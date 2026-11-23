@@ -16,12 +16,8 @@ import {
   fetchInstalledIntegrations
 } from '../../../api/integrationsAdminApi';
 import useFeatureFlags from '../../../shared/hooks/useFeatureFlags';
-import {
-  CHECKBOX_CLASS,
-  INPUT_CLASS,
-  PRIMARY_BUTTON_CLASS,
-  SECONDARY_BUTTON_CLASS
-} from './formStyles';
+import { CHECKBOX_CLASS, INPUT_CLASS, SECONDARY_BUTTON_CLASS } from './formStyles';
+import { useSaveSection } from './SaveSections';
 
 /**
  * Whether this build has the publish routes (slice P12). With `false` the
@@ -124,35 +120,65 @@ export function changedKeys(draft, stored) {
  * @returns {JSX.Element|null}
  */
 function UserAppSettingsPanel({ publishingAvailable = PUBLISHING_AVAILABLE }) {
-  const { t } = useTranslation();
-  const featureOn = useFeatureFlags().isEnabled('userApps', false);
-  const [stored, setStored] = useState(null);
-  const [draft, setDraft] = useState(null);
-  const [maxInput, setMaxInput] = useState('');
-  const [groups, setGroups] = useState(null);
-  // The installations with their functions; null until "Choose…" was opened.
-  const [installations, setInstallations] = useState(null);
-  const [choosing, setChoosing] = useState(false);
-  const [people, setPeople] = useState({});
+  const [initial, setInitial] = useState(null);
   const [forbidden, setForbidden] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const [saved, setSaved] = useState(false);
-  const [error, setError] = useState(null);
+  const [loadError, setLoadError] = useState(null);
 
   useEffect(() => {
     let active = true;
     fetchUserAppSettings()
       .then(settings => {
-        if (!active) return;
-        setStored(settings);
-        setDraft(settings);
-        setMaxInput(String(settings.limits?.maxAppsPerUser ?? ''));
+        if (active) setInitial(settings);
       })
       .catch(err => {
         if (!active) return;
         if (err?.response?.status === 403 || err?.response?.status === 401) setForbidden(true);
-        else setError(getAdminApiErrorMessage(err));
+        else setLoadError(getAdminApiErrorMessage(err));
       });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  if (forbidden) return null;
+  if (!initial) {
+    return loadError ? (
+      <p role="alert" className="mb-6 text-sm text-red-700 dark:text-red-300">
+        {loadError}
+      </p>
+    ) : null;
+  }
+  return <UserAppSettingsForm initial={initial} publishingAvailable={publishingAvailable} />;
+}
+
+/**
+ * The loaded settings. It registers with the page's save bar and has no Save button of its
+ * own; nothing is registered (so no bar) before the settings loaded.
+ *
+ * @param {Object} props
+ * @param {Object} props.initial - The settings as the server returned them
+ * @param {boolean} props.publishingAvailable
+ */
+function UserAppSettingsForm({ initial, publishingAvailable }) {
+  const { t } = useTranslation();
+  const featureOn = useFeatureFlags().isEnabled('userApps', false);
+  const [stored, setStored] = useState(initial);
+  const [draft, setDraft] = useState(initial);
+  const [maxInput, setMaxInput] = useState(() => String(initial.limits?.maxAppsPerUser ?? ''));
+  const [groups, setGroups] = useState(null);
+  // The installations with their functions; null until "Choose…" was opened.
+  const [installations, setInstallations] = useState(null);
+  const [choosing, setChoosing] = useState(false);
+  const [people, setPeople] = useState({});
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+  // Why the last save failed (shown in the bar) and why the chooser could not list the
+  // installations (shown in the panel).
+  const [error, setError] = useState(null);
+  const [chooserError, setChooserError] = useState(null);
+
+  useEffect(() => {
+    let active = true;
     // Who gets the feature: a hint, the panel works without it.
     fetchAdminGroups()
       .then(data => {
@@ -184,15 +210,6 @@ function UserAppSettingsPanel({ publishingAvailable = PUBLISHING_AVAILABLE }) {
       active = false;
     };
   }, [hasBlocked]);
-
-  if (forbidden) return null;
-  if (!draft) {
-    return error ? (
-      <p role="alert" className="mb-6 text-sm text-red-700 dark:text-red-300">
-        {error}
-      </p>
-    ) : null;
-  }
 
   const maxApps = parseMaxApps(maxInput);
   const maxChanged = maxApps !== stored.limits?.maxAppsPerUser;
@@ -241,7 +258,7 @@ function UserAppSettingsPanel({ publishingAvailable = PUBLISHING_AVAILABLE }) {
         }))
       );
     } catch (err) {
-      setError(getAdminApiErrorMessage(err));
+      setChooserError(getAdminApiErrorMessage(err));
       setInstallations([]);
     }
   };
@@ -265,6 +282,16 @@ function UserAppSettingsPanel({ publishingAvailable = PUBLISHING_AVAILABLE }) {
   const installationLabel = id => installations?.find(item => item.id === id)?.label || id;
 
   const save = async () => {
+    // The old Save button was disabled for this; the bar's Save says why it refuses.
+    if (maxApps === null) {
+      setError(
+        t(
+          'admin.userApps.settings.invalidMaxApps',
+          'Enter a whole number for the limit of apps per user (0 means no limit).'
+        )
+      );
+      return false;
+    }
     setSaving(true);
     setError(null);
     try {
@@ -284,12 +311,24 @@ function UserAppSettingsPanel({ publishingAvailable = PUBLISHING_AVAILABLE }) {
       setDraft(settings);
       setMaxInput(String(settings.limits?.maxAppsPerUser ?? ''));
       setSaved(true);
+      return true;
     } catch (err) {
       setError(getAdminApiErrorMessage(err));
+      return false;
     } finally {
       setSaving(false);
     }
   };
+
+  // Back to what is stored, including the limit field as typed.
+  const discard = () => {
+    setDraft(stored);
+    setMaxInput(String(stored.limits?.maxAppsPerUser ?? ''));
+    setSaved(false);
+    setError(null);
+  };
+
+  useSaveSection('user-app-settings', { dirty, saving, error, save, discard });
 
   const checkbox = ({ id, checked, onChange, label, help, disabled = false }) => (
     <label
@@ -538,26 +577,17 @@ function UserAppSettingsPanel({ publishingAvailable = PUBLISHING_AVAILABLE }) {
           )}
         </div>
 
-        {error && (
+        {chooserError && (
           <p role="alert" className="text-sm text-red-700 dark:text-red-300">
-            {error}
+            {chooserError}
           </p>
         )}
-        <div className="flex items-center justify-end gap-3">
-          {saved && !dirty && (
-            <span role="status" className="text-sm text-green-700 dark:text-green-400">
-              {t('admin.projects.sharing.saved')}
-            </span>
-          )}
-          <button
-            type="button"
-            onClick={save}
-            disabled={!dirty || saving || maxApps === null}
-            className={PRIMARY_BUTTON_CLASS}
-          >
-            {t('common.save')}
-          </button>
-        </div>
+        {/* The save error is shown by the page's bar; Save and Discard live there too. */}
+        {saved && !dirty && (
+          <p role="status" className="text-right text-sm text-green-700 dark:text-green-400">
+            {t('admin.projects.sharing.saved')}
+          </p>
+        )}
       </div>
     </details>
   );

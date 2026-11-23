@@ -185,7 +185,11 @@ export default defineConfig({
         '/docs',
         '/uploads',
         '/manifest.json',
-        '/sw.js'
+        '/sw.js',
+        // The popup page of the sign-in in a frame (server/routes/embedAuth.js). Without this,
+        // Vite's single-page fallback would answer it with the app shell and no code would be
+        // handed to the frame.
+        '/embed-auth/'
         // /office/ is intentionally NOT proxied:
         // Vite serves office HTML entries (taskpane.html, commands.html) as MPA pages
         // and serves client/public/office/assets/* from its public dir in dev mode.

@@ -19,18 +19,34 @@ const PAGES_DIR = path.resolve(__dirname, '../../../client/src/features/admin/pa
 
 /** A Save button, a submit button, a form submit handler or a shared save frame. */
 const SAVE_CONTROL =
-  /AdminSaveBar|AdminEditPageShell|AdminSettingsPage|type="submit"|onSubmit=\{|onClick=\{[^}\n]*\b(?:handle)?[sS]ave[A-Za-z]*\b/;
+  /AdminSaveBar|SaveSectionsBar|AdminEditPageShell|AdminSettingsPage|type="submit"|onSubmit=\{|onClick=\{[^}\n]*\b(?:handle)?[sS]ave[A-Za-z]*\b/;
 
-/** The guard, directly or through a frame that calls it. */
-const GUARD = /useUnsavedChanges|useAdminResourceEditor|AdminEditPageShell|AdminSettingsPage/;
+/**
+ * The guard, directly or through a frame that calls it. `leaveGuard` is the page-level guard of
+ * `SaveSectionsBar`: one dialog for every section the page's bar saves.
+ */
+const GUARD =
+  /useUnsavedChanges|useAdminResourceEditor|AdminEditPageShell|AdminSettingsPage|<SaveSectionsBar\b[^>]*\bleaveGuard\b/;
 
 /** Pages with a save control and no guard yet. Shrink-only. */
-const BASELINE = new Map([
-  // Not in the finding lists of the unsaved-guards PR; follow-ups.
-  ['AdminAppsPage.jsx', 'app order draft (Save order)'],
-  ['AdminPromptsPage.jsx', 'global prompt variables'],
-  ['AdminOAuthCimdClientEditPage.jsx', 'CIMD client editor'],
-  ['AdminOAuthServerPage.jsx', 'OAuth server settings']
+const BASELINE = new Map([]);
+
+const COMPONENTS_DIR = path.resolve(__dirname, '../../../client/src/features/admin/components');
+
+/**
+ * Pages whose bar saves sections that guard themselves: the page needs no guard of its own, but
+ * every named component must call `useUnsavedChanges` (checked below), so the claim stays true.
+ */
+const GUARDED_BY_SECTIONS = new Map([
+  [
+    'AdminEuAiActPage.jsx',
+    [
+      'AiNoticeSettingsCard.jsx',
+      'AiAcknowledgementSettingsCard.jsx',
+      'euAiAct/ProvenanceSettingsCard.jsx'
+    ]
+  ],
+  ['AdminUsageReports.jsx', ['UsageQuotasPanel.jsx']]
 ]);
 
 function pageFiles() {
@@ -43,7 +59,7 @@ function pageFiles() {
 function unguardedPages() {
   return pageFiles().filter(name => {
     const source = fs.readFileSync(path.join(PAGES_DIR, name), 'utf8');
-    return SAVE_CONTROL.test(source) && !GUARD.test(source);
+    return SAVE_CONTROL.test(source) && !GUARD.test(source) && !GUARDED_BY_SECTIONS.has(name);
   });
 }
 
@@ -55,8 +71,8 @@ describe('admin unsaved-changes guard coverage', () => {
   it('recognizes a guarded page and a page with a save control', () => {
     const security = fs.readFileSync(path.join(PAGES_DIR, 'AdminSecurityPage.jsx'), 'utf8');
     expect(GUARD.test(security)).toBe(true);
-    const logging = fs.readFileSync(path.join(PAGES_DIR, 'AdminLoggingPage.jsx'), 'utf8');
-    expect(SAVE_CONTROL.test(logging)).toBe(true);
+    const credentials = fs.readFileSync(path.join(PAGES_DIR, 'AdminCredentialsPage.jsx'), 'utf8');
+    expect(SAVE_CONTROL.test(credentials)).toBe(true);
   });
 
   it('every admin page with a save control uses the unsaved-changes guard (or is baselined)', () => {
@@ -70,6 +86,16 @@ describe('admin unsaved-changes guard coverage', () => {
     // A page listed here has its guard now: remove it from BASELINE.
     expect(fixed).toEqual([]);
   });
+
+  it.each([...GUARDED_BY_SECTIONS.entries()])(
+    '%s saves sections that each guard themselves',
+    (_page, components) => {
+      for (const component of components) {
+        const source = fs.readFileSync(path.join(COMPONENTS_DIR, component), 'utf8');
+        expect(source).toMatch(/useUnsavedChanges/);
+      }
+    }
+  );
 
   it.each([
     'AdminLoggingPage.jsx',

@@ -38,7 +38,19 @@ var __authGateI18n = (function () {
       demoAccounts: 'Demo accounts:',
       demoAdmin: 'Admin: admin / password123',
       demoUser: 'User: user / password123',
-      close: 'Close'
+      close: 'Close',
+      signInInProgress:
+        'Finish signing in in the window that opened. This page continues on its own.',
+      signInPopupBlocked:
+        'Your browser blocked the sign-in window. Allow pop-ups for this site and try again.',
+      signInWindowClosed:
+        'The sign-in window was closed before the sign-in was finished. Please try again.',
+      embedSignInDisabled:
+        'Signing in inside another site is not enabled. Ask your administrator, or open iHub in its own tab.',
+      embedSignInUnavailable:
+        'Signing in is not possible here. A secure connection (HTTPS) is required.',
+      embedSignInCookieBlocked:
+        'The sign-in worked, but your browser did not keep the session for this page. Check that cookies are not blocked, or open iHub in its own tab.'
     },
     de: {
       signIn: 'Anmelden',
@@ -70,7 +82,19 @@ var __authGateI18n = (function () {
       demoAccounts: 'Demo-Konten:',
       demoAdmin: 'Admin: admin / password123',
       demoUser: 'Benutzer: user / password123',
-      close: 'Schließen'
+      close: 'Schließen',
+      signInInProgress:
+        'Schließen Sie die Anmeldung im geöffneten Fenster ab. Diese Seite wird danach automatisch fortgesetzt.',
+      signInPopupBlocked:
+        'Ihr Browser hat das Anmeldefenster blockiert. Erlauben Sie Pop-ups für diese Website und versuchen Sie es erneut.',
+      signInWindowClosed:
+        'Das Anmeldefenster wurde geschlossen, bevor die Anmeldung abgeschlossen war. Bitte versuchen Sie es erneut.',
+      embedSignInDisabled:
+        'Die Anmeldung innerhalb einer anderen Website ist nicht aktiviert. Wenden Sie sich an Ihren Administrator oder öffnen Sie iHub in einem eigenen Tab.',
+      embedSignInUnavailable:
+        'Die Anmeldung ist hier nicht möglich. Eine sichere Verbindung (HTTPS) ist erforderlich.',
+      embedSignInCookieBlocked:
+        'Die Anmeldung war erfolgreich, aber Ihr Browser hat die Sitzung für diese Seite nicht behalten. Prüfen Sie, ob Cookies blockiert werden, oder öffnen Sie iHub in einem eigenen Tab.'
     }
   };
 

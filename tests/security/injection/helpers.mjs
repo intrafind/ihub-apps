@@ -13,11 +13,25 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { expect, request as playwrightRequest } from '@playwright/test';
 import { CANARY_TOKEN } from './compromisedModel.mjs';
-import { CLIENT_PORT, CONTENTS_DIR, INTERNAL, LLM, PROJECTS, SECRETS } from './scenario.mjs';
+import {
+  APPS,
+  CLIENT_PORT,
+  CONTENTS_DIR,
+  INTERNAL,
+  LLM,
+  PROJECTS,
+  SECRETS,
+  SERVER_PORT
+} from './scenario.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
 
 export const BASE_URL = `http://127.0.0.1:${CLIENT_PORT}`;
+/**
+ * The iHub server itself. Server-rendered pages (the embed page of a shared artifact) are
+ * only served here: the Vite client proxies `/api` and answers every other path with the app.
+ */
+export const API_ORIGIN = `http://127.0.0.1:${SERVER_PORT}`;
 
 /**
  * An API context signed in as `credentials` (local login, `authToken` cookie).
@@ -243,4 +257,90 @@ export async function sendInUi(page, appId, message) {
   await page.waitForLoadState('networkidle');
   await page.getByRole('textbox', { name: 'Type your message' }).fill(message);
   await page.getByRole('button', { name: 'Send', exact: true }).click();
+}
+
+/**
+ * Publish hostile artifact `id` (`hostileArtifacts.mjs`) as `api`'s user: one turn of the
+ * artifact lab app, whose planted document makes the compromised model create it.
+ *
+ * @param {import('@playwright/test').APIRequestContext} api
+ * @param {string} id
+ * @returns {Promise<{chatId: string, artifact: {id: string, name: string, mimeType: string}|null}>}
+ *   `artifact` is null when the platform refused to store it.
+ */
+export async function publishHostileArtifact(api, id) {
+  const turn = await chatTurn(
+    api,
+    APPS.artifactLab,
+    `Publish the vendor file [inj-artifact-${id}]`
+  );
+  expect(turn.status, `turn that publishes ${id}`).toBe(200);
+  const res = await api.get(`/api/chats/${turn.chatId}/artifacts`);
+  expect(res.ok(), `list the artifacts of ${turn.chatId}`).toBeTruthy();
+  const { items } = await res.json();
+  return { chatId: turn.chatId, artifact: items[0] || null };
+}
+
+/** Share a chat (or one of its artifacts) as `api`'s user; the link that comes back. */
+export async function createShare(api, chatId, options = {}) {
+  const { artifactId, ...body } = options;
+  const path = artifactId
+    ? `/api/chats/${chatId}/artifacts/${artifactId}/shares`
+    : `/api/chats/${chatId}/shares`;
+  const res = await api.post(path, { data: { mode: 'authenticated', ...body } });
+  expect(
+    res.status(),
+    `share ${artifactId ? 'artifact' : 'chat'} ${chatId}: ${await res.text()}`
+  ).toBe(201);
+  return res.json();
+}
+
+/**
+ * Sign a page in as a victim whose session token is also in `localStorage`: the cookie the
+ * login set, and the copy the client keeps when a session starts from an external token
+ * (proxy auth, `AuthContext.loginWithToken`). The worst case for any script that ever runs
+ * on an iHub origin. Returns the token, the value that must never leave.
+ *
+ * @param {import('@playwright/test').Page} page
+ * @param {{username: string, password: string}} credentials
+ * @returns {Promise<string>}
+ */
+export async function signInVictimPage(page, credentials) {
+  await signInPage(page, credentials);
+  const cookie = (await page.context().cookies()).find(entry => entry.name === 'authToken');
+  expect(cookie?.value, 'the login set a session cookie').toBeTruthy();
+  await page.addInitScript(token => {
+    try {
+      window.localStorage.setItem('authToken', token);
+    } catch {
+      // A sandboxed frame has no storage: that is the point.
+    }
+  }, cookie.value);
+  return cookie.value;
+}
+
+/**
+ * Every request the page's context tries to make to a host other than iHub, from any
+ * frame: what a script attempted, including what its CSP then refused (Chrome reports
+ * those too, before the network). What actually left the browser is what
+ * {@link recordBrowserRequests} caught at the network layer.
+ *
+ * @returns {Array<{url: string, postData: string, headers: Record<string, string>}>} Live list.
+ */
+export function recordForeignRequests(page) {
+  const seen = [];
+  page.context().on('request', request => {
+    const url = request.url();
+    if (!/^(https?|wss?):/i.test(url)) return;
+    const { hostname } = new URL(url);
+    if (hostname === '127.0.0.1' || hostname === 'localhost') return;
+    seen.push({ url, postData: request.postData() || '', headers: request.headers() });
+  });
+  return seen;
+}
+
+/** Whether `value` (a URL, a body, a header map) carries `secret`, plain or percent-encoded. */
+export function carries(value, secret) {
+  const text = typeof value === 'string' ? value : JSON.stringify(value);
+  return text.includes(secret) || text.includes(encodeURIComponent(secret));
 }

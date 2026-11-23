@@ -40,6 +40,25 @@ jest.mock('react-i18next', () => ({
 }));
 
 import ProxyConfig from '../../../client/src/features/admin/components/ProxyConfig';
+import {
+  SaveSectionsBar,
+  SaveSectionsProvider
+} from '../../../client/src/features/admin/components/SaveSections';
+
+const SAVE_BAR_NAME = /saveBar|Save changes/i;
+/** The page's one save bar: sections register with it, so tests render them under it. */
+const withSaveBar = ui => (
+  <SaveSectionsProvider>
+    {ui}
+    <SaveSectionsBar />
+  </SaveSectionsProvider>
+);
+const clickBarSave = () =>
+  fireEvent.click(
+    within(screen.getByRole('region', { name: SAVE_BAR_NAME }))
+      .getAllByRole('button')
+      .at(-1)
+  );
 
 /** The response shape of GET/PUT /api/admin/proxy/config. */
 const response = ({ config = {}, effective = {}, provenance = {} } = {}) => ({
@@ -121,7 +140,7 @@ describe('proxy "In effect right now" panel', () => {
 
   test('drops the pending note once the save comes back', async () => {
     mockMakeAdminApiCall.mockResolvedValueOnce(response());
-    render(<ProxyConfig />);
+    render(withSaveBar(<ProxyConfig />));
     await screen.findByText('In effect right now');
 
     addBypassHost('localhost');
@@ -134,7 +153,7 @@ describe('proxy "In effect right now" panel', () => {
         provenance: { noProxy: 'platform' }
       })
     );
-    fireEvent.click(screen.getByRole('button', { name: /Save proxy settings/ }));
+    clickBarSave();
 
     await waitFor(() => expect(screen.queryByText('Unsaved changes')).not.toBeInTheDocument());
     expect(effectiveRow('No proxy')).toHaveTextContent('localhost');

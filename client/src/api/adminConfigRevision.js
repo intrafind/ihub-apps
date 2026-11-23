@@ -132,9 +132,22 @@ const REVISION_METHODS = new Set(['GET', 'POST']);
 export function captureRevision(url, response, method, revision) {
   if (!revision || !guardedResourceOf(url)) return;
   if (!REVISION_METHODS.has(String(method).toUpperCase())) return;
+  const etag = etagOf(response);
+  if (etag) revision.current = etag;
+}
+
+/**
+ * The `ETag` a response carries, for a caller that guards its own write with
+ * `If-Match` (the group editor and the connect wizard's group step, whose
+ * `PUT /admin/groups/{id}` is not one of the guarded `POST`s above).
+ *
+ * @param {{headers?: Object}} response - An axios response
+ * @returns {string|null} The tag as sent (quotes included), or `null`
+ */
+export function etagOf(response) {
   const headers = response?.headers || {};
   const etag = typeof headers.get === 'function' ? headers.get('etag') : headers.etag;
-  if (typeof etag === 'string' && etag) revision.current = etag;
+  return typeof etag === 'string' && etag ? etag : null;
 }
 
 /**

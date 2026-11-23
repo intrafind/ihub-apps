@@ -641,7 +641,10 @@ describe('saving', () => {
 });
 
 describe('one language, and no admin route', () => {
-  test('a full edit and save shows one input per text, no Translate and no "Improve with AI"', async () => {
+  test('a full edit and save shows one input per text, no Translate and, without drafts, no "Improve with AI"', async () => {
+    // "Improve with AI" comes with drafts for personal apps (`generatorEnabled`); its own suite
+    // is app-editor-improve.
+    mockUserApps.config = { ...CONFIG, generator: false, generatorEnabled: false };
     mockApi.fetchUserApp.mockResolvedValue(
       userApp({
         name: { de: 'Stellenanzeigen' },

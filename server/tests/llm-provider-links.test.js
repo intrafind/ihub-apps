@@ -627,3 +627,109 @@ describe('provider routes answer errors in the shared shape', () => {
     });
   });
 });
+
+describe('the region of a Bedrock model', () => {
+  const bedrockModel = {
+    id: 'claude-eu',
+    modelId: 'anthropic.claude-sonnet-4',
+    name: { en: 'Claude' },
+    description: { en: 'Bedrock' },
+    provider: 'bedrock'
+  };
+
+  it('refuses a set but invalid region on create and update with 400', async () => {
+    for (const region of ['apac-northeast-1', 'us-east1', 'evil.com/x']) {
+      const created = await request(app)
+        .post('/api/admin/models')
+        .send({ ...bedrockModel, config: { region } });
+      expect(created.status).toBe(400);
+      expect(created.body.detail).toMatch(/config\.region/);
+    }
+    addModel({ ...bedrockModel, config: { region: 'eu-central-1' } });
+    const updated = await request(app)
+      .put('/api/admin/models/claude-eu')
+      .send({ ...bedrockModel, config: { region: 'us-east1' } });
+    expect(updated.status).toBe(400);
+    expect(store['models/claude-eu.json'].config.region).toBe('eu-central-1');
+  });
+
+  it('stores a valid region trimmed and drops an empty one', async () => {
+    const created = await request(app)
+      .post('/api/admin/models')
+      .send({ ...bedrockModel, config: { region: ' us-west-2 ', other: 1 } });
+    expect(created.status).toBe(201);
+    expect(store['models/claude-eu.json'].config).toEqual({ region: 'us-west-2', other: 1 });
+    const cleared = await request(app)
+      .put('/api/admin/models/claude-eu')
+      .send({ ...bedrockModel, config: { region: '' } });
+    expect(cleared.status).toBe(200);
+    expect(store['models/claude-eu.json'].config).toEqual({});
+  });
+
+  it("does not read another provider's config.region", async () => {
+    const res = await request(app)
+      .post('/api/admin/models')
+      .send({ ...baseModel, id: 'oa-region', provider: 'openai', config: { region: 'x y' } });
+    expect(res.status).toBe(201);
+  });
+});
+
+describe('the effective region of the Bedrock provider', () => {
+  const withBedrock = config => {
+    store['config/providers.json'].providers.push({
+      id: 'bedrock',
+      name: 'AWS Bedrock',
+      category: 'llm',
+      enabled: true,
+      ...(config ? { config } : {})
+    });
+  };
+  const saved = {
+    AWS_REGION: process.env.AWS_REGION,
+    AWS_DEFAULT_REGION: process.env.AWS_DEFAULT_REGION
+  };
+  afterEach(() => {
+    for (const [key, value] of Object.entries(saved)) {
+      if (value === undefined) delete process.env[key];
+      else process.env[key] = value;
+    }
+  });
+  const bedrockOf = res => res.body.items.find(p => p.id === 'bedrock');
+
+  it("is the provider's region, else the server's AWS_REGION", async () => {
+    process.env.AWS_REGION = 'eu-west-3';
+    delete process.env.AWS_DEFAULT_REGION;
+    withBedrock();
+    let res = await request(app).get('/api/admin/providers');
+    expect(bedrockOf(res).effectiveRegion).toBe('eu-west-3');
+    expect(res.body.items.find(p => p.id === 'openai')).not.toHaveProperty('effectiveRegion');
+
+    store['config/providers.json'].providers.at(-1).config = { region: 'us-west-2' };
+    res = await request(app).get('/api/admin/providers/bedrock');
+    expect(res.body.effectiveRegion).toBe('us-west-2');
+  });
+
+  it('is left out when nothing names a valid region', async () => {
+    process.env.AWS_REGION = 'Frankfurt';
+    withBedrock();
+    const res = await request(app).get('/api/admin/providers');
+    expect(bedrockOf(res)).not.toHaveProperty('effectiveRegion');
+  });
+
+  it('is never stored', async () => {
+    withBedrock({ region: 'eu-west-1' });
+    const res = await request(app)
+      .put('/api/admin/providers/bedrock')
+      .send({
+        id: 'bedrock',
+        name: 'AWS Bedrock',
+        category: 'llm',
+        enabled: true,
+        config: { region: 'eu-west-1' },
+        effectiveRegion: 'eu-west-1'
+      });
+    expect(res.status).toBe(200);
+    const stored = store['config/providers.json'].providers.find(p => p.id === 'bedrock');
+    expect(stored).not.toHaveProperty('effectiveRegion');
+  });
+});

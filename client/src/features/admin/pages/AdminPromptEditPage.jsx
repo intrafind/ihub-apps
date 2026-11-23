@@ -1,13 +1,13 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
-import AdminEditPageShell, {
-  AdminSaveCancelButtons
-} from '../../../shared/components/AdminEditPageShell';
+import AdminEditPageShell from '../../../shared/components/AdminEditPageShell';
+import AdminSaveBar from '../components/AdminSaveBar';
+import ImplicitSubmit from '../../../shared/components/ImplicitSubmit';
 import { useAdminResourceEditor } from '../hooks/useAdminResourceEditor';
 import ContentAccessSection from '../components/ContentAccessSection';
 import {
@@ -23,6 +23,8 @@ import DualModeEditor from '../../../shared/components/DualModeEditor';
 import PromptFormEditor from '../components/PromptFormEditor';
 import ChangeHistoryDrawer from '../components/ChangeHistoryDrawer';
 import AdminLoadError from '../components/AdminLoadError';
+import useSaveAttempts from '../hooks/useSaveAttempts';
+import { FIELD_KEYS } from '../utils/fieldErrors';
 
 function AdminPromptEditPage() {
   const { t } = useTranslation();
@@ -36,10 +38,27 @@ function AdminPromptEditPage() {
   const [uiConfig, setUiConfig] = useState(null);
   const [jsonSchema, setJsonSchema] = useState(null);
   const [historyOpen, setHistoryOpen] = useState(false);
+  // What the form reports (`{ isValid, errors }`) and in which mode the editor is: a save
+  // from the form waits until the form is valid; the JSON mode keeps the server's check.
+  const [formValidation, setFormValidation] = useState({ isValid: true, errors: [] });
+  const [editorMode, setEditorMode] = useState('form');
+  // Save attempts that the form refused; from the first one on every error shows.
+  // Counted per resource: another resource or a blank "new" form opens without errors.
+  const [saveAttempts, countSaveAttempt] = useSaveAttempts(promptId);
+  // IDs of the existing prompts, so a new prompt hears "taken" before it is saved, and the
+  // ID the server refused as taken (409) after a save.
+  const [existingIds, setExistingIds] = useState([]);
+  const [refusedId, setRefusedId] = useState(null);
+  const takenIds = useMemo(
+    () => (refusedId ? [...existingIds, refusedId] : existingIds),
+    [existingIds, refusedId]
+  );
 
   const {
     data: promptData,
     setData: setPromptData,
+    initialData,
+    isDirty,
     loading,
     error,
     isNew: isNewPrompt,
@@ -81,7 +100,15 @@ function AdminPromptEditPage() {
         category: 'creative'
       };
       const tpl = location.state?.templatePrompt;
-      return tpl ? { ...defaults, ...tpl, id: '', enabled: tpl.enabled !== false } : defaults;
+      // A clone from the list proposes `<id>-copy` (or the next free one).
+      return tpl
+        ? {
+            ...defaults,
+            ...tpl,
+            id: location.state?.cloneId ?? '',
+            enabled: tpl.enabled !== false
+          }
+        : defaults;
     },
     saveResource: async (data, id) => {
       if (id === 'new') {
@@ -113,6 +140,22 @@ function AdminPromptEditPage() {
     void loadJsonSchema();
   }, [promptId]); // eslint-disable-line @eslint-react/exhaustive-deps
 
+  // A new prompt's ID must not be taken; the list is checked while the admin types.
+  useEffect(() => {
+    if (!isNewPrompt) return undefined;
+    let cancelled = false;
+    fetchAdminPrompts()
+      .then(items => {
+        if (!cancelled && Array.isArray(items)) setExistingIds(items.map(prompt => prompt.id));
+      })
+      .catch(() => {
+        // Without the list the server still refuses a taken ID on save.
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [isNewPrompt]);
+
   const loadApps = useCallback(async () => {
     try {
       const data = await fetchAdminApps();
@@ -141,6 +184,15 @@ function AdminPromptEditPage() {
       // Redirect to prompts list
       navigate('/admin/prompts');
     } catch (err) {
+      // A taken ID belongs to the ID field: the form says it there and in its summary.
+      // The JSON mode shows no form, so there the page says it.
+      if (isNewPrompt && err?.response?.status === 409) {
+        setRefusedId(promptData?.id);
+        countSaveAttempt();
+        if (editorMode === 'form') return;
+        setSaveError(t(FIELD_KEYS.idTaken));
+        return;
+      }
       setSaveError(getAdminApiErrorMessage(err));
     } finally {
       setSaving(false);
@@ -151,8 +203,32 @@ function AdminPromptEditPage() {
     setPromptData(newData);
   };
 
+  const formRef = useRef(null);
+  // A prompt made from a template is complete as it opens: it can be created at once.
+  const [templateDiscarded, setTemplateDiscarded] = useState(false);
+  const startsFromTemplate =
+    isNewPrompt && Boolean(location.state?.templatePrompt) && !templateDiscarded;
+
+  const handleDiscard = () => {
+    setPromptData(initialData);
+    setSaveError(null);
+    // Discarding the draft of a template puts the template back and ends the "can be
+    // created at once": the bar is for edits again.
+    setTemplateDiscarded(true);
+  };
+
+  /**
+   * The form saves only when it is valid: otherwise every error shows, with the summary on
+   * top. Checks left to the browser come next, with the browser's own message.
+   */
   const handleFormSubmit = async e => {
     e.preventDefault();
+    if (editorMode === 'form' && !formValidation.isValid) {
+      countSaveAttempt();
+      return;
+    }
+    if (typeof e.currentTarget?.reportValidity === 'function' && !e.currentTarget.reportValidity())
+      return;
     await handleSave();
   };
 
@@ -197,8 +273,8 @@ function AdminPromptEditPage() {
       }
     >
       <div className="mb-8">
-        <div className="flex items-center justify-between">
-          <div>
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div className="min-w-0">
             <h1 className="text-2xl font-semibold text-gray-900 dark:text-gray-100">
               {isNewPrompt
                 ? t('admin.prompts.edit.createTitle', 'Create New Prompt')
@@ -210,7 +286,7 @@ function AdminPromptEditPage() {
                 : t('admin.prompts.edit.editDesc', 'Edit the prompt details and configuration')}
             </p>
           </div>
-          <div className="flex space-x-3">
+          <div className="flex flex-wrap gap-2">
             {!isNewPrompt && (
               <button
                 type="button"
@@ -265,13 +341,21 @@ function AdminPromptEditPage() {
         </div>
       )}
 
-      <form onSubmit={handleFormSubmit} className="space-y-8">
+      {/* noValidate: the form's own messages come first (see handleFormSubmit). */}
+      <form ref={formRef} onSubmit={handleFormSubmit} noValidate className="space-y-8">
+        <ImplicitSubmit disabled={saving} />
         <DualModeEditor
           value={promptData}
+          savedValue={initialData}
           onChange={handleDataChange}
           formComponent={PromptFormEditor}
+          onValidationChange={setFormValidation}
+          onModeChange={setEditorMode}
           formProps={{
             isNewPrompt,
+            showAllErrors: saveAttempts > 0,
+            summaryFocusKey: saveAttempts,
+            takenIds,
             apps,
             categories: uiConfig?.promptsList?.categories?.list || [],
             jsonSchema
@@ -286,18 +370,16 @@ function AdminPromptEditPage() {
 
         {/* Group access — which groups may use this prompt (groups.json) */}
         <ContentAccessSection resourceType="prompts" resourceId={promptId} isNew={isNewPrompt} />
-
-        {/* Save buttons */}
-        <AdminSaveCancelButtons
-          onCancel={() => navigate('/admin/prompts')}
-          cancelLabel={t('admin.prompts.edit.cancel', 'Cancel')}
-          saving={saving}
-          saveLabel={t('admin.prompts.edit.save', 'Save Prompt')}
-          savingLabel={t('admin.prompts.edit.saving', 'Saving...')}
-          cancelClassName="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-xs text-sm font-medium text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-          saveClassName="px-4 py-2 border border-transparent rounded-md shadow-xs text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50"
-        />
       </form>
+
+      {/* Save goes through the form's own submit handler, so its validation runs. */}
+      <AdminSaveBar
+        dirty={isDirty || startsFromTemplate}
+        saving={saving}
+        saveLabel={isNewPrompt ? t('admin.ui.saveBar.create', 'Create') : undefined}
+        onSave={() => formRef.current?.requestSubmit()}
+        onDiscard={handleDiscard}
+      />
     </AdminEditPageShell>
   );
 }

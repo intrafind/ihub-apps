@@ -300,6 +300,9 @@ const UsageGuideDialog = lazyWithRetry(() => import('../../chat/components/Usage
  *   nothing this browser remembers about the app is read or written: chat id,
  *   settings, variables, recent apps, the iAssistant conversation. Every mount is a
  *   new chat that starts from the app's own defaults, as a new user would see it.
+ * @param {boolean} [props.focusComposerOnStart=true] - Whether the message box takes the
+ *   focus when the chat starts. A host page that keeps the focus elsewhere passes false;
+ *   after the first message the box behaves as always.
  * @param {string|null} [props.appId] - The app to show when `embedded`
  * @param {string|null} [props.testProjectId] - When `embedded`: the admin project this chat
  *   tests (Admin → Projects → Try in chat, #3309). Every turn names it, and the server runs
@@ -308,6 +311,7 @@ const UsageGuideDialog = lazyWithRetry(() => import('../../chat/components/Usage
 function AppChat({
   preloadedApp = null,
   embedded = false,
+  focusComposerOnStart = true,
   appId: embeddedAppId = null,
   testProjectId: embeddedTestProjectId = null
 }) {
@@ -3070,7 +3074,11 @@ function AppChat({
           leadingAction={renderUsageGuideButton()}
           // The guide is a modal dialog: an answer that finishes while it is open
           // must not move the focus to the composer behind it.
-          autoFocusSuspended={usageGuideViewerOpen}
+          // A host that keeps the focus (a restart after the app editor saved) holds it
+          // back until the first message.
+          autoFocusSuspended={
+            usageGuideViewerOpen || (!focusComposerOnStart && messages.length === 0)
+          }
         />
       </>
     );

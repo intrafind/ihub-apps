@@ -26,9 +26,10 @@
 import configCache from '../configCache.js';
 import { requireFeature } from '../featureRegistry.js';
 import { authenticatedOnly } from '../middleware/authRequired.js';
-import { appGeneratorLimiter } from '../middleware/rateLimiting.js';
+import { appGeneratorLimiter, appReviseLimiter } from '../middleware/rateLimiting.js';
 import { userAppAccessRequired } from '../middleware/userAppAccess.js';
 import { generateAppDraft } from '../services/appGenerator.js';
+import { reviseApp } from '../services/appRevision.js';
 import { loadAppTemplates } from '../services/appTemplates.js';
 import { logAudit } from '../services/AuditLogService.js';
 import { isLLMError } from '../services/loop/contracts/errors.js';
@@ -56,7 +57,13 @@ import { segment } from '../utils/created.js';
 import { getLocalizedString } from '../utils/localize.js';
 import { ServiceError } from '../utils/ServiceError.js';
 import { LANGUAGE_CODE_PATTERN } from '../../shared/validationPatterns.js';
-import { parseDraftRequest } from './admin/appBuilder.js';
+import { isUserAppId } from '../../shared/userAppContent.js';
+import {
+  parseDraftRequest,
+  parseRevisionRequest,
+  revisionAuditDetails,
+  withClientAbort
+} from './admin/appBuilder.js';
 import registerUserAppPublishRoutes from './userAppPublishRoutes.js';
 
 /** The feature that switches drafting with AI on and off (Admin → Features). */
@@ -227,6 +234,27 @@ function personalDraft(draft) {
   return { ...draft, app };
 }
 
+/**
+ * The optional `appId` of a revision request: the personal app the turn is
+ * for. It must have the shape of a personal app ID (`uap_` and 32 lower-case
+ * hex characters); whether the app exists is for the access check to say.
+ *
+ * @param {unknown} body - The request body.
+ * @returns {string|undefined} The ID, or `undefined` when the body names none.
+ * @throws {ServiceError} 400 `VALIDATION_FAILED` with the pointer `/appId`.
+ */
+function parseRevisionAppId(body) {
+  const appId = body && typeof body === 'object' && !Array.isArray(body) ? body.appId : undefined;
+  if (appId === undefined || appId === null) return undefined;
+  if (!isUserAppId(appId)) {
+    const message = 'appId must be the ID of a personal app';
+    throw new ServiceError('VALIDATION_FAILED', message, {
+      details: [{ path: 'appId', code: 'INVALID', message }]
+    });
+  }
+  return appId;
+}
+
 /** The registry code an error of the draft route is answered with, for the audit entry. */
 function codeOf(error) {
   if (error instanceof ServiceError || isLLMError(error)) return error.code || 'INTERNAL_ERROR';
@@ -299,6 +327,9 @@ export default function registerUserAppRoutes(app, { llmClient, service: injecte
    *                     maxApps: { type: integer, description: "Apps per user; 0 means no limit" }
    *                     used: { type: integer, description: "Apps the caller owns, published ones included" }
    *                     generator: { type: boolean, description: "Whether the caller can have a draft prepared with AI" }
+   *                     generatorEnabled:
+   *                       type: boolean
+   *                       description: "Whether drafting with AI is on for personal apps, create rights aside: an editor of an app may change it with AI (`POST /api/apps/_revise` with `appId`)"
    *                     capabilities:
    *                       type: object
    *                       properties:
@@ -487,6 +518,203 @@ export default function registerUserAppRoutes(app, { llmClient, service: injecte
     (error, req, _res, next) => {
       if (req.appDraft && req.user?.id && req.user.id !== 'anonymous') {
         auditDraft(req, 'failure', { code: codeOf(error) });
+      }
+      next(error);
+    }
+  );
+
+  // --- the conversation that changes an app ---------------------------------
+
+  // The revise limiter of the admin route, the same instance: both routes count
+  // against one budget of turns per user.
+  const reviseLimiter = appReviseLimiter(configCache.getPlatform() || {});
+
+  /** Validates the body before the revise limit counts, so only real turns are counted. */
+  const readRevisionRequest = (req, _res, next) => {
+    const appId = parseRevisionAppId(req.body);
+    req.appRevision = {
+      request: parseRevisionRequest(req.body, { target: 'personal' }),
+      ...(appId ? { appId } : {}),
+      record: {}
+    };
+    next();
+  };
+
+  // The app a turn is for, read with the gate of `PATCH /api/apps/{appId}`.
+  const revisedAppVisible = userAppAccessRequired('view', {
+    appIdOf: req => req.appRevision.appId
+  });
+
+  /**
+   * Who may have a turn answered: a caller who may create personal apps, or a
+   * caller who may edit the app `appId` names (its owner, or an editor through
+   * sharing), with the checks of `PATCH /api/apps/{appId}`. An app the caller
+   * cannot see answers the 404 of an unknown ID; one they may only read, 403
+   * `PERMISSION_DENIED`. Without `appId`, a caller who may not create gets the
+   * refusal of `mayCreate`.
+   */
+  const mayRevise = (req, res, next) => {
+    const { appId } = req.appRevision;
+    try {
+      service().assertMayCreate(req.user, currentUserAppSettings());
+      return next();
+    } catch (error) {
+      if (!appId) throw error;
+    }
+    return revisedAppVisible(req, res, error => {
+      if (error) return next(error);
+      try {
+        requireLevel(req, 'edit');
+        return next();
+      } catch (refused) {
+        return next(refused);
+      }
+    });
+  };
+
+  /** One audit entry per turn, whatever its outcome; never a text of the draft, conversation or answer. */
+  const auditRevision = (req, result, extra = {}) => {
+    logAudit({
+      req,
+      action: 'execute',
+      resource: 'userApp',
+      resourceId: '',
+      summary:
+        result === 'success'
+          ? 'Answered a request to change a personal app with AI'
+          : 'A request to change a personal app with AI failed',
+      result,
+      details: {
+        ...revisionAuditDetails(req.appRevision),
+        ...(req.appRevision?.appId ? { appId: req.appRevision.appId } : {}),
+        ...extra
+      }
+    });
+  };
+
+  /**
+   * @swagger
+   * /api/apps/_revise:
+   *   post:
+   *     summary: Answer one turn of the conversation that changes a personal app
+   *     description: |
+   *       Request and response of `POST /api/admin/apps/_revise`, for callers who
+   *       may create personal apps, and for callers who may edit the personal app
+   *       `appId` names (its owner, or an editor through sharing), whether or not
+   *       they may create apps. Nothing is stored: a change is a `patch` the
+   *       editor merges into its form and saves with `PATCH /api/apps/{appId}`.
+   *
+   *       `appId` is checked as `PATCH /api/apps/{appId}` checks it, after the
+   *       body and before the revise limit: an app the caller cannot see answers
+   *       the 404 of an unknown ID, one they may only use 403 `PERMISSION_DENIED`.
+   *       A caller who may create personal apps needs no `appId`.
+   *
+   *       Of `draft` only the content keys of a personal app are read (`name`,
+   *       `description`, `system`, `icon`, `color`, `prompt`, `messagePlaceholder`,
+   *       `variables`, `starterPrompts`); `fields` may name only these. The model,
+   *       `preferredModel` and `capabilities` are never changed, and `patch` never
+   *       holds `allowEmptyContent` (the server derives it on save). The patched
+   *       content passes the personal-app schema. `suggestions` holds only what
+   *       personal apps may use on this installation and the caller may use, as
+   *       for `POST /api/apps/_generate`.
+   *
+   *       Counts against the revise limit of the admin route (60 turns per user
+   *       per hour; failed turns count).
+   *     tags: [Apps]
+   *     security:
+   *       - bearerAuth: []
+   *     requestBody:
+   *       required: true
+   *       content:
+   *         application/json:
+   *           schema:
+   *             type: object
+   *             required: [draft, conversation]
+   *             properties:
+   *               appId:
+   *                 type: string
+   *                 pattern: '^uap_[a-f0-9]{32}$'
+   *                 description: The personal app the turn is for; required for a caller who may not create personal apps
+   *               draft: { type: object }
+   *               conversation:
+   *                 type: array
+   *                 minItems: 1
+   *                 maxItems: 12
+   *                 items:
+   *                   type: object
+   *                   required: [role, text]
+   *                   properties:
+   *                     role: { type: string, enum: [author, builder] }
+   *                     kind: { type: string, enum: [question, change, message] }
+   *                     text: { type: string }
+   *               fields:
+   *                 type: array
+   *                 minItems: 1
+   *                 items:
+   *                   type: string
+   *                   enum: [name, description, system, icon, color, prompt, messagePlaceholder, variables, starterPrompts]
+   *               allowQuestions: { type: boolean, default: true }
+   *               language: { type: string, pattern: '^[a-z]{2}(-[A-Z]{2})?$' }
+   *     responses:
+   *       200:
+   *         description: The answer of this turn
+   *         content:
+   *           application/json:
+   *             schema:
+   *               $ref: '#/components/schemas/AppRevisionTurn'
+   *       400:
+   *         description: The body is invalid (`VALIDATION_FAILED`, also for an `appId` that is not a personal app ID), a content key of the draft is over the personal-app limit (`APP_REVISE_TOO_LONG` with `details.field` and `details.max`), or the model refused the request
+   *       401:
+   *         description: Not signed in (`AUTH_REQUIRED`)
+   *       403:
+   *         description: Personal apps are switched off (`USER_APPS_DISABLED`), the caller may neither create personal apps nor edit the app `appId` names (`PERMISSION_DENIED`), or drafting with AI is switched off (`FEATURE_DISABLED`)
+   *       404:
+   *         description: The caller may not create personal apps and `appId` names no app they can see (`NOT_FOUND`)
+   *       409:
+   *         description: The caller may not create personal apps and the app `appId` names is published or switched off (`CONFLICT` with `details.reason`)
+   *       429:
+   *         description: More than 60 turns in an hour (`RATE_LIMITED` with `details.limiter` `appRevise`), or the caller's usage limit is reached (`QUOTA_EXCEEDED`)
+   *       499:
+   *         description: The request was closed before the model answered (`ABORTED`)
+   *       502:
+   *         description: The answer of the model cannot become a reply (`APP_GENERATOR_INVALID_ANSWER`), or the model call failed
+   *       503:
+   *         description: No chat model the caller may use (`APP_GENERATOR_NO_MODEL`), or personal apps are unavailable (`USER_APPS_UNAVAILABLE`)
+   */
+  app.post(
+    route('/_revise'),
+    ...gate,
+    requireFeature(GENERATOR_FEATURE),
+    readRevisionRequest,
+    mayRevise,
+    reviseLimiter,
+    async (req, res) => {
+      const { request, record } = req.appRevision;
+      const turn = await withClientAbort(req, res, signal =>
+        reviseApp({
+          draft: request.draft,
+          conversation: request.conversation,
+          language: request.language,
+          fields: request.fields,
+          allowQuestions: request.allowQuestions,
+          user: req.user,
+          signal,
+          record,
+          personal: { settings: currentUserAppSettings() },
+          ...(llmClient ? { llmClient } : {})
+        })
+      );
+      auditRevision(req, 'success');
+      res.json(turn);
+    },
+    // The failure entry, for every failure of the chain: the gates, the feature switch, the
+    // validation of the body and the limiter included. Without it the audit safety net would
+    // record the request, and at the `request` verbosity that includes the body, which holds
+    // the draft and the conversation. An early failure has no `req.appRevision` yet; its entry
+    // then holds no lengths.
+    (error, req, _res, next) => {
+      if (req.user?.id && req.user.id !== 'anonymous') {
+        auditRevision(req, 'failure', { code: codeOf(error) });
       }
       next(error);
     }

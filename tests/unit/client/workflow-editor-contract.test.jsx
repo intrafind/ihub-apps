@@ -30,18 +30,19 @@ import { findUnanswerableHumanSteps } from '../../../server/services/workflow/wo
  * is a known name; Publish is gone; the list shows who can run a workflow.
  */
 
-jest.mock('react-i18next', () => ({
-  useTranslation: () => ({
-    t: (key, fallback, options) => {
-      const text = typeof fallback === 'string' ? fallback : key;
-      return Object.entries(options || {}).reduce(
-        (out, [name, value]) => out.replaceAll(`{{${name}}}`, String(value)),
-        text
-      );
-    },
-    i18n: { language: 'en' }
-  })
-}));
+// One stable `t`, like the real hook: the page reloads the workflow when `t` changes.
+jest.mock('react-i18next', () => {
+  const t = (key, fallback, options) => {
+    const text = typeof fallback === 'string' ? fallback : key;
+    return Object.entries(options || {}).reduce(
+      (out, [name, value]) => out.replaceAll(`{{${name}}}`, String(value)),
+      text
+    );
+  };
+  const i18n = { language: 'en' };
+  const value = { t, i18n };
+  return { useTranslation: () => value };
+});
 
 jest.mock('../../../client/src/api/client', () => ({
   apiClient: { get: jest.fn(), put: jest.fn(), post: jest.fn() }
@@ -53,9 +54,13 @@ const mockEditorProps = [];
 jest.mock('../../../client/src/features/workflows/editor/WorkflowEditor', () => ({
   WorkflowEditor: props => {
     mockEditorProps.push(props);
+    // The page saves through its bar; the stand-in only moves the first step.
+    const moved = props.initialNodes.map((node, index) =>
+      index === 0 ? { ...node, position: { x: node.position.x + 50, y: node.position.y } } : node
+    );
     return (
-      <button type="button" onClick={() => props.onSave(props.initialNodes, props.initialEdges)}>
-        Save canvas
+      <button type="button" onClick={() => props.onFlowChange(moved, props.initialEdges)}>
+        Move first step
       </button>
     );
   }
@@ -80,7 +85,7 @@ describe('canvas round trip', () => {
     expect(flowToWorkflow(nodes, edges, APPROVAL_WORKFLOW)).toEqual(APPROVAL_WORKFLOW);
   });
 
-  it('saves an unchanged workflow from the canvas page with the payload it loaded', async () => {
+  it('saves a canvas edit with the payload it loaded, only the moved step changed', async () => {
     apiClient.get.mockResolvedValue({ data: structuredClone(APPROVAL_WORKFLOW) });
     apiClient.put.mockResolvedValue({ data: {} });
     render(
@@ -91,12 +96,14 @@ describe('canvas round trip', () => {
       </MemoryRouter>
     );
     await flush();
-    fireEvent.click(screen.getByRole('button', { name: 'Save canvas' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Move first step' }));
+    const bar = screen.getByRole('region', { name: 'Save changes' });
+    const buttons = within(bar).getAllByRole('button');
+    fireEvent.click(buttons[buttons.length - 1]);
     await flush();
-    expect(apiClient.put).toHaveBeenCalledWith(
-      `/workflows/${APPROVAL_WORKFLOW.id}`,
-      APPROVAL_WORKFLOW
-    );
+    const expected = structuredClone(APPROVAL_WORKFLOW);
+    expected.nodes[0].position.x += 50;
+    expect(apiClient.put).toHaveBeenCalledWith(`/workflows/${APPROVAL_WORKFLOW.id}`, expected);
   });
 });
 

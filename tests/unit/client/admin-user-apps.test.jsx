@@ -19,9 +19,10 @@
  */
 import fs from 'fs';
 import path from 'path';
+import { useState } from 'react';
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import '@testing-library/jest-dom';
-import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
+import { MemoryRouter, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
 import i18next from 'i18next';
 import en from '../../../shared/i18n/en.json';
 
@@ -140,6 +141,10 @@ const {
 const UserAppSettingsPanel =
   require('../../../client/src/features/admin/components/UserAppSettingsPanel').default;
 const {
+  SaveSectionsBar,
+  SaveSectionsProvider
+} = require('../../../client/src/features/admin/components/SaveSections');
+const {
   changedKeys,
   groupsWithPermission,
   PUBLISHING_AVAILABLE
@@ -253,11 +258,23 @@ const renderAppsPage = (url = '/admin/apps') =>
 const renderTab = (url = '/admin/apps?tab=personal') =>
   renderAt(url, <Route path="*" element={<AdminUserAppsTab />} />);
 
+// The panel sits on a tab whose bar carries Save and Discard.
 const renderPanel = props =>
   renderAt(
     '/admin/apps?tab=personal',
-    <Route path="*" element={<UserAppSettingsPanel {...props} />} />
+    <Route
+      path="*"
+      element={
+        <SaveSectionsProvider>
+          <UserAppSettingsPanel {...props} />
+          <SaveSectionsBar />
+        </SaveSectionsProvider>
+      }
+    />
   );
+
+const SAVE_BAR = 'Save changes';
+const saveButton = () => screen.getByRole('button', { name: text('admin.ui.save') });
 
 /** The table row that names an app. */
 const rowOf = name => screen.getByText(name).closest('tr');
@@ -363,6 +380,97 @@ describe('the tab "Personal apps" of Admin → Apps', () => {
     expect(read('pages/AdminAppsPage.jsx')).toContain(
       '<WaitingAppsNotice refreshKey={waitingRefresh} />'
     );
+  });
+});
+
+describe('the tab "Personal apps" keeps its unsaved settings', () => {
+  const everyone = () =>
+    screen.getByRole('checkbox', {
+      name: new RegExp(`^${text('admin.userApps.settings.allowEveryone')}`)
+    });
+  const bar = () => screen.queryByRole('region', { name: SAVE_BAR });
+
+  /** The apps page with a button that leaves it, as a sidebar link would. */
+  function GoAway() {
+    const navigate = useNavigate();
+    return (
+      <button type="button" onClick={() => navigate('/admin/groups')}>
+        go away
+      </button>
+    );
+  }
+  const renderWithExit = () =>
+    renderAt(
+      '/admin/apps?tab=personal',
+      <Route
+        path="*"
+        element={
+          <>
+            <AdminAppsPage />
+            <GoAway />
+          </>
+        }
+      />
+    );
+
+  it('keeps the edit and the bar when the admin switches to the Apps tab and back', async () => {
+    renderAppsPage('/admin/apps?tab=personal');
+    await screen.findByText(text('admin.userApps.settings.shareWith'));
+    expect(bar()).toBeNull();
+
+    fireEvent.click(everyone());
+    expect(bar()).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('tab', { name: 'Apps' }));
+    expect(screen.getByTestId('location')).not.toHaveTextContent('tab=personal');
+    // The settings are out of sight, the edit is not gone: the bar still carries it.
+    expect(
+      screen.queryByRole('checkbox', {
+        name: new RegExp(`^${text('admin.userApps.settings.allowEveryone')}`)
+      })
+    ).toBeNull();
+    expect(bar()).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('tab', { name: /Personal apps/ }));
+    expect(everyone()).toBeChecked();
+    expect(mockApi.saveUserAppSettings).not.toHaveBeenCalled();
+  });
+
+  it('saves the edit from the Apps tab, with the one bar of the page', async () => {
+    renderAppsPage('/admin/apps?tab=personal');
+    await screen.findByText(text('admin.userApps.settings.shareWith'));
+    fireEvent.click(everyone());
+    fireEvent.click(screen.getByRole('tab', { name: 'Apps' }));
+
+    await act(async () => {
+      fireEvent.click(saveButton());
+    });
+
+    expect(mockApi.saveUserAppSettings).toHaveBeenCalledWith({ sharing: { allowEveryone: true } });
+    expect(bar()).toBeNull();
+    // Only the page's bar exists: the tab's own is not drawn a second time.
+    expect(screen.queryAllByRole('region', { name: SAVE_BAR })).toHaveLength(0);
+  });
+
+  it('asks before the admin leaves the page with the edit', async () => {
+    renderWithExit();
+    await screen.findByText(text('admin.userApps.settings.shareWith'));
+    fireEvent.click(everyone());
+
+    fireEvent.click(screen.getByRole('button', { name: 'go away' }));
+
+    expect(screen.getByRole('alertdialog')).toBeInTheDocument();
+    expect(screen.getByTestId('location')).toHaveTextContent('/admin/apps');
+  });
+
+  it('lets the admin leave when nothing changed', async () => {
+    renderWithExit();
+    await screen.findByText(text('admin.userApps.settings.shareWith'));
+
+    fireEvent.click(screen.getByRole('button', { name: 'go away' }));
+
+    expect(screen.queryByRole('alertdialog')).toBeNull();
+    expect(screen.getByTestId('location')).toHaveTextContent('/admin/groups');
   });
 });
 
@@ -788,8 +896,9 @@ describe('the settings panel', () => {
     expect(screen.getByRole('spinbutton')).toHaveValue(20);
     expect(await screen.findByText('Carl Left')).toBeInTheDocument();
     expect(screen.getByText('dora')).toBeInTheDocument();
-    const save = screen.getByRole('button', { name: 'Save' });
-    expect(save).toBeDisabled();
+    // No Save button of its own, and no bar until something changes.
+    expect(screen.queryByRole('button', { name: 'Save' })).toBeNull();
+    expect(screen.queryByRole('region', { name: SAVE_BAR })).toBeNull();
 
     // The audiences and the publishing switch with the checkbox under it.
     fireEvent.click(box(text('admin.userApps.settings.allowUsers')));
@@ -831,9 +940,9 @@ describe('the settings panel', () => {
       })
     );
 
-    expect(save).toBeEnabled();
+    expect(screen.getByRole('region', { name: SAVE_BAR })).toBeInTheDocument();
     await act(async () => {
-      fireEvent.click(save);
+      fireEvent.click(saveButton());
     });
     expect(mockApi.saveUserAppSettings).toHaveBeenCalledTimes(1);
     // Only the keys that changed: the server merges key by key.
@@ -851,7 +960,7 @@ describe('the settings panel', () => {
     });
 
     // The answer of the server is what the panel shows afterwards.
-    await waitFor(() => expect(save).toBeDisabled());
+    await waitFor(() => expect(screen.queryByRole('region', { name: SAVE_BAR })).toBeNull());
     expect(box(text('admin.userApps.settings.allowUsers'))).not.toBeChecked();
     expect(box(text('admin.userApps.settings.allowEveryone'))).toBeChecked();
     expect(box(text('admin.userApps.settings.allowPublish'))).toBeChecked();
@@ -871,7 +980,7 @@ describe('the settings panel', () => {
 
     fireEvent.click(box(text('admin.userApps.capability.upload')));
     await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+      fireEvent.click(saveButton());
     });
     // Not the other switches nor the list of connected systems as the panel
     // loaded them: another admin may have changed them since.
@@ -881,7 +990,7 @@ describe('the settings panel', () => {
 
     fireEvent.click(box(text('admin.userApps.settings.allowEveryone')));
     await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+      fireEvent.click(saveButton());
     });
     expect(mockApi.saveUserAppSettings).toHaveBeenLastCalledWith({
       sharing: { allowEveryone: true }
@@ -903,9 +1012,19 @@ describe('the settings panel', () => {
 
     fireEvent.change(screen.getByRole('spinbutton'), { target: { value: '-1' } });
     expect(screen.getByRole('spinbutton')).toHaveAttribute('aria-invalid', 'true');
-    expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled();
+    // The bar is there, but Save refuses and says why; nothing is sent.
+    await act(async () => {
+      fireEvent.click(saveButton());
+    });
+    expect(screen.getByTestId('save-bar-message')).toHaveTextContent(
+      'Enter a whole number for the limit'
+    );
+    expect(mockApi.saveUserAppSettings).not.toHaveBeenCalled();
     fireEvent.change(screen.getByRole('spinbutton'), { target: { value: '0' } });
-    expect(screen.getByRole('button', { name: 'Save' })).toBeEnabled();
+    await act(async () => {
+      fireEvent.click(saveButton());
+    });
+    expect(mockApi.saveUserAppSettings).toHaveBeenCalledWith({ limits: { maxAppsPerUser: 0 } });
   });
 
   it('lists a stored installation that is gone, so its functions can be removed', async () => {
@@ -924,7 +1043,7 @@ describe('the settings panel', () => {
     const gone = (await screen.findByText('old-crm', { selector: 'legend' })).closest('fieldset');
     fireEvent.click(within(gone).getByRole('checkbox', { name: 'findContact' }));
     await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+      fireEvent.click(saveButton());
     });
     expect(mockApi.saveUserAppSettings).toHaveBeenCalledWith({
       capabilities: { integrations: [] }
@@ -1071,5 +1190,27 @@ describe('the user page', () => {
     await screen.findByRole('heading', { name: 'Anna Schmidt' });
     await waitFor(() => expect(mockApi.fetchAdminUserApps).toHaveBeenCalled());
     expect(screen.queryByRole('button', { name: text('admin.userApps.user.block') })).toBeNull();
+  });
+});
+
+describe('the retained Personal apps tab', () => {
+  test('reads its list again when the page says a company app changed', async () => {
+    function Host() {
+      const [key, setKey] = useState(0);
+      return (
+        <>
+          <button type="button" onClick={() => setKey(value => value + 1)}>
+            company app changed
+          </button>
+          <AdminUserAppsTab refreshKey={key} />
+        </>
+      );
+    }
+    renderAt('/admin/apps?tab=personal', <Route path="*" element={<Host />} />);
+    await waitFor(() => expect(mockApi.fetchAdminUserApps).toHaveBeenCalledTimes(1));
+
+    fireEvent.click(screen.getByRole('button', { name: 'company app changed' }));
+
+    await waitFor(() => expect(mockApi.fetchAdminUserApps).toHaveBeenCalledTimes(2));
   });
 });

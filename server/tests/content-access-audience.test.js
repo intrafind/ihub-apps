@@ -263,7 +263,8 @@ describe('what stays as it was', () => {
     'granted',
     'wildcard',
     'inheritedFrom',
-    'effective'
+    'effective',
+    'via'
   ];
 
   it('keeps scope and the row fields for a content admin', async () => {
@@ -280,7 +281,21 @@ describe('what stays as it was', () => {
         granted: false,
         wildcard: true,
         inheritedFrom: ['users', 'authenticated', 'anonymous'],
-        effective: true
+        effective: true,
+        via: [
+          { groupId: 'admins', path: ['admins'], kind: 'wildcard' },
+          { groupId: 'users', path: ['admins', 'users'], kind: 'wildcard' },
+          {
+            groupId: 'authenticated',
+            path: ['admins', 'users', 'authenticated'],
+            kind: 'wildcard'
+          },
+          {
+            groupId: 'anonymous',
+            path: ['admins', 'users', 'authenticated', 'anonymous'],
+            kind: 'explicit'
+          }
+        ]
       },
       {
         id: 'users',
@@ -289,12 +304,17 @@ describe('what stays as it was', () => {
         granted: false,
         wildcard: true,
         inheritedFrom: ['authenticated', 'anonymous'],
-        effective: true
+        effective: true,
+        via: [
+          { groupId: 'users', path: ['users'], kind: 'wildcard' },
+          { groupId: 'authenticated', path: ['users', 'authenticated'], kind: 'wildcard' },
+          { groupId: 'anonymous', path: ['users', 'authenticated', 'anonymous'], kind: 'explicit' }
+        ]
       }
     ]);
   });
 
-  it('keeps the row fields for a full admin; implicit is the only new one', async () => {
+  it('keeps the row fields for a full admin; implicit and via are the only new ones', async () => {
     const body = await view(FULL_ADMIN);
     for (const group of body.groups) {
       const keys = Object.keys(group);
@@ -308,6 +328,7 @@ describe('what stays as it was', () => {
       wildcard: false,
       inheritedFrom: [],
       effective: true,
+      via: [{ groupId: 'anonymous', path: ['anonymous'], kind: 'explicit' }],
       implicit: true
     });
   });
@@ -406,7 +427,7 @@ describe('describeContentAccess', () => {
     expect(Object.hasOwn(rows[1], 'implicit')).toBe(false);
   });
 
-  it('answers the rows it always did without the option', () => {
+  it('answers the rows it always did without the option, plus the grant routes', () => {
     const rows = describeContentAccess({
       groups,
       type: 'apps',
@@ -421,7 +442,8 @@ describe('describeContentAccess', () => {
         granted: false,
         wildcard: true,
         inheritedFrom: [],
-        effective: true
+        effective: true,
+        via: [{ groupId: 'authenticated', path: ['authenticated'], kind: 'wildcard' }]
       },
       {
         id: 'sales',
@@ -430,7 +452,8 @@ describe('describeContentAccess', () => {
         granted: false,
         wildcard: false,
         inheritedFrom: ['authenticated'],
-        effective: true
+        effective: true,
+        via: [{ groupId: 'authenticated', path: ['sales', 'authenticated'], kind: 'wildcard' }]
       }
     ]);
   });

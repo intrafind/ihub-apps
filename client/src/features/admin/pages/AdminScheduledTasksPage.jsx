@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
 import { useOptionalAuth } from '../../../shared/contexts/authContextValue';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { makeAdminApiCall, getAdminApiErrorMessage } from '../../../api/adminApi';
@@ -16,6 +16,8 @@ import {
 import { formatDateTime, formatDuration, reasonText } from '../../tasks/utils/taskFormat';
 import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
 import UnsavedChangesDialog from '../components/UnsavedChangesDialog';
+import AdminSaveBar from '../components/AdminSaveBar';
+import ImplicitSubmit from '../../../shared/components/ImplicitSubmit';
 import ConfirmDialog from '../../../shared/components/ConfirmDialog';
 import { useConfirmAction } from '../hooks/useConfirmAction';
 
@@ -64,8 +66,21 @@ export default function AdminScheduledTasksPage() {
   const [settings, setSettings] = useState(null);
   // The settings as first loaded or last saved; null until they loaded.
   const [savedSettings, setSavedSettings] = useState(null);
-  const { blocker } = useUnsavedChanges(savedSettings, settings);
+  // The number inputs hold text while typing; compare them as numbers so typing the saved value
+  // back counts as unchanged.
+  const comparableSettings = useMemo(() => {
+    if (!settings) return settings;
+    const next = { ...settings };
+    for (const [key] of NUMBER_SETTINGS) {
+      if (next[key] !== '' && Number.isFinite(Number(next[key]))) next[key] = Number(next[key]);
+    }
+    return next;
+  }, [settings]);
+  const { isDirty, blocker } = useUnsavedChanges(savedSettings, comparableSettings);
   const [saving, setSaving] = useState(false);
+  // A failed save is reported in the save bar, next to the button that retries it.
+  const [saveError, setSaveError] = useState(null);
+  const settingsFormRef = useRef(null);
   const [runsFor, setRunsFor] = useState(null);
   const [runs, setRuns] = useState([]);
   const [busy, setBusy] = useState(null);
@@ -93,6 +108,7 @@ export default function AdminScheduledTasksPage() {
     event.preventDefault();
     setSaving(true);
     setNotice(null);
+    setSaveError(null);
     try {
       const body = { enabled: settings.enabled, memoryEnabled: settings.memoryEnabled !== false };
       for (const [key] of NUMBER_SETTINGS) body[key] = Number(settings[key]);
@@ -109,7 +125,7 @@ export default function AdminScheduledTasksPage() {
       );
       await load();
     } catch (err) {
-      setError(getAdminApiErrorMessage(err));
+      setSaveError(getAdminApiErrorMessage(err));
     } finally {
       setSaving(false);
     }
@@ -300,7 +316,8 @@ export default function AdminScheduledTasksPage() {
         )}
 
         {settings && (
-          <form className={`${card} space-y-4`} onSubmit={saveSettings}>
+          <form ref={settingsFormRef} className={`${card} space-y-4`} onSubmit={saveSettings}>
+            <ImplicitSubmit disabled={saving} />
             <div className="flex items-center justify-between">
               <h2 className="text-base font-semibold text-gray-900 dark:text-gray-100">
                 {t('admin.scheduledTasks.limits', 'Limits')}
@@ -363,15 +380,6 @@ export default function AdminScheduledTasksPage() {
                 '0 turns off the per-user task limit, the auto-pause after failures, run record retention and the run chat cap.'
               )}
             </p>
-            <div className="flex justify-end">
-              <button
-                type="submit"
-                disabled={saving}
-                className="px-4 py-2 rounded-lg text-sm font-medium bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-60"
-              >
-                {saving ? t('common.saving', 'Saving…') : t('common.save', 'Save')}
-              </button>
-            </div>
           </form>
         )}
 
@@ -591,6 +599,16 @@ export default function AdminScheduledTasksPage() {
           </div>
         </div>
       </Modal>
+      <AdminSaveBar
+        dirty={Boolean(settings) && isDirty}
+        saving={saving}
+        onSave={() => settingsFormRef.current?.requestSubmit()}
+        onDiscard={() => {
+          setSettings(savedSettings);
+          setSaveError(null);
+        }}
+        message={saveError || undefined}
+      />
       <UnsavedChangesDialog blocker={blocker} />
       <ConfirmDialog {...confirmDialogProps} />
     </div>

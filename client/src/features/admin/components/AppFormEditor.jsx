@@ -42,6 +42,9 @@ import BasicInfoSection from './app-form/BasicInfoSection';
 import InputModeSection from './app-form/InputModeSection';
 import parseNumberOrUndefined from '../utils/parseNumberOrUndefined';
 import { primaryLanguageOf } from '../../../../../shared/appDefaults.js';
+import ImproveInstructionsDialog from './app-form/ImproveInstructionsDialog';
+import { draftOf } from './app-conversation/conversationState';
+import { adminAppSource } from '../utils/adminAppSource';
 
 const NO_ERRORS = Object.freeze([]);
 
@@ -112,6 +115,9 @@ function AppForm({
 
   // Projects (#1036) can be linked only while the projects feature is enabled
   const isProjectsEnabled = featureFlags.isEnabled('projects', true);
+  // "Improve with AI" on the instructions (slice 2 of the chat builder plan) comes with app drafts.
+  const improveOffered = featureFlags.isEnabled('appGenerator', true);
+  const [improveOpen, setImproveOpen] = useState(false);
 
   // The language the texts are edited in first. It is fixed per app, so that
   // it does not jump while the author empties and retypes the name.
@@ -305,6 +311,16 @@ function AppForm({
                   onChange={onChange}
                   t={t}
                   validationErrors={validationErrors}
+                  onImprove={improveOffered ? () => setImproveOpen(true) : undefined}
+                />
+                <ImproveInstructionsDialog
+                  isOpen={improveOpen}
+                  onClose={() => setImproveOpen(false)}
+                  refine={adminAppSource.refineDraft}
+                  draft={draftOf(app, 'admin')}
+                  language={primary.language}
+                  // Into the form only: the save bar saves it, or Discard takes it back.
+                  onUse={system => onChange({ ...app, system })}
                 />
                 <VariablesSection app={app} onChange={onChange} />
                 <StarterPromptsSection app={app} onChange={onChange} />
