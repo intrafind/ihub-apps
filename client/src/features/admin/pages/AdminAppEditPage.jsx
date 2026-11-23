@@ -15,6 +15,7 @@ import AppFormEditor from '../components/AppFormEditor';
 import AppTestPanel from '../components/AppTestPanel';
 import ChangeHistoryDrawer from '../components/ChangeHistoryDrawer';
 import ContentAccessSection from '../components/ContentAccessSection';
+import ItemAccessTools from '../components/access/ItemAccessTools';
 import AppEditorHeader from '../components/app-editor/AppEditorHeader';
 import EditorSaveBar from '../components/app-editor/EditorSaveBar';
 import EditorToast, {
@@ -93,6 +94,10 @@ function AdminAppEditPage() {
   const [testFocus, setTestFocus] = useState(0);
   // Bumped whenever the test has to start over: after a save, after access changed.
   const [testRun, setTestRun] = useState(0);
+  // Bumped when the group card granted or revoked: the access tools read the groups again.
+  const [accessVersion, setAccessVersion] = useState(0);
+  // Bumped when "Restrict access" changed groups: the group card loads again.
+  const [groupCardKey, setGroupCardKey] = useState(0);
   const [toast, showToast] = useEditorToast();
   // Where the focus goes when its control leaves the page (Publish, "Hide these steps").
   const headingRef = useRef(null);
@@ -186,6 +191,14 @@ function AdminAppEditPage() {
   const handleAccessSaved = view => {
     setAccessView(view);
     // A group that got access a moment ago: the test can load the app now.
+    setTestRun(run => run + 1);
+    setAccessVersion(version => version + 1);
+  };
+
+  // "Restrict access" rewrote groups: the group card and the publish dialog read them again.
+  const handleRestricted = () => {
+    setGroupCardKey(key => key + 1);
+    void refreshAccess();
     setTestRun(run => run + 1);
   };
 
@@ -286,10 +299,22 @@ function AdminAppEditPage() {
               {/* Which groups may use this app (groups.json); saved on its own. */}
               <EditorGroup id={ACCESS_GROUP} groups={groups}>
                 <ContentAccessSection
+                  key={groupCardKey}
                   resourceType="apps"
                   resourceId={appId}
                   onSaved={handleAccessSaved}
                 />
+                {/* Restrict access (W3) and the access check read every group: full admins only. */}
+                {isFullAdmin && (
+                  <ItemAccessTools
+                    type="apps"
+                    id={appId}
+                    itemName={appName}
+                    refreshKey={accessVersion}
+                    onRestricted={handleRestricted}
+                    className="mt-6"
+                  />
+                )}
               </EditorGroup>
             </div>
           </div>
