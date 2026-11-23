@@ -411,13 +411,14 @@ describe('runConnectPlan', () => {
   it('plans the group writes again from the groups as they are now', async () => {
     const api = jest.fn().mockResolvedValue({ data: {} });
     // Another admin added "legal-model" to HR while the flow was open.
-    const replanGroups = jest.fn(async created =>
-      planGroupUpdates(
+    const replanGroups = jest.fn(async created => ({
+      updates: planGroupUpdates(
         { groups: { hr: { permissions: { models: ['old', 'legal-model'] } } } },
         { mode: 'groups', groupIds: ['hr'] },
         created
-      )
-    );
+      ),
+      revision: '"r1"'
+    }));
     await runConnectPlan({
       api,
       errorMessage,
@@ -429,6 +430,8 @@ describe('runConnectPlan', () => {
     expect(replanGroups).toHaveBeenCalledWith(['a']);
     const groupCall = api.mock.calls.find(([path]) => path === '/admin/groups/hr');
     expect(groupCall[1].body.permissions.models).toEqual(['old', 'legal-model', 'a']);
+    // Guarded by the revision of that fresh read.
+    expect(groupCall[1].headers).toEqual({ 'If-Match': '"r1"' });
   });
 
   it('falls back to the loaded plan when the groups cannot be read again', async () => {
@@ -445,6 +448,125 @@ describe('runConnectPlan', () => {
     });
     const groupCall = api.mock.calls.find(([path]) => path === '/admin/groups/hr');
     expect(groupCall[1].body.permissions.models).toEqual(['old', 'a']);
+    // Nothing was read, so there is no revision to send.
+    expect(groupCall[1].headers).toBeUndefined();
+  });
+
+  it('sends the ETag of the previous group write with the next one', async () => {
+    const api = jest.fn(async path =>
+      path === '/admin/groups/hr' ? { data: {}, headers: { etag: '"r2"' } } : { data: {} }
+    );
+    await runConnectPlan({
+      api,
+      errorMessage,
+      providerWrite: null,
+      modelConfigs: [{ id: 'a' }],
+      groupUpdates: [{ groupId: 'hr', models: ['a'] }],
+      replanGroups: async () => ({
+        updates: [
+          { groupId: 'hr', models: ['a'] },
+          { groupId: 'it', models: ['a'] }
+        ],
+        revision: '"r1"'
+      })
+    });
+    const headersOf = id => api.mock.calls.find(([path]) => path === `/admin/groups/${id}`)[1];
+    expect(headersOf('hr').headers).toEqual({ 'If-Match': '"r1"' });
+    expect(headersOf('it').headers).toEqual({ 'If-Match': '"r2"' });
+  });
+
+  it('on 412 reads the groups again and retries the write once from that read', async () => {
+    const conflict = Object.assign(new Error('changed'), {
+      response: { status: 412, data: { code: 'PRECONDITION_FAILED' } }
+    });
+    let groupWrites = 0;
+    const api = jest.fn(async path => {
+      if (path !== '/admin/groups/hr') return { data: {} };
+      groupWrites += 1;
+      if (groupWrites === 1) throw conflict;
+      return { data: {}, headers: { etag: '"r3"' } };
+    });
+    // Between the first read and the write, another admin added "legal-model" to HR.
+    const reads = [
+      { groups: { hr: { permissions: { models: ['old'] } } } },
+      { groups: { hr: { permissions: { models: ['old', 'legal-model'] } } } }
+    ];
+    const replanGroups = jest.fn(async created => {
+      const index = replanGroups.mock.calls.length - 1;
+      return {
+        updates: planGroupUpdates(reads[index], { mode: 'groups', groupIds: ['hr'] }, created),
+        revision: `"r${index + 1}"`
+      };
+    });
+
+    const outcome = await runConnectPlan({
+      api,
+      errorMessage,
+      providerWrite: null,
+      modelConfigs: [{ id: 'a' }],
+      groupUpdates: [{ groupId: 'hr', models: ['old', 'a'] }],
+      replanGroups
+    });
+
+    expect(replanGroups).toHaveBeenCalledTimes(2);
+    const groupCalls = api.mock.calls.filter(([path]) => path === '/admin/groups/hr');
+    expect(groupCalls).toHaveLength(2);
+    expect(groupCalls[0][1].headers).toEqual({ 'If-Match': '"r1"' });
+    expect(groupCalls[1][1].headers).toEqual({ 'If-Match': '"r2"' });
+    expect(groupCalls[1][1].body.permissions.models).toEqual(['old', 'legal-model', 'a']);
+    expect(outcome.groups).toEqual([{ groupId: 'hr', ok: true }]);
+  });
+
+  it('reports the group as failed when the retry meets another conflict', async () => {
+    const conflict = Object.assign(new Error('changed again'), {
+      response: { status: 412, data: { code: 'PRECONDITION_FAILED' } }
+    });
+    const api = jest.fn(async path => {
+      if (path === '/admin/groups/hr') throw conflict;
+      return { data: {} };
+    });
+    const outcome = await runConnectPlan({
+      api,
+      errorMessage,
+      providerWrite: null,
+      modelConfigs: [{ id: 'a' }],
+      groupUpdates: [{ groupId: 'hr', models: ['a'] }],
+      replanGroups: async () => ({ updates: [{ groupId: 'hr', models: ['a'] }], revision: '"r"' })
+    });
+    expect(api.mock.calls.filter(([path]) => path === '/admin/groups/hr')).toHaveLength(2);
+    expect(outcome.groups).toEqual([{ groupId: 'hr', ok: false, error: 'changed again' }]);
+  });
+
+  it('counts a group as done when the fresh read shows it already grants the models', async () => {
+    const conflict = Object.assign(new Error('changed'), {
+      response: { status: 412, data: { code: 'PRECONDITION_FAILED' } }
+    });
+    let reads = 0;
+    const api = jest.fn(async path => {
+      if (path === '/admin/groups/hr') throw conflict;
+      return { data: {} };
+    });
+    const outcome = await runConnectPlan({
+      api,
+      errorMessage,
+      providerWrite: null,
+      modelConfigs: [{ id: 'a' }],
+      groupUpdates: [{ groupId: 'hr', models: ['a'] }],
+      replanGroups: async created => {
+        reads += 1;
+        const models = reads === 1 ? [] : ['*'];
+        return {
+          updates: planGroupUpdates(
+            { groups: { hr: { permissions: { models } } } },
+            { mode: 'groups', groupIds: ['hr'] },
+            created
+          ),
+          revision: `"r${reads}"`
+        };
+      }
+    });
+    expect(api.mock.calls.filter(([path]) => path === '/admin/groups/hr')).toHaveLength(1);
+    expect(outcome.groups).toEqual([{ groupId: 'hr', ok: true }]);
   });
 
   it('creates no model when the provider cannot be written', async () => {

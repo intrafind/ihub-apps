@@ -4,6 +4,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { getAdminApiErrorMessage, makeAdminApiCall } from '../../../../api/adminApi';
+import { etagOf } from '../../../../api/adminConfigRevision';
 import { findIdProblems, suggestModelId, translateDiscoveryError } from '../../utils/modelImport';
 import {
   KEEP_DEFAULT,
@@ -290,9 +291,13 @@ export default function useProviderConnect({ initialTileId = null } = {}) {
       groupUpdates,
       // The group lists as they are now, not as the flow loaded them minutes ago: the
       // write replaces a group's model list, and another admin may have changed it.
+      // Its ETag goes out as If-Match, so a save made after this read is not overwritten.
       replanGroups: async createdIds => {
         const fresh = await makeAdminApiCall('/admin/groups');
-        return planGroupUpdates(fresh.data, access, createdIds);
+        return {
+          updates: planGroupUpdates(fresh.data, access, createdIds),
+          revision: etagOf(fresh)
+        };
       }
     });
     setOutcome({ ...result, defaultId });

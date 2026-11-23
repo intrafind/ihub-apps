@@ -65,3 +65,17 @@ or connected, so chat requests still went to the old endpoint.
   entry in its change history and in the audit log.
 - The provider page says how many linked models now use the new address and lists any linked
   model it left alone because its **API URL** points elsewhere, with a link to change it.
+
+## Group Saves No Longer Overwrite Each Other
+
+When two administrators saved the same group at nearly the same time, or the **Connect a
+provider** flow granted its models to a group while someone edited it, one of the changes was
+lost without a word.
+
+- The group editor now saves only if the groups have not changed since it opened. Otherwise it
+  says **Changed by someone else**, saves nothing and keeps your edits; **Reload** loads the
+  current version.
+- The **Connect a provider** flow reads the groups again and retries once when another save got
+  there first, so it keeps the other change and still grants its models.
+- For scripts: `GET /api/admin/groups` returns an `ETag`; send it as `If-Match` with
+  `PUT /api/admin/groups/{groupId}` to get `412` instead of overwriting a newer change.

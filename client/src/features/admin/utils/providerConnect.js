@@ -13,7 +13,8 @@
  *      `PUT /admin/providers/{id}` stores the key on a shipped one
  *   3. `POST /admin/models` once per picked model (linked via `providerId`,
  *      no key of its own; the chosen default carries `default: true`)
- *   4. `PUT /admin/groups/{id}` adds the model ids to the chosen groups
+ *   4. `PUT /admin/groups/{id}` adds the model ids to the chosen groups, with
+ *      `If-Match` from a fresh read of the groups (one re-read and retry on 412)
  *
  * Everything here is free of React so the step rules can be unit tested;
  * the page only renders state and calls {@link runConnectPlan}.
@@ -28,6 +29,7 @@ import {
   providerEnvKeyName
 } from '../../../../../shared/llmProviders.js';
 import { buildImportedModelConfig, isValidId, slugify } from './modelImport';
+import { etagOf, isConfigConflict } from '../../../api/adminConfigRevision';
 import { DEFAULT_MODEL_TOKEN } from '../../../../../shared/modelPermissions.js';
 
 /**
@@ -623,6 +625,12 @@ export function buildModelConfigs({ discovery, picks, providerId, defaultId }) {
  * import dialog. Every piece is a valid configuration on its own, so a partial
  * outcome can be finished from the provider and model pages.
  *
+ * Group writes replace a group's model list, so they are guarded: each
+ * `PUT /admin/groups/{id}` sends the `ETag` of the groups read it was planned
+ * from (and then of the previous group write) as `If-Match`. When another admin
+ * saved the groups in between, the server answers 412; the groups are then read
+ * and planned again, and the write is retried once from that fresh read.
+ *
  * @param {Object} params
  * @param {(path: string, options?: Object) => Promise<Object>} params.api - `makeAdminApiCall`
  * @param {(err: unknown) => string} params.errorMessage - `getAdminApiErrorMessage`
@@ -630,10 +638,11 @@ export function buildModelConfigs({ discovery, picks, providerId, defaultId }) {
  * @param {Object[]} params.modelConfigs
  * @param {Array<{ groupId: string, models: string[] }>} params.groupUpdates - The plan made
  *   from the groups as the flow loaded them
- * @param {(createdIds: string[]) => Promise<Array<{ groupId: string, models: string[] }>>} [params.replanGroups]
- *   Plans the group writes again from the groups as they are now, right before writing
- *   them, so an edit another admin made to those groups while the flow was open is kept.
- *   When it fails, the plan from `groupUpdates` is used.
+ * @param {(createdIds: string[]) => Promise<{ updates: Array<{ groupId: string, models: string[] }>, revision: string|null }>} [params.replanGroups]
+ *   Reads the groups again and plans the group writes from them as they are now, right before
+ *   writing them, so an edit another admin made to those groups while the flow was open is kept.
+ *   `revision` is the `ETag` of that read. When it fails, the plan from `groupUpdates` is used,
+ *   without `If-Match`.
  * @returns {Promise<{ providerError: string|null, models: Array<{ id: string, ok: boolean, error?: string }>, groups: Array<{ groupId: string, ok: boolean, error?: string }> }>}
  */
 export async function runConnectPlan({
@@ -662,27 +671,56 @@ export async function runConnectPlan({
     }
   }
   const created = new Set(outcome.models.filter(m => m.ok).map(m => m.id));
-  let updates = groupUpdates;
+  let queue = groupUpdates;
+  let revision = null;
   if (replanGroups && groupUpdates.length > 0) {
     try {
-      updates = await replanGroups([...created]);
+      ({ updates: queue, revision } = await replanGroups([...created]));
     } catch {
-      updates = groupUpdates;
+      queue = groupUpdates;
+      revision = null;
     }
   }
-  for (const update of updates) {
-    // Grant only what exists: a model that failed to be created is not listed.
-    const models = update.models.filter(
-      id => created.has(id) || !modelConfigs.some(c => c.id === id)
-    );
+
+  // Grant only what exists: a model that failed to be created is not listed.
+  const grantable = update =>
+    update.models.filter(id => created.has(id) || !modelConfigs.some(c => c.id === id));
+  const writeGroup = async update => {
+    const response = await api(`/admin/groups/${encodeURIComponent(update.groupId)}`, {
+      method: 'PUT',
+      ...(revision ? { headers: { 'If-Match': revision } } : {}),
+      body: { permissions: { models: grantable(update) } }
+    });
+    // The next group write builds on the file as this one left it.
+    revision = etagOf(response);
+  };
+
+  queue = [...queue];
+  while (queue.length > 0) {
+    const update = queue.shift();
     try {
-      await api(`/admin/groups/${encodeURIComponent(update.groupId)}`, {
-        method: 'PUT',
-        body: { permissions: { models } }
-      });
+      await writeGroup(update);
       outcome.groups.push({ groupId: update.groupId, ok: true });
     } catch (err) {
-      outcome.groups.push({ groupId: update.groupId, ok: false, error: errorMessage(err) });
+      if (!replanGroups || !isConfigConflict(err)) {
+        outcome.groups.push({ groupId: update.groupId, ok: false, error: errorMessage(err) });
+        continue;
+      }
+      // Someone saved the groups since they were read: read them again, plan this group and
+      // the ones still to write from that read, and retry this one once.
+      try {
+        const fresh = await replanGroups([...created]);
+        revision = fresh.revision;
+        const pending = new Set([update.groupId, ...queue.map(u => u.groupId)]);
+        const replanned = fresh.updates.filter(u => pending.has(u.groupId));
+        const retry = replanned.find(u => u.groupId === update.groupId);
+        queue = replanned.filter(u => u.groupId !== update.groupId);
+        // Nothing left to grant: the group got the models (or `*`) meanwhile.
+        if (retry) await writeGroup(retry);
+        outcome.groups.push({ groupId: update.groupId, ok: true });
+      } catch (retryErr) {
+        outcome.groups.push({ groupId: update.groupId, ok: false, error: errorMessage(retryErr) });
+      }
     }
   }
   return outcome;
