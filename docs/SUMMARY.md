@@ -71,6 +71,7 @@
 
 # Users and sign-in
 
+- [Who can use apps, models and prompts](access-control.md)
 - [Authentication Quick Start](AUTHENTICATION_QUICK_START.md)
 - [OIDC Authentication](oidc-authentication.md)
   - [ADFS Authentication](ADFS-AUTHENTICATION-GUIDE.md)

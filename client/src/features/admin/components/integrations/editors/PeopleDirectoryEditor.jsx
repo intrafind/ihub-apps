@@ -6,7 +6,10 @@ import { useTranslation } from 'react-i18next';
 import AdminFormErrorSummary from '../../AdminFormErrorSummary';
 import { CALLOUT_CLASS, HELP_CLASS, INPUT_CLASS, LABEL_CLASS } from '../../formStyles';
 import { fetchPeopleDirectoryEditorContext } from '../../../../../api/integrationsAdminApi';
-import useInstallationEditor, { useInstallationEditorDirty } from './useInstallationEditor';
+import useInstallationEditor, {
+  useInstallationEditorDirty,
+  useInstallationEditorSave
+} from './useInstallationEditor';
 import { ActionsSection, EditorFooter } from './InstallationEditorParts';
 import SourceSection from './peopleDirectory/SourceSection';
 import DirectoryAccessSection from './peopleDirectory/DirectoryAccessSection';
@@ -123,8 +126,7 @@ function PeopleDirectoryEditor({ instance, definition, onSaved, onCancel }) {
 
   const texts = () => ({ labelMap: form.name, descriptionMap: form.description });
 
-  const submit = event => {
-    event.preventDefault();
+  const save = async () => {
     const found = validateDirectoryForm(form, { limits: context?.limits });
     if (found.length > 0) {
       setProblems(
@@ -134,10 +136,15 @@ function PeopleDirectoryEditor({ instance, definition, onSaved, onCancel }) {
           message: t(entry.message.key, entry.message.defaultValue, entry.message.values)
         }))
       );
-      return;
+      return false;
     }
     setProblems([]);
-    void editor.save(directoryFormToValues(form), texts());
+    return editor.save(directoryFormToValues(form), texts());
+  };
+  useInstallationEditorSave(editor, save);
+  const submit = event => {
+    event.preventDefault();
+    void save();
   };
 
   const runTest = () => {

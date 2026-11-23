@@ -1,12 +1,13 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
 import { buildPath } from '../../../utils/runtimeBasePath';
 import { fetchAppDetails } from '../../../api';
 import AppChat from '../../apps/pages/AppChat';
+import ChatDiagnosticsContext from '../../chat/contexts/ChatDiagnosticsContext';
 import useOverlayPanel from '../../../shared/hooks/useOverlayPanel';
 import NoModelNotice from './app-create/NoModelNotice';
 import TestNoAccessMessage from './app-editor/TestNoAccessMessage';
@@ -56,11 +57,19 @@ export function projectTestApp(app) {
  * @param {string} props.appId - The saved app to run
  * @param {string} [props.testProjectId] - An admin project to test: it is the only
  *   one in scope and the chat is temporary (#3309)
+ * @param {boolean} [props.focusComposerOnStart=true] - Whether the chat's message box
+ *   takes the focus when the chat starts. False for a restart after a save: the page that
+ *   saved (the app conversation's "Applied" line) keeps the focus.
  * @param {(error: unknown) => React.ReactNode} [props.renderLoadError] - What to show
  *   when the app could not be loaded, for a caller that knows more about the cause
  *   than "could not be loaded"; return nothing to keep that message
  */
-export function TestChat({ appId, testProjectId = null, renderLoadError }) {
+export function TestChat({
+  appId,
+  testProjectId = null,
+  focusComposerOnStart = true,
+  renderLoadError
+}) {
   const { t } = useTranslation();
   const [state, setState] = useState({ status: 'loading', app: null, error: null });
 
@@ -111,15 +120,19 @@ export function TestChat({ appId, testProjectId = null, renderLoadError }) {
   }
 
   // `data-surface="app"`: the end-user chat keeps its end-user look inside the admin (App.css
-  // scopes the admin's form-control styles out of this subtree).
+  // scopes the admin's form-control styles out of this subtree). A failed model call shows
+  // the admin what to check (ChatDiagnosticsContext); the end-user chat does not.
   return (
     <div data-surface="app" className="flex flex-col flex-1 min-h-0">
-      <AppChat
-        embedded
-        appId={appId}
-        preloadedApp={testProjectId ? projectTestApp(state.app) : state.app}
-        testProjectId={testProjectId}
-      />
+      <ChatDiagnosticsContext.Provider value={true}>
+        <AppChat
+          embedded
+          focusComposerOnStart={focusComposerOnStart}
+          appId={appId}
+          preloadedApp={testProjectId ? projectTestApp(state.app) : state.app}
+          testProjectId={testProjectId}
+        />
+      </ChatDiagnosticsContext.Provider>
     </div>
   );
 }
@@ -177,6 +190,15 @@ function AppTestPanel({
 }) {
   const { t } = useTranslation();
   const [restarts, setRestarts] = useState(0);
+  // Why the chat (re)started: a save restarts it through `reloadKey`, and the page
+  // that saved keeps the focus; opening the panel or the restart button hands the
+  // focus to the message box as before.
+  const startCause = useRef('open');
+  const seenReloadKey = useRef(reloadKey);
+  if (seenReloadKey.current !== reloadKey) {
+    seenReloadKey.current = reloadKey;
+    startCause.current = 'save';
+  }
   const { panelRef, closeRef, overlay, dialogProps } = useOverlayPanel({ onClose });
 
   useEffect(() => {
@@ -210,7 +232,12 @@ function AppTestPanel({
     );
   } else {
     body = (
-      <TestChat key={`${reloadKey}-${restarts}`} appId={appId} renderLoadError={explainLoadError} />
+      <TestChat
+        key={`${reloadKey}-${restarts}`}
+        appId={appId}
+        focusComposerOnStart={startCause.current !== 'save'}
+        renderLoadError={explainLoadError}
+      />
     );
   }
 
@@ -236,7 +263,10 @@ function AppTestPanel({
           <>
             <button
               type="button"
-              onClick={() => setRestarts(n => n + 1)}
+              onClick={() => {
+                startCause.current = 'restart';
+                setRestarts(n => n + 1);
+              }}
               className={iconButton}
               title={t('admin.apps.test.restart', 'Restart with a new chat')}
               aria-label={t('admin.apps.test.restart', 'Restart with a new chat')}

@@ -205,6 +205,10 @@ const KEY_REQUIRED_HOSTS = Object.freeze(['api.openai.com']);
  * - A model linked to an iFinder Model Gateway provider, whatever its dialect:
  *   a gateway without projects is open, so no key is the normal case there.
  *   One that does need a key answers 401 when the model is called.
+ * - A model linked to a provider entry that declares `requiresApiKey: false`:
+ *   the admin said the endpoint needs no key (a self-hosted LM Studio or
+ *   Ollama server reached through the OpenAI API type). The provider status
+ *   already reports such an entry as keyless; its models must agree.
  *
  * This only decides what happens when no key is found anywhere; a configured
  * key is always sent.
@@ -216,6 +220,7 @@ const KEY_REQUIRED_HOSTS = Object.freeze(['api.openai.com']);
 export function allowsMissingApiKey(model, providerEntry) {
   if (!model) return false;
   if (isGatewayProvider(providerEntry)) return true;
+  if (providerEntry?.requiresApiKey === false) return true;
   if (model.provider === 'local') return true;
   if (model.provider !== 'openai' || model.providerId || typeof model.url !== 'string') {
     return false;

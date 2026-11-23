@@ -28,6 +28,10 @@ import { useCallback, useState } from 'react';
  *   whether it was saved.
  * @param {(published: boolean) => void} options.onChanged - The flag was set.
  * @param {(error: unknown) => string} options.describeError - A failed request as a sentence.
+ * @param {(error: unknown) => boolean} [options.isConflict] - Whether the flag was refused
+ *   because someone else saved the app since the editor loaded it.
+ * @param {() => void} [options.onConflict] - Called instead of showing an error for such a
+ *   refusal; the dialog closes, and the page says that the app changed.
  * @param {() => void} [options.onAskPublish] - The publish dialog opens: the moment to
  *   ask again who can use the app.
  * @returns {{
@@ -52,6 +56,8 @@ export function useAppPublishing({
   saveFirst,
   onChanged,
   describeError,
+  isConflict,
+  onConflict,
   onAskPublish
 }) {
   const [dialog, setDialog] = useState(null);
@@ -88,7 +94,12 @@ export function useAppPublishing({
       onChanged(publish);
       setDialog(null);
     } catch (failure) {
-      setError(describeError(failure));
+      if (onConflict && isConflict?.(failure)) {
+        setDialog(null);
+        onConflict();
+      } else {
+        setError(describeError(failure));
+      }
     } finally {
       setBusy(false);
     }

@@ -207,7 +207,6 @@
     "moveDown": "Nach unten",
     "create": "Anlegen",
     "status": "Status",
-    "saveChanges": "Änderungen speichern",
     "disable": "Deaktivieren",
     "enable": "Aktivieren",
     "basicInfo": "Grundinformationen",
@@ -288,6 +287,19 @@
     },
     "modelSelector": {
       "noModels": "Keine Modelle verfügbar"
+    },
+    "failureCause": {
+      "certificateUntrusted": "Das KI-Modell konnte nicht sicher erreicht werden: Der iHub-Server vertraut dem Zertifikat seines Dienstes nicht. Bitte wenden Sie sich an Ihren Administrator.",
+      "serverError": "Der Dienst des KI-Modells hat nicht geantwortet. Der Fehler liegt beim Dienst; bitte versuchen Sie es später erneut.",
+      "authenticationFailed": "Der Dienst des KI-Modells hat den in iHub konfigurierten API-Schlüssel abgelehnt. Bitte wenden Sie sich an Ihren Administrator.",
+      "accessDenied": "Der Dienst des KI-Modells erlaubt diese Anfrage mit dem konfigurierten API-Schlüssel nicht. Bitte wenden Sie sich an Ihren Administrator.",
+      "apiKeyRequired": "Der Dienst des KI-Modells verlangt einen API-Schlüssel, für dieses Modell ist aber keiner konfiguriert. Bitte wenden Sie sich an Ihren Administrator.",
+      "apiKeyNotConfigured": "Für dieses KI-Modell ist kein API-Schlüssel konfiguriert. Bitte wenden Sie sich an Ihren Administrator.",
+      "apiKeyUndecryptable": "Der für dieses KI-Modell gespeicherte API-Schlüssel kann nicht mehr gelesen werden. Bitte wenden Sie sich an Ihren Administrator.",
+      "modelNotFound": "Der Dienst bietet das konfigurierte KI-Modell nicht an. Bitte wenden Sie sich an Ihren Administrator.",
+      "rateLimitExceeded": "Der Dienst des KI-Modells erhält zu viele Anfragen. Bitte warten Sie einen Moment und versuchen Sie es erneut.",
+      "unreachable": "Der Dienst des KI-Modells ist nicht erreichbar. Bitte versuchen Sie es später erneut, oder wenden Sie sich an Ihren Administrator, wenn der Fehler bleibt.",
+      "timeout": "Der Dienst des KI-Modells hat zu lange für die Antwort gebraucht. Bitte versuchen Sie es erneut."
     }
   },
   "websearch": {
@@ -686,8 +698,8 @@
     "plainText": "Klartext",
     "json": "JSON",
     "html": "HTML",
-    "toolsSettings": "Werkzeuge",
-    "toolsSettingsHelp": "Aktivieren oder deaktivieren Sie einzelne Werkzeuge für diese Sitzung",
+    "toolsSettings": "Tools",
+    "toolsSettingsHelp": "Aktivieren oder deaktivieren Sie einzelne Tools für diese Sitzung",
     "imageGeneration": "Bilderzeugungseinstellungen",
     "imageAspectRatio": "Seitenverhältnis",
     "imageAspectRatioHelp": "Wählen Sie das Seitenverhältnis für generierte Bilder",
@@ -745,7 +757,7 @@
     "downloadOptions": "Download-Optionen",
     "deleteMessage": "Nachricht löschen",
     "knowledgeScope": {
-      "noTools": "das Modell kann keine Werkzeuge aufrufen",
+      "noTools": "das Modell kann keine Tools aufrufen",
       "overBudget": "über dem Budget",
       "privateProject": "Privates Projekt",
       "ifinderCollection": "iFinder-Collection",
@@ -972,7 +984,10 @@
     "streamStalled": "Der {provider}-Endpunkt für Modell {model} hat die Übertragung abgebrochen, bevor die Antwort vollständig war. Alles oberhalb dieser Zeile ist die Teilantwort — senden Sie die Nachricht erneut, um es noch einmal zu versuchen.",
     "connectionRefused": "Verbindung verweigert beim Versuch, auf die {provider} API für Modell {model} zuzugreifen. Bitte überprüfen Sie Ihre Verbindung oder Serverkonfiguration.",
     "dnsResolutionFailed": "Der Hostname für die {provider} API (Modell {model}) konnte nicht aufgelöst werden. DNS-Lookup für {hostname} fehlgeschlagen. Wenn Sie sich hinter einem Firmen-Proxy befinden, stellen Sie sicher, dass HTTPS_PROXY konfiguriert ist.",
+    "dnsResolutionFailedNoHost": "Der Hostname der {provider} API (Modell {model}) konnte nicht aufgelöst werden. Bitten Sie Ihre Administration, die Adresse des Modells und die Netzwerkeinstellungen zu prüfen.",
     "networkError": "Netzwerkfehler bei der Verbindung zur {provider} API für Modell {model}: {error}. Überprüfen Sie Ihre Netzwerkverbindung und Proxy-Konfiguration.",
+    "modelCallFailed": "Der Aufruf der {provider} API für Modell {model} ist fehlgeschlagen. Bitten Sie Ihre Administration, die Modellkonfiguration zu prüfen.",
+    "networkErrorNoDetail": "Netzwerkfehler bei der Verbindung zur {provider} API für Modell {model}. Überprüfen Sie Ihre Netzwerkverbindung und Proxy-Konfiguration.",
     "unauthorized": "Ungültiger API-Schlüssel",
     "modelAccessDenied": "API-Schlüssel darf dieses Modell nicht verwenden",
     "modelAccessDeniedForUser": "Sie haben keine Berechtigung, dieses KI-Modell zu verwenden. Bitte wenden Sie sich an Ihren Administrator, um Zugriff anzufordern.",
@@ -1899,8 +1914,6 @@
         "connectHint": "Längste Wartezeit auf die Verbindung zum Anbieter (DNS, TCP, TLS), bevor ein Aufruf als nicht erreichbar scheitert. Die Zeit, die das Modell bis zum ersten Antwortteil braucht, zählt nicht. 0 schaltet sie ab.",
         "streamIdle": "Stream-Leerlauf-Timeout (ms)",
         "streamIdleHint": "Längste Pause zwischen zwei Chunks eines bereits laufenden Streams. Für Denkmodelle erhöhen. 0 schaltet sie ab.",
-        "save": "Timeouts speichern",
-        "reset": "Zurücksetzen",
         "saved": "Timeouts gespeichert. Sie gelten ab der nächsten Anfrage.",
         "providerTitle": "Timeouts",
         "providerDescription": "Gelten für alle Modelle dieses Anbieters. Ein leeres Feld verwendet den Wert der Installation; ein Modell kann weiterhin einen eigenen setzen. 0 schaltet eine Grenze ab.",
@@ -1955,14 +1968,17 @@
         "apiKeyEnter": "API-Schlüssel eingeben",
         "apiKeySet": "Ein API-Schlüssel ist derzeit konfiguriert",
         "enabled": "Anbieter aktiviert",
-        "cancel": "Abbrechen",
-        "save": "Änderungen speichern",
-        "saving": "Speichern...",
         "info": {
           "title": "Über Anbieter-API-Schlüssel",
           "description": "API-Schlüssel, die hier konfiguriert werden, werden als Fallback für alle Modelle dieses Anbieters verwendet, die keinen eigenen API-Schlüssel konfiguriert haben. Wenn Sie dieses Feld leer lassen, verwendet das System stattdessen die Umgebungsvariable."
         },
-        "subtitle": "Diesen Anbieter und seinen API-Schlüssel konfigurieren"
+        "subtitle": "Diesen Anbieter und seinen API-Schlüssel konfigurieren",
+        "modelUrls": {
+          "updated_one": "{{count}} verknüpftes Modell verwendet jetzt die neue Adresse.",
+          "updated_other": "{{count}} verknüpfte Modelle verwenden jetzt die neue Adresse.",
+          "skipped_one": "Dieses verknüpfte Modell wurde nicht geändert, weil seine URL nicht mit der bisherigen Basis-URL des Anbieters beginnt:",
+          "skipped_other": "Diese verknüpften Modelle wurden nicht geändert, weil ihre URL nicht mit der bisherigen Basis-URL des Anbieters beginnt:"
+        }
       },
       "create": {
         "title": "Neuen Anbieter erstellen",
@@ -1976,13 +1992,11 @@
         "apiKeyOptional": "(Optional)",
         "apiKeyEnter": "API-Schlüssel eingeben",
         "enabled": "Anbieter aktiviert",
-        "cancel": "Abbrechen",
-        "save": "Anbieter erstellen",
-        "saving": "Wird erstellt...",
         "llmHelp": "Ein LLM-Anbieter hält einen API-Schlüssel für alle seine Modelle. Verknüpfen Sie Modelle im Modell-Editor mit ihm oder importieren Sie sie von seinem Endpunkt.",
         "nameRequired": "Der Name des Anbieters ist erforderlich",
         "subtitle": "Legen Sie einen LLM-Anbieter für einen eigenen Endpunkt, einen Websuche-Anbieter oder einen allgemeinen API-Schlüssel an",
-        "idRequired": "Die Anbieter-ID ist erforderlich"
+        "idRequired": "Die Anbieter-ID ist erforderlich",
+        "intro": "Verbinden Sie einen eigenen KI-Endpunkt – ein Gateway, einen selbst betriebenen Server oder einen anderen Hersteller. Seine Modelle teilen sich einen API-Schlüssel."
       },
       "info": {
         "title": "API-Schlüssel-Priorität",
@@ -2070,7 +2084,139 @@
       },
       "add": "Anbieter hinzufügen",
       "import": "Modelle importieren",
-      "ownTimeouts": "Setzt eigene Timeouts"
+      "ownTimeouts": "Setzt eigene Timeouts",
+      "connect": {
+        "access": {
+          "title": "Wer darf diese Modelle nutzen?",
+          "intro": "Geben Sie die neuen Modelle für Gruppen frei. Sie können das später unter Gruppen ändern.",
+          "groupsUnavailable": "Die Gruppen konnten nicht geladen werden. Die Modelle erhalten den Zugriff, den die Gruppen bereits gewähren; ändern Sie ihn später unter Gruppen.",
+          "everyone": "Alle angemeldeten Benutzer",
+          "everyoneHint": "Freigegeben für die Gruppe „authenticated“, zu der jeder angemeldete Benutzer gehört.",
+          "groups": "Nur die Gruppen, die ich auswähle",
+          "allModels": "(alle Modelle)",
+          "wildcardNote": "Diese Gruppen können jedes Modell nutzen, auch die neuen, unabhängig von Ihrer Auswahl hier: {{groups}}.",
+          "defaultTokenNote": "Sie machen eines dieser Modelle zum Standardmodell. Diese Gruppen gewähren „das Standardmodell“, daher können sie und jede Gruppe, die von ihnen erbt, es nutzen, egal was Sie hier wählen: {{groups}}."
+        },
+        "tiles": {
+          "openai": "GPT-Modelle von api.openai.com.",
+          "azureOpenai": "OpenAI-Modelle, die in Ihrer Azure-Ressource bereitgestellt sind.",
+          "anthropic": "Claude-Modelle von api.anthropic.com.",
+          "google": "Gemini-Modelle über die Google-AI-API.",
+          "mistral": "Mistral-Modelle von api.mistral.ai.",
+          "bedrock": "Foundation-Modelle über die Bedrock-Converse-API.",
+          "openrouter": "Eine API für Modelle vieler Hersteller.",
+          "openaiCompatible": "Ein Gateway wie T-Systems LLM Hub oder LiteLLM.",
+          "selfHosted": "vLLM, LM Studio oder Ollama auf Ihrer eigenen Hardware.",
+          "ifinderGateway": "Das Modell-Gateway einer iFinder-Installation.",
+          "openaiCompatibleName": "OpenAI-kompatibles Gateway",
+          "selfHostedName": "Selbst betrieben"
+        },
+        "vendor": {
+          "title": "Wo laufen Ihre Modelle?",
+          "intro": "Wählen Sie den Dienst, der Ihre Modelle betreibt. Weitere Anbieter können Sie später verbinden.",
+          "keyStored": "Schlüssel gespeichert",
+          "otherProvider": "Brauchen Sie einen Anbieter, der nur eigene Zugangsdaten hält, oder möchten Sie jedes Feld selbst setzen?",
+          "otherProviderLink": "Anbieter-Formular verwenden"
+        },
+        "models": {
+          "title": "Modelle auswählen",
+          "intro": "Jedes ausgewählte Modell wird hinzugefügt, aktiviert und mit dem Anbieter verknüpft: Es nutzt Endpunkt und Schlüssel des Anbieters, am Modell wird keiner gespeichert.",
+          "selected": "{{selected}} von {{total}} Modellen ausgewählt"
+        },
+        "done": {
+          "smokeIntro": "Senden Sie einen kurzen Prompt an {{model}}, um zu prüfen, ob es antwortet.",
+          "smokeRunning": "Wird gesendet…",
+          "smokeRun": "Test-Prompt senden",
+          "smokeOk": "Das Modell hat geantwortet:",
+          "providerFailedTitle": "Der Anbieter wurde nicht gespeichert",
+          "providerFailedHint": "Sonst wurde nichts angelegt. Gehen Sie zurück, korrigieren Sie die Verbindung und versuchen Sie es erneut.",
+          "title": "{{count}} Modelle über {{provider}} verbunden",
+          "title_one": "{{count}} Modell über {{provider}} verbunden",
+          "linked": "Die Modelle nutzen Endpunkt und Schlüssel des Anbieters.",
+          "default": "{{model}} ist das Standardmodell.",
+          "groups": "Freigegeben für: {{groups}}.",
+          "groupFailed": "Gruppe {{group}}: {{error}}",
+          "createApp": "App mit diesem Modell erstellen",
+          "openProvider": "Anbieter öffnen",
+          "openModels": "Zu den Modellen"
+        },
+        "steps": {
+          "vendor": "Dienst",
+          "connection": "Verbindung",
+          "test": "Test",
+          "models": "Modelle",
+          "default": "Standard",
+          "access": "Zugriff",
+          "done": "Fertig",
+          "label": "Fortschritt"
+        },
+        "default": {
+          "title": "Standardmodell wählen",
+          "intro": "Apps ohne eigenes Modell und neue Chats verwenden das Standardmodell.",
+          "noChatModels": "Keines der ausgewählten Modelle ist ein Chat-Modell, daher kann keines das Standardmodell sein.",
+          "keep": "{{model}} beibehalten",
+          "keepHint": "Das aktuelle Standardmodell."
+        },
+        "test": {
+          "causes": {
+            "unreachable": "Der iHub-Server konnte den Host nicht erreichen. Prüfen Sie Hostname und Port und ob der Server (nicht Ihr Browser) ihn über Netzwerk, Firewall oder Proxy erreicht.",
+            "tls": "Der Endpunkt legt ein Zertifikat vor, dem der iHub-Server nicht vertraut – üblich bei einer privaten CA. Fügen Sie den Host unter Sicherheit der SSL-Whitelist hinzu oder installieren Sie die CA auf dem Server.",
+            "auth": "Der Endpunkt hat den Schlüssel abgelehnt. Prüfen Sie, ob es der Schlüssel für diesen Endpunkt ist und ob er Modelle auflisten darf.",
+            "path": "Der Host hat geantwortet, aber unter diesem Pfad liegt keine Modellliste. Prüfen Sie die URL; sie endet meist auf /v1.",
+            "other": "Prüfen Sie URL und Schlüssel und testen Sie erneut."
+          },
+          "title": "Verbindung testen",
+          "intro": "iHub fragt die Modellliste des Endpunkts vom Server aus ab, mit dem eingegebenen Schlüssel.",
+          "running": "Verbindung zu {{host}} wird hergestellt…",
+          "success": "Verbunden",
+          "host": "Host",
+          "models": "Modelle",
+          "modelCount": "{{count}} gelistet, davon {{chat}} Chat-Modelle",
+          "noModels": "Der Endpunkt listet keine Modelle. Prüfen Sie, ob Modelle bereitgestellt sind und ob der Schlüssel sie sehen darf.",
+          "retry": "Erneut testen",
+          "openSsl": "SSL-Whitelist öffnen",
+          "changeKey": "Schlüssel ändern",
+          "changeConnection": "URL oder Schlüssel ändern"
+        },
+        "connection": {
+          "urlHintAzure": "Der Endpunkt Ihrer Azure-OpenAI-Ressource, zum Beispiel https://my-resource.openai.azure.com/openai/v1. Eine aus Azure kopierte Deployment-URL (…/chat/completions?api-version=…) funktioniert ebenfalls.",
+          "urlHintGateway": "Die API-Basis, meist auf /v1 endend, zum Beispiel https://llm-server.llmhub.t-systems.net/v2. Die /models-Liste oder eine Chat-Completions-URL funktionieren ebenfalls.",
+          "urlHintSelfHosted": "Die API-Basis, wie der iHub-Server (nicht Ihr Browser) sie erreicht, zum Beispiel {{example}}.",
+          "idExists": "Ein Anbieter mit dieser ID existiert bereits. Wählen Sie eine andere ID oder bearbeiten Sie diesen Anbieter unter Anbieter.",
+          "title": "{{provider}} verbinden",
+          "introBedrock": "Die AWS-Region, in der iHub die Modelle auflistet und aufruft, und ein Bedrock-API-Schlüssel. Beides wird beim Abschluss am Anbieter AWS Bedrock gespeichert (der Schlüssel verschlüsselt).",
+          "intro": "Wo iHub die Modelle erreicht und welchen Schlüssel es sendet. Gespeichert wird erst im letzten Schritt.",
+          "serverKind": "Server",
+          "serverKindHint": "vLLM wird mit dem vLLM-Adapter angesprochen, LM Studio und Ollama mit dem OpenAI-kompatiblen.",
+          "urlFixedHint": "Die öffentliche API des Herstellers. Für einen vorgeschalteten Proxy verwenden Sie die Kachel „OpenAI-kompatibles Gateway“.",
+          "keyStoredPlaceholder": "Gespeichert – leer lassen, um ihn zu behalten",
+          "keyStoredHint": "An diesem Anbieter ist bereits ein Schlüssel gespeichert. Lassen Sie das Feld leer, um ihn zu testen und zu behalten, oder geben Sie einen neuen ein, um ihn zu ersetzen.",
+          "keyHintSelfHosted": "Leer lassen, wenn der Server keine Authentifizierung hat. Ein hier eingegebener Schlüssel wird verschlüsselt am Anbieter gespeichert.",
+          "keyHint": "Wird verschlüsselt am Anbieter gespeichert, nicht an jedem Modell.",
+          "envVarHint": "Statt ihn zu speichern, können Sie das Feld leer lassen und auf dem Server die Umgebungsvariable {{envVar}} setzen.",
+          "getKey": "Wo bekomme ich einen Schlüssel?",
+          "region": "AWS-Region",
+          "regionHint": "Ein AWS-Regionscode wie eu-central-1 oder „global“ für die globalen regionsübergreifenden Inferenzprofile. Modelle, die ein Inferenzprofil benötigen, werden mit dem Profil dieser Region angeboten (eu. für eu-central-1).",
+          "regionInvalid": "Geben Sie einen AWS-Regionscode wie eu-central-1 oder global ein."
+        },
+        "loadError": "Anbieter und Modelle konnten nicht geladen werden",
+        "saving": "Wird gespeichert…",
+        "finish": "Verbinden und {{count}} Modelle hinzufügen",
+        "finish_one": "Verbinden und {{count}} Modell hinzufügen",
+        "testAction": "Verbindung testen",
+        "next": "Weiter",
+        "title": "Modell-Anbieter verbinden",
+        "subtitle": "Verbinden Sie einen Dienst, testen Sie ihn, wählen Sie seine Modelle und legen Sie fest, wer sie nutzen darf – in einem Durchgang.",
+        "back": "Zurück",
+        "backToConnection": "Zurück zur Verbindung"
+      },
+      "loadError": "Fehler beim Laden der Anbieter",
+      "searchLabel": "Anbieter durchsuchen",
+      "bedrockRegion": {
+        "label": "AWS-Region",
+        "invalid": "Geben Sie einen AWS-Regionscode wie eu-central-1 oder global ein.",
+        "hint": "Region, in der die Bedrock-Modelle aufgerufen werden, sofern ein Modell keine eigene festlegt. Leer lassen, um AWS_REGION auf dem Server zu verwenden (Standard eu-central-1). Modelle, deren ID mit einem Profilpräfix beginnt (eu., us., global.), funktionieren nur in einer Region dieses Wirtschaftsraums."
+      }
     },
     "models": {
       "sync": {
@@ -2113,7 +2259,9 @@
           "modelNotFound": "Modell nicht gefunden",
           "rateLimitExceeded": "Ratenlimit überschritten",
           "serverError": "Serverfehler",
-          "apiKeyUndecryptable": "Gespeicherter API-Schlüssel kann nicht entschlüsselt werden"
+          "apiKeyUndecryptable": "Gespeicherter API-Schlüssel kann nicht entschlüsselt werden",
+          "apiKeyRequired": "Der Endpunkt erfordert einen API-Schlüssel",
+          "certificateUntrusted": "Zertifikat nicht vertrauenswürdig"
         }
       },
       "enable": "Aktivieren",
@@ -2180,16 +2328,15 @@
         "success": "Modell {{action}} erfolgreich!",
         "successCreated": "erstellt",
         "successUpdated": "aktualisiert",
-        "saving": "Speichern...",
-        "createModel": "Modell erstellen",
-        "saveChanges": "Änderungen speichern",
         "basicInfo": "Grundlegende Informationen",
         "basicInfoDesc": "Grundlegende Informationen über das Modell",
         "configuration": "Konfiguration",
         "configurationDesc": "Erweiterte Konfigurationsoptionen für das Modell",
         "resource": "Modell „{{id}}“",
         "fixErrors": "Bitte beheben Sie die folgenden Fehler",
-        "history": "Verlauf"
+        "history": "Verlauf",
+        "testSavedHint": "Testet das gespeicherte Modell. Speichern Sie zuerst, um Ihre Änderungen zu testen.",
+        "testing": "Wird getestet…"
       },
       "fields": {
         "id": "Modell-ID",
@@ -2294,7 +2441,8 @@
         "markingDetectorCredentialRef": "Optionales Bearer-Token, falls der Detektor eines verlangt.",
         "markingTokenizer": "Der Detektor zerlegt einen Text in dieselben Tokens wie das Modell, um das Wasserzeichen zu finden. Leer lassen, um die Modell-ID zu verwenden; eine Hugging-Face-ID oder einen Pfad nur angeben, wenn vLLM das Modell unter einem anderen Namen bereitstellt.",
         "markingContextWidth": "Anzahl der vorherigen Tokens, auf die das Wasserzeichen zurückblickt, nicht das Kontextfenster. Muss context_width von vLLM entsprechen (Standard 4).",
-        "autoDiscovery": "Erkennt das aktive Modell automatisch über den Endpunkt /v1/models. Nützlich für lokale LLM-Anbieter (vLLM, LM Studio, Jan.ai), bei denen das Modell wechseln kann. Nur für OpenAI-kompatible Anbieter verfügbar."
+        "autoDiscovery": "Erkennt das aktive Modell automatisch über den Endpunkt /v1/models. Nützlich für lokale LLM-Anbieter (vLLM, LM Studio, Jan.ai), bei denen das Modell wechseln kann. Nur für OpenAI-kompatible Anbieter verfügbar.",
+        "apiKeyLookupOrder": "Optional. Ist das Feld leer, verwendet der Server den ersten Schlüssel, den er findet, in dieser Reihenfolge: den Schlüssel dieses Modells, den Schlüssel seines Anbieters, die Umgebungsvariable {{modelEnv}}, die Umgebungsvariable {{providerEnv}}. Ein lokaler Server (vLLM, LM Studio, Jan.ai, Ollama) braucht keinen Schlüssel. Schlüssel werden verschlüsselt gespeichert."
       },
       "placeholders": {
         "maxOutputTokens": "Standard: {{value}}",
@@ -2441,12 +2589,16 @@
           "connectionRefused": "Verbindung abgelehnt",
           "hostNotFound": "Host nicht gefunden",
           "networkError": "Netzwerkfehler",
-          "providerIdReserved": "Diese ID ist der Name eines API-Typs. Wählen Sie eine andere ID."
+          "providerIdReserved": "Diese ID ist der Name eines API-Typs. Wählen Sie eine andere ID.",
+          "serverError": "Der Endpunkt hat mit einem Serverfehler geantwortet",
+          "certificateUntrusted": "Dem Zertifikat des Endpunkts wird nicht vertraut",
+          "invalidRegion": "Das ist keine AWS-Region"
         },
         "unsupported": "iHub kann dieses Modell bei diesem Anbieter nicht ausführen",
         "gatewayCheckbox": "Dieser Endpunkt ist ein iFinder Model Gateway",
         "gatewayUrlHint": "Die Gateway-Wurzel, zum Beispiel https://gateway:9614. iHub liest /v1/gateway/models und ruft die Modelle über /v1/gateway/proxy auf. Tragen Sie unten den Projekt-API-Schlüssel des Gateways ein, falls das Gateway einen verlangt.",
-        "models": "Modelle importieren"
+        "models": "Modelle importieren",
+        "tools": "Tools"
       },
       "areaTitle": "Modelle",
       "areaSubtitle": "KI-Anbieter verbinden und die Modelle auswählen, die Ihre Apps nutzen können",
@@ -2478,7 +2630,9 @@
         "enableHint": "Importieren Sie die Modelle eines Anbieters oder schalten Sie unten eines ein.",
         "defaultHint": "Öffnen Sie ein Modell und setzen Sie „Standard“, damit Apps ohne eigenes Modell eines haben.",
         "done": "(erledigt)",
-        "todo": "(offen)"
+        "todo": "(offen)",
+        "connectWizardAction": "Modell-Anbieter verbinden",
+        "defaultHintRow": "Wählen Sie „Als Standard festlegen“ in der Zeile eines aktivierten Chat-Modells, damit Apps ohne eigenes Modell eines haben."
       },
       "moreActions": "Weitere Modell-Aktionen",
       "disableAllDefault": "Die Einstellung für das Standardmodell wird entfernt. Werden Modelle wieder aktiviert, wird das erste Chat-Modell der Liste zum Standard.",
@@ -2508,7 +2662,12 @@
       },
       "downloadError": "Die Konfiguration konnte nicht heruntergeladen werden: {{error}}",
       "uploadExists": "Ein Modell mit der ID „{{id}}“ existiert bereits",
-      "uploadError": "Die Konfiguration konnte nicht hochgeladen werden: {{error}}"
+      "uploadError": "Die Konfiguration konnte nicht hochgeladen werden: {{error}}",
+      "enabledSwitch": "Aktiviert: {{name}}",
+      "defaultAssigned": "„{{name}}“ ist jetzt das Standardmodell.",
+      "madeDefault": "„{{name}}“ ist jetzt das Standardmodell.",
+      "makeDefault": "Als Standard festlegen",
+      "makeDefaultDisabled": "Aktivieren Sie das Modell zuerst"
     },
     "chat": {
       "title": "Chat",
@@ -2700,8 +2859,6 @@
         "refreshTokenExp": "Refresh-Token-Ablauf (Tage)",
         "jwtAlgorithm": "JWT-Signaturalgorithmus",
         "jwtAlgorithmHint": "Konfiguriert in den Server-JWT-Einstellungen. RS256 aktiviert die JWKS-Public-Key-Freigabe.",
-        "saveSettings": "Einstellungen speichern",
-        "savingSettings": "Speichert...",
         "configSaved": "Autorisierungsserver-Einstellungen erfolgreich gespeichert",
         "configSaveError": "Fehler beim Speichern der Autorisierungsserver-Einstellungen",
         "server": {
@@ -2944,9 +3101,10 @@
         "ldapLookupHelp": "Wenn gesetzt, werden die Gruppenmitgliedschaften des angemeldeten Benutzers beim gewählten LDAP-Anbieter nachgeschlagen und mit den Gruppen aus dem Gruppen-Header und dem JWT-Claim zusammengeführt. Der LDAP-Anbieter benötigt Administrator-Zugangsdaten und eine konfigurierte Gruppensuche."
       },
       "resource": "Authentifizierungseinstellungen",
+      "embedHintTitle": "iHub in einem iframe einer anderen Website verwenden?",
+      "embedHintText": "Identitätsanbieter erlauben ihre Anmeldeseite nicht in einem Frame. Erlauben Sie die Website, die iHub anzeigt, dann öffnet sich die Anmeldung stattdessen in einem Pop-up.",
+      "embedHintLink": "iHub in einer anderen Website einrichten",
       "subtitle": "Konfigurieren Sie mehrere Anmeldemethoden und den Benutzerzugriff. Aktivieren Sie mehrere Methoden gleichzeitig für maximale Flexibilität.",
-      "save": "Konfiguration speichern",
-      "saving": "Wird gespeichert...",
       "saved": "Authentifizierungskonfiguration gespeichert.",
       "saveFailed": "Konfiguration konnte nicht gespeichert werden: {{error}}",
       "noConfigData": "Keine Konfigurationsdaten verfügbar",
@@ -3073,7 +3231,6 @@
       "moveUp": "Nach oben",
       "moveDown": "Nach unten",
       "remove": "Entfernen",
-      "save": "Speichern",
       "saved": "Konfiguration gespeichert",
       "saveError": "Konfiguration konnte nicht gespeichert werden",
       "loadError": "Office-Integrationsstatus konnte nicht geladen werden",
@@ -3171,6 +3328,32 @@
       "regenerateAddinIdConsequence": "Outlook behandelt ein Manifest mit neuer ID als anderes Add-in. Alle Benutzer müssen das neue Manifest installieren, und das alte zeigt weiter auf diesen Server, bis es entfernt wird.",
       "resource": "Einstellungen der Office-Integration"
     },
+    "embedAuth": {
+      "title": "iHub in einer anderen Website",
+      "description": "Zeigen Sie iHub in einem iframe eines anderen Produkts, etwa iFinder oder eines Portals, und lassen Sie die Benutzer sich dort über Ihren Identitätsanbieter anmelden.",
+      "resource": "Einstellungen für iHub in einer anderen Website",
+      "statusTitle": "Anmeldung in einem Frame",
+      "enabledLabel": "Anmeldung erlauben, wenn iHub in einer anderen Website angezeigt wird",
+      "enabledHint": "Identitätsanbieter wie Microsoft Entra ID erlauben ihre Anmeldeseite nicht in einem Frame. Ist dies aktiviert, öffnet sich die Anmeldung in einem Pop-up-Fenster, und der Frame läuft danach weiter.",
+      "noSiteWarning": "Der Schalter ist aktiviert, aber es ist noch keine Website erlaubt. Es ändert sich daher nichts. Fügen Sie unten die Website hinzu, die iHub anzeigt.",
+      "offWithSitesNote": "Der Schalter ist deaktiviert. Die Liste bleibt erhalten, gilt aber nicht: Die Anmeldung in einem Frame ist nicht verfügbar, und iHub ist nicht auf diese Websites beschränkt.",
+      "insecurePage": "iHub wird hier nicht über HTTPS ausgeliefert. Das Sitzungs-Cookie des Frames benötigt HTTPS, die Anmeldung in einem Frame funktioniert daher nicht.",
+      "originsTitle": "Websites, die iHub anzeigen dürfen",
+      "originsDesc": "Solange der Schalter aktiviert ist, können nur diese Websites und iHub selbst iHub in einem Frame anzeigen. Tragen Sie jede Website ein, die das tut, zum Beispiel iFinder, ein Intranet-Portal oder einen Teams-Tab: Eine Website, die nicht in der Liste steht, kann iHub nicht mehr anzeigen.",
+      "originLabel": "Adresse der Website",
+      "originInvalid": "Geben Sie einen Origin wie https://ifinder.example.com ein: Schema und Host, ohne Pfad.",
+      "addOrigin": "Hinzufügen",
+      "noOrigins": "Noch keine Website hinzugefügt.",
+      "remove": "Entfernen",
+      "removeOrigin": "{{origin}} entfernen",
+      "httpOrigin": "{{origin}} wird nicht über HTTPS ausgeliefert. Das Sitzungs-Cookie des Frames benötigt HTTPS, die Anmeldung von dieser Website aus funktioniert daher nicht.",
+      "howTitle": "Was Benutzer sehen und was zu beachten ist",
+      "how1": "Benutzer klicken im Frame auf Anmelden und erlauben das Pop-up, falls der Browser danach fragt. Sind sie beim Identitätsanbieter bereits angemeldet, schließt sich das Fenster von selbst.",
+      "how2": "Beide Websites benötigen HTTPS. Die Sitzung des Frames ist ein Cookie, das Skripte nicht lesen können. Es wird nur gesendet, solange iHub von der Website angezeigt wird, für die es erstellt wurde.",
+      "how3": "Gespeicherte Einstellungen gelten sofort, ohne Neustart. Das Abmelden im Frame beendet nur die Sitzung des Frames.",
+      "saved": "Einstellungen gespeichert. Sie gelten sofort.",
+      "saveError": "Die Einstellungen konnten nicht gespeichert werden."
+    },
     "nextcloudEmbed": {
       "title": "Nextcloud-Embed",
       "description": "Konfiguriere die eingebettete iHub-Oberfläche, die innerhalb von Nextcloud geöffnet wird, sobald jemand ein Dokument auswählt und einen Chat startet.",
@@ -3203,7 +3386,6 @@
       "moveUp": "Nach oben",
       "moveDown": "Nach unten",
       "remove": "Entfernen",
-      "save": "Speichern",
       "saved": "Konfiguration gespeichert",
       "saveError": "Konfiguration konnte nicht gespeichert werden",
       "loadError": "Nextcloud-Embed-Status konnte nicht geladen werden",
@@ -3303,8 +3485,6 @@
         "removeDomain": "Entfernen",
         "domainPatternHelp": "Unterstützte Muster: exakte Domain (api.example.com), Wildcard (*.example.com), Subdomain (.example.com)",
         "noDomains": "Keine Domains in der Whitelist",
-        "saveConfig": "Konfiguration speichern",
-        "savingConfig": "Konfiguration wird gespeichert...",
         "configSaved": "SSL-Konfiguration erfolgreich gespeichert",
         "configSaveError": "Fehler beim Speichern der SSL-Konfiguration",
         "securityWarning": "Sicherheitswarnung",
@@ -3323,8 +3503,6 @@
         "tlsTrustedTitle": "Ebenfalls vertrauenswürdig: SSL-Domain-Whitelist",
         "tlsTrustedDesc": "Hosts auf der SSL-Domain-Whitelist gelten auch für Webquellen, Website-Crawls, den Seitenleser und den Wasserzeichen-Detektor als vertrauenswürdig (nicht für Tools und MCP-Server), unabhängig davon, ob „Ungültige SSL-Zertifikate ignorieren“ aktiviert ist. Sie werden in der SSL-Karte bearbeitet.",
         "tlsTrustedNone": "Die SSL-Domain-Whitelist ist leer.",
-        "saveConfig": "Allowlist speichern",
-        "savingConfig": "Wird gespeichert…",
         "configSaved": "SSRF-Allowlist erfolgreich gespeichert",
         "configLoadError": "Fehler beim Laden der SSRF-Konfiguration",
         "configSaveError": "Fehler beim Speichern der SSRF-Konfiguration",
@@ -3366,8 +3544,6 @@
         "effectivePending": "nach dem Speichern: {{value}}",
         "unsavedField": "nicht gespeicherte Änderung",
         "notSet": "nicht gesetzt",
-        "saveConfig": "Proxy-Einstellungen speichern",
-        "savingConfig": "Wird gespeichert…",
         "configSaved": "Proxy-Konfiguration erfolgreich gespeichert",
         "configLoadError": "Fehler beim Laden der Proxy-Konfiguration",
         "configSaveError": "Fehler beim Speichern der Proxy-Konfiguration",
@@ -3419,8 +3595,6 @@
         "description": "Konfigurieren Sie Cookie-Sicherheitseinstellungen für die Authentifizierung",
         "disableSecure": "Secure-Cookie-Flag deaktivieren",
         "disableSecureDesc": "Wenn aktiviert, wird das 'secure'-Flag von Authentifizierungs-Cookies entfernt. Dies ermöglicht die Verwendung von Cookies über HTTP-Verbindungen ohne SSL. Aktivieren Sie dies nur für interne Bereitstellungen ohne SSL.",
-        "saveConfig": "Konfiguration speichern",
-        "savingConfig": "Konfiguration wird gespeichert...",
         "configSaved": "Cookie-Einstellungen erfolgreich gespeichert",
         "configSaveError": "Fehler beim Speichern der Cookie-Einstellungen",
         "securityWarning": "Sicherheitswarnung",
@@ -3468,8 +3642,6 @@
         "anonymousLimit": "Anfragen pro Adresse (nicht angemeldet)",
         "perIpLimit": "Fehlgeschlagene Anmeldungen pro Adresse (alle Benutzernamen)",
         "perAddress": "Die Grenzen für Web-App, Admin und Inference zählen pro angemeldetem Benutzer, Anfragen ohne Anmeldung pro Client-Adresse. Die Anmeldung zählt pro Client-Adresse und Benutzername, mit einer Obergrenze für fehlgeschlagene Anmeldungen pro Adresse. Jeder Server-Worker zählt für sich, mit mehreren Workern kann ein Benutzer also entsprechend ein Vielfaches der Grenze senden. Hinter einem Reverse Proxy die Anzahl der Proxy-Hops einstellen (trustProxy in platform.json), sonst teilen sich alle anonymen Anfragen und Anmeldungen die Adresse des Proxys.",
-        "save": "Ratenbegrenzung speichern",
-        "saving": "Wird gespeichert...",
         "saved": "Ratenbegrenzung gespeichert. Starten Sie den Server neu, um sie anzuwenden.",
         "saveError": "Die Ratenbegrenzung konnte nicht gespeichert werden",
         "loadError": "Die Ratenbegrenzung konnte nicht geladen werden",
@@ -3542,9 +3714,6 @@
         "createDesc": "Neues Benutzerkonto mit Berechtigungen und Einstellungen erstellen",
         "editDesc": "Benutzerkonto, Berechtigungen und Einstellungen bearbeiten",
         "backToList": "Zurück zu Benutzern",
-        "cancel": "Abbrechen",
-        "save": "Benutzer speichern",
-        "saving": "Speichern...",
         "selfDeactivateHint": "Sie können Ihr eigenes Konto nicht deaktivieren.",
         "saveFailedTitle": "Der Benutzer konnte nicht gespeichert werden",
         "noUserData": "Keine Benutzerdaten verfügbar",
@@ -3589,14 +3758,6 @@
         "removeAllDone": "Alle Bestätigungen entfernt.",
         "removeFailed": "Die Bestätigung konnte nicht entfernt werden",
         "exportFailed": "Die CSV konnte nicht exportiert werden"
-      },
-      "validation": {
-        "usernameRequired": "Der Benutzername ist erforderlich",
-        "usernameInvalid": "Der Benutzername darf nur Buchstaben, Ziffern, Punkte, Bindestriche und Unterstriche enthalten",
-        "emailInvalid": "Bitte geben Sie eine gültige E-Mail-Adresse ein",
-        "passwordRequired": "Für die lokale Authentifizierung ist ein Passwort erforderlich",
-        "passwordTooShort": "Das Passwort muss mindestens 6 Zeichen lang sein",
-        "passwordMismatch": "Die Passwörter stimmen nicht überein"
       },
       "fields": {
         "username": "Benutzername",
@@ -3693,7 +3854,6 @@
       "privacyDescription": "Client-IP-Adressen anonymisieren, bevor sie in Logs oder im Audit-Log gespeichert werden.",
       "privacySaveSuccess": "Datenschutzeinstellungen erfolgreich gespeichert",
       "privacySaveError": "Datenschutzeinstellungen konnten nicht gespeichert werden",
-      "savePrivacy": "Datenschutzeinstellungen speichern",
       "loggingAnonymizeIp": "IP in strukturierten Logs anonymisieren",
       "loggingAnonymizeIpHelp": "Gilt für die IP, die in jede Logzeile aus dem Request-Kontext gemischt wird.",
       "auditAnonymizeIp": "IP im Audit-Log anonymisieren",
@@ -3707,10 +3867,7 @@
       "consoleLogging": "Konsolen-Logging aktivieren",
       "includeRawData": "Rohe Authentifizierungsdaten einschließen",
       "authProviders": "Debug nach Anbieter",
-      "saveAuthDebug": "Authentifizierungs-Debug-Einstellungen speichern",
-      "saveChanges": "Änderungen speichern",
       "saveDescription": "Logging-Konfiguration speichern und Änderungen sofort anwenden",
-      "save": "Logging-Konfiguration speichern",
       "note1": "Änderungen werden sofort auf alle Serverprozesse angewendet",
       "note2": "Log-Level-Änderungen werden in platform.json gespeichert",
       "note3": "Niedrigere Level (error, warn) zeigen weniger Nachrichten, höhere Level (debug, silly) mehr",
@@ -3812,7 +3969,6 @@
     "mcp": {
       "common": {
         "saved": "Gespeichert",
-        "saving": "Speichern...",
         "deleted": "Gelöscht",
         "testing": "{{id}} wird getestet...",
         "testOk": "OK — {{count}} Tools gefunden"
@@ -3914,7 +4070,6 @@
       "summaryWindow": "Rollierendes Fenster (Minuten)",
       "saveChanges": "Änderungen speichern",
       "saveDescription": "Datenschutz-/Event-/Aktivitäts-Einstellungen gelten sofort. Aktivieren, Exporter oder Anbieter zu ändern erfordert einen Server-Neustart.",
-      "save": "Telemetrie-Einstellungen speichern",
       "referenceTitle": "Referenz",
       "refEnvHint": "Standard-OTEL_*-Umgebungsvariablen (OTEL_EXPORTER_OTLP_ENDPOINT, OTEL_SERVICE_NAME, ...) werden beim Start berücksichtigt.",
       "refMetricsHint": "Eigene iHub-Metriken: ihub.app.usage, ihub.prompt.usage, ihub.errors, ihub.conversations, ihub.active.users, ihub.active.chats.",
@@ -4780,12 +4935,46 @@
           "part": "{{parent}}, {{field}}",
           "language": "{{field}} — {{language}}"
         },
-        "magicPromptInstructionsPlaceholder": "Anweisungen für die Funktion „Magic Prompt“ eingeben…"
+        "magicPromptInstructionsPlaceholder": "Anweisungen für die Funktion „Magic Prompt“ eingeben…",
+        "modelChoice": {
+          "disabled": "{{name}} (deaktiviert)",
+          "default": "{{name}} (Standard)"
+        },
+        "conflict": {
+          "title": "Von jemand anderem geändert",
+          "message": "Jemand anderes hat diese App gespeichert, nachdem Sie sie geöffnet haben. Es wurde nichts gespeichert. Laden Sie neu, um die aktuelle Fassung zu sehen, und nehmen Sie Ihre Änderungen dann erneut vor.",
+          "reload": "Neu laden"
+        },
+        "improve": {
+          "action": "Mit KI verbessern",
+          "title": "Anweisungen verbessern",
+          "hint": "Der neue Text ändert nur das Formular. Speichern Sie, um ihn zu behalten; „Verwerfen“ in der Speicherleiste nimmt ihn zurück.",
+          "inputLabel": "Was soll besser werden?",
+          "chips": {
+            "label": "Schnelle Anfragen",
+            "shorter": "Kürzer",
+            "formal": "Förmlicher",
+            "steps": "Klarere Schritte",
+            "unsure": "Sagen, was bei Unsicherheit zu tun ist"
+          },
+          "requests": {
+            "shorter": "Kürzen Sie die Anweisungen, ohne etwas Wichtiges wegzulassen.",
+            "formal": "Formulieren Sie die Anweisungen förmlicher.",
+            "steps": "Schreiben Sie die Anweisungen als klarere Schritte.",
+            "unsure": "Ergänzen Sie, was der Assistent tun soll, wenn er unsicher ist oder die Antwort nicht kennt."
+          },
+          "submit": "Neuen Text vorschlagen",
+          "before": "Jetzt",
+          "after": "Vorschlag",
+          "use": "Diesen Text verwenden",
+          "close": "Schließen",
+          "noChange": "Es wurde kein neuer Text vorgeschlagen."
+        }
       },
       "reorder": "Reihenfolge",
-      "reorderHelp": "Ziehen Sie eine Zeile oder nutzen Sie die Pfeile, um die Reihenfolge festzulegen, in der Apps für Benutzer erscheinen – in der App-Übersicht, auf der Startseite und in der Seitenleiste. Es werden immer alle Apps aufgelistet, Suche und Filter gelten hier nicht. Gespeichert wird erst mit „Reihenfolge speichern“.",
+      "reorderHelp": "Ziehen Sie eine Zeile oder nutzen Sie die Pfeile, um die Reihenfolge festzulegen, in der Apps für Benutzer erscheinen – in der App-Übersicht, auf der Startseite und in der Seitenleiste. Es werden immer alle Apps aufgelistet, Suche und Filter gelten hier nicht. Gespeichert wird erst, wenn Sie die neue Reihenfolge unten auf der Seite speichern.",
+      "doneReordering": "Fertig",
       "saveOrder": "Reihenfolge speichern",
-      "savingOrder": "Reihenfolge wird gespeichert...",
       "openApp": "App öffnen",
       "openAppHint": "App in einem neuen Tab öffnen",
       "openMissingFeaturesHint": "Schalten Sie {{features}} ein, um sie zu öffnen",
@@ -5074,7 +5263,9 @@
         "category": "Kategorie",
         "model": "Modell",
         "order": "Reihenfolge",
-        "status": "Status"
+        "status": "Status",
+        "categoryFallback": "Keine Kategorie festgelegt: wird unter {{category}} aufgeführt",
+        "defaultModel": "Standardmodell"
       },
       "uploading": "Wird hochgeladen...",
       "details": {
@@ -5091,7 +5282,130 @@
       },
       "downloadError": "Die Konfiguration konnte nicht heruntergeladen werden: {{error}}",
       "uploadExists": "Eine App mit der ID „{{id}}“ existiert bereits",
-      "uploadError": "Die Konfiguration konnte nicht hochgeladen werden: {{error}}"
+      "uploadError": "Die Konfiguration konnte nicht hochgeladen werden: {{error}}",
+      "loadError": "Fehler beim Laden der Apps",
+      "conversation": {
+        "title": "Unterhaltung",
+        "logLabel": "Unterhaltung mit dem App-Assistenten",
+        "view": {
+          "label": "Bearbeiten mit",
+          "form": "Formular",
+          "conversation": "Unterhaltung"
+        },
+        "intro": "Sagen Sie mir mit Ihren eigenen Worten, was sich an dieser App ändern soll. Ich schlage jeweils eine Änderung vor, und Sie entscheiden, ob Sie sie übernehmen.",
+        "chips": {
+          "label": "Ideen für den Anfang",
+          "shorter": "Antworten kürzer machen",
+          "examples": "Beispielfragen vorschlagen",
+          "inputs": "Benutzer zuerst nach den nötigen Angaben fragen"
+        },
+        "you": "Sie",
+        "builder": "Assistent",
+        "composer": {
+          "label": "Sagen Sie dem Assistenten, was sich ändern soll",
+          "placeholder": "Zum Beispiel: förmlicher antworten",
+          "hint": "Eingabetaste sendet, Umschalt+Eingabetaste fügt eine Zeile ein.",
+          "send": "Senden"
+        },
+        "working": "Wird bearbeitet …",
+        "cancel": "Abbrechen",
+        "retry": "Erneut versuchen",
+        "startOver": "Neu beginnen",
+        "longHint": "Diese Unterhaltung wird lang. Ein Neubeginn führt oft zu besseren Antworten.",
+        "toast": "Übernommen. Probieren Sie es aus.",
+        "question": {
+          "other": "Etwas anderes",
+          "otherLabel": "Ihre Antwort",
+          "skip": "Überspringen",
+          "answer": "Antworten",
+          "skipped": "Überspringen Sie diese Frage und entscheiden Sie selbst."
+        },
+        "change": {
+          "heading": "Vorgeschlagene Änderung",
+          "apply": "Übernehmen",
+          "applying": "Wird gespeichert …",
+          "dismiss": "Verwerfen",
+          "dismissed": "Verworfen.",
+          "stale": "Die App hat sich inzwischen geändert. Fragen Sie erneut.",
+          "conflict": "Jemand anderes hat diese App gespeichert. Laden Sie sie neu und fragen Sie erneut.",
+          "failed": "Die Änderung konnte nicht gespeichert werden. {{detail}}",
+          "applied": "Übernommen.",
+          "appliedTest": "Übernommen. Der Test wurde neu gestartet.",
+          "undo": "Rückgängig",
+          "undoing": "Wird rückgängig gemacht …",
+          "undone": "Rückgängig gemacht. Die vorherige Fassung ist wieder gespeichert.",
+          "alsoSaves": "Übernehmen speichert auch Ihre anderen ungespeicherten Änderungen im Formular.",
+          "undoAlsoSaves": "Rückgängig speichert auch Ihre anderen ungespeicherten Änderungen im Formular.",
+          "undoChanged": "Dieser Teil wurde geändert, nachdem die Änderung übernommen wurde",
+          "removed": "entfernt:",
+          "added": "hinzugefügt:",
+          "empty": "(leer)",
+          "showUnchanged_one": "{{count}} unveränderte Zeile anzeigen",
+          "showUnchanged_other": "{{count}} unveränderte Zeilen anzeigen",
+          "hideUnchanged": "Unveränderte Zeilen ausblenden",
+          "suggestions": "Sie könnte außerdem",
+          "webSearch": "im Web suchen",
+          "integration": "{{name}} verwenden",
+          "languageLabel": "Sprache: {{language}}"
+        },
+        "field": {
+          "name": "Name",
+          "description": "Kurzbeschreibung",
+          "system": "Anweisungen",
+          "prompt": "Nachrichtenvorlage",
+          "messagePlaceholder": "Hinweis im Nachrichtenfeld",
+          "variables": "Was Benutzer zuerst ausfüllen",
+          "starterPrompts": "Beispielfragen",
+          "category": "Kategorie",
+          "look": "Aussehen"
+        },
+        "line": {
+          "required": "(Pflichtfeld)",
+          "color": "Farbe {{value}}",
+          "icon": "Symbol {{value}}",
+          "default": "Vorgabe: {{value}}",
+          "typeBoolean": "Ja/Nein"
+        },
+        "warning": {
+          "otherLanguages": "Nur der Text in dieser Sprache wurde geändert. Die anderen Sprachen bleiben, wie sie waren.",
+          "noChange": "Es musste nichts geändert werden.",
+          "dropped": "Etwas, das das Modell vorgeschlagen hat, war nicht verwendbar und wurde weggelassen.",
+          "shortened": "Ein Text war länger als erlaubt und wurde gekürzt.",
+          "replaced": "Ein nicht zulässiger Wert wurde durch den Standardwert ersetzt.",
+          "added": "Etwas, das die Änderung brauchte, wurde ergänzt.",
+          "ignored": "Teile der Antwort, die hier nicht geändert werden können, wurden ignoriert.",
+          "other": "Prüfen Sie die Änderung, bevor Sie sie übernehmen."
+        },
+        "stakes": {
+          "publishedGroups": "Veröffentlicht: Alle in {{groups}} erhalten diese Änderung.",
+          "publishedEveryone": "Veröffentlicht: Alle erhalten diese Änderung, auch Personen, die nicht angemeldet sind.",
+          "publishedSignedIn": "Veröffentlicht: Alle, die sich anmelden, erhalten diese Änderung.",
+          "published": "Veröffentlicht: Alle, die diese App verwenden dürfen, erhalten diese Änderung.",
+          "notPublished": "Nicht veröffentlicht: Nur Sie und andere App-Verwalter sehen sie.",
+          "sharedEveryone": "Alle können diese App verwenden und erhalten diese Änderung.",
+          "shared_one": "Sie teilen sie mit {{count}} Person oder Gruppe; diese erhält die Änderung.",
+          "shared_other": "Sie teilen sie mit {{count}} Personen oder Gruppen; diese erhalten die Änderung.",
+          "onlyYou": "Nur Sie verwenden diese App.",
+          "integrations": "Diese App kann verwenden: {{names}}."
+        },
+        "error": {
+          "invalid": "Die Anfrage konnte nicht gelesen werden. Beginnen Sie neu und versuchen Sie es noch einmal.",
+          "noModel": "Für den App-Assistenten ist kein KI-Modell verfügbar. Bitten Sie eine Administratorin oder einen Administrator, eines einzurichten.",
+          "unreadable": "Das KI-Modell hat eine Antwort gegeben, die nicht verwendet werden kann. Versuchen Sie es erneut oder formulieren Sie es anders.",
+          "tooLong": "Die Anweisungen sind für den App-Assistenten zu lang. Kürzen Sie sie zuerst im Formular.",
+          "contentTooLong": "Einige Texte, Eingabefelder oder Einstiegsfragen der App sind länger oder zahlreicher, als der App-Assistent ändern kann. Kürzen Sie sie zuerst im Formular.",
+          "quota": "Sie haben Ihr Nutzungslimit erreicht. Versuchen Sie es später erneut.",
+          "off": "Der App-Assistent ist ausgeschaltet.",
+          "userAppsOff": "Persönliche Apps sind ausgeschaltet.",
+          "model": "Das KI-Modell hat nicht geantwortet. Versuchen Sie es erneut.",
+          "modelSetup": "Das KI-Modell kann so, wie es eingerichtet ist, nicht antworten. Bitten Sie eine Administratorin oder einen Administrator, es zu prüfen.",
+          "refused": "Das KI-Modell hat diese Anfrage abgelehnt. Formulieren Sie sie anders.",
+          "tooManyTurns": "Sie haben in der letzten Stunde viele Anfragen gesendet. Warten Sie eine Weile und versuchen Sie es dann erneut.",
+          "busy": "Das KI-Modell ist ausgelastet. Versuchen Sie es gleich noch einmal.",
+          "failed": "Etwas ist schiefgegangen. {{detail}}",
+          "truncated": "Die Antwort des KI-Modells wurde abgeschnitten. Bitten Sie um eine kleinere Änderung."
+        }
+      }
     },
     "features": {
       "title": "Funktionen",
@@ -5099,7 +5413,15 @@
       "preview": "Vorschau",
       "loadError": "Fehler beim Laden der Funktionen",
       "saveError": "Fehler beim Speichern der Funktionen",
-      "saved": "Funktionen erfolgreich aktualisiert"
+      "saved": "Funktionen erfolgreich aktualisiert",
+      "appGeneratorModel": {
+        "label": "Modell für Entwürfe",
+        "automatic": "Automatisch (empfohlen)",
+        "automaticCurrent": "Automatisch (empfohlen): derzeit {{model}}",
+        "unavailableOption": "{{model}} (nicht verfügbar)",
+        "help": "Die Beschreibung einer neuen App wird an dieses Modell gesendet, für Admin-Apps und persönliche Apps. Es wird nur für Personen verwendet, deren Gruppen es nutzen dürfen; alle anderen erhalten die automatische Auswahl: das Standard-Chatmodell unter den Modellen, die sie nutzen dürfen.",
+        "unavailable": "Das Modell {{model}} ist kein aktiviertes Chatmodell. Entwürfe verwenden die automatische Auswahl, bis Sie ein anderes Modell wählen."
+      }
     },
     "iFinder": {
       "testResults": {
@@ -5312,6 +5634,10 @@
           "title": "Nextcloud-Embed",
           "description": "iHub innerhalb von Nextcloud einbetten. Benutzer starten Chats aus Nextcloud Files mit vorausgewählten Dokumenten — analog zum Outlook-Add-in."
         },
+        "embedAuth": {
+          "title": "iHub in einer anderen Website",
+          "description": "Zeigen Sie iHub in einem iframe von iFinder oder einem Portal, mit Anmeldung über Ihren Identitätsanbieter (OIDC)."
+        },
         "copilotAgent": {
           "title": "Microsoft 365 Copilot",
           "description": "Machen Sie iHub zu einem Agenten in Microsoft 365 Copilot. Copilot führt die iHub-Apps über das MCP-Gateway aus, angemeldet mit dem iHub-Konto des Benutzers."
@@ -5445,7 +5771,7 @@
       "groups": {
         "clients": {
           "title": "Clients",
-          "description": "Wo Benutzer iHub außerhalb der Web-App nutzen: in Outlook, im Browser, in Nextcloud und in Microsoft 365 Copilot. Jeder Client wird auf seiner eigenen Seite eingerichtet."
+          "description": "Wo Benutzer iHub außerhalb der Web-App nutzen: in Outlook, im Browser, in Nextcloud, in Microsoft 365 Copilot und in anderen Websites, die iHub in einem Frame anzeigen. Jeder Client wird auf seiner eigenen Seite eingerichtet."
         },
         "peopleDirectories": {
           "title": "Personenverzeichnisse",
@@ -6363,7 +6689,8 @@
         "label": "Änderungen speichern",
         "saving": "Speichern …",
         "unsaved": "Es gibt ungespeicherte Änderungen",
-        "discard": "Verwerfen"
+        "discard": "Verwerfen",
+        "create": "Anlegen"
       },
       "saved": "UI-Konfiguration gespeichert",
       "backedUp": "Konfiguration gesichert unter: {{path}}",
@@ -6577,9 +6904,9 @@
       "integrations": {
         "title": "Integrationen",
         "help": "Welche installierten Integrationen Mitglieder nutzen dürfen. Eine App, die eine Integration einbindet, bietet sie nur Mitgliedern einer Gruppe an, die sie gewährt. Gruppen, die diese Gruppe erben, erhalten dasselbe.",
-        "inheritedHelp": "Angehakt und ausgegraut: von einer geerbten Gruppe gewährt. Dort ändern.",
+        "inheritedHelp": "Von einer geerbten Gruppe gewährt. Dort ändern.",
         "all": "Alle Integrationen",
-        "allHelp": "Jede installierte Integration, auch später installierte.",
+        "allHelp": "„Alle Integrationen“ umfasst jede installierte Integration, auch später installierte.",
         "none": "Mitglieder dieser Gruppe dürfen keine Integration nutzen.",
         "loading": "Integrationen werden geladen…",
         "loadError": "Die installierten Integrationen konnten nicht geladen werden: {{error}}",
@@ -6604,7 +6931,10 @@
         "with": "mit {{name}}",
         "other": "Weitere Einträge",
         "otherHelp": "Einträge, die die Liste oben nicht zeigt: Definitions-IDs oder Installationen, die es nicht mehr gibt.",
-        "remove": "{{key}} entfernen"
+        "remove": "{{key}} entfernen",
+        "addLabel": "Integration hinzufügen",
+        "addPlaceholder": "Integration hinzufügen…",
+        "nothingToAdd": "Alles Installierte ist hinzugefügt."
       },
       "deleteBlockedTitle": "Gruppe kann nicht gelöscht werden",
       "deleteFailed": "Die Gruppe konnte nicht gelöscht werden.",
@@ -6625,7 +6955,12 @@
         "cancel": "Abbrechen",
         "save": "Gruppe speichern",
         "saving": "Wird gespeichert…",
-        "create": "Gruppe anlegen"
+        "create": "Gruppe anlegen",
+        "conflict": {
+          "title": "Von jemand anderem geändert",
+          "message": "Die Gruppen wurden von jemand anderem geändert, nachdem Sie diese Seite geöffnet haben. Es wurde nichts gespeichert. Laden Sie die Seite neu, um den aktuellen Stand zu sehen, und nehmen Sie Ihre Änderungen dann erneut vor.",
+          "reload": "Neu laden"
+        }
       },
       "fields": {
         "id": "Gruppen-ID",
@@ -6678,8 +7013,30 @@
         "searchSkills": "Skills zum Hinzufügen suchen…",
         "noSkills": "Keine Skills ausgewählt – Benutzer können keine Agenten-Skills verwenden",
         "allWildcard": "Alle (*)",
-        "allWildcardFor": "{{label}}: Alle (*)"
-      }
+        "allWildcardFor": "{{label}}: Alle (*)",
+        "defaultModelToken": "Standardmodell (das jeweils als Standard festgelegte)"
+      },
+      "members": {
+        "title": "Mitglieder",
+        "description": "Benutzer, die zu dieser Gruppe gehören. Hinzufügen und Entfernen wirken sofort; die Gruppe muss dafür nicht gespeichert werden.",
+        "externalNote": "Benutzer, die diese Gruppe über die Zuordnungen von einem externen Anbieter erhalten, werden hier nicht aufgeführt.",
+        "loading": "Mitglieder werden geladen…",
+        "loadError": "Die Mitglieder konnten nicht geladen werden.",
+        "addError": "Die Benutzer konnten nicht hinzugefügt werden.",
+        "removeError": "Der Benutzer konnte nicht entfernt werden.",
+        "empty": "Diese Gruppe hat noch keine Mitglieder.",
+        "inactive": "Inaktiv",
+        "remove": "{{name}} aus der Gruppe entfernen",
+        "removeShort": "Entfernen",
+        "addLabel": "Benutzer hinzufügen",
+        "searchPlaceholder": "Nach Name, Benutzername oder E-Mail suchen",
+        "noMatches": "Keine Benutzer entsprechen der Suche.",
+        "allAdded": "Alle Benutzer sind bereits Mitglied.",
+        "moreMatches": "{{count}} weitere Benutzer passen. Engere Suche eingeben, um sie zu finden.",
+        "addSelected": "{{count}} ausgewählte hinzufügen",
+        "saveFirst": "Speichern Sie zuerst die Gruppe, danach können Sie hier ihre Mitglieder hinzufügen."
+      },
+      "clone": "Klonen"
     },
     "contentAccess": {
       "title": "Gruppenzugriff",
@@ -6714,7 +7071,8 @@
         "skills": "Skills",
         "tools": "Tools",
         "workflows": "Workflows"
-      }
+      },
+      "wildcardNote": "Gruppen mit Schloss dürfen über einen Platzhalter alle {{subjectPlural}} verwenden. Um einzelne zu entziehen, ersetzt ein Administrator den Platzhalter in den Gruppeneinstellungen durch eine explizite Liste."
     },
     "auditLog": {
       "title": "Audit-Log",
@@ -7197,8 +7555,6 @@
       "appliesUi": "Die Oberflächensprache für Benutzer, die selbst keine gewählt haben.",
       "appliesSearch": "Die Sprache, in der die Websuche läuft, wenn eine Anfrage keine eigene mitbringt — insbesondere Workflow- und Agentenläufe, hinter denen kein Browser steht.",
       "appliesFallback": "Der Rückfall für Texte, die in der angeforderten Sprache keine Übersetzung haben.",
-      "save": "Speichern",
-      "saving": "Wird gespeichert...",
       "saveSuccess": "Standardsprache gespeichert",
       "saveError": "Standardsprache konnte nicht gespeichert werden",
       "loadError": "Plattformkonfiguration konnte nicht geladen werden",
@@ -7227,7 +7583,8 @@
       "tabs": {
         "userPrompts": "Benutzer-Prompts",
         "prompts": "Prompts",
-        "variables": "Variablen"
+        "variables": "Variablen",
+        "aria": "Bereiche der Prompt-Verwaltung"
       },
       "edit": {
         "detectedVariables": "Im Text erkannt",
@@ -7271,9 +7628,6 @@
         "createDesc": "Legen Sie einen neuen Prompt für Ihre $t(product.name) an",
         "editDesc": "Bearbeiten Sie Details und Konfiguration des Prompts",
         "history": "Verlauf",
-        "cancel": "Abbrechen",
-        "save": "Prompt speichern",
-        "saving": "Wird gespeichert…",
         "searchApps": "Apps suchen…",
         "noAppsFound": "Keine Apps gefunden",
         "variableDefaultPlaceholder": "Standardwert"
@@ -7332,7 +7686,10 @@
         "description": "Beschreibung",
         "order": "Reihenfolge",
         "appConnected": "Mit App verknüpft",
-        "status": "Status"
+        "status": "Status",
+        "categoryFallback": "Keine Kategorie festgelegt: wird unter {{category}} aufgeführt",
+        "linkedApp": "App",
+        "appMissing": "App fehlt: {{id}}"
       },
       "delete": "Löschen",
       "searchPlaceholder": "Prompts suchen…",
@@ -7697,8 +8054,6 @@
       "starterText": "Prompt",
       "removeStarter": "Entfernen",
       "addStarter": "Einstieg hinzufügen",
-      "saving": "Wird gespeichert…",
-      "save": "Speichern",
       "step3Title": "3. Agenten in Microsoft 365 hochladen",
       "step3Desc": "Laden Sie das Paket im Microsoft 365 Admin Center unter Copilot → Agents → Upload custom agent hoch und legen Sie fest, wer es erhält. Jeder Download hat eine neue Version: Nach Änderungen an den Einstellungen erneut herunterladen und hochladen.",
       "needsReferenceId": "Speichern Sie zuerst die OAuth client registration ID aus Schritt 1.",
@@ -8050,7 +8405,8 @@
         "allowCatalog": "Dem Projektkatalog",
         "allowCatalogHelp": "Besitzer und Bearbeiter veröffentlichen ein Projekt; alle Benutzer können den Katalog durchsuchen und es zu ihren Projekten hinzufügen. Ausschalten blendet veröffentlichte Projekte wieder aus.",
         "permissionHint": "Benutzer brauchen außerdem die Berechtigung „projectSharing“ ihrer Gruppe.",
-        "saved": "Gespeichert"
+        "saved": "Gespeichert",
+        "invalidInput": "Korrigieren Sie zuerst die markierten Felder (eine Zahl im erlaubten Bereich oder leer)."
       },
       "panel": {
         "details": "Name und Beschreibung",
@@ -8484,7 +8840,6 @@
       "inheritInstallation": "Freigabe: wie die Integration",
       "installationMode": "Vor einer Aktion fragen",
       "installationModeHelp": "Es gilt die strengste Einstellung aus Plattform-Standard, dieser Einstellung, der Aktion und der App. Eine Wirkung, die nur der Server selbst angibt, zählt nicht als Lesen.",
-      "saveApproval": "Freigabe speichern",
       "installationSaved": "Freigabe-Einstellungen gespeichert.",
       "newOrChangedMode": "Neue oder geänderte Aktionen",
       "newOrChangedDefault": "Immer fragen (Standard)",
@@ -8645,7 +9000,6 @@
         "remove": "Zeile {{n}} entfernen",
         "value": "Wert"
       },
-      "save": "Speichern",
       "saved": "Integration „{{id}}“ gespeichert.",
       "script": {
         "help": "Ein ES-Modul, keine Importe aus seinem Ordner. export default { actions: { <name>: { run: async (args, ctx) => … } } }. ctx.values enthält die Installationswerte, ctx.user den Aufrufer, ctx.runToolScript(script, { method }) führt eines der Tool-Skripte von iHub aus. Die Aktionen (Beschreibung, Parameter) deklarieren Sie im nächsten Schritt.",
@@ -8709,7 +9063,7 @@
       "modelColumn": "Modell",
       "unknownModel": "Modell nicht gefunden",
       "otherModels": "Alle anderen Modelle",
-      "otherModelsHint": "Jedes Modell ohne eigenen Eintrag oben",
+      "otherModelsHint": "Jedes Modell ohne eigenes Limit",
       "placeholderCeiling": "max. {{limit}}",
       "placeholderNoLimit": "kein Limit",
       "noEffectModel": "Ohne Wirkung – das Modell erlaubt höchstens {{limit}}",
@@ -8737,7 +9091,17 @@
         "dayShort": "Täglich",
         "weekShort": "Wöchentlich",
         "monthShort": "Monatlich"
-      }
+      },
+      "removeLimit": "Limit entfernen: {{name}}",
+      "addLabel": "Limit hinzufügen",
+      "addPlaceholder": "Limit hinzufügen…",
+      "addGeneral": "Allgemein",
+      "addModel": "Pro Modell",
+      "addAllModels": "Alle Modelle zusammen",
+      "addFileStorage": "Dateispeicher",
+      "nothingToAdd": "Alle Limits sind hinzugefügt.",
+      "emptyGroup": "Für diese Gruppe sind keine Limits gesetzt.",
+      "emptyUser": "Es sind keine persönlichen Limits gesetzt."
     },
     "unsavedChanges": {
       "title": "Ohne Speichern verlassen?",
@@ -8774,7 +9138,15 @@
       "resultCount_other": "{{count}} Treffer",
       "collapseAll": "Alle zuklappen",
       "expandAll": "Alle aufklappen",
-      "tableLabel": "Tabelle"
+      "tableLabel": "Tabelle",
+      "helpLink": "Hilfe: {{topic}}",
+      "helpTopics": {
+        "models": "Modelle einrichten",
+        "providers": "Einen Anbieter verbinden",
+        "apps": "Die erste App erstellen",
+        "prompts": "Prompts verwalten",
+        "access": "Wer Apps, Modelle und Prompts nutzen darf"
+      }
     },
     "aiDisclosure": {
       "title": "KI-Hinweis",
@@ -9078,7 +9450,6 @@
         "timeout": "Zeitlimit des Detektors",
         "milliseconds": "Millisekunden",
         "timeoutHelp": "Wie lange auf den Detektor eines Modells gewartet wird. Zwischen 1000 und 120000.",
-        "discard": "Änderungen verwerfen",
         "saved": "Einstellungen gespeichert. Sie gelten sofort; ein Neustart ist nicht nötig.",
         "saveError": "Die Einstellungen wurden nicht gespeichert.",
         "fixErrors": "Korrigieren Sie die markierten Felder und speichern Sie erneut.",
@@ -9307,6 +9678,22 @@
         "disableMessage_other": "{{count}} von {{total}} {{items}} sind derzeit aktiviert und werden deaktiviert. Benutzer verlieren sofort den Zugriff:",
         "nothingToEnable": "Alle {{total}} {{items}} sind bereits aktiviert.",
         "nothingToDisable": "Alle {{total}} {{items}} sind bereits deaktiviert."
+      },
+      "dependants": {
+        "modelMessage": "Das Modell wird für alle Benutzer entfernt. Eine Kopie bleibt im Änderungsverlauf: Öffnen Sie {{path}} erneut, um es wiederherzustellen.",
+        "appMessage": "Die App wird für alle Benutzer entfernt. Eine Kopie bleibt im Änderungsverlauf: Öffnen Sie {{path}} erneut, um sie wiederherzustellen.",
+        "checkFailed": "Es konnte nicht geprüft werden, was den Eintrag verwendet. Apps, Workflows, Agenten oder Gruppen nennen ihn möglicherweise noch.",
+        "modelApps": "Apps, die es nennen (sie antworten dann mit einem anderen Modell): {{names}}",
+        "modelWorkflows": "Workflows, die es nennen: {{names}}",
+        "modelAgents": "Agenten, die es nennen: {{names}}",
+        "modelGroups": "Gruppen, die es namentlich freigeben: {{names}}",
+        "defaultMoves": "Es ist das Standardmodell. „{{name}}“ wird zum Standardmodell.",
+        "defaultNone": "Es ist das Standardmodell, und kein anderes aktiviertes Chat-Modell kann übernehmen. Apps ohne eigenes Modell haben keines, bis Sie eines aktivieren.",
+        "appPrompts": "Prompts, die sich in ihr öffnen: {{names}}",
+        "appTools": "Apps, die sie als Tool aufrufen: {{names}}",
+        "appChildren": "Apps, die von ihr erben: {{names}}",
+        "appWorkflows": "Workflows, die sie aufrufen: {{names}}",
+        "appGroups": "Gruppen, die sie namentlich freigeben: {{names}}"
       }
     },
     "backup": {
@@ -9518,7 +9905,6 @@
       "remove": "Entfernen",
       "promptTitle": "Titel",
       "promptMessage": "Nachricht",
-      "save": "Speichern",
       "setupTitle": "Anleitung zur Verteilung",
       "step1": "Laden Sie den Erweiterungsordner unter /browser-extension in Chrome über chrome://extensions → Entwicklermodus → Entpackte Erweiterung laden, oder packen Sie die Erweiterung und verteilen Sie sie über den Chrome Web Store.",
       "step2": "Kopieren Sie die von Chrome vergebene Erweiterungs-ID, fügen Sie sie oben zur Liste „Erweiterungs-IDs“ hinzu und speichern Sie.",
@@ -9543,9 +9929,7 @@
       "methods": "Erlaubte Methoden",
       "methodsDesc": "Kommagetrennte Liste der erlaubten HTTP-Methoden.",
       "allowedHeaders": "Erlaubte Header",
-      "allowedHeadersDesc": "Kommagetrennte Liste der HTTP-Request-Header, die Clients senden dürfen.",
-      "saving": "Wird gespeichert…",
-      "save": "Konfiguration speichern"
+      "allowedHeadersDesc": "Kommagetrennte Liste der HTTP-Request-Header, die Clients senden dürfen."
     },
     "artifacts": {
       "hosts": {
@@ -9610,7 +9994,44 @@
     "formErrors": {
       "title": "Bitte beheben Sie die folgenden Fehler",
       "count_one": "({{count}} Fehler)",
-      "count_other": "({{count}} Fehler)"
+      "count_other": "({{count}} Fehler)",
+      "rule": {
+        "required": "Füllen Sie dieses Feld aus.",
+        "choose": "Wählen Sie einen Wert aus.",
+        "minLength": "Geben Sie mindestens {{min}} Zeichen ein.",
+        "maxLength": "Höchstens {{max}} Zeichen.",
+        "minimum": "Geben Sie eine Zahl ab {{limit}} ein.",
+        "maximum": "Geben Sie eine Zahl bis {{limit}} ein.",
+        "exclusiveMinimum": "Geben Sie eine Zahl größer als {{limit}} ein.",
+        "exclusiveMaximum": "Geben Sie eine Zahl kleiner als {{limit}} ein.",
+        "number": "Geben Sie eine Zahl ein.",
+        "integer": "Geben Sie eine ganze Zahl ein.",
+        "pattern": "Dieser Wert hat nicht das richtige Format.",
+        "uri": "Geben Sie eine vollständige Webadresse ein, zum Beispiel https://example.com.",
+        "email": "Geben Sie eine gültige E-Mail-Adresse ein.",
+        "enum": "Wählen Sie einen der angebotenen Werte aus.",
+        "uniqueItems": "Entfernen Sie die doppelten Einträge.",
+        "additionalProperties": "Diese Einstellung wird hier nicht unterstützt. Entfernen Sie sie im JSON-Editor.",
+        "languageText": "Geben Sie für diese Sprache einen Text ein oder entfernen Sie die Sprache.",
+        "invalid": "Prüfen Sie diesen Wert."
+      },
+      "field": {
+        "idRequired": "Geben Sie eine ID ein.",
+        "idFormat": "Verwenden Sie nur Kleinbuchstaben, Ziffern, Punkte, Unterstriche und Bindestriche.",
+        "idTaken": "Diese ID ist bereits vergeben.",
+        "groupIdFormat": "Verwenden Sie nur Buchstaben, Ziffern, Punkte, Unterstriche und Bindestriche.",
+        "nameRequired": "Geben Sie einen Namen ein.",
+        "descriptionRequired": "Geben Sie eine Beschreibung ein.",
+        "modelIdRequired": "Geben Sie die Modell-ID ein, die der Anbieter verwendet.",
+        "providerRequired": "Wählen Sie einen Anbieter aus.",
+        "urlRequired": "Geben Sie die API-URL ein.",
+        "promptRequired": "Geben Sie den Prompt-Text ein.",
+        "usernameRequired": "Geben Sie einen Benutzernamen ein.",
+        "usernameFormat": "Verwenden Sie nur Buchstaben, Ziffern, Punkte, Unterstriche und Bindestriche.",
+        "passwordRequired": "Geben Sie ein Passwort ein.",
+        "passwordMinLength": "Geben Sie ein Passwort mit mindestens {{min}} Zeichen ein.",
+        "passwordMismatch": "Geben Sie dasselbe Passwort noch einmal ein."
+      }
     },
     "resourceSelector": {
       "placeholder": "Suchen und auswählen...",
@@ -9705,7 +10126,8 @@
         "choose": "Auswählen…",
         "noInstallations": "Es ist kein angebundenes System installiert.",
         "noActions": "Keine Funktionen",
-        "unblock": "Wieder einschalten"
+        "unblock": "Wieder einschalten",
+        "invalidMaxApps": "Geben Sie eine ganze Zahl für das Limit an Apps pro Benutzer ein (0 bedeutet kein Limit)."
       },
       "groups": {
         "userApps": "Persönliche Apps",
@@ -9930,6 +10352,133 @@
     },
     "integrationPages": {
       "oauthClientId": "OAuth-Client-ID:"
+    },
+    "access": {
+      "items": {
+        "apps": "Apps",
+        "models": "Modelle",
+        "prompts": "Prompts",
+        "skills": "Skills",
+        "workflows": "Workflows"
+      },
+      "explain": {
+        "heading": "Freigegeben über „alle {{items}}“:",
+        "ownWildcard": "Alle in {{group}} sehen dies über „alle {{items}}“.",
+        "inheritedWildcard": "Alle in {{group}} sehen dies über „alle {{items}}“ (geerbt von {{source}}: {{chain}}).",
+        "ownExplicit": "{{group}} ist dies namentlich freigegeben.",
+        "inheritedExplicit": "Alle in {{group}} erhalten dies namentlich von {{source}} ({{chain}}).",
+        "ownDefault": "{{group}} erhält dies als Standardmodell („Standardmodell“ in der Modellliste).",
+        "inheritedDefault": "Alle in {{group}} erhalten dies als Standardmodell, über „Standardmodell“ von {{source}} ({{chain}})."
+      },
+      "card": {
+        "title": "Wer dieses Modell verwenden darf",
+        "description": "Welche Gruppen das Modell verwenden dürfen und warum. Gruppenlisten werden unter Gruppen bearbeitet; „Zugriff einschränken“ nimmt das Modell aus Gruppen heraus, die alle Modelle freigeben.",
+        "loading": "Zugriff wird geladen…",
+        "loadError": "Der Zugriff konnte nicht geladen werden.",
+        "audienceEveryone": "Alle dürfen dies verwenden, auch nicht angemeldete Personen.",
+        "audienceSignedIn": "Alle angemeldeten Benutzer dürfen dies verwenden.",
+        "audienceAnonymous": "Nicht angemeldete Personen dürfen dies verwenden. Gruppen: {{groups}}",
+        "audienceGroups": "Nur diese Gruppen dürfen dies verwenden: {{groups}}.",
+        "audienceNone": "Keine Gruppe darf dies verwenden."
+      },
+      "tools": {
+        "checkTitle": "Zugriffsprüfung",
+        "title": "Zugriff einschränken und prüfen"
+      },
+      "check": {
+        "title": "Warum sieht jemand dies nicht?",
+        "descriptionGroupsOnly": "Wählen Sie eine der Gruppen, die Sie verwalten. Die Prüfung wendet dieselben Regeln an wie der Server, wenn er Apps für ihre Mitglieder auflistet.",
+        "description": "Wählen Sie eine Gruppe oder einen Benutzer. Die Prüfung wendet dieselben Regeln an wie der Server, wenn er Apps und Modelle für sie auflistet.",
+        "subjectLegend": "Prüfen für",
+        "byGroup": "Eine Gruppe",
+        "byUser": "Einen Benutzer",
+        "groupLabel": "Gruppe",
+        "userLabel": "Benutzer",
+        "userPlaceholder": "Benutzername, E-Mail oder Benutzer-ID",
+        "run": "Zugriff prüfen",
+        "error": "Die Prüfung konnte nicht ausgeführt werden.",
+        "subjectGroups": "Geprüft mit den Gruppen: {{groups}}",
+        "identityProviderNote": "Dieser Benutzer meldet sich über einen Identitätsanbieter an. Gruppen, die dieser bei der Anmeldung sendet, sind hier nicht bekannt; geprüft wurden nur die in iHub gespeicherten Gruppen.",
+        "verdict": {
+          "availableGroup": "Mitglieder von {{name}} dürfen dies verwenden.",
+          "unavailableGroup": "Mitglieder von {{name}} dürfen dies nicht verwenden.",
+          "availableUser": "{{name}} darf dies verwenden.",
+          "unavailableUser": "{{name}} darf dies nicht verwenden.",
+          "availableAnonymous": "Nicht angemeldete Personen dürfen dies verwenden.",
+          "unavailableAnonymous": "Nicht angemeldete Personen dürfen dies nicht verwenden."
+        },
+        "reasons": {
+          "anonymousAccessOff": "Der anonyme Zugriff ist ausgeschaltet, nicht angemeldete Personen sehen also nichts.",
+          "userInactive": "Das Konto ist deaktiviert.",
+          "itemEnabled": "Es ist aktiviert.",
+          "itemDisabled": "Es ist deaktiviert: Niemand sieht es, bis es aktiviert wird.",
+          "featureOn": "Erforderliche Funktionen sind eingeschaltet: {{features}}.",
+          "featureOff": "Die erforderliche Funktion „{{feature}}“ ist ausgeschaltet (Funktionen).",
+          "integrationOff": "Eine benötigte Integration ist ausgeschaltet: {{integrations}}.",
+          "granted": "Eine Gruppe gibt es frei:",
+          "notGranted": "Keine ihrer Gruppen gibt es frei, weder namentlich noch über „alle“.",
+          "modelsAvailable": "Modelle, die sie damit verwenden dürfen: {{models}}.",
+          "noUsableModel": "Es bleibt kein Modell übrig, das sie damit verwenden dürfen:",
+          "preferredModelUnavailable": "Das bevorzugte Modell {{model}} steht ihnen nicht zur Verfügung; ein anderes Modell wird verwendet."
+        },
+        "modelCause": {
+          "missing": "{{model}} ist nicht eingerichtet.",
+          "disabled": "{{model}} ist deaktiviert.",
+          "notAllowedForApp": "{{model}} ist für diese App nicht zugelassen oder hat eine Fähigkeit nicht, die die App braucht.",
+          "notGranted": "{{model}} ist ihren Gruppen nicht freigegeben."
+        },
+        "noModelsConfigured": "Es ist kein Chat-Modell eingerichtet."
+      },
+      "restrict": {
+        "open": "Zugriff einschränken…",
+        "openHelp": "Gruppen, die alle {{items}} freigeben, umfassen auch dieses Element. Beim Einschränken wird „alle“ in diesen Gruppen durch eine explizite Liste ersetzt.",
+        "title": "Einschränken, wer {{name}} verwenden darf",
+        "intro": "Diese Gruppen sehen über „alle {{items}}“ jedes Element. Um ihnen {{name}} zu entziehen, wird „alle“ durch eine Liste aller aktuellen Elemente außer diesem ersetzt.",
+        "convertLegend": "Gruppen, die alle {{items}} freigeben",
+        "convertRow": "„alle {{items}}“ wird zu einer Liste mit {{count}} {{items}}",
+        "keepRow": "Behält „alle {{items}}“ und sieht dies weiterhin",
+        "passesTo": "Weitergegeben an: {{groups}}",
+        "grantLegend": "Danach namentlich freigeben für (optional)",
+        "grantHelp": "Diese Gruppen dürfen {{name}} nach der Änderung verwenden, unabhängig von der Auswahl oben.",
+        "previewTitle": "Nach der Änderung",
+        "previewLoading": "Änderung wird berechnet…",
+        "keeps": "Dürfen es verwenden: {{groups}}",
+        "keepsNone": "Keine Gruppe darf es verwenden.",
+        "loses": "Dürfen es nicht mehr verwenden: {{groups}}",
+        "stillEveryone": "Alle angemeldeten Benutzer dürfen es weiterhin verwenden:",
+        "newItemsWarning": "Neue {{items}}, die Sie später hinzufügen, erscheinen in den umgestellten Gruppen nicht mehr automatisch. Fügen Sie sie diesen Gruppen beim Anlegen hinzu. Die Änderung wird im Verlauf jeder Gruppe festgehalten.",
+        "error": "Der Zugriff konnte nicht eingeschränkt werden.",
+        "apply": "Zugriff einschränken",
+        "stillDefaultModel": "{{name}} ist das Standardmodell, und {{groups}} geben „Standardmodell“ frei: Sie verwenden es weiterhin. Entfernen Sie diesen Eintrag in den Gruppeneinstellungen oder legen Sie ein anderes Modell als Standard fest."
+      }
+    },
+    "connectionErrors": {
+      "facts": {
+        "status": "HTTP {{status}}",
+        "host": "Host: {{host}}",
+        "code": "Code: {{code}}"
+      },
+      "openSslSettings": "SSL-/TLS-Einstellungen öffnen",
+      "remediation": {
+        "certificateUntrusted": "Der iHub-Server vertraut dem TLS-Zertifikat dieses Endpunkts nicht. Das ist typisch für eine private CA oder ein selbstsigniertes Zertifikat. Tragen Sie den Host in die Domain-Whitelist ein und aktivieren Sie „Ungültige SSL-Zertifikate ignorieren“.",
+        "serverError": "Der Endpunkt selbst ist fehlgeschlagen. Prüfen Sie Status und Logs des Dienstes (oder eines vorgeschalteten Proxys) und versuchen Sie es erneut. Die Konfiguration in iHub ist vermutlich korrekt.",
+        "authenticationFailed": "Der Endpunkt hat den API-Schlüssel abgelehnt. Prüfen Sie den Schlüssel beim Modell oder bei seinem Anbieter.",
+        "accessDenied": "Der Endpunkt hat den API-Schlüssel angenommen, erlaubt diese Anfrage aber nicht. Prüfen Sie die Berechtigungen des Schlüssels und welche Modelle das Konto nutzen darf.",
+        "apiKeyRequired": "Der Endpunkt verlangt einen API-Schlüssel, es ist aber keiner hinterlegt. Tragen Sie den Schlüssel beim Anbieter oder beim Modell ein und versuchen Sie es erneut.",
+        "apiKeyNotConfigured": "Es ist kein API-Schlüssel hinterlegt. Tragen Sie einen beim Modell oder bei seinem Anbieter ein oder setzen Sie die Umgebungsvariable.",
+        "apiKeyUndecryptable": "Der gespeicherte API-Schlüssel wurde mit einem anderen Verschlüsselungsschlüssel gespeichert. Geben Sie den Schlüssel erneut ein.",
+        "wrongPath": "Unter dieser URL wurde nichts gefunden. Prüfen Sie den Pfad (er endet meist auf /v1/chat/completions) und die Modell-ID.",
+        "listNotFound": "Unter dieser URL wurde keine Modellliste gefunden. Prüfen Sie den Pfad: Er endet meist auf /v1 oder /v1/models.",
+        "connectionRefused": "Unter diesem Host und Port nimmt nichts Verbindungen an. Prüfen Sie den Port in der URL und ob der Dienst läuft.",
+        "hostNotFound": "Der Hostname konnte nicht aufgelöst werden. Prüfen Sie die Schreibweise der URL oder die DNS- und Proxy-Einstellungen des iHub-Servers.",
+        "timeout": "Der Endpunkt hat nicht rechtzeitig geantwortet. Prüfen Sie die URL, ob der Dienst läuft und ob der iHub-Server ihn erreicht (Firewall, VPN, Proxy).",
+        "requestTimeout": "Der Dienst hat zu lange für die Antwort gebraucht. Versuchen Sie es erneut oder prüfen Sie die Auslastung des Dienstes.",
+        "networkError": "Die Verbindung ist fehlgeschlagen. Prüfen Sie, ob der iHub-Server den Host erreicht (Firewall, VPN, ausgehender Proxy).",
+        "rateLimitExceeded": "Der Endpunkt begrenzt die Anfragen. Warten Sie einen Moment und versuchen Sie es erneut."
+      }
+    },
+    "restoreDeleted": {
+      "action": "Aus dem Verlauf wiederherstellen"
     }
   },
   "cloudStorage": {
@@ -12234,7 +12783,7 @@
       "ABORTED": "Der Lauf wurde angehalten",
       "APP_NOT_ACCESSIBLE": "Sie haben keinen Zugriff mehr auf die App dieser Aufgabe",
       "APP_NOT_AVAILABLE": "Die App dieser Aufgabe existiert nicht mehr oder ist deaktiviert",
-      "APPROVAL_REJECTED": "Sie haben das Werkzeug abgelehnt, das dieser Lauf brauchte",
+      "APPROVAL_REJECTED": "Sie haben das Tool abgelehnt, das dieser Lauf brauchte",
       "APPROVAL_TIMED_OUT": "Die Freigabe wurde nicht rechtzeitig beantwortet",
       "AUTHENTICATION_REQUIRED": "Geplante Aufgaben benötigen einen angemeldeten Benutzer",
       "AWAITING_APPROVAL": "Wartet auf Ihre Freigabe",
@@ -12259,7 +12808,7 @@
       "TASK_NOT_ACTIVE": "Die Aufgabe war nicht mehr aktiv, als der Lauf fällig war",
       "TOO_MANY_APPROVALS": "Der Lauf hat zu oft um Freigabe gebeten",
       "TOO_MANY_FAILURES": "Nach zu vielen fehlgeschlagenen Läufen in Folge pausiert",
-      "TOOL_NOT_AVAILABLE": "Die App bietet ein Werkzeug dieser Aufgabe nicht mehr an"
+      "TOOL_NOT_AVAILABLE": "Die App bietet ein Tool dieser Aufgabe nicht mehr an"
     },
     "memory": {
       "title": "Gedächtnis",
@@ -12353,7 +12902,7 @@
         },
         "relevant": {
           "label": "Beste Textstellen",
-          "description": "Die angehefteten Dokumente und die besten Abschnitte zur Frage aus allen Dokumenten. Spart einen Werkzeugaufruf; für große Projekte und Modelle, die Werkzeuge schlecht aufrufen."
+          "description": "Die angehefteten Dokumente und die besten Abschnitte zur Frage aus allen Dokumenten. Spart einen Tool-Aufruf; für große Projekte und Modelle, die Tools schlecht aufrufen."
         },
         "tools": {
           "label": "Bei Bedarf nachschlagen",
@@ -13151,6 +13700,8 @@
     }
   },
   "apiErrors": {
+    "EMBED_SIGN_IN_DISABLED": "Die Anmeldung innerhalb einer anderen Website ist nicht aktiviert. Wenden Sie sich an Ihren Administrator.",
+    "EMBED_CODE_INVALID": "Die Anmeldung konnte nicht abgeschlossen werden. Bitte versuchen Sie es erneut.",
     "INTERNAL_ERROR": "Es ist ein unerwarteter Fehler aufgetreten. Bitte versuchen Sie es später erneut.",
     "BAD_REQUEST": "Die Anfrage ist ungültig.",
     "VALIDATION_FAILED": "Einige der eingegebenen Daten sind ungültig.",
@@ -13469,10 +14020,12 @@
     "LAST_ADMIN": "Diese Änderung würde keinen aktiven Administrator übrig lassen, der sich anmelden kann. Es wurde nichts geändert. Geben Sie zuerst einem anderen aktiven Benutzer Administratorrechte.",
     "SELF_LOCKOUT": "Sie können Ihr eigenes Konto nicht deaktivieren oder löschen. Bitten Sie einen anderen Administrator darum.",
     "GROUP_IN_USE": "Die Gruppe „{{groupId}}“ kann nicht gelöscht werden, weil andere Gruppen von ihr erben. Entfernen Sie sie zuerst aus deren geerbten Gruppen.",
+    "ACCESS_CHECK_OUT_OF_SCOPE": "Content-Admins können den Zugriff nur für Apps prüfen, und nur für die Gruppen, die sie verwalten. Ein Modell, einen Benutzer oder eine andere Gruppe kann nur ein Administrator mit vollem Admin-Zugriff prüfen.",
     "ADMIN_CHECK_FAILED": "Es konnte nicht geprüft werden, ob ein Administrator Zugriff behält, daher wurde nichts geändert. Bitte versuchen Sie es erneut.",
     "PRECONDITION_FAILED": "Diese Konfiguration wurde geändert, nachdem Sie sie geöffnet haben (von einem anderen Administrator, in einem anderen Tab oder durch ein Skript). Es wurde nichts gespeichert, Ihre Änderungen sind noch auf der Seite. Laden Sie neu, um den aktuellen Stand zu sehen, und übernehmen Sie Ihre Änderungen dann erneut.",
     "APP_GENERATOR_NO_MODEL": "Ihnen steht kein KI-Modell zur Verfügung, daher kann kein Entwurf vorbereitet werden.",
     "APP_GENERATOR_INVALID_ANSWER": "Der Entwurf der KI ließ sich nicht verwenden.",
+    "APP_REVISE_TOO_LONG": "Die Anweisungen dieser App sind zu lang, um sie im Gespräch zu ändern (höchstens {{max}} Zeichen). Kürzen Sie sie im Formular.",
     "USER_APPS_DISABLED": "Persönliche Apps sind auf dieser Installation abgeschaltet.",
     "USER_APPS_UNAVAILABLE": "Persönliche Apps sind gerade nicht verfügbar. Versuchen Sie es später erneut.",
     "QUOTA_USER_APPS": "Die Obergrenze für persönliche Apps ist erreicht.",

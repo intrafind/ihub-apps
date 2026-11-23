@@ -127,6 +127,11 @@ export function PlatformConfigProvider({ children }) {
         // Chart.js is blocked even though the server and the skill allow it.
         artifacts: platformCfg.artifacts,
 
+        // App drafts with AI: the draft model an administrator chose (`{ modelId }`).
+        // Both create pages name it in the line under the description box; absent
+        // means the automatic choice.
+        appGenerator: platformCfg.appGenerator,
+
         // Platform features and settings
         features: platformCfg.features,
         // Build a boolean lookup map from the resolved features array

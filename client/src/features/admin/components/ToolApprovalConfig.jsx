@@ -9,6 +9,7 @@ import AdminLoadGate from './AdminLoadGate';
 import { useAdminConfigLoad } from '../hooks/useAdminConfigLoad';
 import { useDirtyReport } from '../hooks/useDirtyReport';
 import { ApprovalModeSelect } from './ToolApprovalFields';
+import { useSaveSection } from './SaveSections';
 
 /**
  * The platform's tool approval defaults (`platform.json` → `toolApproval.defaults`)
@@ -61,7 +62,7 @@ function ToolApprovalConfig({ onDirtyChange }) {
   const [form, setForm] = useState({ default: '', internal: '', external: '' });
   // The form as last loaded or saved; null until it loaded.
   const [savedForm, setSavedForm] = useState(null);
-  useDirtyReport(savedForm, form, onDirtyChange);
+  const dirty = useDirtyReport(savedForm, form, onDirtyChange);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState(null);
 
@@ -87,6 +88,7 @@ function ToolApprovalConfig({ onDirtyChange }) {
   });
   const ready = load.status === 'ready';
 
+  /** Saves the defaults. Resolves `false` when nothing was saved, so the page's bar stops. */
   const save = async () => {
     if (!ready) return;
     setSaving(true);
@@ -105,6 +107,7 @@ function ToolApprovalConfig({ onDirtyChange }) {
         type: 'success',
         text: t('admin.toolApproval.saved', 'Tool approval settings saved.')
       });
+      return true;
     } catch (error) {
       setMessage({
         type: 'error',
@@ -112,10 +115,26 @@ function ToolApprovalConfig({ onDirtyChange }) {
           error.message ||
           t('admin.toolApproval.saveError', 'The tool approval settings could not be saved.')
       });
+      return false;
     } finally {
       setSaving(false);
     }
   };
+
+  /** Back to the defaults as last loaded or saved, without the last message. */
+  const discard = () => {
+    if (savedForm) setForm(savedForm);
+    setMessage(null);
+  };
+
+  // The page's save bar saves and discards this section; no Save button of its own.
+  useSaveSection('tool-approval', {
+    dirty,
+    saving,
+    error: message?.type === 'error' ? message.text : null,
+    save,
+    discard
+  });
 
   if (!ready) {
     return (
@@ -200,17 +219,6 @@ function ToolApprovalConfig({ onDirtyChange }) {
             'Remote MCP servers, A2A agents and integrations whose data leaves your systems.'
           )}
         />
-      </div>
-
-      <div>
-        <button
-          type="button"
-          onClick={save}
-          disabled={saving}
-          className="inline-flex items-center rounded-md bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700 focus:outline-hidden focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 disabled:opacity-50"
-        >
-          {saving ? t('common.saving', 'Saving...') : t('common.save', 'Save')}
-        </button>
       </div>
     </div>
   );

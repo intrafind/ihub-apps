@@ -241,6 +241,58 @@ export const generateAppDraft = async ({ description, language, signal }) => {
 };
 
 /**
+ * Ask an AI model for one change to an app, or one question about it
+ * (`POST /api/admin/apps/_revise`). Nothing is stored: the editor applies
+ * the answer's `patch` itself and saves through its normal save.
+ *
+ * @param {Object} request
+ * @param {Object} request.draft - The app's content as the editor holds it.
+ * @param {Array<{role: 'author'|'builder', kind?: string, text: string}>} request.conversation -
+ *   1 to 12 entries; the last one is the author's.
+ * @param {string} [request.language] - The content language of the app.
+ * @param {string[]} [request.fields] - Restrict the change to these content keys.
+ * @param {boolean} [request.allowQuestions] - `false`: the answer is never a question.
+ * @param {AbortSignal} [request.signal] - Aborting it cancels the request; the
+ *   server then stops the model call.
+ * @returns {Promise<{ reply: 'question'|'change'|'message', text: string, question: Object|null,
+ *   patch: Object, changed: string[], suggestions: Object, warnings: Object[], model: Object }>}
+ */
+export const reviseAdminApp = async ({
+  draft,
+  conversation,
+  language,
+  fields,
+  allowQuestions,
+  signal
+}) => {
+  const response = await makeAdminApiCall('/admin/apps/_revise', {
+    method: 'POST',
+    body: reviseBody({ draft, conversation, language, fields, allowQuestions }),
+    timeout: APP_DRAFT_TIMEOUT_MS,
+    signal
+  });
+  return response.data;
+};
+
+/**
+ * The body of a `_revise` request: the members that are set, nothing else.
+ * (`endpoints/userApps.js` builds the same body for the personal route; it
+ * must not import this module, which a person without admin rights never loads.)
+ *
+ * @param {Object} request
+ * @returns {Object}
+ */
+function reviseBody({ draft, conversation, language, fields, allowQuestions }) {
+  return {
+    draft,
+    conversation,
+    ...(language ? { language } : {}),
+    ...(Array.isArray(fields) && fields.length > 0 ? { fields } : {}),
+    ...(typeof allowQuestions === 'boolean' ? { allowQuestions } : {})
+  };
+}
+
+/**
  * Create an app (`POST /api/admin/apps`).
  *
  * @param {Object} app - The app configuration; stored as sent.
@@ -307,6 +359,25 @@ export const toggleApps = async (ids, enabled) => {
 };
 
 /**
+ * Publishes or unpublishes one app (`POST /api/admin/apps/{appId}/_toggle`).
+ * Unlike {@link toggleApps} it answers the whole response: for one app the
+ * server sends the app's new revision as `ETag`, and with `ifMatch` it refuses
+ * the toggle (412 `PRECONDITION_FAILED`) when the app changed since that
+ * revision was read.
+ *
+ * @param {string} appId
+ * @param {boolean} enabled
+ * @param {{ ifMatch?: string|null }} [options] - The `ETag` the toggle is based on.
+ * @returns {Promise<object>} The response, with `data` and `headers`.
+ */
+export const toggleApp = (appId, enabled, { ifMatch } = {}) =>
+  makeAdminApiCall(`/admin/apps/${encodeURIComponent(appId)}/_toggle`, {
+    method: 'POST',
+    ...(ifMatch ? { headers: { 'If-Match': ifMatch } } : {}),
+    body: { enabled }
+  });
+
+/**
  * Save the display order of apps: the first id becomes `order: 1`, the second
  * `order: 2`, and so on. Apps left out of `ids` keep the order they have.
  */
@@ -336,12 +407,81 @@ export const createPage = async pageData => {
   return response.data;
 };
 
+/**
+ * The model the server made the platform default on its own while handling a
+ * request (create, update, `_toggle`, delete of a model), read from the
+ * `Default-Model-Assigned` response header. The admin is told, because every
+ * app that names no model now answers with it.
+ *
+ * @param {{headers?: Object}|undefined} response - An axios response.
+ * @returns {string|null} The model id, or null when the default did not move on its own.
+ */
+export const assignedDefaultModelId = response => {
+  const headers = response?.headers;
+  const value =
+    typeof headers?.get === 'function'
+      ? headers.get('default-model-assigned')
+      : headers?.['default-model-assigned'];
+  if (!value) return null;
+  try {
+    return decodeURIComponent(String(value));
+  } catch {
+    return String(value);
+  }
+};
+
+/**
+ * Enables or disables models.
+ *
+ * @param {string|string[]} ids - Model ids, or `'*'` for all.
+ * @param {boolean} enabled
+ * @returns {Promise<{enabled: boolean, ids: string[], assignedDefaultModelId: string|null}>}
+ *   The server's answer plus the model it made the default on its own, if any.
+ */
 export const toggleModels = async (ids, enabled) => {
   const idParam = Array.isArray(ids) ? ids.join(',') : ids;
   const response = await makeAdminApiCall(`/admin/models/${idParam}/_toggle`, {
     method: 'POST',
     body: { enabled }
   });
+  return { ...response.data, assignedDefaultModelId: assignedDefaultModelId(response) };
+};
+
+/**
+ * Makes an enabled chat model the platform default.
+ *
+ * @param {string} modelId
+ * @returns {Promise<Object>} The model as stored now.
+ */
+export const makeDefaultModel = async modelId => {
+  const response = await makeAdminApiCall(
+    `/admin/models/${encodeURIComponent(modelId)}/_make-default`,
+    { method: 'POST' }
+  );
+  return response.data;
+};
+
+/**
+ * What names a model: `{ apps, workflows, groups, isDefault, nextDefaultModelId? }`.
+ *
+ * @param {string} modelId
+ * @returns {Promise<Object>}
+ */
+export const fetchModelDependants = async modelId => {
+  const response = await makeAdminApiCall(
+    `/admin/models/${encodeURIComponent(modelId)}/_dependants`
+  );
+  return response.data;
+};
+
+/**
+ * What names an app: `{ prompts, apps, workflows, groups }`.
+ *
+ * @param {string} appId
+ * @returns {Promise<Object>}
+ */
+export const fetchAppDependants = async appId => {
+  const response = await makeAdminApiCall(`/admin/apps/${encodeURIComponent(appId)}/_dependants`);
   return response.data;
 };
 
@@ -906,6 +1046,73 @@ export const updateContentAccess = async (type, id, { grant = [], revoke = [] } 
       body: { grant, revoke }
     }
   );
+  return response.data;
+};
+
+// Item access (full admins): who can use an app, model, prompt, … and why,
+// the access check, and replacing wildcards so that one item is no longer
+// granted to everyone. See server/routes/admin/itemAccess.js.
+
+const itemAccessUrl = (type, id) =>
+  `/admin/access/${encodeURIComponent(type)}/${encodeURIComponent(id)}`;
+
+/**
+ * Every group with the routes by which its members get the item.
+ *
+ * @param {'apps'|'models'|'prompts'|'skills'|'workflows'} type
+ * @param {string} id
+ * @returns {Promise<{type: string, id: string, groups: object[], audience: object,
+ *   wildcardGroups: string[], restrictable: boolean}>}
+ */
+export const fetchItemAccess = async (type, id) => {
+  const response = await makeAdminApiCall(itemAccessUrl(type, id));
+  return response.data;
+};
+
+/**
+ * Whether a group or a user can use an app or a model, with the reasons.
+ *
+ * @param {'apps'|'models'} type
+ * @param {string} id
+ * @param {{groupId?: string, userId?: string}} subject - Exactly one of the two
+ * @returns {Promise<{subject: object, verdict: 'available'|'unavailable', reasons: object[]}>}
+ */
+export const fetchAccessVerdict = async (type, id, { groupId, userId } = {}) => {
+  const query = new URLSearchParams(groupId ? { groupId } : { userId: userId || '' });
+  const response = await makeAdminApiCall(`${itemAccessUrl(type, id)}/verdict?${query}`);
+  return response.data;
+};
+
+/**
+ * What restricting the item would change, without writing.
+ *
+ * @param {'apps'|'models'|'prompts'} type
+ * @param {string} id
+ * @param {{groupIds?: string[], grantGroupIds?: string[]}} [body]
+ * @returns {Promise<object>} The restriction plan
+ */
+export const previewAccessRestriction = async (type, id, body = {}) => {
+  const response = await makeAdminApiCall(`${itemAccessUrl(type, id)}/_preview-restrict`, {
+    method: 'POST',
+    body
+  });
+  return response.data;
+};
+
+/**
+ * Replaces `*` in the chosen groups with an explicit list without the item,
+ * then grants it to `grantGroupIds`.
+ *
+ * @param {'apps'|'models'|'prompts'} type
+ * @param {string} id
+ * @param {{groupIds?: string[], grantGroupIds?: string[]}} body
+ * @returns {Promise<object>} The access view after the change, with `changed`
+ */
+export const restrictItemAccess = async (type, id, body) => {
+  const response = await makeAdminApiCall(`${itemAccessUrl(type, id)}/_restrict`, {
+    method: 'POST',
+    body
+  });
   return response.data;
 };
 
