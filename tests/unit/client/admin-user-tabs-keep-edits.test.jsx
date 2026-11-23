@@ -178,6 +178,10 @@ const PAGES = [
   }
 ];
 
+/** A page's tab: a `tab` (Prompts uses AdminTabs) or, on pages without tab roles, a button. */
+const tabNamed = name =>
+  screen.queryByRole('tab', { name }) || screen.getByRole('button', { name });
+
 beforeEach(() => {
   jest.resetAllMocks();
   global.ResizeObserver = class {
@@ -218,21 +222,21 @@ describe.each(PAGES)('$name', ({ Page, url, otherTab, backTab, mock, saved, othe
     fireEvent.click(everyone());
     expect(bar()).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: otherTab }));
+    fireEvent.click(tabNamed(otherTab));
     await otherContent();
 
     // The settings are out of sight; the bar still carries them, once.
     expect(screen.queryByRole('checkbox', { name: 'Everyone signed in' })).toBeNull();
     expect(screen.getAllByRole('region', { name: 'Save changes' })).toHaveLength(1);
 
-    fireEvent.click(screen.getByRole('button', { name: backTab }));
+    fireEvent.click(tabNamed(backTab));
     expect(everyone()).toBeChecked();
   });
 
   it('saves the hidden tab from the other tab, and the bar goes away', async () => {
     await renderPage();
     fireEvent.click(everyone());
-    fireEvent.click(screen.getByRole('button', { name: otherTab }));
+    fireEvent.click(tabNamed(otherTab));
     await otherContent();
 
     await act(async () => {
@@ -246,7 +250,7 @@ describe.each(PAGES)('$name', ({ Page, url, otherTab, backTab, mock, saved, othe
   it('asks before the admin leaves the page with the edit, also from the other tab', async () => {
     await renderPage();
     fireEvent.click(everyone());
-    fireEvent.click(screen.getByRole('button', { name: otherTab }));
+    fireEvent.click(tabNamed(otherTab));
     await otherContent();
 
     fireEvent.click(screen.getByRole('button', { name: 'go away' }));
