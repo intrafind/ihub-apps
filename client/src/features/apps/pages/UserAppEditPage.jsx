@@ -772,6 +772,7 @@ function UserAppEditPage() {
           reloadKey={testRun}
           onClose={() => setTestOpen(false)}
           focusToken={testFocus}
+          focusChatOnOpen={!conversationView}
         />
       )}
 

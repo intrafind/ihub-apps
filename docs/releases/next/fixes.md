@@ -97,3 +97,10 @@ runs the same chat) only said "openai API service error" or showed a raw network
 - In the **Test** panel, administrators also see the HTTP status, the host and the error code with
   a line on what to check, and for an untrusted certificate a link to the SSL settings under
   **Security**, as in the model test.
+
+## App Conversation: Typing No Longer Jumps into the Test Chat
+
+When an app opened under **Edit with → Conversation**, the test chat beside it took the keyboard
+focus as soon as it had loaded. Text typed into "Tell the builder what to change" in the first
+moments then ended up in the test chat's message box. The test chat now leaves the focus in the
+builder's message box; **Restart** in the test chat still moves the focus to the test chat.
