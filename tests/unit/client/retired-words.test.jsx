@@ -238,6 +238,12 @@ function proseWithHeadings(markdown) {
       else endQuote();
       continue;
     }
+    if (quote.length && !item && !/^ {0,3}\|/.test(line) && lineText.trim()) {
+      // A line without `>` right after a quoted paragraph line continues that paragraph
+      // (CommonMark's lazy continuation), as the docs viewer renders it.
+      quote.push(lineText.trim());
+      continue;
+    }
     endQuote();
     if (/^ {0,3}\|/.test(line) && !item) {
       endParagraph(); // a table row stands alone
@@ -699,7 +705,7 @@ describe('the wording lint itself', () => {
       '| instance |'
     ];
     expect(findHits(words, { docs: [['p.md', apart.join('\n')]] })).toEqual({});
-    // The lines of one quote are one paragraph; a bare `>` or text after the quote ends it.
+    // The lines of one quote are one paragraph; a bare `>` or a blank line ends it.
     const quoted = ['## Q', '', '> A workflow', '> instance starts.'].join('\n');
     expect(findHits(words, { docs: [['p.md', quoted]] })).toEqual({
       'workflow instance': ['docs:p.md#Q']
@@ -712,9 +718,15 @@ describe('the wording lint itself', () => {
       '> instance.',
       '',
       '> workflow',
+      '',
       'instance'
     ];
     expect(findHits(words, { docs: [['p.md', quotesApart.join('\n')]] })).toEqual({});
+    // A line without `>` right after a quoted paragraph line continues the quote.
+    const lazy = ['## Q', '', '> A workflow', 'instance starts.'].join('\n');
+    expect(findHits(words, { docs: [['p.md', lazy]] })).toEqual({
+      'workflow instance': ['docs:p.md#Q']
+    });
   });
 
   test('skips an indented code block, not an indented list line or paragraph line', () => {
