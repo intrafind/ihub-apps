@@ -3,6 +3,7 @@
 # Get started
 
 - [Core Concepts](concepts.md)
+- [Glossary](glossary.md)
 - [Installation](INSTALLATION.md)
 - [Getting Started](GETTING_STARTED.md)
 - [Admin UI](admin-ui.md)

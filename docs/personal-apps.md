@@ -2,7 +2,7 @@
 description: "Let users build apps of their own, share them with roles, publish them as company apps and hand them over."
 audience: admin
 type: how-to
-adminPage: /admin/apps?tab=personal
+adminPage: /admin/apps
 ---
 
 # Personal apps

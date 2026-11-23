@@ -95,6 +95,32 @@ iHub also ships **system skills**: read-only skills delivered with iHub that bri
 
 ---
 
+## App, workflow or scheduled task: when to use which
+
+All three get work done with a model. The difference is **who starts the work and who decides what happens next**. The words are defined in the [Glossary](glossary.md).
+
+|                             | App                                       | Workflow                                                                                                                                                                                      | Scheduled task                                                                                 |
+| --------------------------- | ----------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
+| **What it is**              | A fixed use case that a person chats with | A sequence of steps that an admin defines once                                                                                                                                                | A saved prompt for one app that runs by itself                                                 |
+| **Starts when**             | A person sends a message                  | A person starts it on the Workflows page or with `@` in a chat; the model of an app or an MCP or A2A client calls it; its schedule trigger fires; or another system calls its webhook trigger | The time its owner set has come, or the owner presses **Run now**                              |
+| **What happens next**       | The person decides, message by message    | The definition decides: its steps, branches and checks, as the admin laid them out                                                                                                                           | The prompt is all there is: the app's model works through it alone                             |
+| **A person takes part**     | The whole time                            | Only where a step asks a person                                                                                                                                                               | Not during the run. The result waits as a chat; a tool that needs approval waits for the owner |
+| **Acts with the rights of** | The person who chats                      | The person or API client that started it (an MCP or A2A client that signs in with client credentials or a static key acts with the groups of its OAuth client); a schedule or webhook trigger runs as the non-privileged `system` principal                                                                                        | Its owner                                                                                      |
+| **Set up by**               | An admin, under Admin → Apps              | An admin, under Admin → Workflows                                                                                                                                                             | Each user for themselves, on the Scheduled tasks page                                          |
+| **Available**               | Always                                    | Preview feature, off until switched on under Admin → Features                                                                                                                                 | On by default; needs chat history and the group permission for scheduled tasks                 |
+
+| Situation                                                                                             | Use                                               |
+| ----------------------------------------------------------------------------------------------------- | ------------------------------------------------- |
+| People bring a question or material and want an answer now                                            | **App**                                           |
+| A procedure is laid down in advance: several steps, checks, branches, a person's decision in between | **Workflow**                                      |
+| The same request should be answered every morning, week or month without anyone asking                | **Scheduled task**                                |
+| A fixed procedure should be at hand inside a chat                                                     | **Workflow** with chat integration, in an **app** |
+| A fixed procedure should run at set times for everyone, not as one person                             | **Workflow** with a schedule trigger              |
+
+The three build on each other. A [workflow](workflows.md) can be offered in the chat of an app, where a person starts it with `@` or the app's model calls it. A [scheduled task](scheduled-tasks.md) runs with one app and with everything that app may use, a workflow included. So start with an app; move to a workflow when the order of the steps matters more than the conversation; add a scheduled task when the clock should start the work and not a person.
+
+---
+
 ## Projects: giving the model knowledge
 
 [Projects](projects.md) supply the domain context. A project holds documents and instructions:
@@ -156,6 +182,9 @@ Note that tool calling requires a model that supports it — check the model's `
 - [Projects](projects.md)
 - [Tool Calling](tool-calling.md)
 - [Prompts Library](prompts.md)
+- [Workflows](workflows.md)
+- [Scheduled Tasks](scheduled-tasks.md)
+- [Glossary](glossary.md)
 - [Architecture Overview](architecture.md)
 - [Admin UI Guide](admin-ui.md)
 - [User Guide](user-guide.md)

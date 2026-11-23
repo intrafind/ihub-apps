@@ -1,0 +1,102 @@
+{
+  "about": "Words iHub does not use in UI text and in user and admin docs. docs/glossary.md, section 'Words iHub does not use', shows this list; tests/unit/client/retired-words.test.jsx checks the locale files, the feature list and the docs against it and keeps list and page identical. Fields: word (as the glossary shows it), lang (en, de, or * for both locale files), match (optional regular expression, matched without regard to case and only at word boundaries; without it the word itself and its plural with s), use (what to write instead), scopes (ui: shared/i18n and the feature list; docs: prose of docs/*.md), allowKeys (keys where the word has another meaning).",
+  "words": [
+    {
+      "word": "thread",
+      "lang": "*",
+      "use": "chat (German: Chat)",
+      "scopes": ["ui"]
+    },
+    {
+      "word": "steer",
+      "lang": "*",
+      "match": "steer(?:s|ed|ing)?",
+      "use": "what the person does: send a message, stop the answer",
+      "scopes": ["ui"]
+    },
+    {
+      "word": "helper",
+      "lang": "*",
+      "use": "the name of what does the work: the app, the workflow, the scheduled task",
+      "scopes": ["ui"],
+      "allowKeys": ["theme.textMutedColorHint"]
+    },
+    {
+      "word": "Helfer",
+      "lang": "de",
+      "match": "helfer[ns]?",
+      "use": "der Name dessen, was die Arbeit erledigt: die App, der Workflow, die geplante Aufgabe",
+      "scopes": ["ui"]
+    },
+    {
+      "word": "sub-task",
+      "lang": "en",
+      "match": "sub-?tasks?",
+      "use": "step (of a workflow), or run",
+      "scopes": ["ui", "docs"]
+    },
+    {
+      "word": "Teilaufgabe",
+      "lang": "de",
+      "match": "teilaufgaben?",
+      "use": "Schritt (eines Workflows) oder Lauf",
+      "scopes": ["ui"]
+    },
+    {
+      "word": "job",
+      "lang": "*",
+      "use": "run (German: Lauf)",
+      "scopes": ["ui"],
+      "allowKeys": ["admin.integrations.editors.peopleDirectory.fields.jobTitle"]
+    },
+    {
+      "word": "lease",
+      "lang": "*",
+      "use": "what happened, in plain words: another server process took over the run",
+      "scopes": ["ui"]
+    },
+    {
+      "word": "worker",
+      "lang": "*",
+      "match": "worker[ns]?",
+      "use": "server process (German: Serverprozess)",
+      "scopes": ["ui"]
+    },
+    {
+      "word": "automation",
+      "lang": "en",
+      "use": "workflow, or scheduled task",
+      "scopes": ["ui"],
+      "allowKeys": ["integrations.page.categories.automation"]
+    },
+    {
+      "word": "Automatisierung",
+      "lang": "de",
+      "match": "automatisierung(?:en)?",
+      "use": "Workflow oder geplante Aufgabe",
+      "scopes": ["ui"],
+      "allowKeys": ["integrations.page.categories.automation"]
+    },
+    {
+      "word": "workflow instance",
+      "lang": "en",
+      "match": "workflow[ -]instances?",
+      "use": "run (of a workflow)",
+      "scopes": ["ui", "docs"]
+    },
+    {
+      "word": "Workflow-Instanz",
+      "lang": "de",
+      "match": "workflow[ -]?instanz(?:en)?",
+      "use": "Lauf (eines Workflows)",
+      "scopes": ["ui"]
+    },
+    {
+      "word": "Geplanter Agent",
+      "lang": "de",
+      "match": "geplante[mnrs]? agent(?:en|s)?",
+      "use": "Geplante Aufgabe",
+      "scopes": ["ui", "docs"]
+    }
+  ]
+}

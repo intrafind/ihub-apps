@@ -7,8 +7,9 @@
 /**
  * Checks of the shipped documentation in docs/, as Admin → Documentation and the mdBook build see
  * it: every SUMMARY entry exists, no page is left out of the navigation, each page has one H1 that
- * matches its SUMMARY label and the metadata the viewer shows, and relative links between pages
- * resolve. The mdBook preprocessor that hides the front-matter is checked here too.
+ * matches its SUMMARY label and the metadata the viewer shows, relative links between pages
+ * resolve, and a page's `adminPage` names an admin route of the client. The mdBook preprocessor
+ * that hides the front-matter is checked here too.
  */
 import { describe, expect, test } from '@jest/globals';
 import { spawnSync } from 'child_process';
@@ -18,9 +19,13 @@ import {
   firstHeading,
   listDocPages,
   loadDocsToc,
+  normalizeDocMeta,
   parseSummary,
   splitFrontMatter
 } from '../../../server/utils/docsLibrary.js';
+import { parseFrontMatter } from '../../../server/utils/frontMatter.js';
+import { splitDocsFrontMatter } from '../../../shared/docsFrontMatter.js';
+import { appRoutes, matchRoute, routesInSource } from '../../utils/appRoutes.js';
 
 const rootDir = path.resolve(__dirname, '../../..');
 const docsDir = path.join(rootDir, 'docs');
@@ -146,6 +151,104 @@ describe('docs pages', () => {
       }
     }
     expect(offending).toEqual([]);
+  });
+});
+
+/**
+ * The `adminPage` a page's front-matter names, as written (`null` when it has none). Parsed as the
+ * viewer parses it, but before `normalizeDocMeta` drops a value that is not shaped like an admin
+ * path: such a page would otherwise pass for having no button at all.
+ */
+function rawAdminPage(markdown) {
+  const { block } = splitDocsFrontMatter(markdown);
+  if (block === null) return null;
+  const { data } = parseFrontMatter(`---\n${block}---\n`);
+  return data && Object.hasOwn(data, 'adminPage') ? data.adminPage : null;
+}
+
+/**
+ * Why the viewer's "Open in admin" button of a page would not open an admin page, or `null` when
+ * it does. The button is built from `adminPage` alone, so a value the viewer drops leaves no
+ * button, and a page that was removed or renamed in `client/src/App.jsx` leaves a button that
+ * lands on "not found".
+ */
+function adminPageProblem(adminPage, routes) {
+  if (normalizeDocMeta({ adminPage }).adminPage === undefined) {
+    return `"${adminPage}" is not a path under /admin`;
+  }
+  const target = adminPage.trim();
+  const route = matchRoute(target, routes);
+  if (!route) return `no route in client/src/App.jsx opens ${target}`;
+  if (route.redirectTo) return `${target} only redirects; name ${route.redirectTo} instead`;
+  return null;
+}
+
+describe("adminPage in a page's front-matter", () => {
+  const routes = appRoutes();
+
+  test('names an admin route that exists in client/src/App.jsx', async () => {
+    const problems = [];
+    let checked = 0;
+    for (const page of await listDocPages(docsDir)) {
+      const adminPage = rawAdminPage(read(page));
+      if (adminPage === null) continue;
+      checked += 1;
+      const problem = adminPageProblem(adminPage, routes);
+      if (problem) problems.push(`${page}: ${problem}`);
+    }
+    expect(problems).toEqual([]);
+    // The check reads something: most admin how-tos carry the field.
+    expect(checked).toBeGreaterThan(20);
+  });
+
+  test('a missing, redirected or malformed route is reported', () => {
+    const sample = routesInSource(`
+      const App = () => (
+        <Routes>
+          <Route path="/" element={<Layout />}>
+            <Route path="apps" element={<Apps />} />
+            <Route path="admin" element={<AdminLayout />}>
+              <Route index element={<Overview />} />
+              {show('models') && <Route path="models" element={<Models />} />}
+              <Route path="models/:modelId" element={<Model />} />
+              <Route path="system" element={<Navigate replace to="/admin/security" />} />
+              <Route path="security" element={<Security />} />
+            </Route>
+            <Route path="*" element={<NotFound />} />
+          </Route>
+        </Routes>
+      );
+    `);
+    for (const adminPage of ['/admin', '/admin/models', '/admin/models/new', '/admin/security']) {
+      expect([adminPage, adminPageProblem(adminPage, sample)]).toEqual([adminPage, null]);
+    }
+    expect(adminPageProblem('/admin/no-such-page', sample)).toBe(
+      'no route in client/src/App.jsx opens /admin/no-such-page'
+    );
+    expect(adminPageProblem('/admin/system', sample)).toBe(
+      '/admin/system only redirects; name /admin/security instead'
+    );
+    expect(adminPageProblem('/apps', sample)).toBe('"/apps" is not a path under /admin');
+    expect(adminPageProblem('admin/models', sample)).toBe(
+      '"admin/models" is not a path under /admin'
+    );
+    // The viewer drops a value with a query or a fragment, so the page would have no button.
+    for (const adminPage of ['/admin/models/new?tab=details', '/admin/models#top']) {
+      expect(adminPageProblem(adminPage, sample)).toBe(`"${adminPage}" is not a path under /admin`);
+    }
+  });
+
+  test('is read as written, quoted or not, and also when the viewer would drop it', () => {
+    expect(rawAdminPage('---\nadminPage: /admin/apps\n---\n\n# A\n')).toBe('/admin/apps');
+    expect(rawAdminPage('---\nadminPage: "/admin/apps"\n---\n\n# A\n')).toBe('/admin/apps');
+    expect(rawAdminPage('---\nadminPage: admin apps\n---\n\n# A\n')).toBe('admin apps');
+    expect(rawAdminPage('---\naudience: admin\n---\n\n# A\n')).toBeNull();
+    expect(rawAdminPage('# A\n\nadminPage: /admin/apps\n')).toBeNull();
+    // YAML, not the line: a trailing comment is not part of the value, a quoted key is the key.
+    expect(rawAdminPage('---\nadminPage: /admin/apps # the app list\n---\n\n# A\n')).toBe(
+      '/admin/apps'
+    );
+    expect(rawAdminPage('---\n"adminPage": /admin/apps\n---\n\n# A\n')).toBe('/admin/apps');
   });
 });
 
