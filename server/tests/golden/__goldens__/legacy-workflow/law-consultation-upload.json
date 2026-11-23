@@ -1,0 +1,2050 @@
+{
+  "approvals": [],
+  "case": "law-consultation-upload",
+  "envelopes": [
+    {
+      "data": {
+        "kind": "workflow",
+        "refs": {
+          "chatId": "golden-legacy-chat",
+          "executionId": "wf-exec-<id:1>",
+          "workflowId": "stellungnahmen-review-v2"
+        }
+      },
+      "runId": "wf-exec-<id:1>",
+      "streamId": "golden-legacy-chat",
+      "type": "run/started"
+    },
+    {
+      "data": {
+        "executionId": "wf-exec-<id:1>",
+        "nodeId": "wf-exec-<id:1>:start:1",
+        "nodeName": "Starting: \"Bezugsdauer und Meldefrist, § 12 und § 14 MLNG\"",
+        "nodeType": "start",
+        "progress": {
+          "chatVisible": true,
+          "workflowName": "Stellungnahmen-Auswertung (revisionssicher) (v2)"
+        },
+        "status": "running"
+      },
+      "runId": "wf-exec-<id:1>",
+      "streamId": "golden-legacy-chat",
+      "type": "progress/node"
+    },
+    {
+      "data": {
+        "executionId": "wf-exec-<id:1>",
+        "nodeId": "start",
+        "nodeName": "Stellungnahmen hochladen",
+        "nodeType": "start",
+        "progress": {
+          "chatVisible": true,
+          "workflowName": "Stellungnahmen-Auswertung (revisionssicher) (v2)"
+        },
+        "status": "running"
+      },
+      "runId": "wf-exec-<id:1>",
+      "streamId": "golden-legacy-chat",
+      "type": "progress/node"
+    },
+    {
+      "data": {
+        "executionId": "wf-exec-<id:1>",
+        "nodeId": "start",
+        "nodeName": "Stellungnahmen hochladen",
+        "nodeType": "start",
+        "progress": {
+          "chatVisible": true,
+          "workflowName": "Stellungnahmen-Auswertung (revisionssicher) (v2)"
+        },
+        "status": "completed"
+      },
+      "runId": "wf-exec-<id:1>",
+      "streamId": "golden-legacy-chat",
+      "type": "progress/node"
+    },
+    {
+      "data": {
+        "executionId": "wf-exec-<id:1>",
+        "nodeId": "init-coverage",
+        "nodeName": "Korpus + Zähler initialisieren",
+        "nodeType": "transform",
+        "progress": {
+          "chatVisible": true,
+          "workflowName": "Stellungnahmen-Auswertung (revisionssicher) (v2)"
+        },
+        "status": "running"
+      },
+      "runId": "wf-exec-<id:1>",
+      "streamId": "golden-legacy-chat",
+      "type": "progress/node"
+    },
+    {
+      "data": {
+        "executionId": "wf-exec-<id:1>",
+        "nodeId": "init-coverage",
+        "nodeName": "Korpus + Zähler initialisieren",
+        "nodeType": "transform",
+        "progress": {
+          "chatVisible": true,
+          "workflowName": "Stellungnahmen-Auswertung (revisionssicher) (v2)"
+        },
+        "status": "completed"
+      },
+      "runId": "wf-exec-<id:1>",
+      "streamId": "golden-legacy-chat",
+      "type": "progress/node"
+    },
+    {
+      "data": {
+        "executionId": "wf-exec-<id:1>",
+        "nodeId": "wf-exec-<id:1>:prompt:6",
+        "nodeName": "📄 Analysing document 1 / 5 — \"01-verband-der-musterkassen.pdf\"",
+        "nodeType": "prompt",
+        "progress": {
+          "chatVisible": true,
+          "workflowName": "Stellungnahmen-Auswertung (revisionssicher) (v2)"
+        },
+        "status": "running"
+      },
+      "runId": "wf-exec-<id:1>",
+      "streamId": "golden-legacy-chat",
+      "type": "progress/node"
+    },
+    {
+      "data": {
+        "executionId": "wf-exec-<id:1>",
+        "nodeId": "wf-exec-<id:1>:prompt:7",
+        "nodeName": "📄 Analysing document 2 / 5 — \"02-musterkammer-nord.docx\"",
+        "nodeType": "prompt",
+        "progress": {
+          "chatVisible": true,
+          "workflowName": "Stellungnahmen-Auswertung (revisionssicher) (v2)"
+        },
+        "status": "running"
+      },
+      "runId": "wf-exec-<id:1>",
+      "streamId": "golden-legacy-chat",
+      "type": "progress/node"
+    },
+    {
+      "data": {
+        "executionId": "wf-exec-<id:1>",
+        "nodeId": "wf-exec-<id:1>:prompt:8",
+        "nodeName": "📄 Analysing document 3 / 5 — \"03-scan-ohne-textebene.pdf\"",
+        "nodeType": "prompt",
+        "progress": {
+          "chatVisible": true,
+          "workflowName": "Stellungnahmen-Auswertung (revisionssicher) (v2)"
+        },
+        "status": "running"
+      },
+      "runId": "wf-exec-<id:1>",
+      "streamId": "golden-legacy-chat",
+      "type": "progress/node"
+    },
+    {
+      "data": {
+        "executionId": "wf-exec-<id:1>",
+        "nodeId": "wf-exec-<id:1>:prompt:9",
+        "nodeName": "📄 Analysing document 4 / 5 — \"04-arbeitsgemeinschaft-lang.pdf\"",
+        "nodeType": "prompt",
+        "progress": {
+          "chatVisible": true,
+          "workflowName": "Stellungnahmen-Auswertung (revisionssicher) (v2)"
+        },
+        "status": "running"
+      },
+      "runId": "wf-exec-<id:1>",
+      "streamId": "golden-legacy-chat",
+      "type": "progress/node"
+    },
+    {
+      "data": {
+        "executionId": "wf-exec-<id:1>",
+        "nodeId": "wf-exec-<id:1>:prompt:10",
+        "nodeName": "📄 Analysing document 5 / 5 — \"06-buendnis-umlaute-tabelle.docx\"",
+        "nodeType": "prompt",
+        "progress": {
+          "chatVisible": true,
+          "workflowName": "Stellungnahmen-Auswertung (revisionssicher) (v2)"
+        },
+        "status": "running"
+      },
+      "runId": "wf-exec-<id:1>",
+      "streamId": "golden-legacy-chat",
+      "type": "progress/node"
+    },
+    {
+      "data": {
+        "executionId": "wf-exec-<id:1>",
+        "nodeId": "compose-report",
+        "nodeName": "Auditbericht erzeugen",
+        "nodeType": "template-render",
+        "progress": {
+          "chatVisible": true,
+          "workflowName": "Stellungnahmen-Auswertung (revisionssicher) (v2)"
+        },
+        "status": "running"
+      },
+      "runId": "wf-exec-<id:1>",
+      "streamId": "golden-legacy-chat",
+      "type": "progress/node"
+    },
+    {
+      "data": {
+        "executionId": "wf-exec-<id:1>",
+        "nodeId": "wf-exec-<id:1>:prompt:12",
+        "nodeName": "Report written: stellungnahmen-review.md (2 KB)",
+        "nodeType": "prompt",
+        "progress": {
+          "chatVisible": true,
+          "workflowName": "Stellungnahmen-Auswertung (revisionssicher) (v2)"
+        },
+        "status": "running"
+      },
+      "runId": "wf-exec-<id:1>",
+      "streamId": "golden-legacy-chat",
+      "type": "progress/node"
+    },
+    {
+      "data": {
+        "executionId": "wf-exec-<id:1>",
+        "nodeId": "compose-report",
+        "nodeName": "Auditbericht erzeugen",
+        "nodeType": "template-render",
+        "progress": {
+          "chatVisible": true,
+          "workflowName": "Stellungnahmen-Auswertung (revisionssicher) (v2)"
+        },
+        "status": "completed"
+      },
+      "runId": "wf-exec-<id:1>",
+      "streamId": "golden-legacy-chat",
+      "type": "progress/node"
+    },
+    {
+      "data": {
+        "executionId": "wf-exec-<id:1>",
+        "nodeId": "end",
+        "nodeName": "Fertig",
+        "nodeType": "end",
+        "progress": {
+          "chatVisible": true,
+          "workflowName": "Stellungnahmen-Auswertung (revisionssicher) (v2)"
+        },
+        "status": "running"
+      },
+      "runId": "wf-exec-<id:1>",
+      "streamId": "golden-legacy-chat",
+      "type": "progress/node"
+    },
+    {
+      "data": {
+        "executionId": "wf-exec-<id:1>",
+        "nodeId": "end",
+        "nodeName": "Fertig",
+        "nodeType": "end",
+        "progress": {
+          "chatVisible": true,
+          "workflowName": "Stellungnahmen-Auswertung (revisionssicher) (v2)"
+        },
+        "status": "completed"
+      },
+      "runId": "wf-exec-<id:1>",
+      "streamId": "golden-legacy-chat",
+      "type": "progress/node"
+    },
+    {
+      "data": {
+        "executionId": "wf-exec-<id:1>",
+        "extra": {
+          "workflow": {
+            "outputFormat": "markdown",
+            "status": "completed",
+            "workflowName": "Stellungnahmen-Auswertung (revisionssicher) (v2)"
+          }
+        }
+      },
+      "runId": "wf-exec-<id:1>",
+      "streamId": "golden-legacy-chat",
+      "type": "meta"
+    },
+    {
+      "data": {
+        "content": "# Stellungnahmen-Auswertung\n\n## Abdeckung\n\n- **Dokumente identifiziert:** 5\n- **Dokumente verarbeitet:** 5\n\n**Autor:** Verband der Musterkassen\n\n**Titel:** Stellungnahme zum Entwurf des MLNG\n\n**Datei:** `01-verband-der-musterkassen.pdf`\n\n| Nr | Paragraph | Forderung (mit Originalzitat) |\n|----|-----------|-------------------------------|\n| 0 | § 12 Abs. 2 MLNG | Streichung der Begrenzung der Bezugsdauer auf 52 Wochen _(Wir fordern, § 12 Absatz 2 zu streichen und die geltende Regelung beizubehalten.)_ |\n| 1 | § 14 MLNG | Verlängerung der Meldefrist auf zehn Tage _(Wir fordern, die Meldefrist in § 14 auf zehn Tage zu verlängern.)_ |\n\n\n\n---\n\n**Autor:** Musterkammer Nord\n\n**Titel:** Stellungnahme zum Entwurf des MLNG\n\n**Datei:** `02-musterkammer-nord.docx`\n\n| Nr | Paragraph | Forderung (mit Originalzitat) |\n|----|-----------|-------------------------------|\n| 0 | § 12 Abs. 3 MLNG | Aufnahme einer Härtefallregelung _(Wir fordern jedoch, in § 12 Absatz 3 eine Härtefallregelung aufzunehmen.)_ |\n\n\n\n---\n\n**Autor:** \n\n**Titel:** \n\n**Datei:** `03-scan-ohne-textebene.pdf`\n\n\n> _Keine geforderten Gesetzesänderungen zu den angegebenen Themen in diesem Dokument gefunden._\n\n\n---\n\n**Autor:** Arbeitsgemeinschaft Musterverbände\n\n**Titel:** Stellungnahme zum Entwurf des MLNG, ausführliche Fassung\n\n**Datei:** `04-arbeitsgemeinschaft-lang.pdf`\n\n| Nr | Paragraph | Forderung (mit Originalzitat) |\n|----|-----------|-------------------------------|\n| 0 | § 12 und § 14 MLNG | Überarbeitung des Entwurfs _(Wir fordern insgesamt, den Entwurf in § 12 und § 14 zu überarbeiten.)_ |\n\n\n\n---\n\n**Autor:** Bündnis für Ärztinnen, Ärzte und Pflegekräfte\n\n**Titel:** Änderungsvorschläge im Überblick\n\n**Datei:** `06-buendnis-umlaute-tabelle.docx`\n\n| Nr | Paragraph | Forderung (mit Originalzitat) |\n|----|-----------|-------------------------------|\n| 0 | § 12 Abs. 2 | Beibehaltung der 78 Wochen _(Beibehaltung der 78 Wochen)_ |\n| 1 | § 20 | Übergang 18 Monate, zusätzlich Härtefälle _(Übergang 18 Monate, zusätzlich Härtefälle)_ |\n\n\n\n---\n\n",
+        "kind": "text",
+        "step": 0
+      },
+      "runId": "wf-exec-<id:1>",
+      "streamId": "golden-legacy-chat",
+      "type": "step/delta"
+    },
+    {
+      "data": {
+        "finishReason": "stop",
+        "status": "completed"
+      },
+      "runId": "wf-exec-<id:1>",
+      "streamId": "golden-legacy-chat",
+      "type": "run/ended"
+    }
+  ],
+  "ledger": [
+    {
+      "data": {
+        "kind": "workflow",
+        "principal": {
+          "anonymous": false,
+          "id": "golden-user",
+          "mode": "default"
+        },
+        "refs": {
+          "executionId": "wf-exec-<id:1>",
+          "workflowId": "stellungnahmen-review-v2"
+        },
+        "trigger": {
+          "type": "user"
+        }
+      },
+      "runId": "wf-exec-<id:1>",
+      "type": "run/start"
+    },
+    {
+      "data": {
+        "purpose": "agent-step",
+        "segment": "seg-<id:2>"
+      },
+      "runId": "wf-exec-<id:1>",
+      "type": "segment/start"
+    },
+    {
+      "data": {
+        "callConfig": {
+          "maxTokens": 16000,
+          "nativeWebSearch": null,
+          "responseFormat": "json",
+          "responseSchema": {
+            "properties": {
+              "demandedChanges": {
+                "items": {
+                  "properties": {
+                    "paragraphReference": {
+                      "type": "string"
+                    },
+                    "sourceQuote": {
+                      "type": "string"
+                    },
+                    "summary": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "summary"
+                  ],
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              "organisation": {
+                "type": "string"
+              },
+              "quotes": {
+                "items": {
+                  "properties": {
+                    "text": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "text"
+                  ],
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              "title": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "organisation",
+              "title",
+              "demandedChanges",
+              "quotes"
+            ],
+            "type": "object"
+          },
+          "responseSchemaHash": "23f8d9b22e2029f02b5444e6839644a080f1ac179da94fb5ca835f0bfaec2dc0",
+          "stream": true,
+          "thinking": null
+        },
+        "configHash": "<volatile>",
+        "language": "en",
+        "messageCount": 2,
+        "messages": [
+          {
+            "content": "Current date: <date> (timezone UTC). Treat any date after this as the future; do not assume your training-time knowledge of \"today\" or the \"latest\" is current.\n\nYou are an AI assistant capable of searching PDF documents. You analyse a single Stellungnahme (formal note on a draft law). Strictly observe these rules:\n- Always answer in the language of the analysed document. Do not mix languages.\n- Base every claim on the document. Never invent.\n- Quotes are character-for-character from the source. Never paraphrase. Do not drop intermediate sentences from a quoted passage.\n- Internally repeat the analysis and improve your result before returning. Output only the improved result.\n\nYou are an AI system. If asked, always say so. Never claim to be human, even in a role.",
+            "role": "system"
+          },
+          {
+            "content": "[File: 01-verband-der-musterkassen.pdf (application/pdf)]\n\n[Page 1]\n# Stellungnahme des Verbands der Musterkassen\nzum Entwurf eines Gesetzes zur Neuordnung der Musterleistungen (MLNG)\nDer Verband begrüßt das Ziel des Entwurfs, lehnt aber die Befristung in § 12 ab.\nZu § 12 Absatz 2 MLNG: Die Bezugsdauer darf nicht auf 52 Wochen begrenzt werden.\nWir fordern, § 12 Absatz 2 zu streichen und die geltende Regelung beizubehalten.\nZu § 14 MLNG: Die Meldefrist von drei Tagen ist für kleine Kassen nicht einzuhalten.\nWir fordern, die Meldefrist in § 14 auf zehn Tage zu verlängern.\n\n[Page 2]\n# Begründung\nDie Begrenzung trifft vor allem langfristig erkrankte Versicherte.\nNach unseren Zahlen wären jährlich etwa 4.200 Versicherte betroffen.\nMusterstadt, im März. Dr. Erika Beispiel, Vorsitzende\n\n## Document\nAttached: Stellungnahme (document 1 of 5).\n\n## User focus\nBezugsdauer und Meldefrist, § 12 und § 14 MLNG\n\nThe user focus names the law, paragraphs, or topics the user cares about. When checking relevance, consider word families and synonyms (e.g. \"Krankengeld\" matches \"§ 48 SGB V\", \"Höchstbezugsdauer\", \"Anspruchsdauer\"). If the user focus is empty, treat ALL demanded changes as in-scope.\n\n## Procedure\n\n**Step 1 — Inventory.** Privately list every legislative paragraph and every distinct topic this Stellungnahme demands a change to. Do not output this list.\n\n**Step 2 — Filter against the user focus.** This is the most important step. Apply it strictly:\n- If the user focus is **non-empty** AND nothing in your Step-1 inventory matches it (even via synonyms / word families), the correct output is `demandedChanges: []`. Do NOT include unrelated demands. Returning off-topic demands is a failure.\n- If at least one inventoried demand matches the focus, keep ONLY those.\n- If the user focus is empty, keep all of them.\n\n**Step 3 — Extract the kept demands.** For each one:\n1. `summary` — one sentence describing the demand.\n2. `paragraphReference` — the exact paragraph reference (e.g. '§ 113c Abs. 5 Satz 1 Nr. 3'). Empty string if no paragraph is named.\n3. `sourceQuote` — the EXACT verbatim quote from the document. Character-for-character. Findable by plain substring search. Do not omit middle sentences — \"Sentence 1. Sentence 2. Sentence 3.\" must be quoted in full even if Sentence 2 is not directly relevant.\n4. Sort by paragraph and subsection; if no paragraph, sort by topic.\n\n**Step 4 — Metadata.** Determine `organisation` (the submitting body, not the individual person) and `title` of the Stellungnahme.\n\n**Step 5 — Self-check.** Re-apply Step 2 to your extracted list. Drop any entry whose paragraph reference and topic do not actually match the user focus. Returning `demandedChanges: []` is the correct and expected answer when this document does not address the user focus.\n\n## Output (JSON only, no prose, no markdown fences)\n\n{\n  \"organisation\": \"<submitting organisation>\",\n  \"title\": \"<title of the Stellungnahme>\",\n  \"demandedChanges\": [\n    {\n      \"paragraphReference\": \"<e.g. '§ 113c Abs. 5 Satz 1 Nr. 3' or empty>\",\n      \"summary\": \"<one-sentence description of the demand>\",\n      \"sourceQuote\": \"<EXACT verbatim quote from the document>\"\n    }\n  ],\n  \"quotes\": [\n    { \"text\": \"<each verbatim quote used above, one entry per demand>\" }\n  ]\n}\n\nUser instruction: Bezugsdauer und Meldefrist, § 12 und § 14 MLNG",
+            "role": "user"
+          }
+        ],
+        "messagesHash": "<hash>",
+        "model": "golden-model",
+        "modelId": "gpt-golden",
+        "modelSnapshot": {
+          "autoDiscovery": false,
+          "default": true,
+          "id": "golden-model",
+          "modelId": "gpt-golden",
+          "provider": "openai",
+          "supportsTools": "auto",
+          "url": "https://model.invalid/v1/chat/completions"
+        },
+        "optionsSnapshot": {
+          "maxTokens": 16000,
+          "nativeWebSearch": null,
+          "responseFormat": "json",
+          "stream": true
+        },
+        "provider": "openai",
+        "purpose": "agent-step",
+        "reason": "initial",
+        "requestHash": "<hash>",
+        "requestId": "req-<id:3>",
+        "segment": "seg-<id:2>",
+        "step": 1,
+        "toolExecution": "none",
+        "toolSchemasHash": null
+      },
+      "runId": "wf-exec-<id:1>",
+      "type": "request/header"
+    },
+    {
+      "data": {
+        "content": "{\"demandedChanges\":[{\"paragraphReference\":\"§ 12 Abs. 2 MLNG\",\"summary\":\"Streichung der Begrenzung der Bezugsdauer auf 52 Wochen\",\"sourceQuote\":\"Wir fordern, § 12 Absatz 2 zu streichen und die geltende Regelung beizubehalten.\"},{\"paragraphReference\":\"§ 14 MLNG\",\"summary\":\"Verlängerung der Meldefrist auf zehn Tage\",\"sourceQuote\":\"Wir fordern, die Meldefrist in § 14 auf zehn Tage zu verlängern.\"}],\"quotes\":[{\"text\":\"Die Bezugsdauer darf nicht auf 52 Wochen begrenzt werden.\"}],\"organisation\":\"Verband der Musterkassen\",\"title\":\"Stellungnahme zum Entwurf des MLNG\"}",
+        "finishReason": "stop",
+        "hasImages": false,
+        "requestId": "req-<id:3>",
+        "step": 1,
+        "toolCalls": [],
+        "usage": {
+          "completionTokens": 120,
+          "promptTokens": 900,
+          "source": "provider",
+          "totalTokens": 1020
+        }
+      },
+      "runId": "wf-exec-<id:1>",
+      "type": "message/assistant"
+    },
+    {
+      "data": {
+        "limits": {
+          "maxTokensPerRun": 0,
+          "maxToolRounds": 10
+        },
+        "runUsage": {
+          "completionTokens": 120,
+          "promptTokens": 900,
+          "totalTokens": 1020
+        },
+        "step": 1,
+        "usage": {
+          "completionTokens": 120,
+          "promptTokens": 900,
+          "source": "provider",
+          "totalTokens": 1020
+        }
+      },
+      "runId": "wf-exec-<id:1>",
+      "type": "budget/checkpoint"
+    },
+    {
+      "data": {
+        "purpose": "agent-step",
+        "segment": "seg-<id:4>"
+      },
+      "runId": "wf-exec-<id:1>",
+      "type": "segment/start"
+    },
+    {
+      "data": {
+        "callConfig": {
+          "maxTokens": 16000,
+          "nativeWebSearch": null,
+          "responseFormat": "json",
+          "responseSchemaHash": "23f8d9b22e2029f02b5444e6839644a080f1ac179da94fb5ca835f0bfaec2dc0",
+          "stream": true,
+          "thinking": null
+        },
+        "configHash": "<volatile>",
+        "language": "en",
+        "messageCount": 2,
+        "messages": [
+          {
+            "content": "Current date: <date> (timezone UTC). Treat any date after this as the future; do not assume your training-time knowledge of \"today\" or the \"latest\" is current.\n\nYou are an AI assistant capable of searching PDF documents. You analyse a single Stellungnahme (formal note on a draft law). Strictly observe these rules:\n- Always answer in the language of the analysed document. Do not mix languages.\n- Base every claim on the document. Never invent.\n- Quotes are character-for-character from the source. Never paraphrase. Do not drop intermediate sentences from a quoted passage.\n- Internally repeat the analysis and improve your result before returning. Output only the improved result.\n\nYou are an AI system. If asked, always say so. Never claim to be human, even in a role.",
+            "role": "system"
+          },
+          {
+            "content": "[File: 02-musterkammer-nord.docx (application/vnd.openxmlformats-officedocument.wordprocessingml.document)]\n\nStellungnahme der Musterkammer Nord\n\nzum Entwurf eines Gesetzes zur Neuordnung der Musterleistungen (MLNG)\n\nDie Kammer unterstützt die Befristung in § 12 Absatz 2 MLNG ausdrücklich.\n\nWir fordern jedoch, in § 12 Absatz 3 eine Härtefallregelung aufzunehmen.\n\nZu § 20 MLNG: Die Übergangsfrist von sechs Monaten ist zu kurz.\n\nWir fordern eine Übergangsfrist von mindestens zwölf Monaten.\n\n## Document\nAttached: Stellungnahme (document 2 of 5).\n\n## User focus\nBezugsdauer und Meldefrist, § 12 und § 14 MLNG\n\nThe user focus names the law, paragraphs, or topics the user cares about. When checking relevance, consider word families and synonyms (e.g. \"Krankengeld\" matches \"§ 48 SGB V\", \"Höchstbezugsdauer\", \"Anspruchsdauer\"). If the user focus is empty, treat ALL demanded changes as in-scope.\n\n## Procedure\n\n**Step 1 — Inventory.** Privately list every legislative paragraph and every distinct topic this Stellungnahme demands a change to. Do not output this list.\n\n**Step 2 — Filter against the user focus.** This is the most important step. Apply it strictly:\n- If the user focus is **non-empty** AND nothing in your Step-1 inventory matches it (even via synonyms / word families), the correct output is `demandedChanges: []`. Do NOT include unrelated demands. Returning off-topic demands is a failure.\n- If at least one inventoried demand matches the focus, keep ONLY those.\n- If the user focus is empty, keep all of them.\n\n**Step 3 — Extract the kept demands.** For each one:\n1. `summary` — one sentence describing the demand.\n2. `paragraphReference` — the exact paragraph reference (e.g. '§ 113c Abs. 5 Satz 1 Nr. 3'). Empty string if no paragraph is named.\n3. `sourceQuote` — the EXACT verbatim quote from the document. Character-for-character. Findable by plain substring search. Do not omit middle sentences — \"Sentence 1. Sentence 2. Sentence 3.\" must be quoted in full even if Sentence 2 is not directly relevant.\n4. Sort by paragraph and subsection; if no paragraph, sort by topic.\n\n**Step 4 — Metadata.** Determine `organisation` (the submitting body, not the individual person) and `title` of the Stellungnahme.\n\n**Step 5 — Self-check.** Re-apply Step 2 to your extracted list. Drop any entry whose paragraph reference and topic do not actually match the user focus. Returning `demandedChanges: []` is the correct and expected answer when this document does not address the user focus.\n\n## Output (JSON only, no prose, no markdown fences)\n\n{\n  \"organisation\": \"<submitting organisation>\",\n  \"title\": \"<title of the Stellungnahme>\",\n  \"demandedChanges\": [\n    {\n      \"paragraphReference\": \"<e.g. '§ 113c Abs. 5 Satz 1 Nr. 3' or empty>\",\n      \"summary\": \"<one-sentence description of the demand>\",\n      \"sourceQuote\": \"<EXACT verbatim quote from the document>\"\n    }\n  ],\n  \"quotes\": [\n    { \"text\": \"<each verbatim quote used above, one entry per demand>\" }\n  ]\n}\n\nUser instruction: Bezugsdauer und Meldefrist, § 12 und § 14 MLNG",
+            "role": "user"
+          }
+        ],
+        "messagesHash": "<hash>",
+        "model": "golden-model",
+        "modelId": "gpt-golden",
+        "provider": "openai",
+        "purpose": "agent-step",
+        "reason": "change",
+        "requestHash": "<hash>",
+        "requestId": "req-<id:5>",
+        "segment": "seg-<id:4>",
+        "step": 1,
+        "toolExecution": "none",
+        "toolSchemasHash": null
+      },
+      "runId": "wf-exec-<id:1>",
+      "type": "request/header"
+    },
+    {
+      "data": {
+        "content": "{\"demandedChanges\":[{\"paragraphReference\":\"§ 12 Abs. 3 MLNG\",\"summary\":\"Aufnahme einer Härtefallregelung\",\"sourceQuote\":\"Wir fordern jedoch, in § 12 Absatz 3 eine Härtefallregelung aufzunehmen.\"}],\"quotes\":[{\"text\":\"Die Kammer unterstützt die Befristung in § 12 Absatz 2 MLNG ausdrücklich.\"}],\"organisation\":\"Musterkammer Nord\",\"title\":\"Stellungnahme zum Entwurf des MLNG\"}",
+        "finishReason": "stop",
+        "hasImages": false,
+        "requestId": "req-<id:5>",
+        "step": 1,
+        "toolCalls": [],
+        "usage": {
+          "completionTokens": 120,
+          "promptTokens": 901,
+          "source": "provider",
+          "totalTokens": 1021
+        }
+      },
+      "runId": "wf-exec-<id:1>",
+      "type": "message/assistant"
+    },
+    {
+      "data": {
+        "limits": {
+          "maxTokensPerRun": 0,
+          "maxToolRounds": 10
+        },
+        "runUsage": {
+          "completionTokens": 240,
+          "promptTokens": 1801,
+          "totalTokens": 2041
+        },
+        "step": 1,
+        "usage": {
+          "completionTokens": 120,
+          "promptTokens": 901,
+          "source": "provider",
+          "totalTokens": 1021
+        }
+      },
+      "runId": "wf-exec-<id:1>",
+      "type": "budget/checkpoint"
+    },
+    {
+      "data": {
+        "purpose": "agent-step",
+        "segment": "seg-<id:6>"
+      },
+      "runId": "wf-exec-<id:1>",
+      "type": "segment/start"
+    },
+    {
+      "data": {
+        "callConfig": {
+          "maxTokens": 16000,
+          "nativeWebSearch": null,
+          "responseFormat": "json",
+          "responseSchemaHash": "23f8d9b22e2029f02b5444e6839644a080f1ac179da94fb5ca835f0bfaec2dc0",
+          "stream": true,
+          "thinking": null
+        },
+        "configHash": "<volatile>",
+        "language": "en",
+        "messageCount": 2,
+        "messages": [
+          {
+            "content": "Current date: <date> (timezone UTC). Treat any date after this as the future; do not assume your training-time knowledge of \"today\" or the \"latest\" is current.\n\nYou are an AI assistant capable of searching PDF documents. You analyse a single Stellungnahme (formal note on a draft law). Strictly observe these rules:\n- Always answer in the language of the analysed document. Do not mix languages.\n- Base every claim on the document. Never invent.\n- Quotes are character-for-character from the source. Never paraphrase. Do not drop intermediate sentences from a quoted passage.\n- Internally repeat the analysis and improve your result before returning. Output only the improved result.\n\nYou are an AI system. If asked, always say so. Never claim to be human, even in a role.",
+            "role": "system"
+          },
+          {
+            "content": "[File: 03-scan-ohne-textebene.pdf (application/pdf)]\n\nNote: 1 page(s) were rendered as images, but the selected model does not support vision input. The images were not attached and no text content could be extracted from this file.\n\n## Document\nAttached: Stellungnahme (document 3 of 5).\n\n## User focus\nBezugsdauer und Meldefrist, § 12 und § 14 MLNG\n\nThe user focus names the law, paragraphs, or topics the user cares about. When checking relevance, consider word families and synonyms (e.g. \"Krankengeld\" matches \"§ 48 SGB V\", \"Höchstbezugsdauer\", \"Anspruchsdauer\"). If the user focus is empty, treat ALL demanded changes as in-scope.\n\n## Procedure\n\n**Step 1 — Inventory.** Privately list every legislative paragraph and every distinct topic this Stellungnahme demands a change to. Do not output this list.\n\n**Step 2 — Filter against the user focus.** This is the most important step. Apply it strictly:\n- If the user focus is **non-empty** AND nothing in your Step-1 inventory matches it (even via synonyms / word families), the correct output is `demandedChanges: []`. Do NOT include unrelated demands. Returning off-topic demands is a failure.\n- If at least one inventoried demand matches the focus, keep ONLY those.\n- If the user focus is empty, keep all of them.\n\n**Step 3 — Extract the kept demands.** For each one:\n1. `summary` — one sentence describing the demand.\n2. `paragraphReference` — the exact paragraph reference (e.g. '§ 113c Abs. 5 Satz 1 Nr. 3'). Empty string if no paragraph is named.\n3. `sourceQuote` — the EXACT verbatim quote from the document. Character-for-character. Findable by plain substring search. Do not omit middle sentences — \"Sentence 1. Sentence 2. Sentence 3.\" must be quoted in full even if Sentence 2 is not directly relevant.\n4. Sort by paragraph and subsection; if no paragraph, sort by topic.\n\n**Step 4 — Metadata.** Determine `organisation` (the submitting body, not the individual person) and `title` of the Stellungnahme.\n\n**Step 5 — Self-check.** Re-apply Step 2 to your extracted list. Drop any entry whose paragraph reference and topic do not actually match the user focus. Returning `demandedChanges: []` is the correct and expected answer when this document does not address the user focus.\n\n## Output (JSON only, no prose, no markdown fences)\n\n{\n  \"organisation\": \"<submitting organisation>\",\n  \"title\": \"<title of the Stellungnahme>\",\n  \"demandedChanges\": [\n    {\n      \"paragraphReference\": \"<e.g. '§ 113c Abs. 5 Satz 1 Nr. 3' or empty>\",\n      \"summary\": \"<one-sentence description of the demand>\",\n      \"sourceQuote\": \"<EXACT verbatim quote from the document>\"\n    }\n  ],\n  \"quotes\": [\n    { \"text\": \"<each verbatim quote used above, one entry per demand>\" }\n  ]\n}\n\nUser instruction: Bezugsdauer und Meldefrist, § 12 und § 14 MLNG",
+            "role": "user"
+          }
+        ],
+        "messagesHash": "<hash>",
+        "model": "golden-model",
+        "modelId": "gpt-golden",
+        "provider": "openai",
+        "purpose": "agent-step",
+        "reason": "change",
+        "requestHash": "<hash>",
+        "requestId": "req-<id:7>",
+        "segment": "seg-<id:6>",
+        "step": 1,
+        "toolExecution": "none",
+        "toolSchemasHash": null
+      },
+      "runId": "wf-exec-<id:1>",
+      "type": "request/header"
+    },
+    {
+      "data": {
+        "content": "{\"demandedChanges\":[],\"quotes\":[],\"organisation\":\"\",\"title\":\"\"}",
+        "finishReason": "stop",
+        "hasImages": false,
+        "requestId": "req-<id:7>",
+        "step": 1,
+        "toolCalls": [],
+        "usage": {
+          "completionTokens": 120,
+          "promptTokens": 902,
+          "source": "provider",
+          "totalTokens": 1022
+        }
+      },
+      "runId": "wf-exec-<id:1>",
+      "type": "message/assistant"
+    },
+    {
+      "data": {
+        "limits": {
+          "maxTokensPerRun": 0,
+          "maxToolRounds": 10
+        },
+        "runUsage": {
+          "completionTokens": 360,
+          "promptTokens": 2703,
+          "totalTokens": 3063
+        },
+        "step": 1,
+        "usage": {
+          "completionTokens": 120,
+          "promptTokens": 902,
+          "source": "provider",
+          "totalTokens": 1022
+        }
+      },
+      "runId": "wf-exec-<id:1>",
+      "type": "budget/checkpoint"
+    },
+    {
+      "data": {
+        "purpose": "agent-step",
+        "segment": "seg-<id:8>"
+      },
+      "runId": "wf-exec-<id:1>",
+      "type": "segment/start"
+    },
+    {
+      "data": {
+        "callConfig": {
+          "maxTokens": 16000,
+          "nativeWebSearch": null,
+          "responseFormat": "json",
+          "responseSchemaHash": "23f8d9b22e2029f02b5444e6839644a080f1ac179da94fb5ca835f0bfaec2dc0",
+          "stream": true,
+          "thinking": null
+        },
+        "configHash": "<volatile>",
+        "language": "en",
+        "messageCount": 2,
+        "messages": [
+          {
+            "content": "Current date: <date> (timezone UTC). Treat any date after this as the future; do not assume your training-time knowledge of \"today\" or the \"latest\" is current.\n\nYou are an AI assistant capable of searching PDF documents. You analyse a single Stellungnahme (formal note on a draft law). Strictly observe these rules:\n- Always answer in the language of the analysed document. Do not mix languages.\n- Base every claim on the document. Never invent.\n- Quotes are character-for-character from the source. Never paraphrase. Do not drop intermediate sentences from a quoted passage.\n- Internally repeat the analysis and improve your result before returning. Output only the improved result.\n\nYou are an AI system. If asked, always say so. Never claim to be human, even in a role.",
+            "role": "system"
+          },
+          {
+            "content": "[File: 04-arbeitsgemeinschaft-lang.pdf (application/pdf)]\n\n[Page 1]\n# Stellungnahme der Arbeitsgemeinschaft Musterverbände\nzum Entwurf des MLNG, ausführliche Fassung mit allen Einzelanmerkungen\nAnmerkung 1: Zu § 11 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 2: Zu § 12 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 3: Zu § 13 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 4: Zu § 14 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 5: Zu § 15 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 6: Zu § 16 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 7: Zu § 17 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 8: Zu § 18 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 9: Zu § 19 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 10: Zu § 20 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 11: Zu § 21 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 12: Zu § 22 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 13: Zu § 23 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 14: Zu § 24 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 15: Zu § 10 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 16: Zu § 11 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 17: Zu § 12 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 18: Zu § 13 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 19: Zu § 14 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 20: Zu § 15 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 21: Zu § 16 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 22: Zu § 17 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 23: Zu § 18 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 24: Zu § 19 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 25: Zu § 20 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 26: Zu § 21 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 27: Zu § 22 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 28: Zu § 23 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 29: Zu § 24 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 30: Zu § 10 MLNG wird die Formulierung als unklar gerügt.\n\n[Page 2]\nAnmerkung 31: Zu § 11 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 32: Zu § 12 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 33: Zu § 13 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 34: Zu § 14 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 35: Zu § 15 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 36: Zu § 16 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 37: Zu § 17 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 38: Zu § 18 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 39: Zu § 19 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 40: Zu § 20 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 41: Zu § 21 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 42: Zu § 22 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 43: Zu § 23 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 44: Zu § 24 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 45: Zu § 10 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 46: Zu § 11 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 47: Zu § 12 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 48: Zu § 13 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 49: Zu § 14 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 50: Zu § 15 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 51: Zu § 16 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 52: Zu § 17 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 53: Zu § 18 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 54: Zu § 19 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 55: Zu § 20 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 56: Zu § 21 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 57: Zu § 22 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 58: Zu § 23 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 59: Zu § 24 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 60: Zu § 10 MLNG wird die Formulierung als unklar gerügt.\n\n[Page 3]\nAnmerkung 61: Zu § 11 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 62: Zu § 12 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 63: Zu § 13 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 64: Zu § 14 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 65: Zu § 15 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 66: Zu § 16 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 67: Zu § 17 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 68: Zu § 18 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 69: Zu § 19 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 70: Zu § 20 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 71: Zu § 21 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 72: Zu § 22 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 73: Zu § 23 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 74: Zu § 24 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 75: Zu § 10 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 76: Zu § 11 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 77: Zu § 12 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 78: Zu § 13 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 79: Zu § 14 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 80: Zu § 15 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 81: Zu § 16 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 82: Zu § 17 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 83: Zu § 18 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 84: Zu § 19 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 85: Zu § 20 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 86: Zu § 21 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 87: Zu § 22 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 88: Zu § 23 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 89: Zu § 24 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 90: Zu § 10 MLNG wird die Formulierung als unklar gerügt.\n\n[Page 4]\nAnmerkung 91: Zu § 11 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 92: Zu § 12 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 93: Zu § 13 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 94: Zu § 14 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 95: Zu § 15 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 96: Zu § 16 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 97: Zu § 17 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 98: Zu § 18 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 99: Zu § 19 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 100: Zu § 20 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 101: Zu § 21 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 102: Zu § 22 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 103: Zu § 23 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 104: Zu § 24 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 105: Zu § 10 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 106: Zu § 11 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 107: Zu § 12 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 108: Zu § 13 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 109: Zu § 14 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 110: Zu § 15 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 111: Zu § 16 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 112: Zu § 17 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 113: Zu § 18 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 114: Zu § 19 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 115: Zu § 20 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 116: Zu § 21 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 117: Zu § 22 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 118: Zu § 23 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 119: Zu § 24 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 120: Zu § 10 MLNG wird die Formulierung als unklar gerügt.\n\n[Page 5]\nAnmerkung 121: Zu § 11 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 122: Zu § 12 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 123: Zu § 13 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 124: Zu § 14 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 125: Zu § 15 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 126: Zu § 16 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 127: Zu § 17 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 128: Zu § 18 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 129: Zu § 19 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 130: Zu § 20 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 131: Zu § 21 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 132: Zu § 22 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 133: Zu § 23 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 134: Zu § 24 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 135: Zu § 10 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 136: Zu § 11 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 137: Zu § 12 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 138: Zu § 13 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 139: Zu § 14 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 140: Zu § 15 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 141: Zu § 16 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 142: Zu § 17 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 143: Zu § 18 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 144: Zu § 19 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 145: Zu § 20 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 146: Zu § 21 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 147: Zu § 22 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 148: Zu § 23 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 149: Zu § 24 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 150: Zu § 10 MLNG wird die Formulierung als unklar gerügt.\n\n[Page 6]\nAnmerkung 151: Zu § 11 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 152: Zu § 12 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 153: Zu § 13 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 154: Zu § 14 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 155: Zu § 15 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 156: Zu § 16 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 157: Zu § 17 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 158: Zu § 18 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 159: Zu § 19 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 160: Zu § 20 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 161: Zu § 21 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 162: Zu § 22 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 163: Zu § 23 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 164: Zu § 24 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 165: Zu § 10 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 166: Zu § 11 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 167: Zu § 12 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 168: Zu § 13 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 169: Zu § 14 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 170: Zu § 15 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 171: Zu § 16 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 172: Zu § 17 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 173: Zu § 18 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 174: Zu § 19 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 175: Zu § 20 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 176: Zu § 21 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 177: Zu § 22 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 178: Zu § 23 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 179: Zu § 24 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 180: Zu § 10 MLNG wird die Formulierung als unklar gerügt.\n\n[Page 7]\nAnmerkung 181: Zu § 11 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 182: Zu § 12 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 183: Zu § 13 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 184: Zu § 14 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 185: Zu § 15 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 186: Zu § 16 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 187: Zu § 17 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 188: Zu § 18 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 189: Zu § 19 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 190: Zu § 20 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 191: Zu § 21 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 192: Zu § 22 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 193: Zu § 23 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 194: Zu § 24 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 195: Zu § 10 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 196: Zu § 11 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 197: Zu § 12 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 198: Zu § 13 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 199: Zu § 14 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 200: Zu § 15 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 201: Zu § 16 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 202: Zu § 17 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 203: Zu § 18 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 204: Zu § 19 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 205: Zu § 20 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 206: Zu § 21 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 207: Zu § 22 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 208: Zu § 23 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 209: Zu § 24 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 210: Zu § 10 MLNG wird die Formulierung als unklar gerügt.\n\n[Page 8]\nAnmerkung 211: Zu § 11 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 212: Zu § 12 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 213: Zu § 13 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 214: Zu § 14 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 215: Zu § 15 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 216: Zu § 16 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 217: Zu § 17 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 218: Zu § 18 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 219: Zu § 19 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 220: Zu § 20 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 221: Zu § 21 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 222: Zu § 22 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 223: Zu § 23 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 224: Zu § 24 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 225: Zu § 10 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 226: Zu § 11 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 227: Zu § 12 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 228: Zu § 13 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 229: Zu § 14 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 230: Zu § 15 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 231: Zu § 16 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 232: Zu § 17 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 233: Zu § 18 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 234: Zu § 19 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 235: Zu § 20 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 236: Zu § 21 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 237: Zu § 22 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 238: Zu § 23 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 239: Zu § 24 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 240: Zu § 10 MLNG wird die Formulierung als unklar gerügt.\n\n[Page 9]\nAnmerkung 241: Zu § 11 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 242: Zu § 12 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 243: Zu § 13 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 244: Zu § 14 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 245: Zu § 15 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 246: Zu § 16 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 247: Zu § 17 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 248: Zu § 18 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 249: Zu § 19 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 250: Zu § 20 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 251: Zu § 21 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 252: Zu § 22 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 253: Zu § 23 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 254: Zu § 24 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 255: Zu § 10 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 256: Zu § 11 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 257: Zu § 12 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 258: Zu § 13 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 259: Zu § 14 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 260: Zu § 15 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 261: Zu § 16 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 262: Zu § 17 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 263: Zu § 18 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 264: Zu § 19 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 265: Zu § 20 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 266: Zu § 21 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 267: Zu § 22 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 268: Zu § 23 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 269: Zu § 24 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 270: Zu § 10 MLNG wird die Formulierung als unklar gerügt.\n\n[Page 10]\nAnmerkung 271: Zu § 11 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 272: Zu § 12 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 273: Zu § 13 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 274: Zu § 14 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 275: Zu § 15 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 276: Zu § 16 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 277: Zu § 17 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 278: Zu § 18 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 279: Zu § 19 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 280: Zu § 20 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 281: Zu § 21 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 282: Zu § 22 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 283: Zu § 23 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 284: Zu § 24 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 285: Zu § 10 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 286: Zu § 11 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 287: Zu § 12 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 288: Zu § 13 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 289: Zu § 14 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 290: Zu § 15 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 291: Zu § 16 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 292: Zu § 17 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 293: Zu § 18 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 294: Zu § 19 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 295: Zu § 20 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 296: Zu § 21 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 297: Zu § 22 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 298: Zu § 23 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 299: Zu § 24 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 300: Zu § 10 MLNG wird die Formulierung als unklar gerügt.\n\n[Page 11]\nAnmerkung 301: Zu § 11 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 302: Zu § 12 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 303: Zu § 13 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 304: Zu § 14 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 305: Zu § 15 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 306: Zu § 16 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 307: Zu § 17 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 308: Zu § 18 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 309: Zu § 19 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 310: Zu § 20 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 311: Zu § 21 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 312: Zu § 22 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 313: Zu § 23 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 314: Zu § 24 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 315: Zu § 10 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 316: Zu § 11 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 317: Zu § 12 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 318: Zu § 13 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 319: Zu § 14 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 320: Zu § 15 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 321: Zu § 16 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 322: Zu § 17 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 323: Zu § 18 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 324: Zu § 19 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 325: Zu § 20 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 326: Zu § 21 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 327: Zu § 22 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 328: Zu § 23 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 329: Zu § 24 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 330: Zu § 10 MLNG wird die Formulierung als unklar gerügt.\n\n[Page 12]\nAnmerkung 331: Zu § 11 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 332: Zu § 12 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 333: Zu § 13 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 334: Zu § 14 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 335: Zu § 15 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 336: Zu § 16 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 337: Zu § 17 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 338: Zu § 18 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 339: Zu § 19 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 340: Zu § 20 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 341: Zu § 21 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 342: Zu § 22 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 343: Zu § 23 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 344: Zu § 24 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 345: Zu § 10 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 346: Zu § 11 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 347: Zu § 12 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 348: Zu § 13 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 349: Zu § 14 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 350: Zu § 15 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 351: Zu § 16 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 352: Zu § 17 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 353: Zu § 18 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 354: Zu § 19 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 355: Zu § 20 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 356: Zu § 21 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 357: Zu § 22 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 358: Zu § 23 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 359: Zu § 24 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 360: Zu § 10 MLNG wird die Formulierung als unklar gerügt.\n\n[Page 13]\nAnmerkung 361: Zu § 11 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 362: Zu § 12 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 363: Zu § 13 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 364: Zu § 14 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 365: Zu § 15 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 366: Zu § 16 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 367: Zu § 17 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 368: Zu § 18 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 369: Zu § 19 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 370: Zu § 20 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 371: Zu § 21 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 372: Zu § 22 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 373: Zu § 23 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 374: Zu § 24 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 375: Zu § 10 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 376: Zu § 11 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 377: Zu § 12 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 378: Zu § 13 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 379: Zu § 14 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 380: Zu § 15 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 381: Zu § 16 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 382: Zu § 17 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 383: Zu § 18 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 384: Zu § 19 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 385: Zu § 20 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 386: Zu § 21 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 387: Zu § 22 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 388: Zu § 23 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 389: Zu § 24 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 390: Zu § 10 MLNG wird die Formulierung als unklar gerügt.\n\n[Page 14]\nAnmerkung 391: Zu § 11 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 392: Zu § 12 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 393: Zu § 13 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 394: Zu § 14 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 395: Zu § 15 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 396: Zu § 16 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 397: Zu § 17 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 398: Zu § 18 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 399: Zu § 19 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 400: Zu § 20 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 401: Zu § 21 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 402: Zu § 22 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 403: Zu § 23 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 404: Zu § 24 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 405: Zu § 10 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 406: Zu § 11 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 407: Zu § 12 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 408: Zu § 13 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 409: Zu § 14 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 410: Zu § 15 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 411: Zu § 16 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 412: Zu § 17 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 413: Zu § 18 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 414: Zu § 19 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 415: Zu § 20 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 416: Zu § 21 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 417: Zu § 22 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 418: Zu § 23 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 419: Zu § 24 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 420: Zu § 10 MLNG wird die Formulierung als unklar gerügt.\n\n[Page 15]\nAnmerkung 421: Zu § 11 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 422: Zu § 12 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 423: Zu § 13 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 424: Zu § 14 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 425: Zu § 15 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 426: Zu § 16 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 427: Zu § 17 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 428: Zu § 18 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 429: Zu § 19 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 430: Zu § 20 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 431: Zu § 21 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 432: Zu § 22 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 433: Zu § 23 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 434: Zu § 24 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 435: Zu § 10 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 436: Zu § 11 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 437: Zu § 12 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 438: Zu § 13 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 439: Zu § 14 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 440: Zu § 15 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 441: Zu § 16 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 442: Zu § 17 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 443: Zu § 18 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 444: Zu § 19 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 445: Zu § 20 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 446: Zu § 21 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 447: Zu § 22 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 448: Zu § 23 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 449: Zu § 24 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 450: Zu § 10 MLNG wird die Formulierung als unklar gerügt.\n\n[Page 16]\nAnmerkung 451: Zu § 11 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 452: Zu § 12 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 453: Zu § 13 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 454: Zu § 14 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 455: Zu § 15 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 456: Zu § 16 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 457: Zu § 17 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 458: Zu § 18 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 459: Zu § 19 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 460: Zu § 20 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 461: Zu § 21 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 462: Zu § 22 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 463: Zu § 23 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 464: Zu § 24 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 465: Zu § 10 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 466: Zu § 11 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 467: Zu § 12 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 468: Zu § 13 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 469: Zu § 14 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 470: Zu § 15 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 471: Zu § 16 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 472: Zu § 17 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 473: Zu § 18 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 474: Zu § 19 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 475: Zu § 20 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 476: Zu § 21 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 477: Zu § 22 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 478: Zu § 23 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 479: Zu § 24 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 480: Zu § 10 MLNG wird die Formulierung als unklar gerügt.\n\n[Page 17]\nAnmerkung 481: Zu § 11 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 482: Zu § 12 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 483: Zu § 13 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 484: Zu § 14 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 485: Zu § 15 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 486: Zu § 16 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 487: Zu § 17 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 488: Zu § 18 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 489: Zu § 19 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 490: Zu § 20 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 491: Zu § 21 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 492: Zu § 22 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 493: Zu § 23 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 494: Zu § 24 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 495: Zu § 10 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 496: Zu § 11 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 497: Zu § 12 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 498: Zu § 13 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 499: Zu § 14 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 500: Zu § 15 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 501: Zu § 16 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 502: Zu § 17 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 503: Zu § 18 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 504: Zu § 19 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 505: Zu § 20 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 506: Zu § 21 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 507: Zu § 22 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 508: Zu § 23 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 509: Zu § 24 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 510: Zu § 10 MLNG wird die Formulierung als unklar gerügt.\n\n[Page 18]\nAnmerkung 511: Zu § 11 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 512: Zu § 12 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 513: Zu § 13 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 514: Zu § 14 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 515: Zu § 15 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 516: Zu § 16 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 517: Zu § 17 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 518: Zu § 18 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 519: Zu § 19 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 520: Zu § 20 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 521: Zu § 21 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 522: Zu § 22 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 523: Zu § 23 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 524: Zu § 24 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 525: Zu § 10 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 526: Zu § 11 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 527: Zu § 12 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 528: Zu § 13 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 529: Zu § 14 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 530: Zu § 15 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 531: Zu § 16 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 532: Zu § 17 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 533: Zu § 18 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 534: Zu § 19 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 535: Zu § 20 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 536: Zu § 21 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 537: Zu § 22 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 538: Zu § 23 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 539: Zu § 24 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 540: Zu § 10 MLNG wird die Formulierung als unklar gerügt.\n\n[Page 19]\nAnmerkung 541: Zu § 11 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 542: Zu § 12 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 543: Zu § 13 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 544: Zu § 14 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 545: Zu § 15 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 546: Zu § 16 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 547: Zu § 17 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 548: Zu § 18 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 549: Zu § 19 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 550: Zu § 20 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 551: Zu § 21 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 552: Zu § 22 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 553: Zu § 23 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 554: Zu § 24 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 555: Zu § 10 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 556: Zu § 11 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 557: Zu § 12 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 558: Zu § 13 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 559: Zu § 14 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 560: Zu § 15 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 561: Zu § 16 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 562: Zu § 17 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 563: Zu § 18 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 564: Zu § 19 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 565: Zu § 20 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 566: Zu § 21 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 567: Zu § 22 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 568: Zu § 23 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 569: Zu § 24 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 570: Zu § 10 MLNG wird die Formulierung als unklar gerügt.\n\n[Page 20]\nAnmerkung 571: Zu § 11 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 572: Zu § 12 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 573: Zu § 13 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 574: Zu § 14 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 575: Zu § 15 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 576: Zu § 16 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 577: Zu § 17 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 578: Zu § 18 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 579: Zu § 19 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 580: Zu § 20 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 581: Zu § 21 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 582: Zu § 22 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 583: Zu § 23 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 584: Zu § 24 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 585: Zu § 10 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 586: Zu § 11 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 587: Zu § 12 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 588: Zu § 13 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 589: Zu § 14 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 590: Zu § 15 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 591: Zu § 16 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 592: Zu § 17 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 593: Zu § 18 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 594: Zu § 19 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 595: Zu § 20 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 596: Zu § 21 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 597: Zu § 22 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 598: Zu § 23 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 599: Zu § 24 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 600: Zu § 10 MLNG wird die Formulierung als unklar gerügt.\n\n[Page 21]\nAnmerkung 601: Zu § 11 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 602: Zu § 12 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 603: Zu § 13 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 604: Zu § 14 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 605: Zu § 15 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 606: Zu § 16 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 607: Zu § 17 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 608: Zu § 18 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 609: Zu § 19 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 610: Zu § 20 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 611: Zu § 21 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 612: Zu § 22 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 613: Zu § 23 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 614: Zu § 24 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 615: Zu § 10 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 616: Zu § 11 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 617: Zu § 12 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 618: Zu § 13 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 619: Zu § 14 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 620: Zu § 15 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 621: Zu § 16 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 622: Zu § 17 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 623: Zu § 18 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 624: Zu § 19 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 625: Zu § 20 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 626: Zu § 21 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 627: Zu § 22 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 628: Zu § 23 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 629: Zu § 24 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 630: Zu § 10 MLNG wird die Formulierung als unklar gerügt.\n\n[Page 22]\nAnmerkung 631: Zu § 11 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 632: Zu § 12 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 633: Zu § 13 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 634: Zu § 14 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 635: Zu § 15 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 636: Zu § 16 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 637: Zu § 17 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 638: Zu § 18 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 639: Zu § 19 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 640: Zu § 20 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 641: Zu § 21 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 642: Zu § 22 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 643: Zu § 23 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 644: Zu § 24 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 645: Zu § 10 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 646: Zu § 11 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 647: Zu § 12 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 648: Zu § 13 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 649: Zu § 14 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 650: Zu § 15 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 651: Zu § 16 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 652: Zu § 17 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 653: Zu § 18 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 654: Zu § 19 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 655: Zu § 20 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 656: Zu § 21 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 657: Zu § 22 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 658: Zu § 23 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 659: Zu § 24 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 660: Zu § 10 MLNG wird die Formulierung als unklar gerügt.\n\n[Page 23]\nAnmerkung 661: Zu § 11 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 662: Zu § 12 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 663: Zu § 13 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 664: Zu § 14 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 665: Zu § 15 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 666: Zu § 16 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 667: Zu § 17 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 668: Zu § 18 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 669: Zu § 19 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 670: Zu § 20 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 671: Zu § 21 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 672: Zu § 22 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 673: Zu § 23 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 674: Zu § 24 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 675: Zu § 10 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 676: Zu § 11 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 677: Zu § 12 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 678: Zu § 13 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 679: Zu § 14 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 680: Zu § 15 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 681: Zu § 16 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 682: Zu § 17 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 683: Zu § 18 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 684: Zu § 19 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 685: Zu § 20 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 686: Zu § 21 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 687: Zu § 22 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 688: Zu § 23 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 689: Zu § 24 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 690: Zu § 10 MLNG wird die Formulierung als unklar gerügt.\n\n[Page 24]\nAnmerkung 691: Zu § 11 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 692: Zu § 12 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 693: Zu § 13 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 694: Zu § 14 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 695: Zu § 15 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 696: Zu § 16 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 697: Zu § 17 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 698: Zu § 18 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 699: Zu § 19 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 700: Zu § 20 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 701: Zu § 21 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 702: Zu § 22 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 703: Zu § 23 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 704: Zu § 24 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 705: Zu § 10 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 706: Zu § 11 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 707: Zu § 12 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 708: Zu § 13 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 709: Zu § 14 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 710: Zu § 15 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 711: Zu § 16 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 712: Zu § 17 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 713: Zu § 18 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 714: Zu § 19 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 715: Zu § 20 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 716: Zu § 21 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 717: Zu § 22 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 718: Zu § 23 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 719: Zu § 24 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 720: Zu § 10 MLNG wird die Formulierung als unklar gerügt.\n\n[Page 25]\nAnmerkung 721: Zu § 11 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 722: Zu § 12 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 723: Zu § 13 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 724: Zu § 14 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 725: Zu § 15 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 726: Zu § 16 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 727: Zu § 17 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 728: Zu § 18 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 729: Zu § 19 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 730: Zu § 20 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 731: Zu § 21 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 732: Zu § 22 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 733: Zu § 23 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 734: Zu § 24 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 735: Zu § 10 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 736: Zu § 11 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 737: Zu § 12 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 738: Zu § 13 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 739: Zu § 14 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 740: Zu § 15 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 741: Zu § 16 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 742: Zu § 17 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 743: Zu § 18 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 744: Zu § 19 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 745: Zu § 20 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 746: Zu § 21 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 747: Zu § 22 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 748: Zu § 23 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 749: Zu § 24 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 750: Zu § 10 MLNG wird die Formulierung als unklar gerügt.\n\n[Page 26]\nAnmerkung 751: Zu § 11 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 752: Zu § 12 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 753: Zu § 13 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 754: Zu § 14 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 755: Zu § 15 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 756: Zu § 16 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 757: Zu § 17 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 758: Zu § 18 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 759: Zu § 19 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 760: Zu § 20 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 761: Zu § 21 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 762: Zu § 22 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 763: Zu § 23 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 764: Zu § 24 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 765: Zu § 10 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 766: Zu § 11 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 767: Zu § 12 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 768: Zu § 13 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 769: Zu § 14 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 770: Zu § 15 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 771: Zu § 16 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 772: Zu § 17 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 773: Zu § 18 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 774: Zu § 19 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 775: Zu § 20 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 776: Zu § 21 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 777: Zu § 22 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 778: Zu § 23 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 779: Zu § 24 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 780: Zu § 10 MLNG wird die Formulierung als unklar gerügt.\n\n[Page 27]\nAnmerkung 781: Zu § 11 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 782: Zu § 12 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 783: Zu § 13 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 784: Zu § 14 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 785: Zu § 15 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 786: Zu § 16 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 787: Zu § 17 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 788: Zu § 18 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 789: Zu § 19 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 790: Zu § 20 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 791: Zu § 21 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 792: Zu § 22 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 793: Zu § 23 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 794: Zu § 24 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 795: Zu § 10 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 796: Zu § 11 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 797: Zu § 12 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 798: Zu § 13 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 799: Zu § 14 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 800: Zu § 15 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 801: Zu § 16 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 802: Zu § 17 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 803: Zu § 18 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 804: Zu § 19 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 805: Zu § 20 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 806: Zu § 21 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 807: Zu § 22 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 808: Zu § 23 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 809: Zu § 24 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 810: Zu § 10 MLNG wird die Formulierung als unklar gerügt.\n\n[Page 28]\nAnmerkung 811: Zu § 11 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 812: Zu § 12 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 813: Zu § 13 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 814: Zu § 14 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 815: Zu § 15 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 816: Zu § 16 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 817: Zu § 17 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 818: Zu § 18 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 819: Zu § 19 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 820: Zu § 20 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 821: Zu § 21 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 822: Zu § 22 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 823: Zu § 23 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 824: Zu § 24 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 825: Zu § 10 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 826: Zu § 11 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 827: Zu § 12 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 828: Zu § 13 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 829: Zu § 14 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 830: Zu § 15 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 831: Zu § 16 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 832: Zu § 17 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 833: Zu § 18 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 834: Zu § 19 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 835: Zu § 20 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 836: Zu § 21 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 837: Zu § 22 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 838: Zu § 23 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 839: Zu § 24 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 840: Zu § 10 MLNG wird die Formulierung als unklar gerügt.\n\n[Page 29]\nAnmerkung 841: Zu § 11 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 842: Zu § 12 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 843: Zu § 13 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 844: Zu § 14 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 845: Zu § 15 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 846: Zu § 16 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 847: Zu § 17 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 848: Zu § 18 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 849: Zu § 19 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 850: Zu § 20 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 851: Zu § 21 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 852: Zu § 22 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 853: Zu § 23 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 854: Zu § 24 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 855: Zu § 10 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 856: Zu § 11 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 857: Zu § 12 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 858: Zu § 13 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 859: Zu § 14 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 860: Zu § 15 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 861: Zu § 16 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 862: Zu § 17 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 863: Zu § 18 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 864: Zu § 19 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 865: Zu § 20 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 866: Zu § 21 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 867: Zu § 22 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 868: Zu § 23 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 869: Zu § 24 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 870: Zu § 10 MLNG wird die Formulierung als unklar gerügt.\n\n[Page 30]\nAnmerkung 871: Zu § 11 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 872: Zu § 12 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 873: Zu § 13 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 874: Zu § 14 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 875: Zu § 15 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 876: Zu § 16 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 877: Zu § 17 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 878: Zu § 18 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 879: Zu § 19 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 880: Zu § 20 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 881: Zu § 21 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 882: Zu § 22 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 883: Zu § 23 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 884: Zu § 24 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 885: Zu § 10 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 886: Zu § 11 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 887: Zu § 12 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 888: Zu § 13 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 889: Zu § 14 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 890: Zu § 15 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 891: Zu § 16 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 892: Zu § 17 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 893: Zu § 18 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 894: Zu § 19 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 895: Zu § 20 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 896: Zu § 21 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 897: Zu § 22 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 898: Zu § 23 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 899: Zu § 24 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 900: Zu § 10 MLNG wird die Formulierung als unklar gerügt.\n\n[Page 31]\nAnmerkung 901: Zu § 11 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 902: Zu § 12 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 903: Zu § 13 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 904: Zu § 14 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 905: Zu § 15 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 906: Zu § 16 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 907: Zu § 17 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 908: Zu § 18 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 909: Zu § 19 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 910: Zu § 20 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 911: Zu § 21 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 912: Zu § 22 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 913: Zu § 23 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 914: Zu § 24 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 915: Zu § 10 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 916: Zu § 11 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 917: Zu § 12 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 918: Zu § 13 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 919: Zu § 14 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 920: Zu § 15 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 921: Zu § 16 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 922: Zu § 17 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 923: Zu § 18 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 924: Zu § 19 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 925: Zu § 20 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 926: Zu § 21 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 927: Zu § 22 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 928: Zu § 23 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 929: Zu § 24 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 930: Zu § 10 MLNG wird die Formulierung als unklar gerügt.\n\n[Page 32]\nAnmerkung 931: Zu § 11 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 932: Zu § 12 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 933: Zu § 13 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 934: Zu § 14 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 935: Zu § 15 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 936: Zu § 16 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 937: Zu § 17 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 938: Zu § 18 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 939: Zu § 19 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 940: Zu § 20 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 941: Zu § 21 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 942: Zu § 22 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 943: Zu § 23 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 944: Zu § 24 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 945: Zu § 10 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 946: Zu § 11 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 947: Zu § 12 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 948: Zu § 13 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 949: Zu § 14 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 950: Zu § 15 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 951: Zu § 16 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 952: Zu § 17 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 953: Zu § 18 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 954: Zu § 19 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 955: Zu § 20 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 956: Zu § 21 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 957: Zu § 22 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 958: Zu § 23 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 959: Zu § 24 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 960: Zu § 10 MLNG wird die Formulierung als unklar gerügt.\n\n[Page 33]\nAnmerkung 961: Zu § 11 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 962: Zu § 12 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 963: Zu § 13 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 964: Zu § 14 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 965: Zu § 15 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 966: Zu § 16 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 967: Zu § 17 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 968: Zu § 18 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 969: Zu § 19 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 970: Zu § 20 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 971: Zu § 21 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 972: Zu § 22 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 973: Zu § 23 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 974: Zu § 24 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 975: Zu § 10 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 976: Zu § 11 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 977: Zu § 12 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 978: Zu § 13 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 979: Zu § 14 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 980: Zu § 15 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 981: Zu § 16 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 982: Zu § 17 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 983: Zu § 18 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 984: Zu § 19 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 985: Zu § 20 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 986: Zu § 21 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 987: Zu § 22 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 988: Zu § 23 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 989: Zu § 24 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 990: Zu § 10 MLNG wird die Formulierung als unklar gerügt.\n\n[Page 34]\nAnmerkung 991: Zu § 11 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 992: Zu § 12 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 993: Zu § 13 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 994: Zu § 14 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 995: Zu § 15 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 996: Zu § 16 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 997: Zu § 17 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 998: Zu § 18 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 999: Zu § 19 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 1000: Zu § 20 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 1001: Zu § 21 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 1002: Zu § 22 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 1003: Zu § 23 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 1004: Zu § 24 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 1005: Zu § 10 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 1006: Zu § 11 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 1007: Zu § 12 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 1008: Zu § 13 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 1009: Zu § 14 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 1010: Zu § 15 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 1011: Zu § 16 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 1012: Zu § 17 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 1013: Zu § 18 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 1014: Zu § 19 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 1015: Zu § 20 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 1016: Zu § 21 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 1017: Zu § 22 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 1018: Zu § 23 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 1019: Zu § 24 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 1020: Zu § 10 MLNG wird die Formulierung als unklar gerügt.\n\n[Page 35]\nAnmerkung 1021: Zu § 11 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 1022: Zu § 12 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 1023: Zu § 13 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 1024: Zu § 14 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 1025: Zu § 15 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 1026: Zu § 16 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 1027: Zu § 17 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 1028: Zu § 18 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 1029: Zu § 19 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 1030: Zu § 20 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 1031: Zu § 21 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 1032: Zu § 22 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 1033: Zu § 23 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 1034: Zu § 24 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 1035: Zu § 10 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 1036: Zu § 11 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 1037: Zu § 12 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 1038: Zu § 13 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 1039: Zu § 14 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 1040: Zu § 15 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 1041: Zu § 16 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 1042: Zu § 17 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 1043: Zu § 18 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 1044: Zu § 19 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 1045: Zu § 20 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 1046: Zu § 21 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 1047: Zu § 22 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 1048: Zu § 23 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 1049: Zu § 24 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 1050: Zu § 10 MLNG wird die Formulierung als unklar gerügt.\n\n[Page 36]\nAnmerkung 1051: Zu § 11 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 1052: Zu § 12 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 1053: Zu § 13 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 1054: Zu § 14 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 1055: Zu § 15 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 1056: Zu § 16 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 1057: Zu § 17 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 1058: Zu § 18 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 1059: Zu § 19 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 1060: Zu § 20 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 1061: Zu § 21 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 1062: Zu § 22 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 1063: Zu § 23 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 1064: Zu § 24 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 1065: Zu § 10 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 1066: Zu § 11 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 1067: Zu § 12 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 1068: Zu § 13 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 1069: Zu § 14 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 1070: Zu § 15 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 1071: Zu § 16 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 1072: Zu § 17 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 1073: Zu § 18 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 1074: Zu § 19 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 1075: Zu § 20 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 1076: Zu § 21 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 1077: Zu § 22 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 1078: Zu § 23 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 1079: Zu § 24 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 1080: Zu § 10 MLNG wird die Formulierung als unklar gerügt.\n\n[Page 37]\nAnmerkung 1081: Zu § 11 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 1082: Zu § 12 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 1083: Zu § 13 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 1084: Zu § 14 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 1085: Zu § 15 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 1086: Zu § 16 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 1087: Zu § 17 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 1088: Zu § 18 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 1089: Zu § 19 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 1090: Zu § 20 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 1091: Zu § 21 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 1092: Zu § 22 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 1093: Zu § 23 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 1094: Zu § 24 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 1095: Zu § 10 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 1096: Zu § 11 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 1097: Zu § 12 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 1098: Zu § 13 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 1099: Zu § 14 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 1100: Zu § 15 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 1101: Zu § 16 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 1102: Zu § 17 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 1103: Zu § 18 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 1104: Zu § 19 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 1105: Zu § 20 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 1106: Zu § 21 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 1107: Zu § 22 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 1108: Zu § 23 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 1109: Zu § 24 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 1110: Zu § 10 MLNG wird die Formulierung als unklar gerügt.\n\n[Page 38]\nAnmerkung 1111: Zu § 11 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 1112: Zu § 12 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 1113: Zu § 13 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 1114: Zu § 14 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 1115: Zu § 15 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 1116: Zu § 16 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 1117: Zu § 17 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 1118: Zu § 18 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 1119: Zu § 19 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 1120: Zu § 20 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 1121: Zu § 21 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 1122: Zu § 22 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 1123: Zu § 23 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 1124: Zu § 24 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 1125: Zu § 10 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 1126: Zu § 11 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 1127: Zu § 12 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 1128: Zu § 13 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 1129: Zu § 14 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 1130: Zu § 15 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 1131: Zu § 16 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 1132: Zu § 17 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 1133: Zu § 18 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 1134: Zu § 19 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 1135: Zu § 20 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 1136: Zu § 21 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 1137: Zu § 22 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 1138: Zu § 23 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 1139: Zu § 24 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 1140: Zu § 10 MLNG wird die Formulierung als unklar gerügt.\n\n[Page 39]\nAnmerkung 1141: Zu § 11 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 1142: Zu § 12 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 1143: Zu § 13 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 1144: Zu § 14 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 1145: Zu § 15 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 1146: Zu § 16 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 1147: Zu § 17 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 1148: Zu § 18 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 1149: Zu § 19 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 1150: Zu § 20 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 1151: Zu § 21 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 1152: Zu § 22 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 1153: Zu § 23 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 1154: Zu § 24 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 1155: Zu § 10 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 1156: Zu § 11 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 1157: Zu § 12 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 1158: Zu § 13 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 1159: Zu § 14 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 1160: Zu § 15 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 1161: Zu § 16 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 1162: Zu § 17 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 1163: Zu § 18 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 1164: Zu § 19 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 1165: Zu § 20 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 1166: Zu § 21 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 1167: Zu § 22 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 1168: Zu § 23 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 1169: Zu § 24 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 1170: Zu § 10 MLNG wird die Formulierung als unklar gerügt.\n\n[Page 40]\nAnmerkung 1171: Zu § 11 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 1172: Zu § 12 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 1173: Zu § 13 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 1174: Zu § 14 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 1175: Zu § 15 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 1176: Zu § 16 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 1177: Zu § 17 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 1178: Zu § 18 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 1179: Zu § 19 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 1180: Zu § 20 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 1181: Zu § 21 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 1182: Zu § 22 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 1183: Zu § 23 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 1184: Zu § 24 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 1185: Zu § 10 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 1186: Zu § 11 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 1187: Zu § 12 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 1188: Zu § 13 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 1189: Zu § 14 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 1190: Zu § 15 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 1191: Zu § 16 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 1192: Zu § 17 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 1193: Zu § 18 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 1194: Zu § 19 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 1195: Zu § 20 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 1196: Zu § 21 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 1197: Zu § 22 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 1198: Zu § 23 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 1199: Zu § 24 MLNG wird die Formulierung als unklar gerügt.\nAnmerkung 1200: Zu § 10 MLNG wird die Formulierung als unklar gerügt.\nWir fordern insgesamt, den Entwurf in § 12 und § 14 zu überarbeiten.\n\n## Document\nAttached: Stellungnahme (document 4 of 5).\n\n## User focus\nBezugsdauer und Meldefrist, § 12 und § 14 MLNG\n\nThe user focus names the law, paragraphs, or topics the user cares about. When checking relevance, consider word families and synonyms (e.g. \"Krankengeld\" matches \"§ 48 SGB V\", \"Höchstbezugsdauer\", \"Anspruchsdauer\"). If the user focus is empty, treat ALL demanded changes as in-scope.\n\n## Procedure\n\n**Step 1 — Inventory.** Privately list every legislative paragraph and every distinct topic this Stellungnahme demands a change to. Do not output this list.\n\n**Step 2 — Filter against the user focus.** This is the most important step. Apply it strictly:\n- If the user focus is **non-empty** AND nothing in your Step-1 inventory matches it (even via synonyms / word families), the correct output is `demandedChanges: []`. Do NOT include unrelated demands. Returning off-topic demands is a failure.\n- If at least one inventoried demand matches the focus, keep ONLY those.\n- If the user focus is empty, keep all of them.\n\n**Step 3 — Extract the kept demands.** For each one:\n1. `summary` — one sentence describing the demand.\n2. `paragraphReference` — the exact paragraph reference (e.g. '§ 113c Abs. 5 Satz 1 Nr. 3'). Empty string if no paragraph is named.\n3. `sourceQuote` — the EXACT verbatim quote from the document. Character-for-character. Findable by plain substring search. Do not omit middle sentences — \"Sentence 1. Sentence 2. Sentence 3.\" must be quoted in full even if Sentence 2 is not directly relevant.\n4. Sort by paragraph and subsection; if no paragraph, sort by topic.\n\n**Step 4 — Metadata.** Determine `organisation` (the submitting body, not the individual person) and `title` of the Stellungnahme.\n\n**Step 5 — Self-check.** Re-apply Step 2 to your extracted list. Drop any entry whose paragraph reference and topic do not actually match the user focus. Returning `demandedChanges: []` is the correct and expected answer when this document does not address the user focus.\n\n## Output (JSON only, no prose, no markdown fences)\n\n{\n  \"organisation\": \"<submitting organisation>\",\n  \"title\": \"<title of the Stellungnahme>\",\n  \"demandedChanges\": [\n    {\n      \"paragraphReference\": \"<e.g. '§ 113c Abs. 5 Satz 1 Nr. 3' or empty>\",\n      \"summary\": \"<one-sentence description of the demand>\",\n      \"sourceQuote\": \"<EXACT verbatim quote from the document>\"\n    }\n  ],\n  \"quotes\": [\n    { \"text\": \"<each verbatim quote used above, one entry per demand>\" }\n  ]\n}\n\nUser instruction: Bezugsdauer und Meldefrist, § 12 und § 14 MLNG",
+            "role": "user"
+          }
+        ],
+        "messagesHash": "<hash>",
+        "model": "golden-model",
+        "modelId": "gpt-golden",
+        "provider": "openai",
+        "purpose": "agent-step",
+        "reason": "change",
+        "requestHash": "<hash>",
+        "requestId": "req-<id:9>",
+        "segment": "seg-<id:8>",
+        "step": 1,
+        "toolExecution": "none",
+        "toolSchemasHash": null
+      },
+      "runId": "wf-exec-<id:1>",
+      "type": "request/header"
+    },
+    {
+      "data": {
+        "content": "{\"demandedChanges\":[{\"paragraphReference\":\"§ 12 und § 14 MLNG\",\"summary\":\"Überarbeitung des Entwurfs\",\"sourceQuote\":\"Wir fordern insgesamt, den Entwurf in § 12 und § 14 zu überarbeiten.\"}],\"quotes\":[],\"organisation\":\"Arbeitsgemeinschaft Musterverbände\",\"title\":\"Stellungnahme zum Entwurf des MLNG, ausführliche Fassung\"}",
+        "finishReason": "stop",
+        "hasImages": false,
+        "requestId": "req-<id:9>",
+        "step": 1,
+        "toolCalls": [],
+        "usage": {
+          "completionTokens": 120,
+          "promptTokens": 903,
+          "source": "provider",
+          "totalTokens": 1023
+        }
+      },
+      "runId": "wf-exec-<id:1>",
+      "type": "message/assistant"
+    },
+    {
+      "data": {
+        "limits": {
+          "maxTokensPerRun": 0,
+          "maxToolRounds": 10
+        },
+        "runUsage": {
+          "completionTokens": 480,
+          "promptTokens": 3606,
+          "totalTokens": 4086
+        },
+        "step": 1,
+        "usage": {
+          "completionTokens": 120,
+          "promptTokens": 903,
+          "source": "provider",
+          "totalTokens": 1023
+        }
+      },
+      "runId": "wf-exec-<id:1>",
+      "type": "budget/checkpoint"
+    },
+    {
+      "data": {
+        "purpose": "agent-step",
+        "segment": "seg-<id:10>"
+      },
+      "runId": "wf-exec-<id:1>",
+      "type": "segment/start"
+    },
+    {
+      "data": {
+        "callConfig": {
+          "maxTokens": 16000,
+          "nativeWebSearch": null,
+          "responseFormat": "json",
+          "responseSchemaHash": "23f8d9b22e2029f02b5444e6839644a080f1ac179da94fb5ca835f0bfaec2dc0",
+          "stream": true,
+          "thinking": null
+        },
+        "configHash": "<volatile>",
+        "language": "en",
+        "messageCount": 2,
+        "messages": [
+          {
+            "content": "Current date: <date> (timezone UTC). Treat any date after this as the future; do not assume your training-time knowledge of \"today\" or the \"latest\" is current.\n\nYou are an AI assistant capable of searching PDF documents. You analyse a single Stellungnahme (formal note on a draft law). Strictly observe these rules:\n- Always answer in the language of the analysed document. Do not mix languages.\n- Base every claim on the document. Never invent.\n- Quotes are character-for-character from the source. Never paraphrase. Do not drop intermediate sentences from a quoted passage.\n- Internally repeat the analysis and improve your result before returning. Output only the improved result.\n\nYou are an AI system. If asked, always say so. Never claim to be human, even in a role.",
+            "role": "system"
+          },
+          {
+            "content": "[File: 06-buendnis-umlaute-tabelle.docx (application/vnd.openxmlformats-officedocument.wordprocessingml.document)]\n\nStellungnahme des Bündnisses für Ärztinnen, Ärzte und Pflegekräfte\n\nzum Entwurf des MLNG – Änderungsvorschläge im Überblick\n\nDie Größe der Übergangsbeträge ist „unzureichend“; das Maß der Kürzung übersteigt das Zumutbare.\n\n| Paragraph | Geltende Fassung | Änderungsvorschlag |\n| --- | --- | --- |\n| § 12 Abs. 2 | 78 Wochen | Beibehaltung der 78 Wochen |\n| § 14 | Meldefrist 3 Tage | Meldefrist 10 Tage |\n| § 20 | Übergang 6 Monate | Übergang 18 Monate, zusätzlich Härtefälle |\n\nFür Rückfragen: Jörg Öztürk-Müller, Geschäftsführung, Straße der Einheit 1, Köln\n\n## Document\nAttached: Stellungnahme (document 5 of 5).\n\n## User focus\nBezugsdauer und Meldefrist, § 12 und § 14 MLNG\n\nThe user focus names the law, paragraphs, or topics the user cares about. When checking relevance, consider word families and synonyms (e.g. \"Krankengeld\" matches \"§ 48 SGB V\", \"Höchstbezugsdauer\", \"Anspruchsdauer\"). If the user focus is empty, treat ALL demanded changes as in-scope.\n\n## Procedure\n\n**Step 1 — Inventory.** Privately list every legislative paragraph and every distinct topic this Stellungnahme demands a change to. Do not output this list.\n\n**Step 2 — Filter against the user focus.** This is the most important step. Apply it strictly:\n- If the user focus is **non-empty** AND nothing in your Step-1 inventory matches it (even via synonyms / word families), the correct output is `demandedChanges: []`. Do NOT include unrelated demands. Returning off-topic demands is a failure.\n- If at least one inventoried demand matches the focus, keep ONLY those.\n- If the user focus is empty, keep all of them.\n\n**Step 3 — Extract the kept demands.** For each one:\n1. `summary` — one sentence describing the demand.\n2. `paragraphReference` — the exact paragraph reference (e.g. '§ 113c Abs. 5 Satz 1 Nr. 3'). Empty string if no paragraph is named.\n3. `sourceQuote` — the EXACT verbatim quote from the document. Character-for-character. Findable by plain substring search. Do not omit middle sentences — \"Sentence 1. Sentence 2. Sentence 3.\" must be quoted in full even if Sentence 2 is not directly relevant.\n4. Sort by paragraph and subsection; if no paragraph, sort by topic.\n\n**Step 4 — Metadata.** Determine `organisation` (the submitting body, not the individual person) and `title` of the Stellungnahme.\n\n**Step 5 — Self-check.** Re-apply Step 2 to your extracted list. Drop any entry whose paragraph reference and topic do not actually match the user focus. Returning `demandedChanges: []` is the correct and expected answer when this document does not address the user focus.\n\n## Output (JSON only, no prose, no markdown fences)\n\n{\n  \"organisation\": \"<submitting organisation>\",\n  \"title\": \"<title of the Stellungnahme>\",\n  \"demandedChanges\": [\n    {\n      \"paragraphReference\": \"<e.g. '§ 113c Abs. 5 Satz 1 Nr. 3' or empty>\",\n      \"summary\": \"<one-sentence description of the demand>\",\n      \"sourceQuote\": \"<EXACT verbatim quote from the document>\"\n    }\n  ],\n  \"quotes\": [\n    { \"text\": \"<each verbatim quote used above, one entry per demand>\" }\n  ]\n}\n\nUser instruction: Bezugsdauer und Meldefrist, § 12 und § 14 MLNG",
+            "role": "user"
+          }
+        ],
+        "messagesHash": "<hash>",
+        "model": "golden-model",
+        "modelId": "gpt-golden",
+        "provider": "openai",
+        "purpose": "agent-step",
+        "reason": "change",
+        "requestHash": "<hash>",
+        "requestId": "req-<id:11>",
+        "segment": "seg-<id:10>",
+        "step": 1,
+        "toolExecution": "none",
+        "toolSchemasHash": null
+      },
+      "runId": "wf-exec-<id:1>",
+      "type": "request/header"
+    },
+    {
+      "data": {
+        "content": "{\"demandedChanges\":[{\"paragraphReference\":\"§ 12 Abs. 2\",\"summary\":\"Beibehaltung der 78 Wochen\",\"sourceQuote\":\"Beibehaltung der 78 Wochen\"},{\"paragraphReference\":\"§ 20\",\"summary\":\"Übergang 18 Monate, zusätzlich Härtefälle\",\"sourceQuote\":\"Übergang 18 Monate, zusätzlich Härtefälle\"}],\"quotes\":[{\"text\":\"Die Größe der Übergangsbeträge ist „unzureichend“\"}],\"organisation\":\"Bündnis für Ärztinnen, Ärzte und Pflegekräfte\",\"title\":\"Änderungsvorschläge im Überblick\"}",
+        "finishReason": "stop",
+        "hasImages": false,
+        "requestId": "req-<id:11>",
+        "step": 1,
+        "toolCalls": [],
+        "usage": {
+          "completionTokens": 120,
+          "promptTokens": 904,
+          "source": "provider",
+          "totalTokens": 1024
+        }
+      },
+      "runId": "wf-exec-<id:1>",
+      "type": "message/assistant"
+    },
+    {
+      "data": {
+        "limits": {
+          "maxTokensPerRun": 0,
+          "maxToolRounds": 10
+        },
+        "runUsage": {
+          "completionTokens": 600,
+          "promptTokens": 4510,
+          "totalTokens": 5110
+        },
+        "step": 1,
+        "usage": {
+          "completionTokens": 120,
+          "promptTokens": 904,
+          "source": "provider",
+          "totalTokens": 1024
+        }
+      },
+      "runId": "wf-exec-<id:1>",
+      "type": "budget/checkpoint"
+    },
+    {
+      "data": {
+        "finishReason": null,
+        "status": "completed"
+      },
+      "runId": "wf-exec-<id:1>",
+      "type": "run/end"
+    }
+  ],
+  "modelRequests": [
+    {
+      "options": {
+        "max_tokens": 16000,
+        "model": "gpt-golden",
+        "response_format": {
+          "json_schema": {
+            "name": "response",
+            "schema": {
+              "additionalProperties": false,
+              "properties": {
+                "demandedChanges": {
+                  "items": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "paragraphReference": {
+                        "type": "string"
+                      },
+                      "sourceQuote": {
+                        "type": "string"
+                      },
+                      "summary": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "summary"
+                    ],
+                    "type": "object"
+                  },
+                  "type": "array"
+                },
+                "organisation": {
+                  "type": "string"
+                },
+                "quotes": {
+                  "items": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "text": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "text"
+                    ],
+                    "type": "object"
+                  },
+                  "type": "array"
+                },
+                "title": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "organisation",
+                "title",
+                "demandedChanges",
+                "quotes"
+              ],
+              "type": "object"
+            },
+            "strict": true
+          },
+          "type": "json_schema"
+        },
+        "stream": true,
+        "stream_options": {
+          "include_usage": true
+        }
+      },
+      "roles": [
+        "system",
+        "user"
+      ],
+      "systemPromptHash": "8f2090540b24c18d8fa741a0aa6e8b5075ca825fe87eb2ccca1e7471d474a85c",
+      "tools": []
+    },
+    {
+      "options": {
+        "max_tokens": 16000,
+        "model": "gpt-golden",
+        "response_format": {
+          "json_schema": {
+            "name": "response",
+            "schema": {
+              "additionalProperties": false,
+              "properties": {
+                "demandedChanges": {
+                  "items": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "paragraphReference": {
+                        "type": "string"
+                      },
+                      "sourceQuote": {
+                        "type": "string"
+                      },
+                      "summary": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "summary"
+                    ],
+                    "type": "object"
+                  },
+                  "type": "array"
+                },
+                "organisation": {
+                  "type": "string"
+                },
+                "quotes": {
+                  "items": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "text": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "text"
+                    ],
+                    "type": "object"
+                  },
+                  "type": "array"
+                },
+                "title": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "organisation",
+                "title",
+                "demandedChanges",
+                "quotes"
+              ],
+              "type": "object"
+            },
+            "strict": true
+          },
+          "type": "json_schema"
+        },
+        "stream": true,
+        "stream_options": {
+          "include_usage": true
+        }
+      },
+      "roles": [
+        "system",
+        "user"
+      ],
+      "systemPromptHash": "8f2090540b24c18d8fa741a0aa6e8b5075ca825fe87eb2ccca1e7471d474a85c",
+      "tools": []
+    },
+    {
+      "options": {
+        "max_tokens": 16000,
+        "model": "gpt-golden",
+        "response_format": {
+          "json_schema": {
+            "name": "response",
+            "schema": {
+              "additionalProperties": false,
+              "properties": {
+                "demandedChanges": {
+                  "items": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "paragraphReference": {
+                        "type": "string"
+                      },
+                      "sourceQuote": {
+                        "type": "string"
+                      },
+                      "summary": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "summary"
+                    ],
+                    "type": "object"
+                  },
+                  "type": "array"
+                },
+                "organisation": {
+                  "type": "string"
+                },
+                "quotes": {
+                  "items": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "text": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "text"
+                    ],
+                    "type": "object"
+                  },
+                  "type": "array"
+                },
+                "title": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "organisation",
+                "title",
+                "demandedChanges",
+                "quotes"
+              ],
+              "type": "object"
+            },
+            "strict": true
+          },
+          "type": "json_schema"
+        },
+        "stream": true,
+        "stream_options": {
+          "include_usage": true
+        }
+      },
+      "roles": [
+        "system",
+        "user"
+      ],
+      "systemPromptHash": "8f2090540b24c18d8fa741a0aa6e8b5075ca825fe87eb2ccca1e7471d474a85c",
+      "tools": []
+    },
+    {
+      "options": {
+        "max_tokens": 16000,
+        "model": "gpt-golden",
+        "response_format": {
+          "json_schema": {
+            "name": "response",
+            "schema": {
+              "additionalProperties": false,
+              "properties": {
+                "demandedChanges": {
+                  "items": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "paragraphReference": {
+                        "type": "string"
+                      },
+                      "sourceQuote": {
+                        "type": "string"
+                      },
+                      "summary": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "summary"
+                    ],
+                    "type": "object"
+                  },
+                  "type": "array"
+                },
+                "organisation": {
+                  "type": "string"
+                },
+                "quotes": {
+                  "items": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "text": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "text"
+                    ],
+                    "type": "object"
+                  },
+                  "type": "array"
+                },
+                "title": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "organisation",
+                "title",
+                "demandedChanges",
+                "quotes"
+              ],
+              "type": "object"
+            },
+            "strict": true
+          },
+          "type": "json_schema"
+        },
+        "stream": true,
+        "stream_options": {
+          "include_usage": true
+        }
+      },
+      "roles": [
+        "system",
+        "user"
+      ],
+      "systemPromptHash": "8f2090540b24c18d8fa741a0aa6e8b5075ca825fe87eb2ccca1e7471d474a85c",
+      "tools": []
+    },
+    {
+      "options": {
+        "max_tokens": 16000,
+        "model": "gpt-golden",
+        "response_format": {
+          "json_schema": {
+            "name": "response",
+            "schema": {
+              "additionalProperties": false,
+              "properties": {
+                "demandedChanges": {
+                  "items": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "paragraphReference": {
+                        "type": "string"
+                      },
+                      "sourceQuote": {
+                        "type": "string"
+                      },
+                      "summary": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "summary"
+                    ],
+                    "type": "object"
+                  },
+                  "type": "array"
+                },
+                "organisation": {
+                  "type": "string"
+                },
+                "quotes": {
+                  "items": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "text": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "text"
+                    ],
+                    "type": "object"
+                  },
+                  "type": "array"
+                },
+                "title": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "organisation",
+                "title",
+                "demandedChanges",
+                "quotes"
+              ],
+              "type": "object"
+            },
+            "strict": true
+          },
+          "type": "json_schema"
+        },
+        "stream": true,
+        "stream_options": {
+          "include_usage": true
+        }
+      },
+      "roles": [
+        "system",
+        "user"
+      ],
+      "systemPromptHash": "8f2090540b24c18d8fa741a0aa6e8b5075ca825fe87eb2ccca1e7471d474a85c",
+      "tools": []
+    }
+  ],
+  "offeredToolIds": [
+    [],
+    [],
+    [],
+    [],
+    []
+  ],
+  "result": {
+    "started": {
+      "executionId": "wf-exec-<id:1>",
+      "output": {
+        "finalReport": "# Stellungnahmen-Auswertung\n\n## Abdeckung\n\n- **Dokumente identifiziert:** 5\n- **Dokumente verarbeitet:** 5\n\n**Autor:** Verband der Musterkassen\n\n**Titel:** Stellungnahme zum Entwurf des MLNG\n\n**Datei:** `01-verband-der-musterkassen.pdf`\n\n| Nr | Paragraph | Forderung (mit Originalzitat) |\n|----|-----------|-------------------------------|\n| 0 | § 12 Abs. 2 MLNG | Streichung der Begrenzung der Bezugsdauer auf 52 Wochen _(Wir fordern, § 12 Absatz 2 zu streichen und die geltende Regelung beizubehalten.)_ |\n| 1 | § 14 MLNG | Verlängerung der Meldefrist auf zehn Tage _(Wir fordern, die Meldefrist in § 14 auf zehn Tage zu verlängern.)_ |\n\n\n\n---\n\n**Autor:** Musterkammer Nord\n\n**Titel:** Stellungnahme zum Entwurf des MLNG\n\n**Datei:** `02-musterkammer-nord.docx`\n\n| Nr | Paragraph | Forderung (mit Originalzitat) |\n|----|-----------|-------------------------------|\n| 0 | § 12 Abs. 3 MLNG | Aufnahme einer Härtefallregelung _(Wir fordern jedoch, in § 12 Absatz 3 eine Härtefallregelung aufzunehmen.)_ |\n\n\n\n---\n\n**Autor:** \n\n**Titel:** \n\n**Datei:** `03-scan-ohne-textebene.pdf`\n\n\n> _Keine geforderten Gesetzesänderungen zu den angegebenen Themen in diesem Dokument gefunden._\n\n\n---\n\n**Autor:** Arbeitsgemeinschaft Musterverbände\n\n**Titel:** Stellungnahme zum Entwurf des MLNG, ausführliche Fassung\n\n**Datei:** `04-arbeitsgemeinschaft-lang.pdf`\n\n| Nr | Paragraph | Forderung (mit Originalzitat) |\n|----|-----------|-------------------------------|\n| 0 | § 12 und § 14 MLNG | Überarbeitung des Entwurfs _(Wir fordern insgesamt, den Entwurf in § 12 und § 14 zu überarbeiten.)_ |\n\n\n\n---\n\n**Autor:** Bündnis für Ärztinnen, Ärzte und Pflegekräfte\n\n**Titel:** Änderungsvorschläge im Überblick\n\n**Datei:** `06-buendnis-umlaute-tabelle.docx`\n\n| Nr | Paragraph | Forderung (mit Originalzitat) |\n|----|-----------|-------------------------------|\n| 0 | § 12 Abs. 2 | Beibehaltung der 78 Wochen _(Beibehaltung der 78 Wochen)_ |\n| 1 | § 20 | Übergang 18 Monate, zusätzlich Härtefälle _(Übergang 18 Monate, zusätzlich Härtefälle)_ |\n\n\n\n---\n\n",
+        "output": "# Stellungnahmen-Auswertung\n\n## Abdeckung\n\n- **Dokumente identifiziert:** 5\n- **Dokumente verarbeitet:** 5\n\n**Autor:** Verband der Musterkassen\n\n**Titel:** Stellungnahme zum Entwurf des MLNG\n\n**Datei:** `01-verband-der-musterkassen.pdf`\n\n| Nr | Paragraph | Forderung (mit Originalzitat) |\n|----|-----------|-------------------------------|\n| 0 | § 12 Abs. 2 MLNG | Streichung der Begrenzung der Bezugsdauer auf 52 Wochen _(Wir fordern, § 12 Absatz 2 zu streichen und die geltende Regelung beizubehalten.)_ |\n| 1 | § 14 MLNG | Verlängerung der Meldefrist auf zehn Tage _(Wir fordern, die Meldefrist in § 14 auf zehn Tage zu verlängern.)_ |\n\n\n\n---\n\n**Autor:** Musterkammer Nord\n\n**Titel:** Stellungnahme zum Entwurf des MLNG\n\n**Datei:** `02-musterkammer-nord.docx`\n\n| Nr | Paragraph | Forderung (mit Originalzitat) |\n|----|-----------|-------------------------------|\n| 0 | § 12 Abs. 3 MLNG | Aufnahme einer Härtefallregelung _(Wir fordern jedoch, in § 12 Absatz 3 eine Härtefallregelung aufzunehmen.)_ |\n\n\n\n---\n\n**Autor:** \n\n**Titel:** \n\n**Datei:** `03-scan-ohne-textebene.pdf`\n\n\n> _Keine geforderten Gesetzesänderungen zu den angegebenen Themen in diesem Dokument gefunden._\n\n\n---\n\n**Autor:** Arbeitsgemeinschaft Musterverbände\n\n**Titel:** Stellungnahme zum Entwurf des MLNG, ausführliche Fassung\n\n**Datei:** `04-arbeitsgemeinschaft-lang.pdf`\n\n| Nr | Paragraph | Forderung (mit Originalzitat) |\n|----|-----------|-------------------------------|\n| 0 | § 12 und § 14 MLNG | Überarbeitung des Entwurfs _(Wir fordern insgesamt, den Entwurf in § 12 und § 14 zu überarbeiten.)_ |\n\n\n\n---\n\n**Autor:** Bündnis für Ärztinnen, Ärzte und Pflegekräfte\n\n**Titel:** Änderungsvorschläge im Überblick\n\n**Datei:** `06-buendnis-umlaute-tabelle.docx`\n\n| Nr | Paragraph | Forderung (mit Originalzitat) |\n|----|-----------|-------------------------------|\n| 0 | § 12 Abs. 2 | Beibehaltung der 78 Wochen _(Beibehaltung der 78 Wochen)_ |\n| 1 | § 20 | Übergang 18 Monate, zusätzlich Härtefälle _(Übergang 18 Monate, zusätzlich Härtefälle)_ |\n\n\n\n---\n\n"
+      },
+      "outputText": "# Stellungnahmen-Auswertung\n\n## Abdeckung\n\n- **Dokumente identifiziert:** 5\n- **Dokumente verarbeitet:** 5\n\n**Autor:** Verband der Musterkassen\n\n**Titel:** Stellungnahme zum Entwurf des MLNG\n\n**Datei:** `01-verband-der-musterkassen.pdf`\n\n| Nr | Paragraph | Forderung (mit Originalzitat) |\n|----|-----------|-------------------------------|\n| 0 | § 12 Abs. 2 MLNG | Streichung der Begrenzung der Bezugsdauer auf 52 Wochen _(Wir fordern, § 12 Absatz 2 zu streichen und die geltende Regelung beizubehalten.)_ |\n| 1 | § 14 MLNG | Verlängerung der Meldefrist auf zehn Tage _(Wir fordern, die Meldefrist in § 14 auf zehn Tage zu verlängern.)_ |\n\n\n\n---\n\n**Autor:** Musterkammer Nord\n\n**Titel:** Stellungnahme zum Entwurf des MLNG\n\n**Datei:** `02-musterkammer-nord.docx`\n\n| Nr | Paragraph | Forderung (mit Originalzitat) |\n|----|-----------|-------------------------------|\n| 0 | § 12 Abs. 3 MLNG | Aufnahme einer Härtefallregelung _(Wir fordern jedoch, in § 12 Absatz 3 eine Härtefallregelung aufzunehmen.)_ |\n\n\n\n---\n\n**Autor:** \n\n**Titel:** \n\n**Datei:** `03-scan-ohne-textebene.pdf`\n\n\n> _Keine geforderten Gesetzesänderungen zu den angegebenen Themen in diesem Dokument gefunden._\n\n\n---\n\n**Autor:** Arbeitsgemeinschaft Musterverbände\n\n**Titel:** Stellungnahme zum Entwurf des MLNG, ausführliche Fassung\n\n**Datei:** `04-arbeitsgemeinschaft-lang.pdf`\n\n| Nr | Paragraph | Forderung (mit Originalzitat) |\n|----|-----------|-------------------------------|\n| 0 | § 12 und § 14 MLNG | Überarbeitung des Entwurfs _(Wir fordern insgesamt, den Entwurf in § 12 und § 14 zu überarbeiten.)_ |\n\n\n\n---\n\n**Autor:** Bündnis für Ärztinnen, Ärzte und Pflegekräfte\n\n**Titel:** Änderungsvorschläge im Überblick\n\n**Datei:** `06-buendnis-umlaute-tabelle.docx`\n\n| Nr | Paragraph | Forderung (mit Originalzitat) |\n|----|-----------|-------------------------------|\n| 0 | § 12 Abs. 2 | Beibehaltung der 78 Wochen _(Beibehaltung der 78 Wochen)_ |\n| 1 | § 20 | Übergang 18 Monate, zusätzlich Härtefälle _(Übergang 18 Monate, zusätzlich Härtefälle)_ |\n\n\n\n---\n\n",
+      "status": "completed"
+    },
+    "state": {
+      "completedNodes": [
+        "start",
+        "init-coverage",
+        "analyse-documents",
+        "compose-report",
+        "end"
+      ],
+      "currentNodes": [],
+      "data": {
+        "_agent": {
+          "artifacts": [
+            {
+              "bytes": 2063,
+              "contentType": "text/markdown",
+              "name": "stellungnahmen-review.md",
+              "writtenAt": "<ts>"
+            }
+          ]
+        },
+        "_budget": {
+          "input": 4510,
+          "output": 600,
+          "total": 5110
+        },
+        "_coverage": {
+          "candidates": {
+            "source": "upload",
+            "total": 5
+          },
+          "failed": [],
+          "processed": 5,
+          "quotesChecked": 0,
+          "quotesValidated": 0,
+          "skipped": []
+        },
+        "_currentNodeIteration": 1,
+        "_currentStep": 5,
+        "_executionDeadline": "<volatile>",
+        "_extractionOutput": {
+          "demandedChanges": [
+            {
+              "paragraphReference": "§ 12 Abs. 2",
+              "sourceQuote": "Beibehaltung der 78 Wochen",
+              "summary": "Beibehaltung der 78 Wochen"
+            },
+            {
+              "paragraphReference": "§ 20",
+              "sourceQuote": "Übergang 18 Monate, zusätzlich Härtefälle",
+              "summary": "Übergang 18 Monate, zusätzlich Härtefälle"
+            }
+          ],
+          "organisation": "Bündnis für Ärztinnen, Ärzte und Pflegekräfte",
+          "quotes": [
+            {
+              "text": "Die Größe der Übergangsbeträge ist „unzureichend“"
+            }
+          ],
+          "title": "Änderungsvorschläge im Überblick"
+        },
+        "_nodeIterations": {
+          "analyse-documents": 1,
+          "compose-report": 1,
+          "end": 1,
+          "init-coverage": 1,
+          "start": 1
+        },
+        "_records": [
+          {
+            "data": {
+              "demandedChanges": [
+                {
+                  "paragraphReference": "§ 12 Abs. 2 MLNG",
+                  "sourceQuote": "Wir fordern, § 12 Absatz 2 zu streichen und die geltende Regelung beizubehalten.",
+                  "summary": "Streichung der Begrenzung der Bezugsdauer auf 52 Wochen"
+                },
+                {
+                  "paragraphReference": "§ 14 MLNG",
+                  "sourceQuote": "Wir fordern, die Meldefrist in § 14 auf zehn Tage zu verlängern.",
+                  "summary": "Verlängerung der Meldefrist auf zehn Tage"
+                }
+              ],
+              "organisation": "Verband der Musterkassen",
+              "quotes": [
+                {
+                  "text": "Die Bezugsdauer darf nicht auf 52 Wochen begrenzt werden."
+                }
+              ],
+              "title": "Stellungnahme zum Entwurf des MLNG"
+            },
+            "failures": [],
+            "iterationIndex": 0,
+            "nodeId": "collect-evidence",
+            "quotes": [
+              {
+                "text": "Die Bezugsdauer darf nicht auf 52 Wochen begrenzt werden.",
+                "validated": false
+              }
+            ],
+            "recordId": "<id:12>",
+            "runId": "wf-exec-<id:1>",
+            "source": {
+              "docId": "file_<id:13>",
+              "retrievedAt": "<ts>",
+              "sourceSystem": "upload",
+              "title": "01-verband-der-musterkassen.pdf"
+            },
+            "status": "ok"
+          },
+          {
+            "data": {
+              "demandedChanges": [
+                {
+                  "paragraphReference": "§ 12 Abs. 3 MLNG",
+                  "sourceQuote": "Wir fordern jedoch, in § 12 Absatz 3 eine Härtefallregelung aufzunehmen.",
+                  "summary": "Aufnahme einer Härtefallregelung"
+                }
+              ],
+              "organisation": "Musterkammer Nord",
+              "quotes": [
+                {
+                  "text": "Die Kammer unterstützt die Befristung in § 12 Absatz 2 MLNG ausdrücklich."
+                }
+              ],
+              "title": "Stellungnahme zum Entwurf des MLNG"
+            },
+            "failures": [],
+            "iterationIndex": 1,
+            "nodeId": "collect-evidence",
+            "quotes": [
+              {
+                "text": "Die Kammer unterstützt die Befristung in § 12 Absatz 2 MLNG ausdrücklich.",
+                "validated": false
+              }
+            ],
+            "recordId": "<id:14>",
+            "runId": "wf-exec-<id:1>",
+            "source": {
+              "docId": "file_<id:15>",
+              "retrievedAt": "<ts>",
+              "sourceSystem": "upload",
+              "title": "02-musterkammer-nord.docx"
+            },
+            "status": "ok"
+          },
+          {
+            "data": {
+              "demandedChanges": [],
+              "organisation": "",
+              "quotes": [],
+              "title": ""
+            },
+            "failures": [],
+            "iterationIndex": 2,
+            "nodeId": "collect-evidence",
+            "quotes": [],
+            "recordId": "<id:16>",
+            "runId": "wf-exec-<id:1>",
+            "source": {
+              "docId": "file_<id:17>",
+              "retrievedAt": "<ts>",
+              "sourceSystem": "upload",
+              "title": "03-scan-ohne-textebene.pdf"
+            },
+            "status": "ok"
+          },
+          {
+            "data": {
+              "demandedChanges": [
+                {
+                  "paragraphReference": "§ 12 und § 14 MLNG",
+                  "sourceQuote": "Wir fordern insgesamt, den Entwurf in § 12 und § 14 zu überarbeiten.",
+                  "summary": "Überarbeitung des Entwurfs"
+                }
+              ],
+              "organisation": "Arbeitsgemeinschaft Musterverbände",
+              "quotes": [],
+              "title": "Stellungnahme zum Entwurf des MLNG, ausführliche Fassung"
+            },
+            "failures": [],
+            "iterationIndex": 3,
+            "nodeId": "collect-evidence",
+            "quotes": [],
+            "recordId": "<id:18>",
+            "runId": "wf-exec-<id:1>",
+            "source": {
+              "docId": "file_<id:19>",
+              "retrievedAt": "<ts>",
+              "sourceSystem": "upload",
+              "title": "04-arbeitsgemeinschaft-lang.pdf"
+            },
+            "status": "ok"
+          },
+          {
+            "data": {
+              "demandedChanges": [
+                {
+                  "paragraphReference": "§ 12 Abs. 2",
+                  "sourceQuote": "Beibehaltung der 78 Wochen",
+                  "summary": "Beibehaltung der 78 Wochen"
+                },
+                {
+                  "paragraphReference": "§ 20",
+                  "sourceQuote": "Übergang 18 Monate, zusätzlich Härtefälle",
+                  "summary": "Übergang 18 Monate, zusätzlich Härtefälle"
+                }
+              ],
+              "organisation": "Bündnis für Ärztinnen, Ärzte und Pflegekräfte",
+              "quotes": [
+                {
+                  "text": "Die Größe der Übergangsbeträge ist „unzureichend“"
+                }
+              ],
+              "title": "Änderungsvorschläge im Überblick"
+            },
+            "failures": [],
+            "iterationIndex": 4,
+            "nodeId": "collect-evidence",
+            "quotes": [
+              {
+                "text": "Die Größe der Übergangsbeträge ist „unzureichend“",
+                "validated": false
+              }
+            ],
+            "recordId": "<id:20>",
+            "runId": "wf-exec-<id:1>",
+            "source": {
+              "docId": "file_<id:21>",
+              "retrievedAt": "<ts>",
+              "sourceSystem": "upload",
+              "title": "06-buendnis-umlaute-tabelle.docx"
+            },
+            "status": "ok"
+          }
+        ],
+        "_stepLogHistory": {
+          "extract-evidence": [
+            {
+              "citationsAdded": 0,
+              "completedAt": "<ts>",
+              "durationMs": "<ms>",
+              "iteration": 1,
+              "kind": "prompt",
+              "model": "golden-model",
+              "nodeId": "extract-evidence",
+              "outputExcerpt": "{\"demandedChanges\":[{\"paragraphReference\":\"§ 12 Abs. 2 MLNG\",\"summary\":\"Streichung der Begrenzung der Bezugsdauer auf 52 Wochen\",\"sourceQuote\":\"Wir fordern, § 12 Absatz 2 zu streichen und die geltende Regelung beizubehalten.\"},{\"paragraphReference\":\"§ 14 MLNG\",\"summary\":\"Verlängerung der Meldefrist auf zehn Tage\",\"sourceQuote\":\"Wir fordern, die Meldefrist in § 14 auf zehn Tage zu verlängern.\"}],\"quotes\":[{\"text\":\"Die Bezugsdauer darf nicht auf 52 Wochen begrenzt werden.\"}],\"organisation\":\"Verban",
+              "responseLength": 565,
+              "startedAt": "<ts>",
+              "tokens": {
+                "input": 900,
+                "output": 120
+              },
+              "toolCount": 0,
+              "toolNames": []
+            },
+            {
+              "citationsAdded": 0,
+              "completedAt": "<ts>",
+              "durationMs": "<ms>",
+              "iteration": 1,
+              "kind": "prompt",
+              "model": "golden-model",
+              "nodeId": "extract-evidence",
+              "outputExcerpt": "{\"demandedChanges\":[{\"paragraphReference\":\"§ 12 Abs. 3 MLNG\",\"summary\":\"Aufnahme einer Härtefallregelung\",\"sourceQuote\":\"Wir fordern jedoch, in § 12 Absatz 3 eine Härtefallregelung aufzunehmen.\"}],\"quotes\":[{\"text\":\"Die Kammer unterstützt die Befristung in § 12 Absatz 2 MLNG ausdrücklich.\"}],\"organisation\":\"Musterkammer Nord\",\"title\":\"Stellungnahme zum Entwurf des MLNG\"}",
+              "responseLength": 373,
+              "startedAt": "<ts>",
+              "tokens": {
+                "input": 901,
+                "output": 120
+              },
+              "toolCount": 0,
+              "toolNames": []
+            },
+            {
+              "citationsAdded": 0,
+              "completedAt": "<ts>",
+              "durationMs": "<ms>",
+              "iteration": 1,
+              "kind": "prompt",
+              "model": "golden-model",
+              "nodeId": "extract-evidence",
+              "outputExcerpt": "{\"demandedChanges\":[],\"quotes\":[],\"organisation\":\"\",\"title\":\"\"}",
+              "responseLength": 63,
+              "startedAt": "<ts>",
+              "tokens": {
+                "input": 902,
+                "output": 120
+              },
+              "toolCount": 0,
+              "toolNames": []
+            },
+            {
+              "citationsAdded": 0,
+              "completedAt": "<ts>",
+              "durationMs": "<ms>",
+              "iteration": 1,
+              "kind": "prompt",
+              "model": "golden-model",
+              "nodeId": "extract-evidence",
+              "outputExcerpt": "{\"demandedChanges\":[{\"paragraphReference\":\"§ 12 und § 14 MLNG\",\"summary\":\"Überarbeitung des Entwurfs\",\"sourceQuote\":\"Wir fordern insgesamt, den Entwurf in § 12 und § 14 zu überarbeiten.\"}],\"quotes\":[],\"organisation\":\"Arbeitsgemeinschaft Musterverbände\",\"title\":\"Stellungnahme zum Entwurf des MLNG, ausführliche Fassung\"}",
+              "responseLength": 320,
+              "startedAt": "<ts>",
+              "tokens": {
+                "input": 903,
+                "output": 120
+              },
+              "toolCount": 0,
+              "toolNames": []
+            },
+            {
+              "citationsAdded": 0,
+              "completedAt": "<ts>",
+              "durationMs": "<ms>",
+              "iteration": 1,
+              "kind": "prompt",
+              "model": "golden-model",
+              "nodeId": "extract-evidence",
+              "outputExcerpt": "{\"demandedChanges\":[{\"paragraphReference\":\"§ 12 Abs. 2\",\"summary\":\"Beibehaltung der 78 Wochen\",\"sourceQuote\":\"Beibehaltung der 78 Wochen\"},{\"paragraphReference\":\"§ 20\",\"summary\":\"Übergang 18 Monate, zusätzlich Härtefälle\",\"sourceQuote\":\"Übergang 18 Monate, zusätzlich Härtefälle\"}],\"quotes\":[{\"text\":\"Die Größe der Übergangsbeträge ist „unzureichend“\"}],\"organisation\":\"Bündnis für Ärztinnen, Ärzte und Pflegekräfte\",\"title\":\"Änderungsvorschläge im Überblick\"}",
+              "responseLength": 460,
+              "startedAt": "<ts>",
+              "tokens": {
+                "input": 904,
+                "output": 120
+              },
+              "toolCount": 0,
+              "toolNames": []
+            }
+          ]
+        },
+        "_stepLogs": {
+          "analyse-documents": {
+            "bodyNodeIds": [
+              "extract-evidence",
+              "collect-evidence"
+            ],
+            "completedAt": "<ts>",
+            "durationMs": "<ms>",
+            "hardCap": 500,
+            "iterationTimings": [
+              {
+                "durationMs": "<ms>",
+                "failed": false,
+                "iteration": 0,
+                "startedAt": "<ts>"
+              },
+              {
+                "durationMs": "<ms>",
+                "failed": false,
+                "iteration": 1,
+                "startedAt": "<ts>"
+              },
+              {
+                "durationMs": "<ms>",
+                "failed": false,
+                "iteration": 2,
+                "startedAt": "<ts>"
+              },
+              {
+                "durationMs": "<ms>",
+                "failed": false,
+                "iteration": 3,
+                "startedAt": "<ts>"
+              },
+              {
+                "durationMs": "<ms>",
+                "failed": false,
+                "iteration": 4,
+                "startedAt": "<ts>"
+              }
+            ],
+            "iterations": 5,
+            "kind": "loop",
+            "mode": "forEach",
+            "nodeId": "analyse-documents",
+            "startedAt": "<ts>"
+          },
+          "extract-evidence": {
+            "apps": [],
+            "citationsAdded": 0,
+            "completedAt": "<ts>",
+            "durationMs": "<ms>",
+            "iterations": 1,
+            "kind": "prompt",
+            "messages": [
+              {
+                "content": "Current date: <date> (timezone UTC). Treat any date after this as the future; do not assume your training-time knowledge of \"today\" or the \"latest\" is current.\n\nYou are an AI assistant capable of searching PDF documents. You analyse a single Stellungnahme (formal note on a draft law). Strictly observe these rules:\n- Always answer in the language of the analysed document. Do not mix languages.\n- Base every claim on the document. Never invent.\n- Quotes are character-for-character from the source. Never paraphrase. Do not drop intermediate sentences from a quoted passage.\n- Internally repeat the analysis and improve your result before returning. Output only the improved result.",
+                "role": "system"
+              },
+              {
+                "content": "[File: 06-buendnis-umlaute-tabelle.docx (application/vnd.openxmlformats-officedocument.wordprocessingml.document)]\n\nStellungnahme des Bündnisses für Ärztinnen, Ärzte und Pflegekräfte\n\nzum Entwurf des MLNG – Änderungsvorschläge im Überblick\n\nDie Größe der Übergangsbeträge ist „unzureichend“; das Maß der Kürzung übersteigt das Zumutbare.\n\n| Paragraph | Geltende Fassung | Änderungsvorschlag |\n| --- | --- | --- |\n| § 12 Abs. 2 | 78 Wochen | Beibehaltung der 78 Wochen |\n| § 14 | Meldefrist 3 Tage | Meldefrist 10 Tage |\n| § 20 | Übergang 6 Monate | Übergang 18 Monate, zusätzlich Härtefälle |\n\nFür Rückfragen: Jörg Öztürk-Müller, Geschäftsführung, Straße der Einheit 1, Köln\n\n## Document\nAttached: Stellungnahme (document 5 of 5).\n\n## User focus\nBezugsdauer und Meldefrist, § 12 und § 14 MLNG\n\nThe user focus names the law, paragraphs, or topics the user cares about. When checking relevance, consider word families and synonyms (e.g. \"Krankengeld\" matches \"§ 48 SGB V\", \"Höchstbezugsdauer\", \"Anspruchsdauer\"). If the user focus is empty, treat ALL demanded changes as in-scope.\n\n## Procedure\n\n**Step 1 — Inventory.** Privately list every legislative paragraph and every distinct topic this Stellungnahme demands a change to. Do not output this list.\n\n**Step 2 — Filter against the user focus.** This is the most important step. Apply it strictly:\n- If the user focus is **non-empty** AND nothing in your Step-1 inventory matches it (even via synonyms / word families), the correct output is `demandedChanges: []`. Do NOT include unrelated demands. Returning off-topic demands is a failure.\n- If at least one inventoried demand matches the focus, keep ONLY those.\n- If the user focus is empty, keep all of them.\n\n**Step 3 — Extract the kept demands.** For each one:\n1. `summary` — one sentence describing the demand.\n2. `paragraphReference` — the exact paragraph reference (e.g. '§ 113c Abs. 5 Satz 1 Nr. 3'). Empty string if no paragraph is named.\n3. `sourceQuote` — the EXACT verbatim quote from the document. Character-for-character. Findable by plain substring search. Do not omit middle sentences — \"Sentence 1. Sentence 2. Sentence 3.\" must be quoted in full even if Sentence 2 is not directly relevant.\n4. Sort by paragraph and subsection; if no paragraph, sort by topic.\n\n**Step 4 — Metadata.** Determine `organisation` (the submitting body, not the individual person) and `title` of the Stellungnahme.\n\n**Step 5 — Self-check.** Re-apply Step 2 to your extracted list. Drop any entry whose paragraph reference and topic do not actually match the user focus. Returning `demandedChanges: []` is the correct and expected answer when this document does not address the user focus.\n\n## Output (JSON only, no prose, no markdown fences)\n\n{\n  \"organisation\": \"<submitting organisation>\",\n  \"title\": \"<title of the Stellungnahme>\",\n  \"demandedChanges\": [\n    {\n      \"paragraphReference\": \"<e.g. '§ 113c Abs. 5 Satz 1 Nr. 3' or empty>\",\n      \"summary\": \"<one-sentence description of the demand>\",\n      \"sourceQuote\": \"<EXACT verbatim quote from the document>\"\n    }\n  ],\n  \"quotes\": [\n    { \"text\": \"<each verbatim quote used above, one entry per demand>\" }\n  ]\n}\n\nUser instruction: Bezugsdauer und Meldefrist, § 12 und § 14 MLNG",
+                "role": "user"
+              }
+            ],
+            "model": "golden-model",
+            "nodeId": "extract-evidence",
+            "output": "{\"demandedChanges\":[{\"paragraphReference\":\"§ 12 Abs. 2\",\"summary\":\"Beibehaltung der 78 Wochen\",\"sourceQuote\":\"Beibehaltung der 78 Wochen\"},{\"paragraphReference\":\"§ 20\",\"summary\":\"Übergang 18 Monate, zusätzlich Härtefälle\",\"sourceQuote\":\"Übergang 18 Monate, zusätzlich Härtefälle\"}],\"quotes\":[{\"text\":\"Die Größe der Übergangsbeträge ist „unzureichend“\"}],\"organisation\":\"Bündnis für Ärztinnen, Ärzte und Pflegekräfte\",\"title\":\"Änderungsvorschläge im Überblick\"}",
+            "projects": [],
+            "responseLength": 460,
+            "skillsActivated": [],
+            "startedAt": "<ts>",
+            "taskId": null,
+            "taskTitle": null,
+            "tokens": {
+              "input": 904,
+              "output": 120
+            },
+            "toolCalls": [],
+            "tools": []
+          }
+        },
+        "_taskTimings": {
+          "extract-evidence": {
+            "completedAt": "<ts>",
+            "durationMs": "<ms>",
+            "startedAt": "<ts>"
+          }
+        },
+        "_totalNodes": 5,
+        "_userHint": "Bezugsdauer und Meldefrist, § 12 und § 14 MLNG",
+        "_workflowSummary": {
+          "id": "stellungnahmen-review-v2",
+          "name": {
+            "de": "Stellungnahmen-Auswertung (revisionssicher) (v2)",
+            "en": "Stellungnahmen Review (Audit-grade) (v2)"
+          },
+          "nodes": [
+            {
+              "id": "start",
+              "type": "start"
+            },
+            {
+              "id": "init-coverage",
+              "type": "transform"
+            },
+            {
+              "id": "analyse-documents",
+              "type": "loop"
+            },
+            {
+              "id": "extract-evidence",
+              "type": "prompt"
+            },
+            {
+              "id": "collect-evidence",
+              "type": "structured-record"
+            },
+            {
+              "id": "compose-report",
+              "type": "template-render"
+            },
+            {
+              "id": "end",
+              "type": "end"
+            }
+          ]
+        },
+        "executionMetrics": {
+          "nodeCount": 5,
+          "totalDuration": "<volatile>",
+          "totalTokens": {
+            "input": 0,
+            "output": 0,
+            "total": 0
+          }
+        },
+        "finalReport": "# Stellungnahmen-Auswertung\n\n## Abdeckung\n\n- **Dokumente identifiziert:** 5\n- **Dokumente verarbeitet:** 5\n\n**Autor:** Verband der Musterkassen\n\n**Titel:** Stellungnahme zum Entwurf des MLNG\n\n**Datei:** `01-verband-der-musterkassen.pdf`\n\n| Nr | Paragraph | Forderung (mit Originalzitat) |\n|----|-----------|-------------------------------|\n| 0 | § 12 Abs. 2 MLNG | Streichung der Begrenzung der Bezugsdauer auf 52 Wochen _(Wir fordern, § 12 Absatz 2 zu streichen und die geltende Regelung beizubehalten.)_ |\n| 1 | § 14 MLNG | Verlängerung der Meldefrist auf zehn Tage _(Wir fordern, die Meldefrist in § 14 auf zehn Tage zu verlängern.)_ |\n\n\n\n---\n\n**Autor:** Musterkammer Nord\n\n**Titel:** Stellungnahme zum Entwurf des MLNG\n\n**Datei:** `02-musterkammer-nord.docx`\n\n| Nr | Paragraph | Forderung (mit Originalzitat) |\n|----|-----------|-------------------------------|\n| 0 | § 12 Abs. 3 MLNG | Aufnahme einer Härtefallregelung _(Wir fordern jedoch, in § 12 Absatz 3 eine Härtefallregelung aufzunehmen.)_ |\n\n\n\n---\n\n**Autor:** \n\n**Titel:** \n\n**Datei:** `03-scan-ohne-textebene.pdf`\n\n\n> _Keine geforderten Gesetzesänderungen zu den angegebenen Themen in diesem Dokument gefunden._\n\n\n---\n\n**Autor:** Arbeitsgemeinschaft Musterverbände\n\n**Titel:** Stellungnahme zum Entwurf des MLNG, ausführliche Fassung\n\n**Datei:** `04-arbeitsgemeinschaft-lang.pdf`\n\n| Nr | Paragraph | Forderung (mit Originalzitat) |\n|----|-----------|-------------------------------|\n| 0 | § 12 und § 14 MLNG | Überarbeitung des Entwurfs _(Wir fordern insgesamt, den Entwurf in § 12 und § 14 zu überarbeiten.)_ |\n\n\n\n---\n\n**Autor:** Bündnis für Ärztinnen, Ärzte und Pflegekräfte\n\n**Titel:** Änderungsvorschläge im Überblick\n\n**Datei:** `06-buendnis-umlaute-tabelle.docx`\n\n| Nr | Paragraph | Forderung (mit Originalzitat) |\n|----|-----------|-------------------------------|\n| 0 | § 12 Abs. 2 | Beibehaltung der 78 Wochen _(Beibehaltung der 78 Wochen)_ |\n| 1 | § 20 | Übergang 18 Monate, zusätzlich Härtefälle _(Übergang 18 Monate, zusätzlich Härtefälle)_ |\n\n\n\n---\n\n",
+        "input": "Bezugsdauer und Meldefrist, § 12 und § 14 MLNG",
+        "nodeInvocations": 5,
+        "nodeResults": {
+          "analyse-documents": {
+            "iteration": 1,
+            "metrics": {
+              "duration": "<volatile>",
+              "startTime": "<ts>",
+              "tokens": null
+            },
+            "output": {
+              "iterations": 5,
+              "results": [
+                {
+                  "recordId": "<id:12>",
+                  "status": "ok"
+                },
+                {
+                  "recordId": "<id:14>",
+                  "status": "ok"
+                },
+                {
+                  "recordId": "<id:16>",
+                  "status": "ok"
+                },
+                {
+                  "recordId": "<id:18>",
+                  "status": "ok"
+                },
+                {
+                  "recordId": "<id:20>",
+                  "status": "ok"
+                }
+              ]
+            },
+            "status": "completed"
+          },
+          "compose-report": {
+            "iteration": 1,
+            "metrics": {
+              "duration": "<volatile>",
+              "startTime": "<ts>",
+              "tokens": null
+            },
+            "output": {
+              "artifactName": "stellungnahmen-review.md",
+              "artifactPath": "<tmp>/data/agent-artifacts/wf-exec-<id:1>/stellungnahmen-review.md",
+              "bytes": 2063
+            },
+            "status": "completed"
+          },
+          "end": {
+            "isTerminal": true,
+            "iteration": 1,
+            "metrics": {
+              "duration": "<volatile>",
+              "startTime": "<ts>",
+              "tokens": null
+            },
+            "output": {
+              "finalReport": "# Stellungnahmen-Auswertung\n\n## Abdeckung\n\n- **Dokumente identifiziert:** 5\n- **Dokumente verarbeitet:** 5\n\n**Autor:** Verband der Musterkassen\n\n**Titel:** Stellungnahme zum Entwurf des MLNG\n\n**Datei:** `01-verband-der-musterkassen.pdf`\n\n| Nr | Paragraph | Forderung (mit Originalzitat) |\n|----|-----------|-------------------------------|\n| 0 | § 12 Abs. 2 MLNG | Streichung der Begrenzung der Bezugsdauer auf 52 Wochen _(Wir fordern, § 12 Absatz 2 zu streichen und die geltende Regelung beizubehalten.)_ |\n| 1 | § 14 MLNG | Verlängerung der Meldefrist auf zehn Tage _(Wir fordern, die Meldefrist in § 14 auf zehn Tage zu verlängern.)_ |\n\n\n\n---\n\n**Autor:** Musterkammer Nord\n\n**Titel:** Stellungnahme zum Entwurf des MLNG\n\n**Datei:** `02-musterkammer-nord.docx`\n\n| Nr | Paragraph | Forderung (mit Originalzitat) |\n|----|-----------|-------------------------------|\n| 0 | § 12 Abs. 3 MLNG | Aufnahme einer Härtefallregelung _(Wir fordern jedoch, in § 12 Absatz 3 eine Härtefallregelung aufzunehmen.)_ |\n\n\n\n---\n\n**Autor:** \n\n**Titel:** \n\n**Datei:** `03-scan-ohne-textebene.pdf`\n\n\n> _Keine geforderten Gesetzesänderungen zu den angegebenen Themen in diesem Dokument gefunden._\n\n\n---\n\n**Autor:** Arbeitsgemeinschaft Musterverbände\n\n**Titel:** Stellungnahme zum Entwurf des MLNG, ausführliche Fassung\n\n**Datei:** `04-arbeitsgemeinschaft-lang.pdf`\n\n| Nr | Paragraph | Forderung (mit Originalzitat) |\n|----|-----------|-------------------------------|\n| 0 | § 12 und § 14 MLNG | Überarbeitung des Entwurfs _(Wir fordern insgesamt, den Entwurf in § 12 und § 14 zu überarbeiten.)_ |\n\n\n\n---\n\n**Autor:** Bündnis für Ärztinnen, Ärzte und Pflegekräfte\n\n**Titel:** Änderungsvorschläge im Überblick\n\n**Datei:** `06-buendnis-umlaute-tabelle.docx`\n\n| Nr | Paragraph | Forderung (mit Originalzitat) |\n|----|-----------|-------------------------------|\n| 0 | § 12 Abs. 2 | Beibehaltung der 78 Wochen _(Beibehaltung der 78 Wochen)_ |\n| 1 | § 20 | Übergang 18 Monate, zusätzlich Härtefälle _(Übergang 18 Monate, zusätzlich Härtefälle)_ |\n\n\n\n---\n\n",
+              "output": "# Stellungnahmen-Auswertung\n\n## Abdeckung\n\n- **Dokumente identifiziert:** 5\n- **Dokumente verarbeitet:** 5\n\n**Autor:** Verband der Musterkassen\n\n**Titel:** Stellungnahme zum Entwurf des MLNG\n\n**Datei:** `01-verband-der-musterkassen.pdf`\n\n| Nr | Paragraph | Forderung (mit Originalzitat) |\n|----|-----------|-------------------------------|\n| 0 | § 12 Abs. 2 MLNG | Streichung der Begrenzung der Bezugsdauer auf 52 Wochen _(Wir fordern, § 12 Absatz 2 zu streichen und die geltende Regelung beizubehalten.)_ |\n| 1 | § 14 MLNG | Verlängerung der Meldefrist auf zehn Tage _(Wir fordern, die Meldefrist in § 14 auf zehn Tage zu verlängern.)_ |\n\n\n\n---\n\n**Autor:** Musterkammer Nord\n\n**Titel:** Stellungnahme zum Entwurf des MLNG\n\n**Datei:** `02-musterkammer-nord.docx`\n\n| Nr | Paragraph | Forderung (mit Originalzitat) |\n|----|-----------|-------------------------------|\n| 0 | § 12 Abs. 3 MLNG | Aufnahme einer Härtefallregelung _(Wir fordern jedoch, in § 12 Absatz 3 eine Härtefallregelung aufzunehmen.)_ |\n\n\n\n---\n\n**Autor:** \n\n**Titel:** \n\n**Datei:** `03-scan-ohne-textebene.pdf`\n\n\n> _Keine geforderten Gesetzesänderungen zu den angegebenen Themen in diesem Dokument gefunden._\n\n\n---\n\n**Autor:** Arbeitsgemeinschaft Musterverbände\n\n**Titel:** Stellungnahme zum Entwurf des MLNG, ausführliche Fassung\n\n**Datei:** `04-arbeitsgemeinschaft-lang.pdf`\n\n| Nr | Paragraph | Forderung (mit Originalzitat) |\n|----|-----------|-------------------------------|\n| 0 | § 12 und § 14 MLNG | Überarbeitung des Entwurfs _(Wir fordern insgesamt, den Entwurf in § 12 und § 14 zu überarbeiten.)_ |\n\n\n\n---\n\n**Autor:** Bündnis für Ärztinnen, Ärzte und Pflegekräfte\n\n**Titel:** Änderungsvorschläge im Überblick\n\n**Datei:** `06-buendnis-umlaute-tabelle.docx`\n\n| Nr | Paragraph | Forderung (mit Originalzitat) |\n|----|-----------|-------------------------------|\n| 0 | § 12 Abs. 2 | Beibehaltung der 78 Wochen _(Beibehaltung der 78 Wochen)_ |\n| 1 | § 20 | Übergang 18 Monate, zusätzlich Härtefälle _(Übergang 18 Monate, zusätzlich Härtefälle)_ |\n\n\n\n---\n\n"
+            },
+            "status": "completed"
+          },
+          "init-coverage": {
+            "iteration": 1,
+            "metrics": {
+              "duration": "<volatile>",
+              "startTime": "<ts>",
+              "tokens": null
+            },
+            "output": {
+              "transformedVariables": [
+                "_records",
+                "_coverage"
+              ]
+            },
+            "resolvedInputs": {
+              "operations": [
+                {
+                  "set": "_records",
+                  "value": []
+                },
+                {
+                  "set": "_coverage",
+                  "value": {
+                    "candidates": {
+                      "source": "upload",
+                      "total": 0
+                    },
+                    "failed": [],
+                    "processed": 0,
+                    "quotesChecked": 0,
+                    "quotesValidated": 0,
+                    "skipped": []
+                  }
+                },
+                {
+                  "lengthOf": "_document",
+                  "to": "_coverage.candidates.total"
+                }
+              ],
+              "updatedValues": {
+                "_coverage": "{\"candidates\":{\"total\":5,\"source\":\"upload\"},\"processed\":0,\"skipped\":[],\"failed\":[],\"quotesChecked\":0,\"quotesValidated\":0}",
+                "_records": "[]"
+              }
+            },
+            "status": "completed"
+          },
+          "start": {
+            "iteration": 1,
+            "metrics": {
+              "duration": "<volatile>",
+              "startTime": "<ts>",
+              "tokens": null
+            },
+            "output": {
+              "initialized": true,
+              "inputFields": [
+                "input",
+                "_workflowDefinition",
+                "userPrompt",
+                "_userHint",
+                "_document",
+                "_workflow",
+                "_executionDeadline",
+                "_workflowSummary",
+                "_nodeIterations",
+                "_currentStep",
+                "_currentNodeIteration",
+                "_totalNodes"
+              ],
+              "mappedFields": [
+                "input",
+                "_workflowDefinition",
+                "userPrompt",
+                "_userHint",
+                "_document",
+                "_workflow",
+                "_executionDeadline",
+                "_workflowSummary",
+                "_nodeIterations",
+                "_currentStep",
+                "_currentNodeIteration",
+                "_totalNodes"
+              ],
+              "timestamp": "<ts>"
+            },
+            "resolvedInputs": {
+              "input": "Bezugsdauer und Meldefrist, § 12 und § 14 MLNG",
+              "userPrompt": "Bezugsdauer und Meldefrist, § 12 und § 14 MLNG"
+            },
+            "status": "completed"
+          }
+        },
+        "userPrompt": "Bezugsdauer und Meldefrist, § 12 und § 14 MLNG"
+      },
+      "failedNodes": [],
+      "history": [
+        {
+          "nodeId": "start",
+          "type": "node_start"
+        },
+        {
+          "nodeId": "start",
+          "type": "node_complete"
+        },
+        {
+          "nodeId": "init-coverage",
+          "type": "node_start"
+        },
+        {
+          "nodeId": "init-coverage",
+          "type": "node_complete"
+        },
+        {
+          "nodeId": "analyse-documents",
+          "type": "node_start"
+        },
+        {
+          "nodeId": "analyse-documents",
+          "type": "node_complete"
+        },
+        {
+          "nodeId": "compose-report",
+          "type": "node_start"
+        },
+        {
+          "nodeId": "compose-report",
+          "type": "node_complete"
+        },
+        {
+          "nodeId": "end",
+          "type": "node_start"
+        },
+        {
+          "nodeId": "end",
+          "type": "node_complete"
+        }
+      ],
+      "status": "completed",
+      "workflowId": "stellungnahmen-review-v2"
+    },
+    "statements": {
+      "read": [
+        {
+          "characters": 730,
+          "name": "01-verband-der-musterkassen.pdf",
+          "pageImages": 0,
+          "type": "application/pdf"
+        },
+        {
+          "characters": 383,
+          "name": "02-musterkammer-nord.docx",
+          "pageImages": 0,
+          "type": "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+        },
+        {
+          "characters": 0,
+          "name": "03-scan-ohne-textebene.pdf",
+          "pageImages": 1,
+          "type": "application/pdf"
+        },
+        {
+          "characters": 83517,
+          "name": "04-arbeitsgemeinschaft-lang.pdf",
+          "pageImages": 0,
+          "type": "application/pdf"
+        },
+        {
+          "characters": 558,
+          "name": "06-buendnis-umlaute-tabelle.docx",
+          "pageImages": 0,
+          "type": "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+        }
+      ],
+      "refused": [
+        {
+          "code": "INVALID_FILE",
+          "message": "\"05-leer.txt\": 05-leer.txt holds no text",
+          "name": "05-leer.txt"
+        }
+      ]
+    }
+  },
+  "surface": "legacy-workflow",
+  "title": "stellungnahmen-review-v2 on six synthetic statements: one model call per readable document and a report from the records.",
+  "toolCalls": [],
+  "toolSchemas": {},
+  "usageRecords": [
+    {
+      "cid": "wf-exec-<id:1>",
+      "ct": 120,
+      "grp": [
+        "users"
+      ],
+      "lat": "<ms>",
+      "model": "golden-model",
+      "prov": "openai",
+      "pt": 900,
+      "rid": "req-<id:3>",
+      "src": "provider",
+      "st": "ok",
+      "surf": "workflow",
+      "tc": 0,
+      "ts": "<ts>",
+      "ttft": "<ms>",
+      "type": "llm_call",
+      "uid": "wf-exec-<id:1>",
+      "v": 2
+    },
+    {
+      "cid": "wf-exec-<id:1>",
+      "ct": 120,
+      "grp": [
+        "users"
+      ],
+      "lat": "<ms>",
+      "model": "golden-model",
+      "prov": "openai",
+      "pt": 901,
+      "rid": "req-<id:5>",
+      "src": "provider",
+      "st": "ok",
+      "surf": "workflow",
+      "tc": 0,
+      "ts": "<ts>",
+      "ttft": "<ms>",
+      "type": "llm_call",
+      "uid": "wf-exec-<id:1>",
+      "v": 2
+    },
+    {
+      "cid": "wf-exec-<id:1>",
+      "ct": 120,
+      "grp": [
+        "users"
+      ],
+      "lat": "<ms>",
+      "model": "golden-model",
+      "prov": "openai",
+      "pt": 902,
+      "rid": "req-<id:7>",
+      "src": "provider",
+      "st": "ok",
+      "surf": "workflow",
+      "tc": 0,
+      "ts": "<ts>",
+      "ttft": "<ms>",
+      "type": "llm_call",
+      "uid": "wf-exec-<id:1>",
+      "v": 2
+    },
+    {
+      "cid": "wf-exec-<id:1>",
+      "ct": 120,
+      "grp": [
+        "users"
+      ],
+      "lat": "<ms>",
+      "model": "golden-model",
+      "prov": "openai",
+      "pt": 903,
+      "rid": "req-<id:9>",
+      "src": "provider",
+      "st": "ok",
+      "surf": "workflow",
+      "tc": 0,
+      "ts": "<ts>",
+      "ttft": "<ms>",
+      "type": "llm_call",
+      "uid": "wf-exec-<id:1>",
+      "v": 2
+    },
+    {
+      "cid": "wf-exec-<id:1>",
+      "ct": 120,
+      "grp": [
+        "users"
+      ],
+      "lat": "<ms>",
+      "model": "golden-model",
+      "prov": "openai",
+      "pt": 904,
+      "rid": "req-<id:11>",
+      "src": "provider",
+      "st": "ok",
+      "surf": "workflow",
+      "tc": 0,
+      "ts": "<ts>",
+      "ttft": "<ms>",
+      "type": "llm_call",
+      "uid": "wf-exec-<id:1>",
+      "v": 2
+    }
+  ]
+}

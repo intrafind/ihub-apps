@@ -1,0 +1,208 @@
+{
+  "approvals": [],
+  "case": "disconnect",
+  "envelopes": [],
+  "httpResponse": {
+    "exchanges": [
+      {
+        "request": {
+          "body": {
+            "messages": [
+              {
+                "content": "What about record A-1?",
+                "role": "user"
+              }
+            ],
+            "model": "golden-model",
+            "stream": true
+          },
+          "method": "POST",
+          "path": "/api/inference/v1/chat/completions"
+        },
+        "response": {
+          "cutByClient": true,
+          "headers": {
+            "cache-control": "no-cache",
+            "content-type": "text/event-stream; charset=utf-8",
+            "x-accel-buffering": "no",
+            "x-ai-content-id": "<id:3>",
+            "x-ai-generated": "true",
+            "x-run-id": "inference-<id:1>"
+          },
+          "status": 200,
+          "stream": [
+            {
+              "data": {
+                "choices": [
+                  {
+                    "delta": {
+                      "content": "Record A-1 ",
+                      "role": "assistant"
+                    },
+                    "finish_reason": null,
+                    "index": 0
+                  }
+                ],
+                "created": "<volatile>",
+                "id": "chatcmpl-<id:4>",
+                "model": "golden-model",
+                "object": "chat.completion.chunk"
+              }
+            }
+          ]
+        }
+      }
+    ]
+  },
+  "ledger": [
+    {
+      "data": {
+        "kind": "inference",
+        "language": "en",
+        "model": "golden-model",
+        "principal": {
+          "anonymous": false,
+          "id": "golden-user",
+          "mode": "default"
+        },
+        "refs": {
+          "appId": "inference-api"
+        },
+        "trigger": {
+          "source": "inference-api",
+          "type": "api"
+        }
+      },
+      "runId": "inference-<id:1>",
+      "type": "run/start"
+    },
+    {
+      "data": {
+        "callConfig": {
+          "nativeWebSearch": null,
+          "responseFormat": null,
+          "responseSchemaHash": null,
+          "stream": true,
+          "thinking": null
+        },
+        "configHash": "<volatile>",
+        "language": "en",
+        "messageCount": 2,
+        "messages": [
+          {
+            "content": "You are an AI system. If asked, always say so. Never claim to be human, even in a role.",
+            "role": "system"
+          },
+          {
+            "content": "What about record A-1?",
+            "role": "user"
+          }
+        ],
+        "messagesHash": "<hash>",
+        "model": "golden-model",
+        "modelId": "gpt-golden",
+        "modelSnapshot": {
+          "autoDiscovery": false,
+          "default": true,
+          "id": "golden-model",
+          "modelId": "gpt-golden",
+          "provider": "openai",
+          "supportsTools": "auto",
+          "url": "https://model.invalid/v1/chat/completions"
+        },
+        "optionsSnapshot": {
+          "stream": true,
+          "user": {
+            "id": "golden-user"
+          }
+        },
+        "provider": "openai",
+        "purpose": "inference-api",
+        "reason": "initial",
+        "requestHash": "<hash>",
+        "requestId": "req-<id:2>",
+        "step": 0,
+        "toolExecution": "none",
+        "toolSchemasHash": null
+      },
+      "runId": "inference-<id:1>",
+      "type": "request/header"
+    },
+    {
+      "data": {
+        "code": "ABORTED",
+        "message": "The model call was stopped",
+        "providerCode": "ABORTED",
+        "recoverable": false,
+        "status": null,
+        "step": 0
+      },
+      "runId": "inference-<id:1>",
+      "type": "error"
+    },
+    {
+      "data": {
+        "durationMs": "<ms>",
+        "error": {
+          "code": "ABORTED",
+          "message": "The operation was aborted",
+          "providerCode": "ABORTED"
+        },
+        "finishReason": null,
+        "status": "aborted"
+      },
+      "runId": "inference-<id:1>",
+      "type": "run/end"
+    }
+  ],
+  "modelRequests": [
+    {
+      "options": {
+        "max_tokens": 16384,
+        "model": "gpt-golden",
+        "stream": true,
+        "stream_options": {
+          "include_usage": true
+        }
+      },
+      "roles": [
+        "system",
+        "user"
+      ],
+      "systemPromptHash": "1467548f411e99b878465b5c6c8e6a67a633aa3bd019bc3dc374ec4acf6d51f0",
+      "tools": []
+    }
+  ],
+  "offeredToolIds": [
+    []
+  ],
+  "surface": "completions",
+  "title": "The client goes away while the answer streams: the model call is aborted.",
+  "toolCalls": [],
+  "toolSchemas": {},
+  "usageRecords": [
+    {
+      "app": "inference-api",
+      "cid": "inference-api:golden-user",
+      "ct": 3,
+      "err": "ABORTED",
+      "grp": [
+        "users"
+      ],
+      "lat": "<ms>",
+      "model": "golden-model",
+      "prov": "openai",
+      "pt": 28,
+      "rid": "req-<id:2>",
+      "src": "estimate",
+      "st": "aborted",
+      "surf": "api",
+      "tc": 0,
+      "ts": "<ts>",
+      "ttft": "<ms>",
+      "type": "llm_call",
+      "uid": "inference-api:golden-user",
+      "v": 2
+    }
+  ]
+}

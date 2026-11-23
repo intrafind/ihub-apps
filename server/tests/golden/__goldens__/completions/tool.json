@@ -1,0 +1,378 @@
+{
+  "approvals": [],
+  "case": "tool",
+  "envelopes": [],
+  "evidence": [
+    {
+      "record": {
+        "app": {
+          "id": "inference-api"
+        },
+        "calls": [
+          {
+            "attempt": 1,
+            "config": "<sha256>",
+            "endedAt": "<ts>",
+            "messageCount": 2,
+            "messages": {
+              "append": [
+                {
+                  "message": "sha256:8b1dc4e2cf2efed9d1144b29b2a54c7498c08a23db3c54428efd0537aa86f7e1",
+                  "role": "system"
+                },
+                {
+                  "message": "sha256:1c82af477ff8681d30f687dcb7204858a3a569698c252e6564548127613bce04",
+                  "role": "user"
+                }
+              ],
+              "from": null
+            },
+            "messagesHash": "<hash>",
+            "model": "golden-model",
+            "modelId": "gpt-golden",
+            "output": "sha256:9ef5cefa081c37c945f796cc5117de5a8e132232d69c18ffc1b0117226c9eb10",
+            "provider": "openai",
+            "purpose": "inference-api",
+            "requestId": "req-<id:2>",
+            "startedAt": "<ts>",
+            "status": "ok",
+            "step": 0,
+            "tools": [
+              "sha256:54396aeff9bbf87ba57f3ceb0d035cb47c6852cf659a28cd0d0bf508f7998f1f"
+            ]
+          }
+        ],
+        "content": {
+          "1c82af477ff8681d30f687dcb7204858a3a569698c252e6564548127613bce04": "inference-<id:1>",
+          "54396aeff9bbf87ba57f3ceb0d035cb47c6852cf659a28cd0d0bf508f7998f1f": "inference-<id:1>",
+          "8b1dc4e2cf2efed9d1144b29b2a54c7498c08a23db3c54428efd0537aa86f7e1": "inference-<id:1>",
+          "9ef5cefa081c37c945f796cc5117de5a8e132232d69c18ffc1b0117226c9eb10": "inference-<id:1>",
+          "<config>": 1
+        },
+        "endedAt": "<ts>",
+        "ihubVersion": "<version>",
+        "journalEnded": true,
+        "knowledge": [],
+        "model": {
+          "id": "golden-model",
+          "modelId": "gpt-golden",
+          "provider": "openai",
+          "settings": {
+            "toolChoice": "auto"
+          }
+        },
+        "output": {
+          "contentSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "files": [],
+          "finishReason": "tool_calls",
+          "usage": {
+            "completionTokens": 9,
+            "promptTokens": 30,
+            "source": "provider",
+            "totalTokens": 39
+          }
+        },
+        "runId": "inference-<id:1>",
+        "startedAt": "<ts>",
+        "status": "completed",
+        "toolCalls": [],
+        "userId": "golden-user",
+        "v": 2
+      },
+      "runId": "inference-<id:1>"
+    }
+  ],
+  "httpResponse": {
+    "exchanges": [
+      {
+        "request": {
+          "body": {
+            "messages": [
+              {
+                "content": "How is the weather in Munich?",
+                "role": "user"
+              }
+            ],
+            "model": "golden-model",
+            "tool_choice": "auto",
+            "tools": [
+              {
+                "function": {
+                  "description": "The weather in a city",
+                  "name": "get_weather",
+                  "parameters": {
+                    "properties": {
+                      "city": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "city"
+                    ],
+                    "type": "object"
+                  }
+                },
+                "type": "function"
+              }
+            ]
+          },
+          "method": "POST",
+          "path": "/api/inference/v1/chat/completions"
+        },
+        "response": {
+          "body": {
+            "choices": [
+              {
+                "finish_reason": "tool_calls",
+                "index": 0,
+                "message": {
+                  "content": null,
+                  "role": "assistant",
+                  "tool_calls": [
+                    {
+                      "function": {
+                        "arguments": "{\"city\":\"Munich\"}",
+                        "name": "get_weather"
+                      },
+                      "id": "call_1",
+                      "index": 0,
+                      "type": "function"
+                    }
+                  ]
+                }
+              }
+            ],
+            "created": "<volatile>",
+            "id": "chatcmpl-<id:3>",
+            "model": "golden-model",
+            "object": "chat.completion",
+            "usage": {
+              "completion_tokens": 9,
+              "prompt_tokens": 30,
+              "total_tokens": 39
+            }
+          },
+          "headers": {
+            "content-type": "application/json; charset=utf-8",
+            "x-run-id": "inference-<id:1>"
+          },
+          "status": 200
+        }
+      }
+    ]
+  },
+  "ledger": [
+    {
+      "data": {
+        "kind": "inference",
+        "language": "en",
+        "model": "golden-model",
+        "principal": {
+          "anonymous": false,
+          "id": "golden-user",
+          "mode": "default"
+        },
+        "refs": {
+          "appId": "inference-api"
+        },
+        "trigger": {
+          "source": "inference-api",
+          "type": "api"
+        }
+      },
+      "runId": "inference-<id:1>",
+      "type": "run/start"
+    },
+    {
+      "data": {
+        "callConfig": {
+          "nativeWebSearch": null,
+          "responseFormat": null,
+          "responseSchemaHash": null,
+          "stream": true,
+          "thinking": null,
+          "toolChoice": "auto"
+        },
+        "configHash": "<volatile>",
+        "language": "en",
+        "messageCount": 2,
+        "messages": [
+          {
+            "content": "You are an AI system. If asked, always say so. Never claim to be human, even in a role.",
+            "role": "system"
+          },
+          {
+            "content": "How is the weather in Munich?",
+            "role": "user"
+          }
+        ],
+        "messagesHash": "<hash>",
+        "model": "golden-model",
+        "modelId": "gpt-golden",
+        "modelSnapshot": {
+          "autoDiscovery": false,
+          "default": true,
+          "id": "golden-model",
+          "modelId": "gpt-golden",
+          "provider": "openai",
+          "supportsTools": "auto",
+          "url": "https://model.invalid/v1/chat/completions"
+        },
+        "optionsSnapshot": {
+          "stream": true,
+          "toolChoice": "auto",
+          "user": {
+            "id": "golden-user"
+          }
+        },
+        "provider": "openai",
+        "purpose": "inference-api",
+        "reason": "initial",
+        "requestHash": "<hash>",
+        "requestId": "req-<id:2>",
+        "step": 0,
+        "toolExecution": "caller",
+        "toolSchemas": [
+          {
+            "description": "The weather in a city",
+            "id": "get_weather",
+            "metadata": {
+              "originalFormat": "openai",
+              "type": "function"
+            },
+            "name": "get_weather",
+            "parameters": {
+              "properties": {
+                "city": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "city"
+              ],
+              "type": "object"
+            }
+          }
+        ],
+        "toolSchemasHash": "a58023a4c00809fb9701f9190a2cb1ace1b72930339fd6e4695392dcf93ac623"
+      },
+      "runId": "inference-<id:1>",
+      "type": "request/header"
+    },
+    {
+      "data": {
+        "content": "",
+        "finishReason": "tool_calls",
+        "hasImages": false,
+        "requestId": "req-<id:2>",
+        "step": 0,
+        "thinkingChars": 0,
+        "toolCalls": [
+          {
+            "arguments": "{\"city\":\"Munich\"}",
+            "id": "call_1",
+            "index": 0,
+            "metadata": {
+              "originalFormat": "openai",
+              "type": "function"
+            },
+            "name": "get_weather",
+            "type": "function"
+          }
+        ],
+        "usage": {
+          "completionTokens": 9,
+          "promptTokens": 30,
+          "source": "provider",
+          "totalTokens": 39
+        }
+      },
+      "runId": "inference-<id:1>",
+      "type": "message/assistant"
+    },
+    {
+      "data": {
+        "durationMs": "<ms>",
+        "finishReason": "tool_calls",
+        "status": "completed",
+        "usage": {
+          "completionTokens": 9,
+          "promptTokens": 30,
+          "source": "provider",
+          "totalTokens": 39
+        }
+      },
+      "runId": "inference-<id:1>",
+      "type": "run/end"
+    }
+  ],
+  "modelRequests": [
+    {
+      "options": {
+        "max_tokens": 16384,
+        "model": "gpt-golden",
+        "stream": true,
+        "stream_options": {
+          "include_usage": true
+        },
+        "tool_choice": "auto"
+      },
+      "roles": [
+        "system",
+        "user"
+      ],
+      "systemPromptHash": "1467548f411e99b878465b5c6c8e6a67a633aa3bd019bc3dc374ec4acf6d51f0",
+      "tools": [
+        {
+          "name": "get_weather",
+          "schema": "e685c3e4e1da"
+        }
+      ]
+    }
+  ],
+  "offeredToolIds": [
+    [
+      "get_weather"
+    ]
+  ],
+  "surface": "completions",
+  "title": "The caller offers a tool: the tool call of the model is handed back, not run.",
+  "toolCalls": [],
+  "toolSchemas": {
+    "e685c3e4e1da": {
+      "properties": {
+        "city": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "city"
+      ],
+      "type": "object"
+    }
+  },
+  "usageRecords": [
+    {
+      "app": "inference-api",
+      "cid": "inference-api:golden-user",
+      "ct": 9,
+      "grp": [
+        "users"
+      ],
+      "lat": "<ms>",
+      "model": "golden-model",
+      "prov": "openai",
+      "pt": 30,
+      "rid": "req-<id:2>",
+      "src": "provider",
+      "st": "ok",
+      "surf": "api",
+      "tc": 1,
+      "ts": "<ts>",
+      "ttft": "<ms>",
+      "type": "llm_call",
+      "uid": "inference-api:golden-user",
+      "v": 2
+    }
+  ]
+}

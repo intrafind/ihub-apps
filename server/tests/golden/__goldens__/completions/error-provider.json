@@ -1,0 +1,268 @@
+{
+  "approvals": [],
+  "case": "error-provider",
+  "envelopes": [],
+  "evidence": [
+    {
+      "record": {
+        "app": {
+          "id": "inference-api"
+        },
+        "calls": [
+          {
+            "attempt": 1,
+            "config": "<sha256>",
+            "error": {
+              "at": "<ts>",
+              "code": "INVALID_REQUEST",
+              "message": "The model call failed (INVALID_REQUEST)",
+              "providerCode": "INVALID_REQUEST",
+              "status": 400,
+              "step": 0
+            },
+            "messageCount": 2,
+            "messages": {
+              "append": [
+                {
+                  "message": "sha256:8b1dc4e2cf2efed9d1144b29b2a54c7498c08a23db3c54428efd0537aa86f7e1",
+                  "role": "system"
+                },
+                {
+                  "message": "sha256:1e59b643369a2e626f448b71ec7923520a7dc453f985993209829c25ff092580",
+                  "role": "user"
+                }
+              ],
+              "from": null
+            },
+            "messagesHash": "<hash>",
+            "model": "golden-model",
+            "modelId": "gpt-golden",
+            "provider": "openai",
+            "purpose": "inference-api",
+            "requestId": "req-<id:2>",
+            "startedAt": "<ts>",
+            "status": "error",
+            "step": 0
+          }
+        ],
+        "content": {
+          "1e59b643369a2e626f448b71ec7923520a7dc453f985993209829c25ff092580": "inference-<id:1>",
+          "8b1dc4e2cf2efed9d1144b29b2a54c7498c08a23db3c54428efd0537aa86f7e1": "inference-<id:1>",
+          "<config>": 1
+        },
+        "endedAt": "<ts>",
+        "errors": [
+          {
+            "at": "<ts>",
+            "code": "INVALID_REQUEST",
+            "message": "The model call failed (INVALID_REQUEST)",
+            "providerCode": "INVALID_REQUEST",
+            "status": 400,
+            "step": 0
+          }
+        ],
+        "ihubVersion": "<version>",
+        "journalEnded": true,
+        "knowledge": [],
+        "model": {
+          "id": "golden-model",
+          "modelId": "gpt-golden",
+          "provider": "openai",
+          "settings": {}
+        },
+        "output": {
+          "contentSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "files": []
+        },
+        "runId": "inference-<id:1>",
+        "startedAt": "<ts>",
+        "status": "error",
+        "toolCalls": [],
+        "userId": "golden-user",
+        "v": 2
+      },
+      "runId": "inference-<id:1>"
+    }
+  ],
+  "httpResponse": {
+    "exchanges": [
+      {
+        "request": {
+          "body": {
+            "messages": [
+              {
+                "content": "What about record A-1?",
+                "role": "user"
+              }
+            ],
+            "model": "golden-model"
+          },
+          "method": "POST",
+          "path": "/api/inference/v1/chat/completions"
+        },
+        "response": {
+          "body": {
+            "code": "INVALID_REQUEST",
+            "details": "{\"error\":{\"message\":\"The request was refused\",\"code\":\"bad_request\"}}",
+            "error": "Invalid request sent to openai API. Please check your input and try again."
+          },
+          "headers": {
+            "content-type": "application/json; charset=utf-8",
+            "x-run-id": "inference-<id:1>"
+          },
+          "status": 400
+        }
+      }
+    ]
+  },
+  "ledger": [
+    {
+      "data": {
+        "kind": "inference",
+        "language": "en",
+        "model": "golden-model",
+        "principal": {
+          "anonymous": false,
+          "id": "golden-user",
+          "mode": "default"
+        },
+        "refs": {
+          "appId": "inference-api"
+        },
+        "trigger": {
+          "source": "inference-api",
+          "type": "api"
+        }
+      },
+      "runId": "inference-<id:1>",
+      "type": "run/start"
+    },
+    {
+      "data": {
+        "callConfig": {
+          "nativeWebSearch": null,
+          "responseFormat": null,
+          "responseSchemaHash": null,
+          "stream": true,
+          "thinking": null
+        },
+        "configHash": "<volatile>",
+        "language": "en",
+        "messageCount": 2,
+        "messages": [
+          {
+            "content": "You are an AI system. If asked, always say so. Never claim to be human, even in a role.",
+            "role": "system"
+          },
+          {
+            "content": "What about record A-1?",
+            "role": "user"
+          }
+        ],
+        "messagesHash": "<hash>",
+        "model": "golden-model",
+        "modelId": "gpt-golden",
+        "modelSnapshot": {
+          "autoDiscovery": false,
+          "default": true,
+          "id": "golden-model",
+          "modelId": "gpt-golden",
+          "provider": "openai",
+          "supportsTools": "auto",
+          "url": "https://model.invalid/v1/chat/completions"
+        },
+        "optionsSnapshot": {
+          "stream": true,
+          "user": {
+            "id": "golden-user"
+          }
+        },
+        "provider": "openai",
+        "purpose": "inference-api",
+        "reason": "initial",
+        "requestHash": "<hash>",
+        "requestId": "req-<id:2>",
+        "step": 0,
+        "toolExecution": "none",
+        "toolSchemasHash": null
+      },
+      "runId": "inference-<id:1>",
+      "type": "request/header"
+    },
+    {
+      "data": {
+        "code": "INVALID_REQUEST",
+        "message": "The model call failed (INVALID_REQUEST)",
+        "providerCode": "INVALID_REQUEST",
+        "recoverable": false,
+        "status": 400,
+        "step": 0
+      },
+      "runId": "inference-<id:1>",
+      "type": "error"
+    },
+    {
+      "data": {
+        "durationMs": "<ms>",
+        "error": {
+          "code": "INVALID_REQUEST",
+          "message": "Invalid request sent to openai API. Please check your input and try again.",
+          "providerCode": "INVALID_REQUEST"
+        },
+        "finishReason": null,
+        "status": "error"
+      },
+      "runId": "inference-<id:1>",
+      "type": "run/end"
+    }
+  ],
+  "modelRequests": [
+    {
+      "options": {
+        "max_tokens": 16384,
+        "model": "gpt-golden",
+        "stream": true,
+        "stream_options": {
+          "include_usage": true
+        }
+      },
+      "roles": [
+        "system",
+        "user"
+      ],
+      "systemPromptHash": "1467548f411e99b878465b5c6c8e6a67a633aa3bd019bc3dc374ec4acf6d51f0",
+      "tools": []
+    }
+  ],
+  "offeredToolIds": [
+    []
+  ],
+  "surface": "completions",
+  "title": "The provider refuses the request: its error is mapped to the error body of the API.",
+  "toolCalls": [],
+  "toolSchemas": {},
+  "usageRecords": [
+    {
+      "app": "inference-api",
+      "cid": "inference-api:golden-user",
+      "ct": 0,
+      "err": "INVALID_REQUEST",
+      "grp": [
+        "users"
+      ],
+      "lat": "<ms>",
+      "model": "golden-model",
+      "prov": "openai",
+      "pt": 0,
+      "rid": "req-<id:2>",
+      "src": "estimate",
+      "st": "error",
+      "surf": "api",
+      "tc": 0,
+      "ts": "<ts>",
+      "type": "llm_call",
+      "uid": "inference-api:golden-user",
+      "v": 2
+    }
+  ]
+}

@@ -1,0 +1,104 @@
+{
+  "note": "A synthetic iFinder result set for the golden of the legacy workflow stellungnahmen-review-ifinder-v2. It has the shape of the iFinder retrieval API as iHub reads it (search hits with array-valued fields, a document with its content, the search profiles of a user). Every organisation, law and statement in it is invented. server/tests/golden/surfaces/ifinderStandIn.js answers from it.",
+  "searchProfile": "searchprofile-standard",
+  "profiles": [
+    { "id": "searchprofile-standard", "name": "Standard", "default": true },
+    { "id": "searchprofile-archiv", "name": "Archiv" }
+  ],
+  "documents": [
+    {
+      "id": "bmg-st-0001",
+      "title": "Stellungnahme zum Entwurf des MLNG",
+      "sourceName": "BMG Stellungnahmen",
+      "sourceType": "filesystem",
+      "mediaType": "application/pdf",
+      "language": "de",
+      "modificationDate": "2026-03-02T09:15:00Z",
+      "file": { "name": "verband-der-musterkassen.pdf", "size": 48211 },
+      "url": "https://ifinder.invalid/docs/bmg-st-0001",
+      "labels": ["bmg", "Public"],
+      "score": 7.5,
+      "content": "Verband der Musterkassen\nStellungnahme zum Entwurf des Musterleistungsneuordnungsgesetzes (MLNG)\n\nZu § 12 Absatz 2 MLNG: Die Bezugsdauer darf nicht auf 52 Wochen begrenzt werden. Wir fordern, § 12 Absatz 2 zu streichen und die geltende Regelung beizubehalten.\n\nZu § 14 MLNG: Die Meldefrist von drei Tagen ist in der Praxis nicht einzuhalten. Wir fordern, die Meldefrist in § 14 auf zehn Tage zu verlängern."
+    },
+    {
+      "id": "bmg-st-0002",
+      "title": "Stellungnahme der Musterkammer Nord",
+      "sourceName": "BMG Stellungnahmen",
+      "sourceType": "filesystem",
+      "mediaType": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      "language": "de",
+      "modificationDate": "2026-03-04T14:40:00Z",
+      "file": { "name": "musterkammer-nord.docx", "size": 20480 },
+      "url": "https://ifinder.invalid/docs/bmg-st-0002",
+      "labels": ["bmg", "Public"],
+      "score": 6.25,
+      "content": "Musterkammer Nord\nStellungnahme zum Entwurf des MLNG\n\nDie Kammer unterstützt die Befristung in § 12 Absatz 2 MLNG ausdrücklich. Wir fordern jedoch, in § 12 Absatz 3 eine Härtefallregelung aufzunehmen."
+    },
+    {
+      "id": "bmg-st-0003",
+      "title": "Stellungnahme zum Entwurf des MLNG, ausführliche Fassung",
+      "sourceName": "BMG Stellungnahmen",
+      "sourceType": "filesystem",
+      "mediaType": "application/pdf",
+      "language": "de",
+      "modificationDate": "2026-03-05T08:00:00Z",
+      "file": { "name": "arbeitsgemeinschaft-lang.pdf", "size": 912345 },
+      "url": "https://ifinder.invalid/docs/bmg-st-0003",
+      "labels": ["bmg", "Public"],
+      "score": 5.5,
+      "contentHead": "Arbeitsgemeinschaft Musterverbände\nStellungnahme zum Entwurf des MLNG, ausführliche Fassung\n\nWir fordern insgesamt, den Entwurf in § 12 und § 14 zu überarbeiten.\n\n",
+      "contentParagraph": "Die Arbeitsgemeinschaft hat die Auswirkungen des Entwurfs auf ihre Mitgliedsverbände im Einzelnen geprüft und legt die Ergebnisse dieser Prüfung in den folgenden Abschnitten dar.\n",
+      "contentParagraphs": 320
+    },
+    {
+      "id": "bmg-st-0004",
+      "title": "Änderungsvorschläge im Überblick",
+      "sourceName": "BMG Stellungnahmen",
+      "sourceType": "filesystem",
+      "mediaType": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      "language": "de",
+      "modificationDate": "2026-03-06T11:30:00Z",
+      "file": { "name": "buendnis-aenderungsvorschlaege.docx", "size": 31744 },
+      "url": "https://ifinder.invalid/docs/bmg-st-0004",
+      "labels": ["bmg", "Public"],
+      "score": 4.75,
+      "content": "Bündnis für Ärztinnen, Ärzte und Pflegekräfte\nÄnderungsvorschläge im Überblick\n\n§ 12 Abs. 2 | Beibehaltung der 78 Wochen\n§ 20 | Übergang 18 Monate, zusätzlich Härtefälle\n\nDie Größe der Übergangsbeträge ist „unzureichend“."
+    },
+    {
+      "id": "bmg-st-0005",
+      "title": "",
+      "sourceName": "BMG Stellungnahmen",
+      "sourceType": "filesystem",
+      "mediaType": "application/pdf",
+      "language": "de",
+      "modificationDate": "2026-03-06T16:05:00Z",
+      "file": { "name": "scan-ohne-textebene.pdf", "size": 2203112 },
+      "url": "https://ifinder.invalid/docs/bmg-st-0005",
+      "labels": ["bmg", "Public"],
+      "score": 1.5,
+      "content": ""
+    },
+    {
+      "id": "bmg-st-0006",
+      "title": "Stellungnahme des Musterbunds (zurückgezogen)",
+      "sourceName": "BMG Stellungnahmen",
+      "sourceType": "filesystem",
+      "mediaType": "application/pdf",
+      "language": "de",
+      "modificationDate": "2026-03-07T10:00:00Z",
+      "file": { "name": "musterbund-zurueckgezogen.pdf", "size": 15360 },
+      "url": "https://ifinder.invalid/docs/bmg-st-0006",
+      "labels": ["bmg", "Public"],
+      "score": 1.25,
+      "contentStatus": 404
+    }
+  ],
+  "queries": {
+    "Bezugsdauer § 12 MLNG": ["bmg-st-0001", "bmg-st-0002", "bmg-st-0004"],
+    "Meldefrist § 14 MLNG": ["bmg-st-0001", "bmg-st-0003"],
+    "Härtefallregelung": ["bmg-st-0002", "bmg-st-0004"],
+    "Übergangsregelung § 20 MLNG": ["bmg-st-0004"],
+    "Bezugsdauer und Meldefrist, § 12 und § 14 MLNG": ["bmg-st-0001", "bmg-st-0003", "bmg-st-0002"],
+    "*": ["bmg-st-0001", "bmg-st-0002", "bmg-st-0003", "bmg-st-0004", "bmg-st-0005", "bmg-st-0006"]
+  }
+}

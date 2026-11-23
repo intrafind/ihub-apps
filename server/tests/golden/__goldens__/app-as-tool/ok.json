@@ -1,0 +1,1221 @@
+{
+  "approvals": [],
+  "case": "ok",
+  "envelopes": [
+    {
+      "data": {
+        "kind": "chat",
+        "model": "golden-model",
+        "refs": {
+          "appId": "concierge",
+          "chatId": "golden-chat-concierge"
+        }
+      },
+      "runId": "chat-<id:1>",
+      "streamId": "golden-chat-concierge",
+      "type": "run/started"
+    },
+    {
+      "data": {
+        "content": "",
+        "finishReason": "tool_calls",
+        "sources": [],
+        "step": 1,
+        "toolCalls": [
+          {
+            "arguments": "{\"message\":\"How do I file a claim?\"}",
+            "id": "call_1",
+            "index": 0,
+            "metadata": {
+              "originalFormat": "openai",
+              "type": "function"
+            },
+            "name": "app__specialist",
+            "type": "function"
+          }
+        ],
+        "usage": {
+          "completionTokens": 12,
+          "promptTokens": 50,
+          "source": "provider",
+          "totalTokens": 62
+        }
+      },
+      "runId": "chat-<id:1>",
+      "streamId": "golden-chat-concierge",
+      "type": "step/completed"
+    },
+    {
+      "data": {
+        "activityKind": "tool",
+        "args": {
+          "message": "How do I file a claim?"
+        },
+        "callId": "call_1",
+        "execution": "server",
+        "name": "app__specialist",
+        "step": 1,
+        "title": "App: Claims specialist",
+        "toolId": "app__specialist"
+      },
+      "runId": "chat-<id:1>",
+      "streamId": "golden-chat-concierge",
+      "type": "tool/started"
+    },
+    {
+      "data": {
+        "callId": "call_1",
+        "durationMs": "<ms>",
+        "name": "app__specialist",
+        "resultPreview": {
+          "content": "File it online.",
+          "finishReason": "stop",
+          "usage": {
+            "completionTokens": 7,
+            "promptTokens": 11,
+            "source": "provider",
+            "totalTokens": 18
+          }
+        },
+        "step": 1,
+        "toolId": "app__specialist"
+      },
+      "runId": "chat-<id:1>",
+      "streamId": "golden-chat-concierge",
+      "type": "tool/completed"
+    },
+    {
+      "data": {
+        "content": "The specialist says: file it online.",
+        "kind": "text",
+        "step": 2
+      },
+      "runId": "chat-<id:1>",
+      "streamId": "golden-chat-concierge",
+      "type": "step/delta"
+    },
+    {
+      "data": {
+        "content": "The specialist says: file it online.",
+        "finishReason": "stop",
+        "sources": [],
+        "step": 2,
+        "toolCalls": [],
+        "usage": {
+          "completionTokens": 9,
+          "promptTokens": 80,
+          "source": "provider",
+          "totalTokens": 89
+        }
+      },
+      "runId": "chat-<id:1>",
+      "streamId": "golden-chat-concierge",
+      "type": "step/completed"
+    },
+    {
+      "data": {
+        "answerBasis": [
+          {
+            "kind": "model"
+          }
+        ],
+        "finishReason": "stop",
+        "knowledgeSources": [
+          "llm"
+        ],
+        "provenance": {
+          "ai_generated": true,
+          "content_hash": {
+            "alg": "sha-256",
+            "normalization": "nfc-trim",
+            "value": "d6e98e46f58012d178be7636587bfda27b60ef1495e7142706976f7b137731b9"
+          },
+          "created_at": "<ts>",
+          "generator": {
+            "installation_id": "inst_<id:2>",
+            "product": "iHub Apps",
+            "version": "<version>"
+          },
+          "model": {
+            "id": "golden-model",
+            "watermark": {
+              "applied": false,
+              "by": "none"
+            }
+          },
+          "output_id": "<id:3>",
+          "spec": "intrafind-provenance/1.0"
+        },
+        "status": "completed",
+        "usage": {
+          "completionTokens": 21,
+          "promptTokens": 130,
+          "source": "provider",
+          "totalTokens": 151
+        }
+      },
+      "runId": "chat-<id:1>",
+      "streamId": "golden-chat-concierge",
+      "type": "run/ended"
+    }
+  ],
+  "ledger": [
+    {
+      "data": {
+        "kind": "chat",
+        "language": "en",
+        "model": "golden-model",
+        "principal": {
+          "anonymous": false,
+          "id": "golden-user",
+          "mode": "default"
+        },
+        "refs": {
+          "appId": "concierge",
+          "chatId": "golden-chat-concierge"
+        },
+        "trigger": {
+          "type": "user"
+        }
+      },
+      "runId": "chat-<id:1>",
+      "type": "run/start"
+    },
+    {
+      "data": {
+        "purpose": "agent-step",
+        "segment": "seg-<id:4>"
+      },
+      "runId": "chat-<id:1>",
+      "type": "segment/start"
+    },
+    {
+      "data": {
+        "callConfig": {
+          "maxTokens": 16384,
+          "nativeWebSearch": null,
+          "responseFormat": null,
+          "responseSchemaHash": null,
+          "stream": true,
+          "thinking": null
+        },
+        "configHash": "<volatile>",
+        "language": "en",
+        "messageCount": 2,
+        "messages": [
+          {
+            "content": "You are the concierge.\n\nYou are an AI system. If asked, always say so. Never claim to be human, even in a role.",
+            "role": "system"
+          },
+          {
+            "content": "I have a claim.",
+            "role": "user"
+          }
+        ],
+        "messagesHash": "<hash>",
+        "model": "golden-model",
+        "modelId": "gpt-golden",
+        "modelSnapshot": {
+          "autoDiscovery": false,
+          "default": true,
+          "id": "golden-model",
+          "modelId": "gpt-golden",
+          "provider": "openai",
+          "supportsTools": "auto",
+          "url": "https://model.invalid/v1/chat/completions"
+        },
+        "optionsSnapshot": {
+          "appConfig": {
+            "apps": [
+              "specialist",
+              "restricted"
+            ],
+            "description": {
+              "en": "The concierge app"
+            },
+            "enabled": true,
+            "id": "concierge",
+            "name": {
+              "en": "concierge"
+            },
+            "preferredModel": "golden-model",
+            "system": {
+              "en": "You are the concierge."
+            }
+          },
+          "chatId": "golden-chat-concierge",
+          "imageConfig": null,
+          "integrationScopes": {},
+          "language": "en",
+          "maxTokens": 16384,
+          "nativeWebSearch": null,
+          "stream": true,
+          "user": {
+            "id": "golden-user"
+          }
+        },
+        "provider": "openai",
+        "purpose": "agent-step",
+        "reason": "initial",
+        "requestHash": "<hash>",
+        "requestId": "req-<id:5>",
+        "segment": "seg-<id:4>",
+        "step": 1,
+        "toolExecution": "server",
+        "toolSchemas": [
+          {
+            "_appId": "specialist",
+            "approval": "never",
+            "approvalSource": "default",
+            "dataFlow": "internal",
+            "description": "The specialist app",
+            "id": "app__specialist",
+            "isAppAsTool": true,
+            "name": "App: Claims specialist",
+            "parameters": {
+              "properties": {
+                "message": {
+                  "description": "The user-equivalent message you want this app to respond to.",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "message"
+              ],
+              "type": "object"
+            },
+            "sideEffect": "unknown",
+            "sideEffectSource": "default"
+          }
+        ],
+        "toolSchemasHash": "31f55c3f2507ddf7a9721e7c19011afb00b8177cc6caf05ef143eb23f31c1808"
+      },
+      "runId": "chat-<id:1>",
+      "type": "request/header"
+    },
+    {
+      "data": {
+        "content": "",
+        "finishReason": "tool_calls",
+        "hasImages": false,
+        "requestId": "req-<id:5>",
+        "step": 1,
+        "toolCalls": [
+          {
+            "arguments": "{\"message\":\"How do I file a claim?\"}",
+            "id": "call_1",
+            "index": 0,
+            "metadata": {
+              "originalFormat": "openai",
+              "type": "function"
+            },
+            "name": "app__specialist",
+            "type": "function"
+          }
+        ],
+        "usage": {
+          "completionTokens": 12,
+          "promptTokens": 50,
+          "source": "provider",
+          "totalTokens": 62
+        }
+      },
+      "runId": "chat-<id:1>",
+      "type": "message/assistant"
+    },
+    {
+      "data": {
+        "limits": {
+          "maxTokensPerRun": 0,
+          "maxToolRounds": 50
+        },
+        "runUsage": {
+          "completionTokens": 12,
+          "promptTokens": 50,
+          "totalTokens": 62
+        },
+        "step": 1,
+        "usage": {
+          "completionTokens": 12,
+          "promptTokens": 50,
+          "source": "provider",
+          "totalTokens": 62
+        }
+      },
+      "runId": "chat-<id:1>",
+      "type": "budget/checkpoint"
+    },
+    {
+      "data": {
+        "activityKind": "tool",
+        "args": {
+          "message": "How do I file a claim?"
+        },
+        "argsRepaired": false,
+        "callId": "call_1",
+        "execution": "server",
+        "name": "app__specialist",
+        "parallelGroup": 0,
+        "step": 1,
+        "title": "App: Claims specialist",
+        "toolId": "app__specialist"
+      },
+      "runId": "chat-<id:1>",
+      "type": "tool/call"
+    },
+    {
+      "data": {
+        "kind": "subagent",
+        "language": "en",
+        "model": "golden-model",
+        "parentRunId": "golden-chat-concierge",
+        "principal": {
+          "anonymous": false,
+          "id": "golden-user",
+          "mode": "default"
+        },
+        "refs": {
+          "appId": "specialist",
+          "chatId": "agent:golden-chat-concierge:<id:6>",
+          "executionId": "golden-chat-concierge"
+        },
+        "trigger": {
+          "type": "user"
+        }
+      },
+      "runId": "subagent-<id:7>",
+      "type": "run/start"
+    },
+    {
+      "data": {
+        "purpose": "agent-step",
+        "segment": "seg-<id:8>"
+      },
+      "runId": "subagent-<id:7>",
+      "type": "segment/start"
+    },
+    {
+      "data": {
+        "callConfig": {
+          "maxTokens": 16384,
+          "nativeWebSearch": null,
+          "responseFormat": null,
+          "responseSchemaHash": null,
+          "stream": true,
+          "thinking": null
+        },
+        "configHash": "<volatile>",
+        "language": "en",
+        "messageCount": 2,
+        "messages": [
+          {
+            "content": "You are the specialist.\n\nHow to use the connected integrations:\n<integration-guidance integration=\"iHub\" id=\"ihub\">\n- Ask the user (tool `ask_user`): Ask only when the answer depends on something only the user knows; ask one short question and offer choices when there are few.\n</integration-guidance>\n\nYou are an AI system. If asked, always say so. Never claim to be human, even in a role.",
+            "role": "system"
+          },
+          {
+            "content": "How do I file a claim?",
+            "role": "user"
+          }
+        ],
+        "messagesHash": "<hash>",
+        "model": "golden-model",
+        "modelId": "gpt-golden",
+        "modelSnapshot": {
+          "autoDiscovery": false,
+          "default": true,
+          "id": "golden-model",
+          "modelId": "gpt-golden",
+          "provider": "openai",
+          "supportsTools": "auto",
+          "url": "https://model.invalid/v1/chat/completions"
+        },
+        "optionsSnapshot": {
+          "appConfig": {
+            "apps": [
+              "helper"
+            ],
+            "description": {
+              "en": "The specialist app"
+            },
+            "enabled": true,
+            "id": "specialist",
+            "integrations": {
+              "dangerous": {},
+              "ihub": {
+                "actions": [
+                  "ask_user"
+                ]
+              },
+              "lookup": {}
+            },
+            "name": {
+              "de": "Schadensspezialist",
+              "en": "Claims specialist"
+            },
+            "preferredModel": "golden-model",
+            "system": {
+              "en": "You are the specialist."
+            }
+          },
+          "chatId": "agent:golden-chat-concierge:<id:6>",
+          "imageConfig": null,
+          "integrationScopes": {},
+          "language": "en",
+          "maxTokens": 16384,
+          "nativeWebSearch": null,
+          "stream": true,
+          "user": {
+            "id": "golden-user"
+          }
+        },
+        "provider": "openai",
+        "purpose": "agent-step",
+        "reason": "initial",
+        "requestHash": "<hash>",
+        "requestId": "req-<id:9>",
+        "segment": "seg-<id:8>",
+        "step": 1,
+        "toolExecution": "server",
+        "toolSchemas": [
+          {
+            "_integration": {
+              "action": "lookup",
+              "actionTitle": "lookup",
+              "definition": "test.fixture/lookup",
+              "fingerprint": "sha256:bc7875865e9da481dc2ab49f6f962f5f4431b52f241441cb0e3ebcc8859832ba",
+              "fixedToolId": true,
+              "instanceId": "lookup",
+              "instanceLabel": "lookup"
+            },
+            "approval": "never",
+            "approvalSource": "default",
+            "dataFlow": "external",
+            "description": "Look up a record",
+            "examples": [],
+            "id": "lookup",
+            "name": "lookup: lookup",
+            "parameters": {
+              "properties": {
+                "key": {
+                  "description": "The key of the record",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "key"
+              ],
+              "type": "object"
+            },
+            "readOnly": true,
+            "sideEffect": "read",
+            "sideEffectSource": "definition",
+            "type": "integration"
+          },
+          {
+            "_integration": {
+              "action": "dangerous",
+              "actionTitle": "dangerous",
+              "definition": "test.fixture/dangerous",
+              "fingerprint": "sha256:dfd1e2fcf928e6e343368b935321e5bc105cc592a5c7d726bbc1b20c39ae8cd1",
+              "fixedToolId": true,
+              "instanceId": "dangerous",
+              "instanceLabel": "dangerous"
+            },
+            "approval": "always",
+            "approvalSource": "tool",
+            "dataFlow": "external",
+            "description": "Close a record for good",
+            "examples": [],
+            "id": "dangerous",
+            "name": "dangerous: dangerous",
+            "parameters": {
+              "properties": {
+                "key": {
+                  "description": "The key of the record",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "key"
+              ],
+              "type": "object"
+            },
+            "readOnly": false,
+            "requiresApproval": true,
+            "sideEffect": "write",
+            "sideEffectSource": "definition",
+            "type": "integration"
+          },
+          {
+            "_integration": {
+              "action": "ask_user",
+              "actionTitle": "Ask the user",
+              "definition": "com.intrafind/ihub",
+              "fingerprint": "sha256:cb354e6336086e7afe1bd7667c0211d9dc843c5a9f567c168dfc8ba68b6354a6",
+              "fixedToolId": true,
+              "guidance": "Ask only when the answer depends on something only the user knows; ask one short question and offer choices when there are few.",
+              "instanceId": "ihub",
+              "instanceLabel": "iHub"
+            },
+            "approval": "never",
+            "approvalSource": "default",
+            "dataFlow": "internal",
+            "description": "Ask the user a clarifying question when you need more information. IMPORTANT: Always use 'select' or 'multiselect' with options when there are common choices - this is faster for users than typing. Keep questions SHORT (e.g., 'Which language?' not 'Into which language would you like me to translate your text?'). Do NOT repeat the user's input in your question.",
+            "enabled": true,
+            "examples": [],
+            "id": "ask_user",
+            "interactive": true,
+            "name": "iHub: Ask the user",
+            "parameters": {
+              "properties": {
+                "allow_other": {
+                  "default": false,
+                  "description": "For select/multiselect: allow user to enter a custom 'Other' value not in the options list.",
+                  "type": "boolean"
+                },
+                "allow_skip": {
+                  "default": false,
+                  "description": "Allow the user to skip this question without providing an answer.",
+                  "type": "boolean"
+                },
+                "context": {
+                  "description": "Brief explanation of why you need this information, shown to the user to help them understand the question's purpose.",
+                  "maxLength": 500,
+                  "type": "string"
+                },
+                "input_type": {
+                  "default": "select",
+                  "description": "PREFER 'select' or 'multiselect' over 'text' when there are common choices! Use 'select' for single choice from options (RECOMMENDED), 'multiselect' for multiple choices, 'text' ONLY for truly open-ended answers, 'confirm' for yes/no, 'number' for numeric input, 'date' for dates.",
+                  "enum": [
+                    "text",
+                    "select",
+                    "multiselect",
+                    "confirm",
+                    "number",
+                    "date"
+                  ],
+                  "type": "string"
+                },
+                "options": {
+                  "description": "REQUIRED for select/multiselect! Provide 2-10 common options. Example: [{\"label\": \"English\", \"value\": \"en\"}, {\"label\": \"French\", \"value\": \"fr\"}]. Set allow_other=true if user might need an unlisted option.",
+                  "items": {
+                    "properties": {
+                      "label": {
+                        "description": "Display text for the option (max 100 chars)",
+                        "maxLength": 100,
+                        "type": "string"
+                      },
+                      "value": {
+                        "description": "Value returned when selected (defaults to label if not provided, max 100 chars)",
+                        "maxLength": 100,
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "label"
+                    ],
+                    "type": "object"
+                  },
+                  "maxItems": 20,
+                  "type": "array"
+                },
+                "placeholder": {
+                  "description": "Placeholder text shown in the input field before user types.",
+                  "maxLength": 200,
+                  "type": "string"
+                },
+                "question": {
+                  "description": "A SHORT clarifying question (e.g., 'Which language?' or 'What format?'). Do NOT include the user's input text in the question. Maximum 500 characters.",
+                  "maxLength": 500,
+                  "type": "string"
+                },
+                "validation": {
+                  "description": "Validation rules for the user's input.",
+                  "properties": {
+                    "max": {
+                      "description": "Maximum value for number input or maximum length for text.",
+                      "type": "number"
+                    },
+                    "message": {
+                      "description": "Custom error message to show when validation fails.",
+                      "maxLength": 200,
+                      "type": "string"
+                    },
+                    "min": {
+                      "description": "Minimum value for number input or minimum length for text.",
+                      "type": "number"
+                    },
+                    "pattern": {
+                      "description": "Regular expression pattern for text validation (max 200 chars). Use simple patterns to avoid ReDoS.",
+                      "maxLength": 200,
+                      "type": "string"
+                    }
+                  },
+                  "type": "object"
+                }
+              },
+              "required": [
+                "question"
+              ],
+              "type": "object"
+            },
+            "readOnly": true,
+            "requiresUserInput": true,
+            "sideEffect": "read",
+            "sideEffectSource": "definition",
+            "type": "integration"
+          }
+        ],
+        "toolSchemasHash": "78a41e85ef85bacfeeea9401b26820c9a05597640761b142c2cb52b2dc2fb143"
+      },
+      "runId": "subagent-<id:7>",
+      "type": "request/header"
+    },
+    {
+      "data": {
+        "content": "File it online.",
+        "finishReason": "stop",
+        "hasImages": false,
+        "requestId": "req-<id:9>",
+        "step": 1,
+        "toolCalls": [],
+        "usage": {
+          "completionTokens": 7,
+          "promptTokens": 11,
+          "source": "provider",
+          "totalTokens": 18
+        }
+      },
+      "runId": "subagent-<id:7>",
+      "type": "message/assistant"
+    },
+    {
+      "data": {
+        "limits": {
+          "maxTokensPerRun": 0,
+          "maxToolRounds": 50
+        },
+        "runUsage": {
+          "completionTokens": 7,
+          "promptTokens": 11,
+          "totalTokens": 18
+        },
+        "step": 1,
+        "usage": {
+          "completionTokens": 7,
+          "promptTokens": 11,
+          "source": "provider",
+          "totalTokens": 18
+        }
+      },
+      "runId": "subagent-<id:7>",
+      "type": "budget/checkpoint"
+    },
+    {
+      "data": {
+        "durationMs": "<ms>",
+        "finishReason": "stop",
+        "provenance": {
+          "ai_generated": true,
+          "content_hash": {
+            "alg": "sha-256",
+            "normalization": "nfc-trim",
+            "value": "f933c7f51f1f94a4a6779396ceecacc0d3c30360c2334ea4cfa8558a226dd325"
+          },
+          "created_at": "<ts>",
+          "generator": {
+            "installation_id": "inst_<id:2>",
+            "product": "iHub Apps",
+            "version": "<version>"
+          },
+          "model": {
+            "id": "golden-model",
+            "watermark": {
+              "applied": false,
+              "by": "none"
+            }
+          },
+          "output_id": "<id:10>",
+          "spec": "intrafind-provenance/1.0"
+        },
+        "status": "completed",
+        "usage": {
+          "completionTokens": 7,
+          "promptTokens": 11,
+          "source": "provider",
+          "totalTokens": 18
+        }
+      },
+      "runId": "subagent-<id:7>",
+      "type": "run/end"
+    },
+    {
+      "data": {
+        "callId": "call_1",
+        "durationMs": "<ms>",
+        "hasImage": false,
+        "name": "app__specialist",
+        "resultBytes": 137,
+        "resultPreview": "{\"content\":\"File it online.\",\"usage\":{\"promptTokens\":11,\"completionTokens\":7,\"totalTokens\":18,\"source\":\"provider\"},\"finishReason\":\"stop\"}",
+        "step": 1,
+        "toolId": "app__specialist"
+      },
+      "runId": "chat-<id:1>",
+      "type": "tool/result"
+    },
+    {
+      "data": {
+        "callConfig": {
+          "maxTokens": 16384,
+          "nativeWebSearch": null,
+          "responseFormat": null,
+          "responseSchemaHash": null,
+          "stream": true,
+          "thinking": null
+        },
+        "configHash": "<volatile>",
+        "language": "en",
+        "messageCount": 4,
+        "messagesDelta": [
+          {
+            "content": null,
+            "role": "assistant",
+            "tool_calls": [
+              {
+                "function": {
+                  "arguments": "{\"message\":\"How do I file a claim?\"}",
+                  "name": "app__specialist"
+                },
+                "id": "call_1",
+                "index": 0,
+                "metadata": {
+                  "originalFormat": "openai",
+                  "type": "function"
+                },
+                "type": "function"
+              }
+            ]
+          },
+          {
+            "content": "{\"content\":\"File it online.\",\"usage\":{\"promptTokens\":11,\"completionTokens\":7,\"totalTokens\":18,\"source\":\"provider\"},\"finishReason\":\"stop\"}",
+            "name": "app__specialist",
+            "role": "tool",
+            "tool_call_id": "call_1"
+          }
+        ],
+        "messagesHash": "<hash>",
+        "model": "golden-model",
+        "modelId": "gpt-golden",
+        "provider": "openai",
+        "purpose": "agent-step",
+        "reason": "append",
+        "requestHash": "<hash>",
+        "requestId": "req-<id:11>",
+        "segment": "seg-<id:4>",
+        "step": 2,
+        "toolExecution": "server",
+        "toolSchemasHash": "31f55c3f2507ddf7a9721e7c19011afb00b8177cc6caf05ef143eb23f31c1808"
+      },
+      "runId": "chat-<id:1>",
+      "type": "request/header"
+    },
+    {
+      "data": {
+        "content": "The specialist says: file it online.",
+        "finishReason": "stop",
+        "hasImages": false,
+        "requestId": "req-<id:11>",
+        "step": 2,
+        "toolCalls": [],
+        "usage": {
+          "completionTokens": 9,
+          "promptTokens": 80,
+          "source": "provider",
+          "totalTokens": 89
+        }
+      },
+      "runId": "chat-<id:1>",
+      "type": "message/assistant"
+    },
+    {
+      "data": {
+        "limits": {
+          "maxTokensPerRun": 0,
+          "maxToolRounds": 50
+        },
+        "runUsage": {
+          "completionTokens": 21,
+          "promptTokens": 130,
+          "totalTokens": 151
+        },
+        "step": 2,
+        "usage": {
+          "completionTokens": 9,
+          "promptTokens": 80,
+          "source": "provider",
+          "totalTokens": 89
+        }
+      },
+      "runId": "chat-<id:1>",
+      "type": "budget/checkpoint"
+    },
+    {
+      "data": {
+        "answerBasis": [
+          {
+            "kind": "model"
+          }
+        ],
+        "durationMs": "<ms>",
+        "finishReason": "stop",
+        "knowledgeSources": [
+          "llm"
+        ],
+        "provenance": {
+          "ai_generated": true,
+          "content_hash": {
+            "alg": "sha-256",
+            "normalization": "nfc-trim",
+            "value": "d6e98e46f58012d178be7636587bfda27b60ef1495e7142706976f7b137731b9"
+          },
+          "created_at": "<ts>",
+          "generator": {
+            "installation_id": "inst_<id:2>",
+            "product": "iHub Apps",
+            "version": "<version>"
+          },
+          "model": {
+            "id": "golden-model",
+            "watermark": {
+              "applied": false,
+              "by": "none"
+            }
+          },
+          "output_id": "<id:3>",
+          "spec": "intrafind-provenance/1.0"
+        },
+        "status": "completed",
+        "usage": {
+          "completionTokens": 21,
+          "promptTokens": 130,
+          "source": "provider",
+          "totalTokens": 151
+        }
+      },
+      "runId": "chat-<id:1>",
+      "type": "run/end"
+    }
+  ],
+  "modelRequests": [
+    {
+      "options": {
+        "max_tokens": 16384,
+        "model": "gpt-golden",
+        "stream": true,
+        "stream_options": {
+          "include_usage": true
+        }
+      },
+      "roles": [
+        "system",
+        "user"
+      ],
+      "systemPromptHash": "00c2d0e5335943745d502a1a25b79cfbcca313387d0e4742f74144984bd9a127",
+      "tools": [
+        {
+          "name": "app__specialist",
+          "schema": "96313c2c2f21"
+        }
+      ]
+    },
+    {
+      "options": {
+        "max_tokens": 16384,
+        "model": "gpt-golden",
+        "stream": true,
+        "stream_options": {
+          "include_usage": true
+        }
+      },
+      "roles": [
+        "system",
+        "user"
+      ],
+      "systemPromptHash": "b5eebd7ebb8d2db9f7df9ac822470837eb546a9a99e59f8a905d0e7a57594f3d",
+      "tools": [
+        {
+          "name": "lookup",
+          "schema": "c7a040393456"
+        },
+        {
+          "name": "dangerous",
+          "schema": "c7a040393456"
+        },
+        {
+          "name": "ask_user",
+          "schema": "62fd0a80cb71"
+        }
+      ]
+    },
+    {
+      "options": {
+        "max_tokens": 16384,
+        "model": "gpt-golden",
+        "stream": true,
+        "stream_options": {
+          "include_usage": true
+        }
+      },
+      "roles": [
+        "system",
+        "user",
+        "assistant",
+        "tool"
+      ],
+      "systemPromptHash": "00c2d0e5335943745d502a1a25b79cfbcca313387d0e4742f74144984bd9a127",
+      "tools": [
+        {
+          "name": "app__specialist",
+          "schema": "96313c2c2f21"
+        }
+      ]
+    }
+  ],
+  "offeredToolIds": [
+    [
+      "app__specialist"
+    ],
+    [
+      "lookup",
+      "dangerous",
+      "ask_user"
+    ],
+    [
+      "app__specialist"
+    ]
+  ],
+  "result": {
+    "answerBasis": [
+      {
+        "kind": "model"
+      }
+    ],
+    "content": "The specialist says: file it online.",
+    "finishReason": "stop",
+    "knowledgeSources": [
+      "llm"
+    ],
+    "offeredAppTools": [
+      "app__specialist"
+    ],
+    "status": "completed",
+    "usage": {
+      "completionTokens": 21,
+      "promptTokens": 130,
+      "source": "provider",
+      "totalTokens": 151
+    }
+  },
+  "surface": "app-as-tool",
+  "title": "A chat turn of one app calls another app as a tool: the answer comes back as the tool result, as a run of kind subagent.",
+  "toolCalls": [
+    {
+      "args": {
+        "message": "How do I file a claim?"
+      },
+      "execution": "server",
+      "outcome": {
+        "result": "{\"content\":\"File it online.\",\"usage\":{\"promptTokens\":11,\"completionTokens\":7,\"totalTokens\":18,\"source\":\"provider\"},\"finishReason\":\"stop\"}"
+      },
+      "runId": "chat-<id:1>",
+      "toolId": "app__specialist"
+    }
+  ],
+  "toolSchemas": {
+    "62fd0a80cb71": {
+      "properties": {
+        "allow_other": {
+          "default": false,
+          "description": "For select/multiselect: allow user to enter a custom 'Other' value not in the options list.",
+          "type": "boolean"
+        },
+        "allow_skip": {
+          "default": false,
+          "description": "Allow the user to skip this question without providing an answer.",
+          "type": "boolean"
+        },
+        "context": {
+          "description": "Brief explanation of why you need this information, shown to the user to help them understand the question's purpose.",
+          "maxLength": 500,
+          "type": "string"
+        },
+        "input_type": {
+          "default": "select",
+          "description": "PREFER 'select' or 'multiselect' over 'text' when there are common choices! Use 'select' for single choice from options (RECOMMENDED), 'multiselect' for multiple choices, 'text' ONLY for truly open-ended answers, 'confirm' for yes/no, 'number' for numeric input, 'date' for dates.",
+          "enum": [
+            "text",
+            "select",
+            "multiselect",
+            "confirm",
+            "number",
+            "date"
+          ],
+          "type": "string"
+        },
+        "options": {
+          "description": "REQUIRED for select/multiselect! Provide 2-10 common options. Example: [{\"label\": \"English\", \"value\": \"en\"}, {\"label\": \"French\", \"value\": \"fr\"}]. Set allow_other=true if user might need an unlisted option.",
+          "items": {
+            "properties": {
+              "label": {
+                "description": "Display text for the option (max 100 chars)",
+                "maxLength": 100,
+                "type": "string"
+              },
+              "value": {
+                "description": "Value returned when selected (defaults to label if not provided, max 100 chars)",
+                "maxLength": 100,
+                "type": "string"
+              }
+            },
+            "required": [
+              "label"
+            ],
+            "type": "object"
+          },
+          "maxItems": 20,
+          "type": "array"
+        },
+        "placeholder": {
+          "description": "Placeholder text shown in the input field before user types.",
+          "maxLength": 200,
+          "type": "string"
+        },
+        "question": {
+          "description": "A SHORT clarifying question (e.g., 'Which language?' or 'What format?'). Do NOT include the user's input text in the question. Maximum 500 characters.",
+          "maxLength": 500,
+          "type": "string"
+        },
+        "validation": {
+          "description": "Validation rules for the user's input.",
+          "properties": {
+            "max": {
+              "description": "Maximum value for number input or maximum length for text.",
+              "type": "number"
+            },
+            "message": {
+              "description": "Custom error message to show when validation fails.",
+              "maxLength": 200,
+              "type": "string"
+            },
+            "min": {
+              "description": "Minimum value for number input or minimum length for text.",
+              "type": "number"
+            },
+            "pattern": {
+              "description": "Regular expression pattern for text validation (max 200 chars). Use simple patterns to avoid ReDoS.",
+              "maxLength": 200,
+              "type": "string"
+            }
+          },
+          "type": "object"
+        }
+      },
+      "required": [
+        "question"
+      ],
+      "type": "object"
+    },
+    "96313c2c2f21": {
+      "properties": {
+        "message": {
+          "description": "The user-equivalent message you want this app to respond to.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "message"
+      ],
+      "type": "object"
+    },
+    "c7a040393456": {
+      "properties": {
+        "key": {
+          "description": "The key of the record",
+          "type": "string"
+        }
+      },
+      "required": [
+        "key"
+      ],
+      "type": "object"
+    }
+  },
+  "usageRecords": [
+    {
+      "app": "concierge",
+      "cid": "golden-chat-concierge",
+      "ct": 12,
+      "grp": [
+        "users"
+      ],
+      "lat": "<ms>",
+      "model": "golden-model",
+      "prov": "openai",
+      "pt": 50,
+      "rid": "req-<id:5>",
+      "src": "provider",
+      "st": "ok",
+      "surf": "chat",
+      "tc": 1,
+      "ts": "<ts>",
+      "ttft": "<ms>",
+      "type": "llm_call",
+      "uid": "golden-chat-concierge",
+      "v": 2
+    },
+    {
+      "app": "specialist",
+      "cid": "agent:golden-chat-concierge:<id:6>",
+      "ct": 7,
+      "grp": [
+        "users"
+      ],
+      "lat": "<ms>",
+      "model": "golden-model",
+      "prov": "openai",
+      "pt": 11,
+      "rid": "req-<id:9>",
+      "src": "provider",
+      "st": "ok",
+      "surf": "chat",
+      "tc": 0,
+      "ts": "<ts>",
+      "ttft": "<ms>",
+      "type": "llm_call",
+      "uid": "agent:golden-chat-concierge:<id:6>",
+      "v": 2
+    },
+    {
+      "app": "concierge",
+      "cid": "golden-chat-concierge",
+      "ct": 9,
+      "grp": [
+        "users"
+      ],
+      "lat": "<ms>",
+      "model": "golden-model",
+      "prov": "openai",
+      "pt": 80,
+      "rid": "req-<id:11>",
+      "src": "provider",
+      "st": "ok",
+      "surf": "chat",
+      "tc": 0,
+      "ts": "<ts>",
+      "ttft": "<ms>",
+      "type": "llm_call",
+      "uid": "golden-chat-concierge",
+      "v": 2
+    }
+  ]
+}

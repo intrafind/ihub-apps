@@ -1,0 +1,697 @@
+{
+  "approvals": [],
+  "case": "structured-output",
+  "envelopes": [
+    {
+      "data": {
+        "kind": "chat",
+        "model": "golden-model",
+        "refs": {
+          "appId": "form",
+          "chatId": "<id:1>",
+          "messageId": "msg-1"
+        }
+      },
+      "runId": "chat-<id:2>",
+      "streamId": "<id:1>",
+      "type": "run/started"
+    },
+    {
+      "data": {
+        "content": "{\"key\":\"A-1\",\"open\":true}",
+        "kind": "text",
+        "step": 1
+      },
+      "runId": "chat-<id:2>",
+      "streamId": "<id:1>",
+      "type": "step/delta"
+    },
+    {
+      "data": {
+        "content": "{\"key\":\"A-1\",\"open\":true}",
+        "finishReason": "stop",
+        "sources": [],
+        "step": 1,
+        "toolCalls": [],
+        "usage": {
+          "completionTokens": 9,
+          "promptTokens": 52,
+          "source": "provider",
+          "totalTokens": 61
+        }
+      },
+      "runId": "chat-<id:2>",
+      "streamId": "<id:1>",
+      "type": "step/completed"
+    },
+    {
+      "data": {
+        "answerBasis": [
+          {
+            "kind": "model"
+          }
+        ],
+        "finishReason": "stop",
+        "knowledgeSources": [
+          "llm"
+        ],
+        "provenance": {
+          "ai_generated": true,
+          "content_hash": {
+            "alg": "sha-256",
+            "normalization": "nfc-trim",
+            "value": "e360c95ce1dd10c076f42a23c08f82dee97bbb88e4bc63cbaa92441babca6671"
+          },
+          "created_at": "<ts>",
+          "generator": {
+            "installation_id": "inst_<id:3>",
+            "product": "iHub Apps",
+            "version": "<version>"
+          },
+          "model": {
+            "id": "golden-model",
+            "watermark": {
+              "applied": false,
+              "by": "none"
+            }
+          },
+          "output_id": "<id:4>",
+          "spec": "intrafind-provenance/1.0"
+        },
+        "status": "completed",
+        "usage": {
+          "completionTokens": 9,
+          "promptTokens": 52,
+          "source": "provider",
+          "totalTokens": 61
+        }
+      },
+      "runId": "chat-<id:2>",
+      "streamId": "<id:1>",
+      "type": "run/ended"
+    }
+  ],
+  "evidence": [
+    {
+      "messageId": "<id:8>",
+      "record": {
+        "app": {
+          "config": "sha256:3fdb37a9993641e74394439a134f3d9983c1401e8af9edc2a6ec6bf389de6e2c",
+          "id": "form"
+        },
+        "calls": [
+          {
+            "attempt": 1,
+            "config": "sha256:af84000ea7bb0d563efd5c4f2b74629a9173cab73508ae73720d91782c5f3b94",
+            "endedAt": "<ts>",
+            "messageCount": 2,
+            "messages": {
+              "append": [
+                {
+                  "message": "sha256:5c0a1703682a9738ec9c7caa9815c02594b192e392bd1cae7822314d8c8c11f4",
+                  "role": "system"
+                },
+                {
+                  "message": "sha256:6608c74c130ae3b4c5dc773d8a18e2fe803dce134cf9110817914fc1582ddd19",
+                  "role": "user"
+                }
+              ],
+              "from": null
+            },
+            "messagesHash": "<hash>",
+            "model": "golden-model",
+            "modelId": "gpt-golden",
+            "output": "sha256:b51c58b9b4895f71acab64e969146c2e4d0161c41e2961dbde51ea324cbd6fe5",
+            "provider": "openai",
+            "purpose": "agent-step",
+            "requestId": "req-<id:6>",
+            "segment": "seg-<id:5>",
+            "startedAt": "<ts>",
+            "status": "ok",
+            "step": 1
+          }
+        ],
+        "chatId": "<id:1>",
+        "content": {
+          "3fdb37a9993641e74394439a134f3d9983c1401e8af9edc2a6ec6bf389de6e2c": "<id:8>",
+          "5c0a1703682a9738ec9c7caa9815c02594b192e392bd1cae7822314d8c8c11f4": "<id:8>",
+          "6608c74c130ae3b4c5dc773d8a18e2fe803dce134cf9110817914fc1582ddd19": "<id:8>",
+          "af84000ea7bb0d563efd5c4f2b74629a9173cab73508ae73720d91782c5f3b94": "<id:8>",
+          "b51c58b9b4895f71acab64e969146c2e4d0161c41e2961dbde51ea324cbd6fe5": "<id:8>"
+        },
+        "endedAt": "<ts>",
+        "ihubVersion": "<version>",
+        "journalEnded": true,
+        "knowledge": [],
+        "messageId": "<id:8>",
+        "model": {
+          "id": "golden-model",
+          "modelId": "gpt-golden",
+          "provider": "openai",
+          "settings": {
+            "maxTokens": 16384,
+            "responseFormat": "json"
+          }
+        },
+        "output": {
+          "contentSha256": "e360c95ce1dd10c076f42a23c08f82dee97bbb88e4bc63cbaa92441babca6671",
+          "files": [],
+          "finishReason": "stop",
+          "provenanceId": "<id:4>",
+          "usage": {
+            "completionTokens": 9,
+            "promptTokens": 52,
+            "source": "provider",
+            "totalTokens": 61
+          }
+        },
+        "runId": "chat-<id:2>",
+        "startedAt": "<ts>",
+        "status": "completed",
+        "toolCalls": [],
+        "userId": "golden-user",
+        "v": 2
+      }
+    }
+  ],
+  "httpResponse": {
+    "exchanges": [
+      {
+        "request": {
+          "body": {
+            "language": "en",
+            "messages": [
+              {
+                "content": "Fill in the form for record A-1.",
+                "messageId": "msg-1",
+                "role": "user"
+              }
+            ],
+            "modelId": "golden-model",
+            "toolApprovalCapable": true
+          },
+          "method": "POST",
+          "path": "/api/apps/form/chat/<id:1>"
+        },
+        "response": {
+          "body": {
+            "chatId": "<id:1>",
+            "status": "streaming"
+          },
+          "headers": {
+            "content-type": "application/json; charset=utf-8"
+          },
+          "status": 200
+        }
+      }
+    ],
+    "getStream": {
+      "request": {
+        "accept": "text/event-stream",
+        "method": "GET",
+        "path": "/api/apps/form/chat/<id:1>"
+      },
+      "response": {
+        "headers": {
+          "cache-control": "no-cache",
+          "content-type": "text/event-stream",
+          "x-accel-buffering": "no"
+        },
+        "status": 200,
+        "stream": [
+          {
+            "data": {
+              "protocol": 2,
+              "runId": "<id:1>"
+            },
+            "runId": "<id:1>",
+            "type": "stream/connected"
+          },
+          {
+            "data": {
+              "kind": "chat",
+              "model": "golden-model",
+              "refs": {
+                "appId": "form",
+                "chatId": "<id:1>",
+                "messageId": "msg-1"
+              }
+            },
+            "runId": "chat-<id:2>",
+            "type": "run/started"
+          },
+          {
+            "data": {
+              "content": "{\"key\":\"A-1\",\"open\":true}",
+              "kind": "text",
+              "step": 1
+            },
+            "runId": "chat-<id:2>",
+            "type": "step/delta"
+          },
+          {
+            "data": {
+              "content": "{\"key\":\"A-1\",\"open\":true}",
+              "finishReason": "stop",
+              "sources": [],
+              "step": 1,
+              "toolCalls": [],
+              "usage": {
+                "completionTokens": 9,
+                "promptTokens": 52,
+                "source": "provider",
+                "totalTokens": 61
+              }
+            },
+            "runId": "chat-<id:2>",
+            "type": "step/completed"
+          },
+          {
+            "data": {
+              "answerBasis": [
+                {
+                  "kind": "model"
+                }
+              ],
+              "finishReason": "stop",
+              "knowledgeSources": [
+                "llm"
+              ],
+              "provenance": {
+                "ai_generated": true,
+                "content_hash": {
+                  "alg": "sha-256",
+                  "normalization": "nfc-trim",
+                  "value": "e360c95ce1dd10c076f42a23c08f82dee97bbb88e4bc63cbaa92441babca6671"
+                },
+                "created_at": "<ts>",
+                "generator": {
+                  "installation_id": "inst_<id:3>",
+                  "product": "iHub Apps",
+                  "version": "<version>"
+                },
+                "model": {
+                  "id": "golden-model",
+                  "watermark": {
+                    "applied": false,
+                    "by": "none"
+                  }
+                },
+                "output_id": "<id:4>",
+                "spec": "intrafind-provenance/1.0"
+              },
+              "status": "completed",
+              "usage": {
+                "completionTokens": 9,
+                "promptTokens": 52,
+                "source": "provider",
+                "totalTokens": 61
+              }
+            },
+            "runId": "chat-<id:2>",
+            "type": "run/ended"
+          }
+        ]
+      }
+    },
+    "position": "chatPostStream off: the POST answers with JSON, the frames arrive on the GET stream"
+  },
+  "ledger": [
+    {
+      "data": {
+        "kind": "chat",
+        "language": "en",
+        "model": "golden-model",
+        "principal": {
+          "anonymous": false,
+          "id": "golden-user",
+          "mode": "default"
+        },
+        "refs": {
+          "appId": "form",
+          "chatId": "<id:1>"
+        },
+        "trigger": {
+          "type": "user"
+        }
+      },
+      "runId": "chat-<id:2>",
+      "type": "run/start"
+    },
+    {
+      "data": {
+        "content": "Fill in the form for record A-1.",
+        "messageId": "msg-1",
+        "step": 0
+      },
+      "runId": "chat-<id:2>",
+      "type": "message/user"
+    },
+    {
+      "data": {
+        "purpose": "agent-step",
+        "segment": "seg-<id:5>"
+      },
+      "runId": "chat-<id:2>",
+      "type": "segment/start"
+    },
+    {
+      "data": {
+        "callConfig": {
+          "maxTokens": 16384,
+          "nativeWebSearch": null,
+          "responseFormat": "json",
+          "responseSchema": {
+            "additionalProperties": false,
+            "properties": {
+              "key": {
+                "type": "string"
+              },
+              "open": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "key",
+              "open"
+            ],
+            "type": "object"
+          },
+          "responseSchemaHash": "576c9853e4a65b1651228de0b723ce6991f0dbca95ecfd0d7c879e60fbae3e8a",
+          "stream": true,
+          "thinking": null
+        },
+        "configHash": "b1fa1c03d60adddbd10abfda27ecc22ebecdfc8372daa54178bfee96c2736dc5",
+        "language": "en",
+        "messageCount": 2,
+        "messages": [
+          {
+            "content": "You fill in the record form.\n\nRespond only with valid JSON. The JSON must match this schema: {\"type\":\"object\",\"properties\":{\"key\":{\"type\":\"string\"},\"open\":{\"type\":\"boolean\"}},\"required\":[\"key\",\"open\"],\"additionalProperties\":false}\n\nYou are an AI system. If asked, always say so. Never claim to be human, even in a role.",
+            "role": "system"
+          },
+          {
+            "content": "Fill in the form for record A-1.",
+            "role": "user"
+          }
+        ],
+        "messagesHash": "<hash>",
+        "model": "golden-model",
+        "modelId": "gpt-golden",
+        "modelSnapshot": {
+          "autoDiscovery": false,
+          "default": true,
+          "id": "golden-model",
+          "modelId": "gpt-golden",
+          "provider": "openai",
+          "supportsTools": "auto",
+          "url": "https://model.invalid/v1/chat/completions"
+        },
+        "optionsSnapshot": {
+          "appConfig": {
+            "description": {
+              "en": "The form app"
+            },
+            "enabled": true,
+            "id": "form",
+            "name": {
+              "en": "form"
+            },
+            "outputSchema": {
+              "additionalProperties": false,
+              "properties": {
+                "open": {
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "key",
+                "open"
+              ],
+              "type": "object"
+            },
+            "preferredModel": "golden-model",
+            "preferredOutputFormat": "json",
+            "system": {
+              "en": "You fill in the record form."
+            }
+          },
+          "chatId": "<id:1>",
+          "imageConfig": null,
+          "integrationScopes": {},
+          "language": "en",
+          "maxTokens": 16384,
+          "nativeWebSearch": null,
+          "responseFormat": "json",
+          "stream": true,
+          "user": {
+            "id": "golden-user"
+          }
+        },
+        "provider": "openai",
+        "purpose": "agent-step",
+        "reason": "initial",
+        "requestHash": "<hash>",
+        "requestId": "req-<id:6>",
+        "segment": "seg-<id:5>",
+        "step": 1,
+        "toolExecution": "none",
+        "toolSchemasHash": null
+      },
+      "runId": "chat-<id:2>",
+      "type": "request/header"
+    },
+    {
+      "data": {
+        "content": "{\"key\":\"A-1\",\"open\":true}",
+        "finishReason": "stop",
+        "hasImages": false,
+        "requestId": "req-<id:6>",
+        "step": 1,
+        "toolCalls": [],
+        "usage": {
+          "completionTokens": 9,
+          "promptTokens": 52,
+          "source": "provider",
+          "totalTokens": 61
+        }
+      },
+      "runId": "chat-<id:2>",
+      "type": "message/assistant"
+    },
+    {
+      "data": {
+        "limits": {
+          "maxTokensPerRun": 0,
+          "maxToolRounds": 50
+        },
+        "runUsage": {
+          "completionTokens": 9,
+          "promptTokens": 52,
+          "totalTokens": 61
+        },
+        "step": 1,
+        "usage": {
+          "completionTokens": 9,
+          "promptTokens": 52,
+          "source": "provider",
+          "totalTokens": 61
+        }
+      },
+      "runId": "chat-<id:2>",
+      "type": "budget/checkpoint"
+    },
+    {
+      "data": {
+        "answerBasis": [
+          {
+            "kind": "model"
+          }
+        ],
+        "durationMs": "<ms>",
+        "finishReason": "stop",
+        "knowledgeSources": [
+          "llm"
+        ],
+        "provenance": {
+          "ai_generated": true,
+          "content_hash": {
+            "alg": "sha-256",
+            "normalization": "nfc-trim",
+            "value": "e360c95ce1dd10c076f42a23c08f82dee97bbb88e4bc63cbaa92441babca6671"
+          },
+          "created_at": "<ts>",
+          "generator": {
+            "installation_id": "inst_<id:3>",
+            "product": "iHub Apps",
+            "version": "<version>"
+          },
+          "model": {
+            "id": "golden-model",
+            "watermark": {
+              "applied": false,
+              "by": "none"
+            }
+          },
+          "output_id": "<id:4>",
+          "spec": "intrafind-provenance/1.0"
+        },
+        "status": "completed",
+        "usage": {
+          "completionTokens": 9,
+          "promptTokens": 52,
+          "source": "provider",
+          "totalTokens": 61
+        }
+      },
+      "runId": "chat-<id:2>",
+      "type": "run/end"
+    }
+  ],
+  "modelRequests": [
+    {
+      "options": {
+        "max_tokens": 16384,
+        "model": "gpt-golden",
+        "response_format": {
+          "json_schema": {
+            "name": "response",
+            "schema": {
+              "additionalProperties": false,
+              "properties": {
+                "key": {
+                  "type": "string"
+                },
+                "open": {
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "key",
+                "open"
+              ],
+              "type": "object"
+            },
+            "strict": true
+          },
+          "type": "json_schema"
+        },
+        "stream": true,
+        "stream_options": {
+          "include_usage": true
+        }
+      },
+      "roles": [
+        "system",
+        "user"
+      ],
+      "systemPromptHash": "80246a3f32f605e219bf3e80dc34844a90b3e4de778a56690f25bd468a05a636",
+      "tools": []
+    }
+  ],
+  "offeredToolIds": [
+    []
+  ],
+  "storedMessage": {
+    "chat": {
+      "activeRunId": null,
+      "appId": "form",
+      "createdAt": "<ts>",
+      "hasUnseenActivity": false,
+      "id": "<id:1>",
+      "identityMode": "default",
+      "lastMessageAt": "<ts>",
+      "messageCount": 2,
+      "modelId": "golden-model",
+      "origin": {
+        "createdVia": "ui"
+      },
+      "ownerId": "golden-user",
+      "runIds": [
+        "chat-<id:2>"
+      ],
+      "settings": null,
+      "status": "active",
+      "title": "Fill in the form for record A-1.",
+      "titleSetByUser": false
+    },
+    "messages": [
+      {
+        "clientMessageId": "msg-1",
+        "content": "Fill in the form for record A-1.",
+        "id": "<id:7>",
+        "role": "user",
+        "runId": "chat-<id:2>",
+        "ts": "<ts>"
+      },
+      {
+        "answerBasis": [
+          {
+            "kind": "model"
+          }
+        ],
+        "content": "{\"key\":\"A-1\",\"open\":true}",
+        "finishReason": "stop",
+        "id": "<id:8>",
+        "provenance": {
+          "ai_generated": true,
+          "content_hash": {
+            "alg": "sha-256",
+            "normalization": "nfc-trim",
+            "value": "e360c95ce1dd10c076f42a23c08f82dee97bbb88e4bc63cbaa92441babca6671"
+          },
+          "created_at": "<ts>",
+          "generator": {
+            "installation_id": "inst_<id:3>",
+            "product": "iHub Apps",
+            "version": "<version>"
+          },
+          "model": {
+            "id": "golden-model",
+            "watermark": {
+              "applied": false,
+              "by": "none"
+            }
+          },
+          "output_id": "<id:4>",
+          "spec": "intrafind-provenance/1.0"
+        },
+        "role": "assistant",
+        "runId": "chat-<id:2>",
+        "ts": "<ts>",
+        "usage": {
+          "completionTokens": 9,
+          "promptTokens": 52,
+          "totalTokens": 61
+        }
+      }
+    ]
+  },
+  "surface": "chat",
+  "title": "An app with an output schema: the model is asked for JSON of that schema. (GET stream)",
+  "toolCalls": [],
+  "toolSchemas": {},
+  "usageRecords": [
+    {
+      "app": "form",
+      "cid": "<id:1>",
+      "ct": 9,
+      "grp": [
+        "users"
+      ],
+      "lat": "<ms>",
+      "model": "golden-model",
+      "prov": "openai",
+      "pt": 52,
+      "rid": "req-<id:6>",
+      "src": "provider",
+      "st": "ok",
+      "surf": "chat",
+      "tc": 0,
+      "ts": "<ts>",
+      "ttft": "<ms>",
+      "type": "llm_call",
+      "uid": "<id:1>",
+      "v": 2
+    }
+  ]
+}

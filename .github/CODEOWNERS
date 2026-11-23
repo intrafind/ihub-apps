@@ -17,12 +17,15 @@
 # The gate runs on `pull_request`, so it runs the pull request's own copy of
 # the workflow and of the two checks. Whoever can change one of them can switch
 # the gate off, so each has the same owner as the list: the signature check, the
-# workflow with the job "Golden difference list", and the check that every
-# changed golden is named by a row. This only holds with the branch protection
+# check that a test-only pull request changes no production code, the workflow
+# with the job "Golden difference list", and the check that every changed golden
+# is named by a row. This only holds with the branch protection
 # rule "Require review from Code Owners" on the target branch.
 /scripts/check-difference-signatures.js @manzked @Intradmin
+/scripts/check-test-only-diff.js @manzked @Intradmin
 /.github/workflows/e2e.yml @manzked @Intradmin
 /server/tests/golden/differenceList.js @manzked @Intradmin
 /server/tests/golden/differenceList.test.js @manzked @Intradmin
 # What the two checks import is part of them.
 /server/tests/golden/byCodeUnit.js @manzked @Intradmin
+/scripts/git-executable.js @manzked @Intradmin

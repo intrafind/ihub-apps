@@ -21,8 +21,16 @@ import { assertGolden, unmatchedGoldens } from './assertGolden.js';
 import { recordCase } from './harness.js';
 import { CASES } from './cases.js';
 
+/**
+ * The longest a case may take. A recording waits on events, not on time, and takes a few
+ * seconds at most. A case whose run takes another path than the one it waits for would wait
+ * forever: this turns that into a failure with the name of the case, in the place of a job that
+ * hangs until the workflow gives up. Not a wait: no case gets slower by it.
+ */
+const CASE_TIMEOUT_MS = 120_000;
+
 for (const goldenCase of CASES) {
-  test(`${goldenCase.id}: ${goldenCase.title}`, async () => {
+  test(`${goldenCase.id}: ${goldenCase.title}`, { timeout: CASE_TIMEOUT_MS }, async () => {
     assertGolden(await recordCase(goldenCase));
   });
 }

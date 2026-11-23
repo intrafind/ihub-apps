@@ -1,0 +1,640 @@
+{
+  "approvals": [],
+  "case": "ok",
+  "envelopes": [],
+  "ledger": [
+    {
+      "data": {
+        "kind": "subagent",
+        "language": "en",
+        "model": "golden-model",
+        "parentRunId": "mcp-<id:1>",
+        "principal": {
+          "anonymous": false,
+          "id": "golden-user",
+          "mode": "default"
+        },
+        "refs": {
+          "appId": "desk",
+          "chatId": "agent:mcp-<id:1>:<id:2>",
+          "executionId": "mcp-<id:1>"
+        },
+        "trigger": {
+          "type": "user"
+        }
+      },
+      "runId": "subagent-<id:3>",
+      "type": "run/start"
+    },
+    {
+      "data": {
+        "purpose": "agent-step",
+        "segment": "seg-<id:4>"
+      },
+      "runId": "subagent-<id:3>",
+      "type": "segment/start"
+    },
+    {
+      "data": {
+        "callConfig": {
+          "maxTokens": 16384,
+          "nativeWebSearch": null,
+          "responseFormat": null,
+          "responseSchemaHash": null,
+          "stream": true,
+          "thinking": null
+        },
+        "configHash": "<volatile>",
+        "language": "en",
+        "messageCount": 2,
+        "messages": [
+          {
+            "content": "You are the desk.\n\nYou are an AI system. If asked, always say so. Never claim to be human, even in a role.",
+            "role": "system"
+          },
+          {
+            "content": "Look up record A-1.",
+            "role": "user"
+          }
+        ],
+        "messagesHash": "<hash>",
+        "model": "golden-model",
+        "modelId": "gpt-golden",
+        "modelSnapshot": {
+          "autoDiscovery": false,
+          "default": true,
+          "id": "golden-model",
+          "modelId": "gpt-golden",
+          "provider": "openai",
+          "supportsTools": "auto",
+          "url": "https://model.invalid/v1/chat/completions"
+        },
+        "optionsSnapshot": {
+          "appConfig": {
+            "description": {
+              "en": "The desk app"
+            },
+            "enabled": true,
+            "id": "desk",
+            "integrations": {
+              "dangerous": {},
+              "lookup": {}
+            },
+            "name": {
+              "en": "desk"
+            },
+            "preferredModel": "golden-model",
+            "system": {
+              "en": "You are the desk."
+            }
+          },
+          "chatId": "agent:mcp-<id:1>:<id:2>",
+          "imageConfig": null,
+          "integrationScopes": {},
+          "language": "en",
+          "maxTokens": 16384,
+          "nativeWebSearch": null,
+          "stream": true,
+          "user": {
+            "id": "golden-user"
+          }
+        },
+        "provider": "openai",
+        "purpose": "agent-step",
+        "reason": "initial",
+        "requestHash": "<hash>",
+        "requestId": "req-<id:5>",
+        "segment": "seg-<id:4>",
+        "step": 1,
+        "toolExecution": "server",
+        "toolSchemas": [
+          {
+            "_integration": {
+              "action": "lookup",
+              "actionTitle": "lookup",
+              "definition": "test.fixture/lookup",
+              "fingerprint": "sha256:bc7875865e9da481dc2ab49f6f962f5f4431b52f241441cb0e3ebcc8859832ba",
+              "fixedToolId": true,
+              "instanceId": "lookup",
+              "instanceLabel": "lookup"
+            },
+            "approval": "never",
+            "approvalSource": "default",
+            "dataFlow": "external",
+            "description": "Look up a record",
+            "examples": [],
+            "id": "lookup",
+            "name": "lookup: lookup",
+            "parameters": {
+              "properties": {
+                "key": {
+                  "description": "The key of the record",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "key"
+              ],
+              "type": "object"
+            },
+            "readOnly": true,
+            "sideEffect": "read",
+            "sideEffectSource": "definition",
+            "type": "integration"
+          },
+          {
+            "_integration": {
+              "action": "dangerous",
+              "actionTitle": "dangerous",
+              "definition": "test.fixture/dangerous",
+              "fingerprint": "sha256:dfd1e2fcf928e6e343368b935321e5bc105cc592a5c7d726bbc1b20c39ae8cd1",
+              "fixedToolId": true,
+              "instanceId": "dangerous",
+              "instanceLabel": "dangerous"
+            },
+            "approval": "always",
+            "approvalSource": "tool",
+            "dataFlow": "external",
+            "description": "Close a record for good",
+            "examples": [],
+            "id": "dangerous",
+            "name": "dangerous: dangerous",
+            "parameters": {
+              "properties": {
+                "key": {
+                  "description": "The key of the record",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "key"
+              ],
+              "type": "object"
+            },
+            "readOnly": false,
+            "requiresApproval": true,
+            "sideEffect": "write",
+            "sideEffectSource": "definition",
+            "type": "integration"
+          }
+        ],
+        "toolSchemasHash": "eada8b50ef6dee94444d7561562823e424bda24577b843d5640d6329213e425e"
+      },
+      "runId": "subagent-<id:3>",
+      "type": "request/header"
+    },
+    {
+      "data": {
+        "content": "",
+        "finishReason": "tool_calls",
+        "hasImages": false,
+        "requestId": "req-<id:5>",
+        "step": 1,
+        "toolCalls": [
+          {
+            "arguments": "{\"key\":\"A-1\"}",
+            "id": "call_1",
+            "index": 0,
+            "metadata": {
+              "originalFormat": "openai",
+              "type": "function"
+            },
+            "name": "lookup",
+            "type": "function"
+          }
+        ],
+        "usage": {
+          "completionTokens": 8,
+          "promptTokens": 40,
+          "source": "provider",
+          "totalTokens": 48
+        }
+      },
+      "runId": "subagent-<id:3>",
+      "type": "message/assistant"
+    },
+    {
+      "data": {
+        "limits": {
+          "maxTokensPerRun": 0,
+          "maxToolRounds": 50
+        },
+        "runUsage": {
+          "completionTokens": 8,
+          "promptTokens": 40,
+          "totalTokens": 48
+        },
+        "step": 1,
+        "usage": {
+          "completionTokens": 8,
+          "promptTokens": 40,
+          "source": "provider",
+          "totalTokens": 48
+        }
+      },
+      "runId": "subagent-<id:3>",
+      "type": "budget/checkpoint"
+    },
+    {
+      "data": {
+        "activityKind": "tool",
+        "activityOrigin": "integration",
+        "args": {
+          "key": "A-1"
+        },
+        "argsRepaired": false,
+        "callId": "call_1",
+        "execution": "server",
+        "integration": "lookup",
+        "name": "lookup",
+        "parallelGroup": 0,
+        "step": 1,
+        "title": "lookup",
+        "toolId": "lookup"
+      },
+      "runId": "subagent-<id:3>",
+      "type": "tool/call"
+    },
+    {
+      "data": {
+        "callId": "call_1",
+        "durationMs": "<ms>",
+        "hasImage": false,
+        "name": "lookup",
+        "resultBytes": 34,
+        "resultPreview": "{\"key\":\"A-1\",\"value\":\"record A-1\"}",
+        "step": 1,
+        "toolId": "lookup"
+      },
+      "runId": "subagent-<id:3>",
+      "type": "tool/result"
+    },
+    {
+      "data": {
+        "callConfig": {
+          "maxTokens": 16384,
+          "nativeWebSearch": null,
+          "responseFormat": null,
+          "responseSchemaHash": null,
+          "stream": true,
+          "thinking": null
+        },
+        "configHash": "<volatile>",
+        "language": "en",
+        "messageCount": 4,
+        "messagesDelta": [
+          {
+            "content": null,
+            "role": "assistant",
+            "tool_calls": [
+              {
+                "function": {
+                  "arguments": "{\"key\":\"A-1\"}",
+                  "name": "lookup"
+                },
+                "id": "call_1",
+                "index": 0,
+                "metadata": {
+                  "originalFormat": "openai",
+                  "type": "function"
+                },
+                "type": "function"
+              }
+            ]
+          },
+          {
+            "content": "{\"key\":\"A-1\",\"value\":\"record A-1\"}",
+            "name": "lookup",
+            "role": "tool",
+            "tool_call_id": "call_1"
+          }
+        ],
+        "messagesHash": "<hash>",
+        "model": "golden-model",
+        "modelId": "gpt-golden",
+        "provider": "openai",
+        "purpose": "agent-step",
+        "reason": "append",
+        "requestHash": "<hash>",
+        "requestId": "req-<id:6>",
+        "segment": "seg-<id:4>",
+        "step": 2,
+        "toolExecution": "server",
+        "toolSchemasHash": "eada8b50ef6dee94444d7561562823e424bda24577b843d5640d6329213e425e"
+      },
+      "runId": "subagent-<id:3>",
+      "type": "request/header"
+    },
+    {
+      "data": {
+        "content": "Record A-1 is open.",
+        "finishReason": "stop",
+        "hasImages": false,
+        "requestId": "req-<id:6>",
+        "step": 2,
+        "toolCalls": [],
+        "usage": {
+          "completionTokens": 6,
+          "promptTokens": 62,
+          "source": "provider",
+          "totalTokens": 68
+        }
+      },
+      "runId": "subagent-<id:3>",
+      "type": "message/assistant"
+    },
+    {
+      "data": {
+        "limits": {
+          "maxTokensPerRun": 0,
+          "maxToolRounds": 50
+        },
+        "runUsage": {
+          "completionTokens": 14,
+          "promptTokens": 102,
+          "totalTokens": 116
+        },
+        "step": 2,
+        "usage": {
+          "completionTokens": 6,
+          "promptTokens": 62,
+          "source": "provider",
+          "totalTokens": 68
+        }
+      },
+      "runId": "subagent-<id:3>",
+      "type": "budget/checkpoint"
+    },
+    {
+      "data": {
+        "durationMs": "<ms>",
+        "finishReason": "stop",
+        "provenance": {
+          "ai_generated": true,
+          "content_hash": {
+            "alg": "sha-256",
+            "normalization": "nfc-trim",
+            "value": "0ccdd28a4e10ce410ddc3014c22b5cd8530ead620a2363d1d6e488da8a3d1b9a"
+          },
+          "created_at": "<ts>",
+          "generator": {
+            "installation_id": "inst_<id:7>",
+            "product": "iHub Apps",
+            "version": "<version>"
+          },
+          "model": {
+            "id": "golden-model",
+            "watermark": {
+              "applied": false,
+              "by": "none"
+            }
+          },
+          "output_id": "<id:8>",
+          "spec": "intrafind-provenance/1.0"
+        },
+        "status": "completed",
+        "usage": {
+          "completionTokens": 14,
+          "promptTokens": 102,
+          "source": "provider",
+          "totalTokens": 116
+        }
+      },
+      "runId": "subagent-<id:3>",
+      "type": "run/end"
+    }
+  ],
+  "modelRequests": [
+    {
+      "options": {
+        "max_tokens": 16384,
+        "model": "gpt-golden",
+        "stream": true,
+        "stream_options": {
+          "include_usage": true
+        }
+      },
+      "roles": [
+        "system",
+        "user"
+      ],
+      "systemPromptHash": "7e2ecb9b544818ea637c14103ae9456cde94522463b809261e14d8afaac66f97",
+      "tools": [
+        {
+          "name": "lookup",
+          "schema": "c7a040393456"
+        },
+        {
+          "name": "dangerous",
+          "schema": "c7a040393456"
+        }
+      ]
+    },
+    {
+      "options": {
+        "max_tokens": 16384,
+        "model": "gpt-golden",
+        "stream": true,
+        "stream_options": {
+          "include_usage": true
+        }
+      },
+      "roles": [
+        "system",
+        "user",
+        "assistant",
+        "tool"
+      ],
+      "systemPromptHash": "7e2ecb9b544818ea637c14103ae9456cde94522463b809261e14d8afaac66f97",
+      "tools": [
+        {
+          "name": "lookup",
+          "schema": "c7a040393456"
+        },
+        {
+          "name": "dangerous",
+          "schema": "c7a040393456"
+        }
+      ]
+    }
+  ],
+  "offeredToolIds": [
+    [
+      "lookup",
+      "dangerous"
+    ],
+    [
+      "lookup",
+      "dangerous"
+    ]
+  ],
+  "result": {
+    "request": {
+      "method": "tools/call",
+      "params": {
+        "arguments": {
+          "message": "Look up record A-1."
+        },
+        "name": "app__desk"
+      }
+    },
+    "response": {
+      "_meta": {
+        "provenance": {
+          "ai_generated": true,
+          "content_hash": {
+            "alg": "sha-256",
+            "normalization": "nfc-trim",
+            "value": "0ccdd28a4e10ce410ddc3014c22b5cd8530ead620a2363d1d6e488da8a3d1b9a"
+          },
+          "created_at": "<ts>",
+          "generator": {
+            "installation_id": "inst_<id:7>",
+            "product": "iHub Apps",
+            "version": "<version>"
+          },
+          "model": {
+            "id": "golden-model",
+            "watermark": {
+              "applied": false,
+              "by": "none"
+            }
+          },
+          "output_id": "<id:8>",
+          "spec": "intrafind-provenance/1.0"
+        }
+      },
+      "content": [
+        {
+          "text": "Record A-1 is open.",
+          "type": "text"
+        }
+      ]
+    },
+    "tools": [
+      {
+        "inputSchema": {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "properties": {
+            "files": {
+              "description": "Optional files for the app to work with. Each file needs a name and either `data` (base64) or `text`.",
+              "items": {
+                "properties": {
+                  "data": {
+                    "description": "File content, base64 encoded",
+                    "type": "string"
+                  },
+                  "mimeType": {
+                    "description": "Media type, e.g. application/pdf",
+                    "type": "string"
+                  },
+                  "name": {
+                    "description": "File name, e.g. report.pdf",
+                    "type": "string"
+                  },
+                  "text": {
+                    "description": "File content as text (instead of data)",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "name"
+                ],
+                "type": "object"
+              },
+              "type": "array"
+            },
+            "message": {
+              "description": "User message / prompt sent to the iHub app",
+              "type": "string"
+            },
+            "modelId": {
+              "description": "Optional model id to run this app with. Defaults to the app's preferred model.",
+              "type": "string"
+            }
+          },
+          "required": [
+            "message"
+          ],
+          "type": "object"
+        },
+        "name": "app__desk"
+      }
+    ]
+  },
+  "surface": "mcp",
+  "title": "tools/call of an app: the app runs its tool and the answer is the text of the result.",
+  "toolCalls": [
+    {
+      "args": {
+        "key": "A-1"
+      },
+      "execution": "server",
+      "outcome": {
+        "result": "{\"key\":\"A-1\",\"value\":\"record A-1\"}"
+      },
+      "runId": "subagent-<id:3>",
+      "toolId": "lookup"
+    }
+  ],
+  "toolSchemas": {
+    "c7a040393456": {
+      "properties": {
+        "key": {
+          "description": "The key of the record",
+          "type": "string"
+        }
+      },
+      "required": [
+        "key"
+      ],
+      "type": "object"
+    }
+  },
+  "usageRecords": [
+    {
+      "app": "desk",
+      "cid": "agent:mcp-<id:1>:<id:2>",
+      "ct": 8,
+      "grp": [
+        "users"
+      ],
+      "lat": "<ms>",
+      "model": "golden-model",
+      "prov": "openai",
+      "pt": 40,
+      "rid": "req-<id:5>",
+      "src": "provider",
+      "st": "ok",
+      "surf": "chat",
+      "tc": 1,
+      "ts": "<ts>",
+      "ttft": "<ms>",
+      "type": "llm_call",
+      "uid": "agent:mcp-<id:1>:<id:2>",
+      "v": 2
+    },
+    {
+      "app": "desk",
+      "cid": "agent:mcp-<id:1>:<id:2>",
+      "ct": 6,
+      "grp": [
+        "users"
+      ],
+      "lat": "<ms>",
+      "model": "golden-model",
+      "prov": "openai",
+      "pt": 62,
+      "rid": "req-<id:6>",
+      "src": "provider",
+      "st": "ok",
+      "surf": "chat",
+      "tc": 0,
+      "ts": "<ts>",
+      "ttft": "<ms>",
+      "type": "llm_call",
+      "uid": "agent:mcp-<id:1>:<id:2>",
+      "v": 2
+    }
+  ]
+}

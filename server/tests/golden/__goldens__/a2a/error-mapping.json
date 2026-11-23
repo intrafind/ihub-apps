@@ -1,0 +1,373 @@
+{
+  "approvals": [],
+  "case": "error-mapping",
+  "envelopes": [],
+  "ledger": [
+    {
+      "data": {
+        "kind": "subagent",
+        "language": "en",
+        "model": "golden-model",
+        "parentRunId": "a2a-<id:1>",
+        "principal": {
+          "anonymous": false,
+          "id": "golden-user",
+          "mode": "default"
+        },
+        "refs": {
+          "appId": "desk",
+          "chatId": "agent:a2a-<id:1>:<id:2>",
+          "executionId": "a2a-<id:1>"
+        },
+        "trigger": {
+          "type": "user"
+        }
+      },
+      "runId": "subagent-<id:3>",
+      "type": "run/start"
+    },
+    {
+      "data": {
+        "purpose": "agent-step",
+        "segment": "seg-<id:4>"
+      },
+      "runId": "subagent-<id:3>",
+      "type": "segment/start"
+    },
+    {
+      "data": {
+        "callConfig": {
+          "maxTokens": 16384,
+          "nativeWebSearch": null,
+          "responseFormat": null,
+          "responseSchemaHash": null,
+          "stream": true,
+          "thinking": null
+        },
+        "configHash": "<volatile>",
+        "language": "en",
+        "messageCount": 2,
+        "messages": [
+          {
+            "content": "You are the desk.\n\nYou are an AI system. If asked, always say so. Never claim to be human, even in a role.",
+            "role": "system"
+          },
+          {
+            "content": "Look up record A-1.",
+            "role": "user"
+          }
+        ],
+        "messagesHash": "<hash>",
+        "model": "golden-model",
+        "modelId": "gpt-golden",
+        "modelSnapshot": {
+          "autoDiscovery": false,
+          "default": true,
+          "id": "golden-model",
+          "modelId": "gpt-golden",
+          "provider": "openai",
+          "supportsTools": "auto",
+          "url": "https://model.invalid/v1/chat/completions"
+        },
+        "optionsSnapshot": {
+          "appConfig": {
+            "description": {
+              "en": "The desk app"
+            },
+            "enabled": true,
+            "id": "desk",
+            "integrations": {
+              "dangerous": {},
+              "lookup": {}
+            },
+            "name": {
+              "en": "desk"
+            },
+            "preferredModel": "golden-model",
+            "system": {
+              "en": "You are the desk."
+            }
+          },
+          "chatId": "agent:a2a-<id:1>:<id:2>",
+          "imageConfig": null,
+          "integrationScopes": {},
+          "language": "en",
+          "maxTokens": 16384,
+          "nativeWebSearch": null,
+          "stream": true,
+          "user": {
+            "id": "golden-user"
+          }
+        },
+        "provider": "openai",
+        "purpose": "agent-step",
+        "reason": "initial",
+        "requestHash": "<hash>",
+        "requestId": "req-<id:5>",
+        "segment": "seg-<id:4>",
+        "step": 1,
+        "toolExecution": "server",
+        "toolSchemas": [
+          {
+            "_integration": {
+              "action": "lookup",
+              "actionTitle": "lookup",
+              "definition": "test.fixture/lookup",
+              "fingerprint": "sha256:bc7875865e9da481dc2ab49f6f962f5f4431b52f241441cb0e3ebcc8859832ba",
+              "fixedToolId": true,
+              "instanceId": "lookup",
+              "instanceLabel": "lookup"
+            },
+            "approval": "never",
+            "approvalSource": "default",
+            "dataFlow": "external",
+            "description": "Look up a record",
+            "examples": [],
+            "id": "lookup",
+            "name": "lookup: lookup",
+            "parameters": {
+              "properties": {
+                "key": {
+                  "description": "The key of the record",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "key"
+              ],
+              "type": "object"
+            },
+            "readOnly": true,
+            "sideEffect": "read",
+            "sideEffectSource": "definition",
+            "type": "integration"
+          },
+          {
+            "_integration": {
+              "action": "dangerous",
+              "actionTitle": "dangerous",
+              "definition": "test.fixture/dangerous",
+              "fingerprint": "sha256:dfd1e2fcf928e6e343368b935321e5bc105cc592a5c7d726bbc1b20c39ae8cd1",
+              "fixedToolId": true,
+              "instanceId": "dangerous",
+              "instanceLabel": "dangerous"
+            },
+            "approval": "always",
+            "approvalSource": "tool",
+            "dataFlow": "external",
+            "description": "Close a record for good",
+            "examples": [],
+            "id": "dangerous",
+            "name": "dangerous: dangerous",
+            "parameters": {
+              "properties": {
+                "key": {
+                  "description": "The key of the record",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "key"
+              ],
+              "type": "object"
+            },
+            "readOnly": false,
+            "requiresApproval": true,
+            "sideEffect": "write",
+            "sideEffectSource": "definition",
+            "type": "integration"
+          }
+        ],
+        "toolSchemasHash": "eada8b50ef6dee94444d7561562823e424bda24577b843d5640d6329213e425e"
+      },
+      "runId": "subagent-<id:3>",
+      "type": "request/header"
+    },
+    {
+      "data": {
+        "code": "INVALID_REQUEST",
+        "message": "The model call failed (INVALID_REQUEST)",
+        "providerCode": "INVALID_REQUEST",
+        "recoverable": false,
+        "status": 400,
+        "step": 1
+      },
+      "runId": "subagent-<id:3>",
+      "type": "error"
+    },
+    {
+      "data": {
+        "durationMs": "<ms>",
+        "error": {
+          "code": "INVALID_REQUEST",
+          "message": "Invalid request sent to openai API. Please check your input and try again."
+        },
+        "finishReason": "error",
+        "status": "error",
+        "usage": {
+          "completionTokens": 0,
+          "promptTokens": 0,
+          "source": "estimate",
+          "totalTokens": 0
+        }
+      },
+      "runId": "subagent-<id:3>",
+      "type": "run/end"
+    }
+  ],
+  "modelRequests": [
+    {
+      "options": {
+        "max_tokens": 16384,
+        "model": "gpt-golden",
+        "stream": true,
+        "stream_options": {
+          "include_usage": true
+        }
+      },
+      "roles": [
+        "system",
+        "user"
+      ],
+      "systemPromptHash": "7e2ecb9b544818ea637c14103ae9456cde94522463b809261e14d8afaac66f97",
+      "tools": [
+        {
+          "name": "lookup",
+          "schema": "c7a040393456"
+        },
+        {
+          "name": "dangerous",
+          "schema": "c7a040393456"
+        }
+      ]
+    }
+  ],
+  "offeredToolIds": [
+    [
+      "lookup",
+      "dangerous"
+    ]
+  ],
+  "result": {
+    "request": {
+      "id": 3,
+      "jsonrpc": "2.0",
+      "method": "message/send",
+      "params": {
+        "message": {
+          "kind": "message",
+          "messageId": "a2a-msg-1",
+          "parts": [
+            {
+              "kind": "text",
+              "text": "Look up record A-1."
+            }
+          ],
+          "role": "user"
+        },
+        "metadata": {
+          "skillId": "app__desk"
+        }
+      }
+    },
+    "response": {
+      "id": 3,
+      "jsonrpc": "2.0",
+      "result": {
+        "artifacts": [],
+        "contextId": "<id:6>",
+        "history": [
+          {
+            "contextId": "<id:6>",
+            "kind": "message",
+            "messageId": "a2a-msg-1",
+            "parts": [
+              {
+                "kind": "text",
+                "text": "Look up record A-1."
+              }
+            ],
+            "role": "user",
+            "taskId": "<id:1>"
+          },
+          {
+            "contextId": "<id:6>",
+            "kind": "message",
+            "messageId": "<id:7>",
+            "parts": [
+              {
+                "kind": "text",
+                "text": "Task failed: Invalid request sent to openai API. Please check your input and try again."
+              }
+            ],
+            "role": "agent",
+            "taskId": "<id:1>"
+          }
+        ],
+        "id": "<id:1>",
+        "kind": "task",
+        "metadata": {
+          "skillId": "app__desk"
+        },
+        "status": {
+          "message": {
+            "contextId": "<id:6>",
+            "kind": "message",
+            "messageId": "<id:7>",
+            "parts": [
+              {
+                "kind": "text",
+                "text": "Task failed: Invalid request sent to openai API. Please check your input and try again."
+              }
+            ],
+            "role": "agent",
+            "taskId": "<id:1>"
+          },
+          "state": "failed",
+          "timestamp": "<ts>"
+        }
+      }
+    }
+  },
+  "surface": "a2a",
+  "title": "The provider fails: the task ends failed and says why.",
+  "toolCalls": [],
+  "toolSchemas": {
+    "c7a040393456": {
+      "properties": {
+        "key": {
+          "description": "The key of the record",
+          "type": "string"
+        }
+      },
+      "required": [
+        "key"
+      ],
+      "type": "object"
+    }
+  },
+  "usageRecords": [
+    {
+      "app": "desk",
+      "cid": "agent:a2a-<id:1>:<id:2>",
+      "ct": 0,
+      "err": "INVALID_REQUEST",
+      "grp": [
+        "users"
+      ],
+      "lat": "<ms>",
+      "model": "golden-model",
+      "prov": "openai",
+      "pt": 0,
+      "rid": "req-<id:5>",
+      "src": "estimate",
+      "st": "error",
+      "surf": "chat",
+      "tc": 0,
+      "ts": "<ts>",
+      "type": "llm_call",
+      "uid": "agent:a2a-<id:1>:<id:2>",
+      "v": 2
+    }
+  ]
+}

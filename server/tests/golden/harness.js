@@ -79,7 +79,7 @@ const NAME = /^[a-z0-9][a-z0-9-]*$/;
  * @param {string} definition.name - Lower-case name of the case, unique within the surface.
  * @param {string} definition.title - One sentence: what the case pins.
  * @param {Object|(() => Object)} definition.config - What the config cache holds, see
- *   {@link startGoldenEnv}; also `idPatterns` and `volatileKeys` for the normaliser.
+ *   {@link startGoldenEnv}; also `idPatterns`, `volatileKeys` and `textRules` for the normaliser.
  * @param {(env: Object) => Array} definition.script - The model's answers, one turn per model call
  *   (`helpers/scriptedModel.js`).
  * @param {(env: Object) => Promise<Object|void>} definition.run - Drives the surface. What it returns is
@@ -116,8 +116,11 @@ export function defineCase(definition) {
  * @param {Object} [config.platform] - `config/platform.json`.
  * @param {Object[]} [config.apps]
  * @param {Object[]} [config.models]
+ * @param {Object[]} [config.workflows] - `config/workflows.json`.
  * @param {Object} [config.groups] - `config/groups.json` (`{ groups: {...} }`).
  * @param {Object} [config.users] - The `users` of `config/users.json`.
+ * @param {Object} [config.credentials] - The `credentials` of `config/credentials.json`, by id and
+ *   decrypted, as the config cache holds them.
  * @param {Object|(() => Object)} [config.integrations] - `config/integrations.json`; a function is called
  *   after the fixture tools are registered.
  * @param {Object[]} [config.tools] - Fixture tools (`fixtureTool` of `helpers/integrationToolFixture.js`).
@@ -189,6 +192,8 @@ async function setUp(config, restore, stop) {
     'config/models.json': config.models ?? [],
     'config/groups.json': config.groups ?? { groups: {} },
     'config/users.json': { users: config.users ?? {} },
+    'config/credentials.json': { credentials: config.credentials ?? {} },
+    'config/workflows.json': config.workflows ?? [],
     'config/integrations.json':
       typeof config.integrations === 'function'
         ? config.integrations()
@@ -226,12 +231,15 @@ async function setUp(config, restore, stop) {
   /** @type {Object[]} */
   const ledger = [];
   restore(runLog.subscribeAll(event => ledger.push(event)));
+  /** @type {number[]} */
+  const ledgerRestarts = [];
 
   Object.assign(env, {
     storage,
     configCache,
     envelopes,
     ledger,
+    ledgerRestarts,
     runLog,
     llmClient,
     /** A `ChatService` as the product builds it: every collaborator is the default one. */
@@ -244,6 +252,26 @@ async function setUp(config, restore, stop) {
      */
     principal: fields =>
       enhanceUserWithPermissions({ authMode: 'oidc', ...fields }, {}, configCache.getPlatform()),
+
+    /**
+     * Say that the server of the case died and another one started: the ledger events from here
+     * on are written by a process that did not write the ones before (`normaliseLedger`).
+     */
+    processRestarted() {
+      ledgerRestarts.push(ledger.length);
+    },
+
+    /**
+     * Do something when the recording is over: after the record was taken (or the case failed)
+     * and before the storage of the recording goes. For what a case has to end but must not
+     * record, such as a model call that a process which "died" in the case was still waiting on.
+     * Whatever `fn` causes to be written is in no record. Last registered, first run.
+     *
+     * @param {() => (void|Promise<void>)} fn
+     */
+    afterRecording(fn) {
+      restore(fn);
+    },
 
     /** Wait until everything the run wrote in the background is stored. */
     async settle() {
@@ -336,7 +364,8 @@ export async function recordCase(goldenCase) {
     const normaliser = createNormaliser({
       appVersion: getAppVersion(),
       idPatterns: config.idPatterns,
-      volatileKeys: config.volatileKeys
+      volatileKeys: config.volatileKeys,
+      textRules: config.textRules
     });
     const usageRecords = await env.usageRecords();
 
@@ -347,7 +376,7 @@ export async function recordCase(goldenCase) {
     const groups = parallelGroupsOf(env.ledger);
     const ledger = orderParallelGroups(env.ledger, groups);
     record.envelopes = normaliseEnvelopes(env.envelopes, normaliser, groups);
-    record.ledger = normaliseLedger(env.ledger, normaliser);
+    record.ledger = normaliseLedger(env.ledger, normaliser, { restartsAt: env.ledgerRestarts });
     record.offeredToolIds = normaliser.normalise(offeredToolIds(env.ledger));
     const toolSchemas = {};
     record.modelRequests = model.requests.map(request => {

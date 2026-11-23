@@ -1,0 +1,41 @@
+{
+  "approvals": [],
+  "case": "error-unknown-model",
+  "envelopes": [],
+  "httpResponse": {
+    "exchanges": [
+      {
+        "request": {
+          "body": {
+            "messages": [
+              {
+                "content": "Hello",
+                "role": "user"
+              }
+            ],
+            "model": "no-such-model"
+          },
+          "method": "POST",
+          "path": "/api/inference/v1/chat/completions"
+        },
+        "response": {
+          "body": {
+            "error": "Model not found"
+          },
+          "headers": {
+            "content-type": "application/json; charset=utf-8"
+          },
+          "status": 404
+        }
+      }
+    ]
+  },
+  "ledger": [],
+  "modelRequests": [],
+  "offeredToolIds": [],
+  "surface": "completions",
+  "title": "A model id that does not exist: the error body and no model call.",
+  "toolCalls": [],
+  "toolSchemas": {},
+  "usageRecords": []
+}

@@ -1,0 +1,17 @@
+{
+  "approvals": [],
+  "case": "user-not-permitted",
+  "envelopes": [],
+  "ledger": [],
+  "modelRequests": [],
+  "offeredToolIds": [],
+  "result": {
+    "error": true,
+    "message": "You do not have permission to access app restricted"
+  },
+  "surface": "app-as-tool",
+  "title": "A user with resolved permissions cannot call an app the user may not open.",
+  "toolCalls": [],
+  "toolSchemas": {},
+  "usageRecords": []
+}

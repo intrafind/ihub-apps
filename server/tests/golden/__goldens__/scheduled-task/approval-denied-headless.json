@@ -1,0 +1,868 @@
+{
+  "approvals": [
+    {
+      "data": {
+        "interaction": {
+          "createdAt": "<ts>",
+          "id": "int-<id:4>",
+          "kind": "approval",
+          "ordinal": 1,
+          "origin": "policy",
+          "policy": {
+            "expiresAt": "<ts>",
+            "fallback": "park",
+            "onTimeout": "fail"
+          },
+          "prompt": {
+            "allowOther": false,
+            "allowSkip": false,
+            "displayData": {
+              "approvalSource": "tool",
+              "args": {
+                "key": "A-1"
+              },
+              "dataFlow": "external",
+              "integration": {
+                "action": "dangerous",
+                "id": "dangerous",
+                "name": "dangerous"
+              },
+              "sideEffect": "write",
+              "sideEffectSource": "definition",
+              "toolId": "dangerous",
+              "toolName": "dangerous"
+            },
+            "inputType": "text",
+            "message": "The scheduled task \"Release watch\" wants to run dangerous. Approve it to let the run continue.",
+            "title": "Approve dangerous?"
+          },
+          "runId": "chat-<id:3>",
+          "source": {
+            "appId": "digest",
+            "chatId": "<id:1>",
+            "identityMode": "default",
+            "principalId": "golden-user",
+            "scheduledRunId": "<id:7>",
+            "scheduledTaskId": "st-<id:8>",
+            "toolCallId": "call_1",
+            "toolId": "dangerous"
+          },
+          "status": "pending",
+          "step": 1
+        }
+      },
+      "runId": "chat-<id:3>",
+      "type": "interaction/raised"
+    },
+    {
+      "data": {
+        "answer": {
+          "approver": {
+            "groups": [],
+            "id": "golden-user",
+            "via": "owner"
+          },
+          "at": "<ts>",
+          "by": "golden-user",
+          "channel": "run_page",
+          "data": {
+            "alwaysAllow": false
+          },
+          "decision": "reject",
+          "reason": "Rejected by the task owner",
+          "value": "reject"
+        },
+        "interactionId": "int-<id:4>",
+        "kind": "approval"
+      },
+      "runId": "chat-<id:3>",
+      "type": "interaction/answered"
+    }
+  ],
+  "case": "approval-denied-headless",
+  "envelopes": [
+    {
+      "data": {
+        "kind": "chat",
+        "model": "golden-model",
+        "refs": {
+          "appId": "digest",
+          "chatId": "<id:1>",
+          "messageId": "<id:2>"
+        }
+      },
+      "runId": "chat-<id:3>",
+      "streamId": "<id:1>",
+      "type": "run/started"
+    },
+    {
+      "data": {
+        "content": "",
+        "finishReason": "tool_calls",
+        "sources": [],
+        "step": 1,
+        "toolCalls": [
+          {
+            "arguments": "{\"key\":\"A-1\"}",
+            "id": "call_1",
+            "index": 0,
+            "metadata": {
+              "originalFormat": "openai",
+              "type": "function"
+            },
+            "name": "dangerous",
+            "type": "function"
+          }
+        ],
+        "usage": {
+          "completionTokens": 8,
+          "promptTokens": 60,
+          "source": "provider",
+          "totalTokens": 68
+        }
+      },
+      "runId": "chat-<id:3>",
+      "streamId": "<id:1>",
+      "type": "step/completed"
+    },
+    {
+      "data": {
+        "callId": "call_1",
+        "name": "dangerous",
+        "resultPreview": {
+          "interactionId": "int-<id:4>",
+          "message": "This action needs the task owner’s approval. The run is paused until they approve or reject it.",
+          "status": "awaiting_approval"
+        },
+        "step": 1,
+        "toolId": "dangerous"
+      },
+      "runId": "chat-<id:3>",
+      "streamId": "<id:1>",
+      "type": "tool/completed"
+    },
+    {
+      "data": {
+        "interactionId": "int-<id:4>",
+        "reason": "interaction"
+      },
+      "runId": "chat-<id:3>",
+      "streamId": "<id:1>",
+      "type": "run/paused"
+    }
+  ],
+  "evidence": [],
+  "ledger": [
+    {
+      "data": {
+        "kind": "chat",
+        "language": "en",
+        "model": "golden-model",
+        "principal": {
+          "anonymous": false,
+          "id": "golden-user",
+          "mode": "default"
+        },
+        "refs": {
+          "appId": "digest",
+          "chatId": "<id:1>"
+        },
+        "trigger": {
+          "source": "scheduled-task",
+          "type": "schedule"
+        }
+      },
+      "runId": "chat-<id:3>",
+      "type": "run/start"
+    },
+    {
+      "data": {
+        "content": "Report the state of record A-1. Run 1.",
+        "messageId": "<id:2>",
+        "step": 0
+      },
+      "runId": "chat-<id:3>",
+      "type": "message/user"
+    },
+    {
+      "data": {
+        "purpose": "agent-step",
+        "segment": "seg-<id:5>"
+      },
+      "runId": "chat-<id:3>",
+      "type": "segment/start"
+    },
+    {
+      "data": {
+        "callConfig": {
+          "maxTokens": 16384,
+          "nativeWebSearch": null,
+          "responseFormat": null,
+          "responseSchemaHash": null,
+          "stream": true,
+          "thinking": null
+        },
+        "configHash": "<volatile>",
+        "language": "en",
+        "messageCount": 2,
+        "messages": [
+          {
+            "content": "You write digests.\n\nUnattended run: this conversation was started by a scheduled task, and no user is available while it runs. Do not ask questions or wait for confirmation; make reasonable assumptions, state them briefly, and complete the task. The user will read the result later.\n\nYou are an AI system. If asked, always say so. Never claim to be human, even in a role.",
+            "role": "system"
+          },
+          {
+            "content": "Report the state of record A-1. Run 1.",
+            "role": "user"
+          }
+        ],
+        "messagesHash": "<hash>",
+        "model": "golden-model",
+        "modelId": "gpt-golden",
+        "modelSnapshot": {
+          "autoDiscovery": false,
+          "default": true,
+          "id": "golden-model",
+          "modelId": "gpt-golden",
+          "provider": "openai",
+          "supportsTools": "auto",
+          "url": "https://model.invalid/v1/chat/completions"
+        },
+        "optionsSnapshot": {
+          "appConfig": {
+            "description": {
+              "en": "The digest app"
+            },
+            "enabled": true,
+            "id": "digest",
+            "integrations": {
+              "dangerous": {},
+              "lookup": {}
+            },
+            "name": {
+              "en": "digest"
+            },
+            "preferredModel": "golden-model",
+            "system": {
+              "en": "You write digests."
+            }
+          },
+          "chatId": "<id:1>",
+          "imageConfig": null,
+          "integrationScopes": {},
+          "language": "en",
+          "maxTokens": 16384,
+          "nativeWebSearch": null,
+          "stream": true,
+          "user": {
+            "id": "golden-user"
+          }
+        },
+        "provider": "openai",
+        "purpose": "agent-step",
+        "reason": "initial",
+        "requestHash": "<hash>",
+        "requestId": "req-<id:6>",
+        "segment": "seg-<id:5>",
+        "step": 1,
+        "toolExecution": "server",
+        "toolSchemas": [
+          {
+            "_integration": {
+              "action": "lookup",
+              "actionTitle": "lookup",
+              "definition": "test.fixture/lookup",
+              "fingerprint": "sha256:bc7875865e9da481dc2ab49f6f962f5f4431b52f241441cb0e3ebcc8859832ba",
+              "fixedToolId": true,
+              "instanceId": "lookup",
+              "instanceLabel": "lookup"
+            },
+            "approval": "never",
+            "approvalSource": "default",
+            "dataFlow": "external",
+            "description": "Look up a record",
+            "examples": [],
+            "id": "lookup",
+            "name": "lookup: lookup",
+            "parameters": {
+              "properties": {
+                "key": {
+                  "description": "The key of the record",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "key"
+              ],
+              "type": "object"
+            },
+            "readOnly": true,
+            "sideEffect": "read",
+            "sideEffectSource": "definition",
+            "type": "integration"
+          },
+          {
+            "_integration": {
+              "action": "dangerous",
+              "actionTitle": "dangerous",
+              "definition": "test.fixture/dangerous",
+              "fingerprint": "sha256:dfd1e2fcf928e6e343368b935321e5bc105cc592a5c7d726bbc1b20c39ae8cd1",
+              "fixedToolId": true,
+              "instanceId": "dangerous",
+              "instanceLabel": "dangerous"
+            },
+            "approval": "always",
+            "approvalSource": "tool",
+            "dataFlow": "external",
+            "description": "Close a record for good",
+            "examples": [],
+            "id": "dangerous",
+            "name": "dangerous: dangerous",
+            "parameters": {
+              "properties": {
+                "key": {
+                  "description": "The key of the record",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "key"
+              ],
+              "type": "object"
+            },
+            "readOnly": false,
+            "requiresApproval": true,
+            "sideEffect": "write",
+            "sideEffectSource": "definition",
+            "type": "integration"
+          }
+        ],
+        "toolSchemasHash": "eada8b50ef6dee94444d7561562823e424bda24577b843d5640d6329213e425e"
+      },
+      "runId": "chat-<id:3>",
+      "type": "request/header"
+    },
+    {
+      "data": {
+        "content": "",
+        "finishReason": "tool_calls",
+        "hasImages": false,
+        "requestId": "req-<id:6>",
+        "step": 1,
+        "toolCalls": [
+          {
+            "arguments": "{\"key\":\"A-1\"}",
+            "id": "call_1",
+            "index": 0,
+            "metadata": {
+              "originalFormat": "openai",
+              "type": "function"
+            },
+            "name": "dangerous",
+            "type": "function"
+          }
+        ],
+        "usage": {
+          "completionTokens": 8,
+          "promptTokens": 60,
+          "source": "provider",
+          "totalTokens": 68
+        }
+      },
+      "runId": "chat-<id:3>",
+      "type": "message/assistant"
+    },
+    {
+      "data": {
+        "limits": {
+          "maxTokensPerRun": 0,
+          "maxToolRounds": 50
+        },
+        "runUsage": {
+          "completionTokens": 8,
+          "promptTokens": 60,
+          "totalTokens": 68
+        },
+        "step": 1,
+        "usage": {
+          "completionTokens": 8,
+          "promptTokens": 60,
+          "source": "provider",
+          "totalTokens": 68
+        }
+      },
+      "runId": "chat-<id:3>",
+      "type": "budget/checkpoint"
+    },
+    {
+      "data": {
+        "interaction": {
+          "createdAt": "<ts>",
+          "id": "int-<id:4>",
+          "kind": "approval",
+          "ordinal": 1,
+          "origin": "policy",
+          "policy": {
+            "expiresAt": "<ts>",
+            "fallback": "park",
+            "onTimeout": "fail"
+          },
+          "prompt": {
+            "allowOther": false,
+            "allowSkip": false,
+            "displayData": {
+              "approvalSource": "tool",
+              "args": {
+                "key": "A-1"
+              },
+              "dataFlow": "external",
+              "integration": {
+                "action": "dangerous",
+                "id": "dangerous",
+                "name": "dangerous"
+              },
+              "sideEffect": "write",
+              "sideEffectSource": "definition",
+              "toolId": "dangerous",
+              "toolName": "dangerous"
+            },
+            "inputType": "text",
+            "message": "The scheduled task \"Release watch\" wants to run dangerous. Approve it to let the run continue.",
+            "title": "Approve dangerous?"
+          },
+          "runId": "chat-<id:3>",
+          "source": {
+            "appId": "digest",
+            "chatId": "<id:1>",
+            "identityMode": "default",
+            "principalId": "golden-user",
+            "scheduledRunId": "<id:7>",
+            "scheduledTaskId": "st-<id:8>",
+            "toolCallId": "call_1",
+            "toolId": "dangerous"
+          },
+          "status": "pending",
+          "step": 1
+        }
+      },
+      "runId": "chat-<id:3>",
+      "type": "interaction/raised"
+    },
+    {
+      "data": {
+        "activityKind": "tool",
+        "activityOrigin": "integration",
+        "args": {
+          "key": "A-1"
+        },
+        "argsRepaired": false,
+        "callId": "call_1",
+        "execution": "clarification",
+        "integration": "dangerous",
+        "name": "dangerous",
+        "parallelGroup": 0,
+        "step": 1,
+        "title": "dangerous",
+        "toolId": "dangerous"
+      },
+      "runId": "chat-<id:3>",
+      "type": "tool/call"
+    },
+    {
+      "data": {
+        "durationMs": "<ms>",
+        "finishReason": "approval",
+        "status": "paused",
+        "usage": {
+          "completionTokens": 8,
+          "promptTokens": 60,
+          "source": "provider",
+          "totalTokens": 68
+        }
+      },
+      "runId": "chat-<id:3>",
+      "type": "run/end"
+    },
+    {
+      "data": {
+        "answer": {
+          "approver": {
+            "groups": [],
+            "id": "golden-user",
+            "via": "owner"
+          },
+          "at": "<ts>",
+          "by": "golden-user",
+          "channel": "run_page",
+          "data": {
+            "alwaysAllow": false
+          },
+          "decision": "reject",
+          "reason": "Rejected by the task owner",
+          "value": "reject"
+        },
+        "interactionId": "int-<id:4>",
+        "kind": "approval"
+      },
+      "runId": "chat-<id:3>",
+      "type": "interaction/answered"
+    }
+  ],
+  "modelRequests": [
+    {
+      "options": {
+        "max_tokens": 16384,
+        "model": "gpt-golden",
+        "stream": true,
+        "stream_options": {
+          "include_usage": true
+        }
+      },
+      "roles": [
+        "system",
+        "user"
+      ],
+      "systemPromptHash": "627d01094bc3fe570f9901513294925a5559ec12ddde1058534de0ef84b23a55",
+      "tools": [
+        {
+          "name": "lookup",
+          "schema": "c7a040393456"
+        },
+        {
+          "name": "dangerous",
+          "schema": "c7a040393456"
+        }
+      ]
+    }
+  ],
+  "offeredToolIds": [
+    [
+      "lookup",
+      "dangerous"
+    ]
+  ],
+  "result": {
+    "executions": [
+      {
+        "appId": "digest",
+        "approval": {
+          "args": {
+            "key": "A-1"
+          },
+          "expiresAt": "<ts>",
+          "interactionId": "int-<id:4>",
+          "ledgerRunId": "chat-<id:3>",
+          "requestedAt": "<ts>",
+          "status": "pending",
+          "toolId": "dangerous"
+        },
+        "approvedTools": [],
+        "chatId": "<id:1>",
+        "continuation": null,
+        "continuations": 1,
+        "durationMs": "<ms>",
+        "execution": {
+          "leaseUntil": "<ts>",
+          "token": "<id:9>"
+        },
+        "finishedAt": null,
+        "id": "<id:7>",
+        "ledgerRunIds": [
+          "chat-<id:3>"
+        ],
+        "modelId": null,
+        "ownerId": "golden-user",
+        "queuedAt": "<ts>",
+        "reason": {
+          "at": "<ts>",
+          "code": "AWAITING_APPROVAL",
+          "message": "Waiting for your approval to run dangerous"
+        },
+        "runNumber": 1,
+        "scheduledFor": "<ts>",
+        "startedAt": "<ts>",
+        "status": "awaiting_approval",
+        "taskId": "st-<id:8>",
+        "taskName": "Release watch",
+        "trigger": "manual",
+        "usage": {
+          "completionTokens": 8,
+          "promptTokens": 60,
+          "totalTokens": 68
+        },
+        "watched": false
+      },
+      {
+        "appId": "digest",
+        "approval": {
+          "alwaysAllow": false,
+          "args": {
+            "key": "A-1"
+          },
+          "decidedAt": "<ts>",
+          "expiresAt": "<ts>",
+          "interactionId": "int-<id:4>",
+          "ledgerRunId": "chat-<id:3>",
+          "requestedAt": "<ts>",
+          "status": "rejected",
+          "toolId": "dangerous"
+        },
+        "approvedTools": [],
+        "chatId": "<id:1>",
+        "continuation": null,
+        "continuations": 1,
+        "durationMs": "<ms>",
+        "execution": {
+          "leaseUntil": "<ts>",
+          "token": "<id:9>"
+        },
+        "finishedAt": "<ts>",
+        "id": "<id:7>",
+        "ledgerRunIds": [
+          "chat-<id:3>"
+        ],
+        "modelId": null,
+        "ownerId": "golden-user",
+        "queuedAt": "<ts>",
+        "reason": {
+          "at": "<ts>",
+          "code": "APPROVAL_REJECTED",
+          "message": "The owner rejected running dangerous"
+        },
+        "runNumber": 1,
+        "scheduledFor": "<ts>",
+        "startedAt": "<ts>",
+        "status": "cancelled",
+        "taskId": "st-<id:8>",
+        "taskName": "Release watch",
+        "trigger": "manual",
+        "usage": {
+          "completionTokens": 8,
+          "promptTokens": 60,
+          "totalTokens": 68
+        },
+        "watched": false
+      }
+    ],
+    "notes": {
+      "body": "",
+      "chars": 0,
+      "enabled": false,
+      "maxChars": 16000,
+      "platformEnabled": true,
+      "updatedAt": null,
+      "updatedBy": null,
+      "version": 0
+    },
+    "run": {
+      "appId": "digest",
+      "approval": {
+        "alwaysAllow": false,
+        "args": {
+          "key": "A-1"
+        },
+        "decidedAt": "<ts>",
+        "expiresAt": "<ts>",
+        "interactionId": "int-<id:4>",
+        "ledgerRunId": "chat-<id:3>",
+        "requestedAt": "<ts>",
+        "status": "rejected",
+        "toolId": "dangerous"
+      },
+      "approvedTools": [],
+      "chatId": "<id:1>",
+      "continuation": null,
+      "continuations": 1,
+      "durationMs": "<ms>",
+      "execution": {
+        "leaseUntil": "<ts>",
+        "token": "<id:9>"
+      },
+      "finishedAt": "<ts>",
+      "id": "<id:7>",
+      "ledgerRunIds": [
+        "chat-<id:3>"
+      ],
+      "modelId": null,
+      "ownerId": "golden-user",
+      "queuedAt": "<ts>",
+      "reason": {
+        "at": "<ts>",
+        "code": "APPROVAL_REJECTED",
+        "message": "The owner rejected running dangerous"
+      },
+      "runNumber": 1,
+      "scheduledFor": "<ts>",
+      "startedAt": "<ts>",
+      "status": "cancelled",
+      "taskId": "st-<id:8>",
+      "taskName": "Release watch",
+      "trigger": "manual",
+      "usage": {
+        "completionTokens": 8,
+        "promptTokens": 60,
+        "totalTokens": 68
+      },
+      "watched": false
+    },
+    "task": {
+      "activeRun": null,
+      "allowedTools": [],
+      "appId": "digest",
+      "consecutiveFailures": 0,
+      "createdAt": "<ts>",
+      "createdVia": "ui",
+      "description": "",
+      "effectiveRetention": {
+        "maxAgeDays": 90,
+        "maxRuns": 0
+      },
+      "enabledTools": null,
+      "id": "st-<id:8>",
+      "instructions": "Report the state of record A-1. Run {{run_number}}.",
+      "integrationScopes": null,
+      "lastRun": {
+        "chatId": "<id:1>",
+        "durationMs": "<ms>",
+        "finishedAt": "<ts>",
+        "id": "<id:7>",
+        "reason": {
+          "at": "<ts>",
+          "code": "APPROVAL_REJECTED",
+          "message": "The owner rejected running dangerous"
+        },
+        "scheduledFor": "<ts>",
+        "startedAt": "<ts>",
+        "status": "cancelled",
+        "trigger": "manual"
+      },
+      "lastRunAt": "<ts>",
+      "lastSuccessfulRunAt": null,
+      "memory": {
+        "enabled": false
+      },
+      "memorySummary": null,
+      "modelId": null,
+      "name": "Release watch",
+      "nextRunAt": "<ts>",
+      "nextSlotAt": "<ts>",
+      "notify": "always",
+      "owner": {
+        "name": "Golden User",
+        "userId": "golden-user",
+        "username": "golden-user"
+      },
+      "ownerId": "golden-user",
+      "retention": null,
+      "runNumber": 1,
+      "schedule": {
+        "time": "08:00",
+        "timezone": "Europe/Berlin",
+        "type": "daily"
+      },
+      "scheduleDescription": "Every day at 08:00, time zone Europe/Berlin",
+      "scheduledRunCount": 0,
+      "schemaVersion": 1,
+      "staggerMinutes": 0,
+      "status": "active",
+      "statusReason": null,
+      "unseenCount": 0,
+      "unseenRuns": [],
+      "upcomingRuns": [
+        "<ts>",
+        "<ts>",
+        "<ts>"
+      ],
+      "updatedAt": "<ts>",
+      "variables": null,
+      "websearchEnabled": null
+    }
+  },
+  "storedMessage": {
+    "chat": {
+      "activeRunId": null,
+      "appId": "digest",
+      "createdAt": "<ts>",
+      "hasUnseenActivity": true,
+      "id": "<id:1>",
+      "identityMode": "default",
+      "lastMessageAt": "<ts>",
+      "messageCount": 1,
+      "modelId": "golden-model",
+      "origin": {
+        "createdVia": "scheduled-task",
+        "runId": "<id:7>",
+        "taskId": "st-<id:8>",
+        "taskName": "Release watch"
+      },
+      "ownerId": "golden-user",
+      "runIds": [
+        "chat-<id:3>"
+      ],
+      "settings": null,
+      "status": "active",
+      "title": "Release watch · <when>",
+      "titleSetByUser": false
+    },
+    "messages": [
+      {
+        "clientMessageId": "<id:2>",
+        "content": "Report the state of record A-1. Run 1.",
+        "id": "<id:10>",
+        "role": "user",
+        "runId": "chat-<id:3>",
+        "ts": "<ts>"
+      }
+    ]
+  },
+  "surface": "scheduled-task",
+  "title": "A run without a person calls a tool that needs approval: the run waits, the owner refuses, and the run ends cancelled without another model call.",
+  "toolCalls": [
+    {
+      "args": {
+        "key": "A-1"
+      },
+      "execution": "clarification",
+      "outcome": null,
+      "runId": "chat-<id:3>",
+      "toolId": "dangerous"
+    }
+  ],
+  "toolSchemas": {
+    "c7a040393456": {
+      "properties": {
+        "key": {
+          "description": "The key of the record",
+          "type": "string"
+        }
+      },
+      "required": [
+        "key"
+      ],
+      "type": "object"
+    }
+  },
+  "usageRecords": [
+    {
+      "app": "digest",
+      "cid": "<id:1>",
+      "ct": 8,
+      "grp": [
+        "users"
+      ],
+      "lat": "<ms>",
+      "model": "golden-model",
+      "prov": "openai",
+      "pt": 60,
+      "rid": "req-<id:6>",
+      "src": "provider",
+      "st": "ok",
+      "surf": "task",
+      "tc": 1,
+      "ts": "<ts>",
+      "ttft": "<ms>",
+      "type": "llm_call",
+      "uid": "<id:1>",
+      "v": 2
+    }
+  ]
+}

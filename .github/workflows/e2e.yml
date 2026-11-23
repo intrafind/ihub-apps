@@ -24,6 +24,14 @@
 #   (scripts/check-difference-signatures.js). No review event starts this
 #   workflow: a run started by a review would report the gate job as skipped, and
 #   a skipped job counts as passed. After the owner approved, re-run this job.
+#   The job also holds a pull request that records goldens to its title: when
+#   the title has the type test, docs or ci and the diff touches a file under
+#   server/tests/golden/__goldens__, a file in production code (server outside
+#   server/tests, shared, client) fails it (scripts/check-test-only-diff.js).
+#   The goldens are recorded in such a pull request, before the code they pin
+#   is changed. The script reads the title from GitHub when it runs, because a
+#   job that is run again replays its event with the title of then. A changed
+#   title does not start the workflow; re-run the job after changing it.
 #   For the same reason the workflow does not start on `edited` (a new target
 #   branch, a new title, a new description): the gate job would have to be
 #   skipped on such a run, and with the concurrency group below the run would
@@ -142,7 +150,17 @@ jobs:
         with:
           node-version: '24'
 
-      # Both checks use only what Node ships with: no install step.
+      # The checks use only what Node ships with: no install step.
+      - name: A test-only pull request that records goldens changes no production code
+        env:
+          # The script asks GitHub for the title the pull request has now. The title of the
+          # event is the one of the time the workflow started, also when the job is run again.
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          # The branch this pull request is opened against (see the next step).
+          TEST_ONLY_BASE_REF: origin/${{ github.event.pull_request.base.ref }}
+        run: node scripts/check-test-only-diff.js
+
       - name: Every changed golden is named by a row
         env:
           # The branch this pull request is opened against, not github.base_ref: for a pull

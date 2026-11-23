@@ -1,0 +1,994 @@
+{
+  "approvals": [],
+  "case": "responses-stream",
+  "envelopes": [],
+  "evidence": [
+    {
+      "record": {
+        "app": {
+          "config": "sha256:05b91a4fb858b53299d86fffca9f5e5936cdfa722855f17ba00f6c651ffa20da",
+          "id": "desk"
+        },
+        "calls": [
+          {
+            "attempt": 1,
+            "config": "<sha256>",
+            "endedAt": "<ts>",
+            "messageCount": 2,
+            "messages": {
+              "append": [
+                {
+                  "message": "sha256:5fe19b5d5302038bf339aca641ab63ae06b92d80643652171b20ac379af552f3",
+                  "role": "system"
+                },
+                {
+                  "message": "sha256:f08a72b93f9dfe33285e950fa9aee82ccc36ee12376655ac64a4c90bd206cae9",
+                  "role": "user"
+                }
+              ],
+              "from": null
+            },
+            "messagesHash": "<hash>",
+            "model": "golden-model",
+            "modelId": "gpt-golden",
+            "output": "sha256:54e7fedacd9a227ba774f63e90bb54cd7357ce47af3af0d1764d34eba2985ba9",
+            "provider": "openai",
+            "purpose": "agent-step",
+            "requestId": "req-<id:4>",
+            "segment": "seg-<id:3>",
+            "startedAt": "<ts>",
+            "status": "ok",
+            "step": 1,
+            "tools": [
+              "sha256:b2a9e321c2ca167dc6460df6a2e7ef36d8853908e7ec62cb0d94c95010706991"
+            ]
+          },
+          {
+            "attempt": 1,
+            "config": "<sha256>",
+            "endedAt": "<ts>",
+            "messageCount": 4,
+            "messages": {
+              "append": [
+                {
+                  "message": "sha256:aed7f0e24bc865171241fc5006cbb8114e95186e043bc1764946806135a5cf20",
+                  "role": "assistant"
+                },
+                {
+                  "message": "sha256:307a6c45dcc5316165c318e8c529ca005a35761a442e8d0e756f86957eff5419",
+                  "role": "tool"
+                }
+              ],
+              "from": 0
+            },
+            "messagesHash": "<hash>",
+            "model": "golden-model",
+            "modelId": "gpt-golden",
+            "output": "sha256:0ad637134db50b058ae9c7337f55c1ce74f9664a00df31a3579518ffaa41894d",
+            "provider": "openai",
+            "purpose": "agent-step",
+            "requestId": "req-<id:5>",
+            "segment": "seg-<id:3>",
+            "startedAt": "<ts>",
+            "status": "ok",
+            "step": 2,
+            "tools": [
+              "sha256:b2a9e321c2ca167dc6460df6a2e7ef36d8853908e7ec62cb0d94c95010706991"
+            ]
+          }
+        ],
+        "content": {
+          "05b91a4fb858b53299d86fffca9f5e5936cdfa722855f17ba00f6c651ffa20da": "chat-<id:2>",
+          "0ad637134db50b058ae9c7337f55c1ce74f9664a00df31a3579518ffaa41894d": "chat-<id:2>",
+          "25e1af75e71bb8b29933dfae3a5f0e2ff7508922e97ae36dc512cd20f4771ee3": "chat-<id:2>",
+          "307a6c45dcc5316165c318e8c529ca005a35761a442e8d0e756f86957eff5419": "chat-<id:2>",
+          "3b0432e78b1d3e99befacca60fc3efdf1aa3739ac1bde4dd94a0d8ac86e394da": "chat-<id:2>",
+          "54e7fedacd9a227ba774f63e90bb54cd7357ce47af3af0d1764d34eba2985ba9": "chat-<id:2>",
+          "5fe19b5d5302038bf339aca641ab63ae06b92d80643652171b20ac379af552f3": "chat-<id:2>",
+          "<config>": 1,
+          "aed7f0e24bc865171241fc5006cbb8114e95186e043bc1764946806135a5cf20": "chat-<id:2>",
+          "b2a9e321c2ca167dc6460df6a2e7ef36d8853908e7ec62cb0d94c95010706991": "chat-<id:2>",
+          "f08a72b93f9dfe33285e950fa9aee82ccc36ee12376655ac64a4c90bd206cae9": "chat-<id:2>"
+        },
+        "endedAt": "<ts>",
+        "ihubVersion": "<version>",
+        "journalEnded": true,
+        "knowledge": [],
+        "model": {
+          "id": "golden-model",
+          "modelId": "gpt-golden",
+          "provider": "openai",
+          "settings": {
+            "maxTokens": 16384
+          }
+        },
+        "output": {
+          "contentSha256": "0ccdd28a4e10ce410ddc3014c22b5cd8530ead620a2363d1d6e488da8a3d1b9a",
+          "files": [],
+          "finishReason": "stop",
+          "provenanceId": "<id:7>",
+          "usage": {
+            "completionTokens": 14,
+            "promptTokens": 102,
+            "source": "provider",
+            "totalTokens": 116
+          }
+        },
+        "runId": "chat-<id:2>",
+        "startedAt": "<ts>",
+        "status": "completed",
+        "toolCalls": [
+          {
+            "activityKind": "tool",
+            "activityOrigin": "integration",
+            "args": "sha256:25e1af75e71bb8b29933dfae3a5f0e2ff7508922e97ae36dc512cd20f4771ee3",
+            "argsRepaired": false,
+            "callId": "call_1",
+            "durationMs": "<ms>",
+            "endedAt": "<ts>",
+            "execution": "server",
+            "integration": "lookup",
+            "name": "lookup",
+            "result": "sha256:3b0432e78b1d3e99befacca60fc3efdf1aa3739ac1bde4dd94a0d8ac86e394da",
+            "resultBytes": 34,
+            "resultSource": "message",
+            "startedAt": "<ts>",
+            "step": 1,
+            "title": "lookup",
+            "toolId": "lookup"
+          }
+        ],
+        "userId": "golden-user",
+        "v": 2
+      },
+      "runId": "chat-<id:2>"
+    }
+  ],
+  "httpResponse": {
+    "exchanges": [
+      {
+        "request": {
+          "body": {
+            "input": "Look up record A-1.",
+            "model": "app:desk",
+            "stream": true
+          },
+          "method": "POST",
+          "path": "/api/inference/v1/responses"
+        },
+        "response": {
+          "headers": {
+            "cache-control": "no-cache",
+            "content-type": "text/event-stream; charset=utf-8",
+            "x-accel-buffering": "no",
+            "x-ai-content-id": "<id:7>",
+            "x-ai-generated": "true",
+            "x-run-id": "chat-<id:2>"
+          },
+          "status": 200,
+          "stream": [
+            {
+              "data": {
+                "response": {
+                  "conversation": null,
+                  "created_at": "<volatile>",
+                  "error": null,
+                  "id": "resp_<id:8>",
+                  "incomplete_details": null,
+                  "instructions": null,
+                  "max_output_tokens": null,
+                  "metadata": {},
+                  "model": "app:desk/golden-model",
+                  "object": "response",
+                  "output": [],
+                  "parallel_tool_calls": false,
+                  "previous_response_id": null,
+                  "reasoning": {
+                    "effort": null,
+                    "summary": null
+                  },
+                  "status": "in_progress",
+                  "store": false,
+                  "temperature": null,
+                  "text": {
+                    "format": {
+                      "type": "text"
+                    }
+                  },
+                  "tool_choice": "auto",
+                  "tools": [],
+                  "top_p": 1,
+                  "truncation": "disabled",
+                  "usage": null,
+                  "user": null
+                },
+                "sequence_number": 0,
+                "type": "response.created"
+              },
+              "event": "response.created"
+            },
+            {
+              "data": {
+                "response": {
+                  "conversation": null,
+                  "created_at": "<volatile>",
+                  "error": null,
+                  "id": "resp_<id:8>",
+                  "incomplete_details": null,
+                  "instructions": null,
+                  "max_output_tokens": null,
+                  "metadata": {},
+                  "model": "app:desk/golden-model",
+                  "object": "response",
+                  "output": [],
+                  "parallel_tool_calls": false,
+                  "previous_response_id": null,
+                  "reasoning": {
+                    "effort": null,
+                    "summary": null
+                  },
+                  "status": "in_progress",
+                  "store": false,
+                  "temperature": null,
+                  "text": {
+                    "format": {
+                      "type": "text"
+                    }
+                  },
+                  "tool_choice": "auto",
+                  "tools": [],
+                  "top_p": 1,
+                  "truncation": "disabled",
+                  "usage": null,
+                  "user": null
+                },
+                "sequence_number": 1,
+                "type": "response.in_progress"
+              },
+              "event": "response.in_progress"
+            },
+            {
+              "data": {
+                "item": {
+                  "arguments": "{\"key\":\"A-1\"}",
+                  "call_id": "call_1",
+                  "id": "tc_<id:9>",
+                  "name": "lookup",
+                  "output": null,
+                  "status": "in_progress",
+                  "type": "ihub_tool_call"
+                },
+                "output_index": 0,
+                "sequence_number": 2,
+                "type": "response.output_item.added"
+              },
+              "event": "response.output_item.added"
+            },
+            {
+              "data": {
+                "item": {
+                  "arguments": "{\"key\":\"A-1\"}",
+                  "call_id": "call_1",
+                  "id": "tc_<id:9>",
+                  "name": "lookup",
+                  "output": "{\"key\":\"A-1\",\"value\":\"record A-1\"}",
+                  "status": "completed",
+                  "type": "ihub_tool_call"
+                },
+                "output_index": 0,
+                "sequence_number": 3,
+                "type": "response.output_item.done"
+              },
+              "event": "response.output_item.done"
+            },
+            {
+              "data": {
+                "item": {
+                  "content": [],
+                  "id": "msg_<id:10>",
+                  "role": "assistant",
+                  "status": "in_progress",
+                  "type": "message"
+                },
+                "output_index": 1,
+                "sequence_number": 4,
+                "type": "response.output_item.added"
+              },
+              "event": "response.output_item.added"
+            },
+            {
+              "data": {
+                "content_index": 0,
+                "item_id": "msg_<id:10>",
+                "output_index": 1,
+                "part": {
+                  "annotations": [],
+                  "logprobs": [],
+                  "text": "",
+                  "type": "output_text"
+                },
+                "sequence_number": 5,
+                "type": "response.content_part.added"
+              },
+              "event": "response.content_part.added"
+            },
+            {
+              "data": {
+                "content_index": 0,
+                "delta": "Record A-1 ",
+                "item_id": "msg_<id:10>",
+                "logprobs": [],
+                "output_index": 1,
+                "sequence_number": 6,
+                "type": "response.output_text.delta"
+              },
+              "event": "response.output_text.delta"
+            },
+            {
+              "data": {
+                "content_index": 0,
+                "delta": "is open.",
+                "item_id": "msg_<id:10>",
+                "logprobs": [],
+                "output_index": 1,
+                "sequence_number": 7,
+                "type": "response.output_text.delta"
+              },
+              "event": "response.output_text.delta"
+            },
+            {
+              "data": {
+                "content_index": 0,
+                "item_id": "msg_<id:10>",
+                "logprobs": [],
+                "output_index": 1,
+                "sequence_number": 8,
+                "text": "Record A-1 is open.",
+                "type": "response.output_text.done"
+              },
+              "event": "response.output_text.done"
+            },
+            {
+              "data": {
+                "content_index": 0,
+                "item_id": "msg_<id:10>",
+                "output_index": 1,
+                "part": {
+                  "annotations": [],
+                  "logprobs": [],
+                  "text": "Record A-1 is open.",
+                  "type": "output_text"
+                },
+                "sequence_number": 9,
+                "type": "response.content_part.done"
+              },
+              "event": "response.content_part.done"
+            },
+            {
+              "data": {
+                "item": {
+                  "content": [
+                    {
+                      "annotations": [],
+                      "logprobs": [],
+                      "text": "Record A-1 is open.",
+                      "type": "output_text"
+                    }
+                  ],
+                  "id": "msg_<id:10>",
+                  "role": "assistant",
+                  "status": "completed",
+                  "type": "message"
+                },
+                "output_index": 1,
+                "sequence_number": 10,
+                "type": "response.output_item.done"
+              },
+              "event": "response.output_item.done"
+            },
+            {
+              "data": {
+                "response": {
+                  "conversation": null,
+                  "created_at": "<volatile>",
+                  "error": null,
+                  "id": "resp_<id:8>",
+                  "incomplete_details": null,
+                  "instructions": null,
+                  "max_output_tokens": null,
+                  "metadata": {},
+                  "model": "app:desk/golden-model",
+                  "object": "response",
+                  "output": [
+                    {
+                      "arguments": "{\"key\":\"A-1\"}",
+                      "call_id": "call_1",
+                      "id": "tc_<id:9>",
+                      "name": "lookup",
+                      "output": "{\"key\":\"A-1\",\"value\":\"record A-1\"}",
+                      "status": "completed",
+                      "type": "ihub_tool_call"
+                    },
+                    {
+                      "content": [
+                        {
+                          "annotations": [],
+                          "logprobs": [],
+                          "text": "Record A-1 is open.",
+                          "type": "output_text"
+                        }
+                      ],
+                      "id": "msg_<id:10>",
+                      "role": "assistant",
+                      "status": "completed",
+                      "type": "message"
+                    }
+                  ],
+                  "parallel_tool_calls": false,
+                  "previous_response_id": null,
+                  "provenance": {
+                    "ai_generated": true,
+                    "content_hash": {
+                      "alg": "sha-256",
+                      "normalization": "nfc-trim",
+                      "value": "0ccdd28a4e10ce410ddc3014c22b5cd8530ead620a2363d1d6e488da8a3d1b9a"
+                    },
+                    "created_at": "<volatile>",
+                    "generator": {
+                      "installation_id": "inst_<id:6>",
+                      "product": "iHub Apps",
+                      "version": "<version>"
+                    },
+                    "model": {
+                      "id": "golden-model",
+                      "watermark": {
+                        "applied": false,
+                        "by": "none"
+                      }
+                    },
+                    "output_id": "<id:7>",
+                    "spec": "intrafind-provenance/1.0"
+                  },
+                  "reasoning": {
+                    "effort": null,
+                    "summary": null
+                  },
+                  "status": "completed",
+                  "store": false,
+                  "temperature": null,
+                  "text": {
+                    "format": {
+                      "type": "text"
+                    }
+                  },
+                  "tool_choice": "auto",
+                  "tools": [],
+                  "top_p": 1,
+                  "truncation": "disabled",
+                  "usage": {
+                    "input_tokens": 102,
+                    "input_tokens_details": {
+                      "cached_tokens": 0
+                    },
+                    "output_tokens": 14,
+                    "output_tokens_details": {
+                      "reasoning_tokens": 0
+                    },
+                    "total_tokens": 116
+                  },
+                  "user": null
+                },
+                "sequence_number": 11,
+                "type": "response.completed"
+              },
+              "event": "response.completed"
+            }
+          ]
+        }
+      }
+    ]
+  },
+  "ledger": [
+    {
+      "data": {
+        "kind": "chat",
+        "language": "en",
+        "model": "golden-model",
+        "principal": {
+          "anonymous": false,
+          "id": "golden-user",
+          "mode": "default"
+        },
+        "refs": {
+          "appId": "desk",
+          "chatId": "inference-api:<id:1>"
+        },
+        "trigger": {
+          "type": "user"
+        }
+      },
+      "runId": "chat-<id:2>",
+      "type": "run/start"
+    },
+    {
+      "data": {
+        "purpose": "agent-step",
+        "segment": "seg-<id:3>"
+      },
+      "runId": "chat-<id:2>",
+      "type": "segment/start"
+    },
+    {
+      "data": {
+        "callConfig": {
+          "maxTokens": 16384,
+          "nativeWebSearch": null,
+          "responseFormat": null,
+          "responseSchemaHash": null,
+          "stream": true,
+          "thinking": null
+        },
+        "configHash": "<volatile>",
+        "language": "en",
+        "messageCount": 2,
+        "messages": [
+          {
+            "content": "You are the desk.\n\nYou are an AI system. If asked, always say so. Never claim to be human, even in a role.",
+            "role": "system"
+          },
+          {
+            "content": "Look up record A-1.",
+            "role": "user"
+          }
+        ],
+        "messagesHash": "<hash>",
+        "model": "golden-model",
+        "modelId": "gpt-golden",
+        "modelSnapshot": {
+          "autoDiscovery": false,
+          "default": true,
+          "id": "golden-model",
+          "modelId": "gpt-golden",
+          "provider": "openai",
+          "supportsTools": "auto",
+          "url": "https://model.invalid/v1/chat/completions"
+        },
+        "optionsSnapshot": {
+          "appConfig": {
+            "description": {
+              "en": "The desk app"
+            },
+            "enabled": true,
+            "id": "desk",
+            "integrations": {
+              "lookup": {}
+            },
+            "name": {
+              "en": "desk"
+            },
+            "preferredModel": "golden-model",
+            "system": {
+              "en": "You are the desk."
+            }
+          },
+          "chatId": "inference-api:<id:1>",
+          "imageConfig": null,
+          "integrationScopes": {},
+          "language": "en",
+          "maxTokens": 16384,
+          "nativeWebSearch": null,
+          "stream": true,
+          "user": {
+            "id": "golden-user"
+          }
+        },
+        "provider": "openai",
+        "purpose": "agent-step",
+        "reason": "initial",
+        "requestHash": "<hash>",
+        "requestId": "req-<id:4>",
+        "segment": "seg-<id:3>",
+        "step": 1,
+        "toolExecution": "server",
+        "toolSchemas": [
+          {
+            "_integration": {
+              "action": "lookup",
+              "actionTitle": "lookup",
+              "definition": "test.fixture/lookup",
+              "fingerprint": "sha256:bc7875865e9da481dc2ab49f6f962f5f4431b52f241441cb0e3ebcc8859832ba",
+              "fixedToolId": true,
+              "instanceId": "lookup",
+              "instanceLabel": "lookup"
+            },
+            "approval": "never",
+            "approvalSource": "default",
+            "dataFlow": "external",
+            "description": "Look up a record",
+            "examples": [],
+            "id": "lookup",
+            "name": "lookup: lookup",
+            "parameters": {
+              "properties": {
+                "key": {
+                  "description": "The key of the record",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "key"
+              ],
+              "type": "object"
+            },
+            "readOnly": true,
+            "sideEffect": "read",
+            "sideEffectSource": "definition",
+            "type": "integration"
+          }
+        ],
+        "toolSchemasHash": "38c10263d989180a38c1e251795c9ff8bbc1d90293ea524b760de4bfd28b9854"
+      },
+      "runId": "chat-<id:2>",
+      "type": "request/header"
+    },
+    {
+      "data": {
+        "content": "",
+        "finishReason": "tool_calls",
+        "hasImages": false,
+        "requestId": "req-<id:4>",
+        "step": 1,
+        "toolCalls": [
+          {
+            "arguments": "{\"key\":\"A-1\"}",
+            "id": "call_1",
+            "index": 0,
+            "metadata": {
+              "originalFormat": "openai",
+              "type": "function"
+            },
+            "name": "lookup",
+            "type": "function"
+          }
+        ],
+        "usage": {
+          "completionTokens": 8,
+          "promptTokens": 40,
+          "source": "provider",
+          "totalTokens": 48
+        }
+      },
+      "runId": "chat-<id:2>",
+      "type": "message/assistant"
+    },
+    {
+      "data": {
+        "limits": {
+          "maxTokensPerRun": 0,
+          "maxToolRounds": 50
+        },
+        "runUsage": {
+          "completionTokens": 8,
+          "promptTokens": 40,
+          "totalTokens": 48
+        },
+        "step": 1,
+        "usage": {
+          "completionTokens": 8,
+          "promptTokens": 40,
+          "source": "provider",
+          "totalTokens": 48
+        }
+      },
+      "runId": "chat-<id:2>",
+      "type": "budget/checkpoint"
+    },
+    {
+      "data": {
+        "activityKind": "tool",
+        "activityOrigin": "integration",
+        "args": {
+          "key": "A-1"
+        },
+        "argsRepaired": false,
+        "callId": "call_1",
+        "execution": "server",
+        "integration": "lookup",
+        "name": "lookup",
+        "parallelGroup": 0,
+        "step": 1,
+        "title": "lookup",
+        "toolId": "lookup"
+      },
+      "runId": "chat-<id:2>",
+      "type": "tool/call"
+    },
+    {
+      "data": {
+        "callId": "call_1",
+        "durationMs": "<ms>",
+        "hasImage": false,
+        "knowledgeSource": "integration",
+        "name": "lookup",
+        "resultBytes": 34,
+        "resultPreview": "{\"key\":\"A-1\",\"value\":\"record A-1\"}",
+        "step": 1,
+        "toolId": "lookup"
+      },
+      "runId": "chat-<id:2>",
+      "type": "tool/result"
+    },
+    {
+      "data": {
+        "callConfig": {
+          "maxTokens": 16384,
+          "nativeWebSearch": null,
+          "responseFormat": null,
+          "responseSchemaHash": null,
+          "stream": true,
+          "thinking": null
+        },
+        "configHash": "<volatile>",
+        "language": "en",
+        "messageCount": 4,
+        "messagesDelta": [
+          {
+            "content": null,
+            "role": "assistant",
+            "tool_calls": [
+              {
+                "function": {
+                  "arguments": "{\"key\":\"A-1\"}",
+                  "name": "lookup"
+                },
+                "id": "call_1",
+                "index": 0,
+                "metadata": {
+                  "originalFormat": "openai",
+                  "type": "function"
+                },
+                "type": "function"
+              }
+            ]
+          },
+          {
+            "content": "{\"key\":\"A-1\",\"value\":\"record A-1\"}",
+            "name": "lookup",
+            "role": "tool",
+            "tool_call_id": "call_1"
+          }
+        ],
+        "messagesHash": "<hash>",
+        "model": "golden-model",
+        "modelId": "gpt-golden",
+        "provider": "openai",
+        "purpose": "agent-step",
+        "reason": "append",
+        "requestHash": "<hash>",
+        "requestId": "req-<id:5>",
+        "segment": "seg-<id:3>",
+        "step": 2,
+        "toolExecution": "server",
+        "toolSchemasHash": "38c10263d989180a38c1e251795c9ff8bbc1d90293ea524b760de4bfd28b9854"
+      },
+      "runId": "chat-<id:2>",
+      "type": "request/header"
+    },
+    {
+      "data": {
+        "content": "Record A-1 is open.",
+        "finishReason": "stop",
+        "hasImages": false,
+        "requestId": "req-<id:5>",
+        "step": 2,
+        "toolCalls": [],
+        "usage": {
+          "completionTokens": 6,
+          "promptTokens": 62,
+          "source": "provider",
+          "totalTokens": 68
+        }
+      },
+      "runId": "chat-<id:2>",
+      "type": "message/assistant"
+    },
+    {
+      "data": {
+        "limits": {
+          "maxTokensPerRun": 0,
+          "maxToolRounds": 50
+        },
+        "runUsage": {
+          "completionTokens": 14,
+          "promptTokens": 102,
+          "totalTokens": 116
+        },
+        "step": 2,
+        "usage": {
+          "completionTokens": 6,
+          "promptTokens": 62,
+          "source": "provider",
+          "totalTokens": 68
+        }
+      },
+      "runId": "chat-<id:2>",
+      "type": "budget/checkpoint"
+    },
+    {
+      "data": {
+        "answerBasis": [
+          {
+            "kind": "integration",
+            "label": "lookup"
+          }
+        ],
+        "durationMs": "<ms>",
+        "finishReason": "stop",
+        "knowledgeSources": [
+          "integration"
+        ],
+        "provenance": {
+          "ai_generated": true,
+          "content_hash": {
+            "alg": "sha-256",
+            "normalization": "nfc-trim",
+            "value": "0ccdd28a4e10ce410ddc3014c22b5cd8530ead620a2363d1d6e488da8a3d1b9a"
+          },
+          "created_at": "<volatile>",
+          "generator": {
+            "installation_id": "inst_<id:6>",
+            "product": "iHub Apps",
+            "version": "<version>"
+          },
+          "model": {
+            "id": "golden-model",
+            "watermark": {
+              "applied": false,
+              "by": "none"
+            }
+          },
+          "output_id": "<id:7>",
+          "spec": "intrafind-provenance/1.0"
+        },
+        "status": "completed",
+        "usage": {
+          "completionTokens": 14,
+          "promptTokens": 102,
+          "source": "provider",
+          "totalTokens": 116
+        }
+      },
+      "runId": "chat-<id:2>",
+      "type": "run/end"
+    }
+  ],
+  "modelRequests": [
+    {
+      "options": {
+        "max_tokens": 16384,
+        "model": "gpt-golden",
+        "stream": true,
+        "stream_options": {
+          "include_usage": true
+        }
+      },
+      "roles": [
+        "system",
+        "user"
+      ],
+      "systemPromptHash": "7e2ecb9b544818ea637c14103ae9456cde94522463b809261e14d8afaac66f97",
+      "tools": [
+        {
+          "name": "lookup",
+          "schema": "c7a040393456"
+        }
+      ]
+    },
+    {
+      "options": {
+        "max_tokens": 16384,
+        "model": "gpt-golden",
+        "stream": true,
+        "stream_options": {
+          "include_usage": true
+        }
+      },
+      "roles": [
+        "system",
+        "user",
+        "assistant",
+        "tool"
+      ],
+      "systemPromptHash": "7e2ecb9b544818ea637c14103ae9456cde94522463b809261e14d8afaac66f97",
+      "tools": [
+        {
+          "name": "lookup",
+          "schema": "c7a040393456"
+        }
+      ]
+    }
+  ],
+  "offeredToolIds": [
+    [
+      "lookup"
+    ],
+    [
+      "lookup"
+    ]
+  ],
+  "surface": "inference-app",
+  "title": "A turn of an app through /responses, streamed as response events.",
+  "toolCalls": [
+    {
+      "args": {
+        "key": "A-1"
+      },
+      "execution": "server",
+      "outcome": {
+        "result": "{\"key\":\"A-1\",\"value\":\"record A-1\"}"
+      },
+      "runId": "chat-<id:2>",
+      "toolId": "lookup"
+    }
+  ],
+  "toolSchemas": {
+    "c7a040393456": {
+      "properties": {
+        "key": {
+          "description": "The key of the record",
+          "type": "string"
+        }
+      },
+      "required": [
+        "key"
+      ],
+      "type": "object"
+    }
+  },
+  "usageRecords": [
+    {
+      "app": "desk",
+      "cid": "inference-api:<id:1>",
+      "ct": 8,
+      "grp": [
+        "users"
+      ],
+      "lat": "<ms>",
+      "model": "golden-model",
+      "prov": "openai",
+      "pt": 40,
+      "rid": "req-<id:4>",
+      "src": "provider",
+      "st": "ok",
+      "surf": "chat",
+      "tc": 1,
+      "ts": "<ts>",
+      "ttft": "<ms>",
+      "type": "llm_call",
+      "uid": "inference-api:<id:1>",
+      "v": 2
+    },
+    {
+      "app": "desk",
+      "cid": "inference-api:<id:1>",
+      "ct": 6,
+      "grp": [
+        "users"
+      ],
+      "lat": "<ms>",
+      "model": "golden-model",
+      "prov": "openai",
+      "pt": 62,
+      "rid": "req-<id:5>",
+      "src": "provider",
+      "st": "ok",
+      "surf": "chat",
+      "tc": 0,
+      "ts": "<ts>",
+      "ttft": "<ms>",
+      "type": "llm_call",
+      "uid": "inference-api:<id:1>",
+      "v": 2
+    }
+  ]
+}

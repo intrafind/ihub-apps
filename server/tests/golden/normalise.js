@@ -59,6 +59,8 @@ export const DURATION_KEYS = new Set([
   'ttftMs',
   'waitMs',
   'queuedMs',
+  // How long a paused run waited for its answer.
+  'pausedMs',
   'took',
   // The short names of a usage record: latency and time to first token.
   'lat',
@@ -125,13 +127,17 @@ function sortKeys(value) {
  * @param {string[]} [options.tmpDirs=[os.tmpdir()]] - Directories under which temporary paths are created.
  * @param {RegExp[]} [options.idPatterns] - Added to {@link DEFAULT_ID_PATTERNS}; one capture group each.
  * @param {string[]} [options.volatileKeys] - More keys whose value is replaced by `<volatile>`.
+ * @param {Array<{pattern: RegExp, replace: string}>} [options.textRules] - More replacements inside
+ *   strings, for a value that holds the date in a form of its own (the title of a scheduled run's
+ *   chat). Applied before the id patterns.
  * @returns {{normalise: (value: any) => any, text: (value: string) => string, ids: Map<string, number>}}
  */
 export function createNormaliser({
   appVersion,
   tmpDirs = [os.tmpdir()],
   idPatterns = [],
-  volatileKeys = []
+  volatileKeys = [],
+  textRules = []
 } = {}) {
   /** @type {Map<string, number>} */
   const ids = new Map();
@@ -153,6 +159,7 @@ export function createNormaliser({
     for (const pattern of tmpPatterns) out = out.replace(pattern, '<tmp>');
     out = applyDateRule(out);
     out = out.replace(ISO_TIMESTAMP, '<ts>');
+    for (const rule of textRules) out = out.replace(rule.pattern, rule.replace);
     for (const pattern of patterns) {
       out = out.replace(pattern, (match, id) => match.replace(id, idToken(id)));
     }
@@ -456,12 +463,25 @@ export function normaliseEnvelopes(deliveries, normaliser, groups = new Map()) {
  * Normalise run ledger events: check and drop `seq`, order parallel groups,
  * then apply the value rules.
  *
+ * `seq` increases within a run for as long as one process writes it. A case
+ * that lets its server die names the places (`restartsAt`), and the check
+ * runs over each stretch between them on its own: what the next process does
+ * with the sequence of a run it did not start is for the case to record, not
+ * for this check to assume.
+ *
  * @param {Object[]} events - As appended, in order.
  * @param {ReturnType<typeof createNormaliser>} normaliser
+ * @param {Object} [options]
+ * @param {number[]} [options.restartsAt=[]] - Indexes into `events`: the first event after each
+ *   restart of the server.
  * @returns {Array<{type: string, runId: string, data: any}>}
  */
-export function normaliseLedger(events, normaliser) {
-  assertIncreasing(events, 'seq', event => event.runId || '');
+export function normaliseLedger(events, normaliser, { restartsAt = [] } = {}) {
+  let from = 0;
+  for (const to of [...restartsAt, events.length]) {
+    assertIncreasing(events.slice(from, to), 'seq', event => event.runId || '');
+    from = to;
+  }
   return orderParallelGroups(events).map(event =>
     normaliser.normalise({ type: event.type, runId: event.runId, data: event.data ?? null })
   );
