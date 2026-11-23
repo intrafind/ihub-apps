@@ -776,6 +776,18 @@ export const platformConfigSchema = z
       })
       .passthrough()
       .prefault({}),
+    // App drafts with AI (feature `appGenerator`): `modelId` names the chat
+    // model that prepares a draft, for admin and personal apps alike. Unset or
+    // empty means the automatic choice (the standard chat model among those the
+    // caller may use). A configured model is used only for callers whose groups
+    // may use it; everyone else gets the automatic choice. Read through
+    // `services/appGenerator.js` (`appGeneratorSettings`).
+    appGenerator: z
+      .object({
+        modelId: z.string().max(200).optional()
+      })
+      .passthrough()
+      .optional(),
     // Personal apps (feature `userApps`): apps users build themselves. The
     // parts `limits` and `sharing` follow `projects`; `maxAppsPerUser` of zero
     // means no limit and `ownerSnapshotMaxAgeDays` of zero never distrusts an
@@ -1206,6 +1218,22 @@ export const platformConfigSchema = z
       })
       .passthrough()
       .prefault({}),
+    /**
+     * Sign-in for iHub in a frame of another site (iFinder, a portal). Identity providers such as
+     * Microsoft Entra ID refuse to be framed, so the sign-in runs in a popup and the frame gets a
+     * partitioned `HttpOnly` cookie (`utils/embedAuth.js`). `enabled` switches it on (Admin →
+     * Integrations → iHub in another site); `allowedHostOrigins` lists the origins of the sites that
+     * may frame iHub, for example `https://ifinder.example.com`. Off, absent or with an empty list,
+     * nothing changes. While it is on, the app pages carry
+     * `Content-Security-Policy: frame-ancestors 'self' <origins>`, so no other site can frame iHub.
+     */
+    embedAuth: z
+      .object({
+        enabled: z.boolean().optional(),
+        allowedHostOrigins: z.array(z.string()).optional()
+      })
+      .passthrough()
+      .optional(),
     /**
      * Tool approval defaults (#2945): whether a person approves a model's tool
      * call before it runs. `defaults.internal` / `defaults.external` apply to

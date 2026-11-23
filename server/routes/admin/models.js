@@ -16,13 +16,16 @@ import { removeMarketplaceInstallation } from '../../utils/installationCleanup.j
 import { logAudit } from '../../services/AuditLogService.js';
 import { saveSnapshot } from '../../services/ChangeHistoryService.js';
 import { compareByOrderThenName } from '../../utils/resourceLoader.js';
-import llmClient, { isLLMError, LLM_ERROR_CODES } from '../../services/loop/LLMClient.js';
+import llmClient, { isLLMError } from '../../services/loop/LLMClient.js';
 import { getTtsProvider, isTtsModel } from '../../tts/index.js';
 import { isTranscriptionModel } from '../../transcription/index.js';
 import { testTranscriptionModel } from '../../websocket/realtimeTranscription.js';
 import { TTS_LANGUAGES } from '../../tts/language.js';
-import { llmErrorToHttpStatus, isMissingApiKeyError } from '../../services/loop/llmHttpErrors.js';
+import { llmErrorToHttpStatus } from '../../services/loop/llmHttpErrors.js';
+import { describeLlmFailure } from '../../services/loop/llmFailureCause.js';
 import { discoverModels, comparableUrl } from '../../services/ModelEndpointDiscovery.js';
+import { BEDROCK_API_TYPE, discoverBedrockModels } from '../../services/BedrockModelDiscovery.js';
+import { DEFAULT_BEDROCK_REGION, isValidBedrockRegion } from '../../../shared/bedrockRegions.js';
 import {
   BUILT_IN_LLM_PROVIDERS,
   gatewayModelProvider,
@@ -34,6 +37,7 @@ import {
 import { inspectModelApiKey } from '../../utils.js';
 import { usageLimitBucketSchema } from '../../validators/common.js';
 import { sendCreated, segment } from '../../utils/created.js';
+import { effectiveDefaultModelId, findModelDependants } from '../../utils/resourceDependants.js';
 
 /** Largest voice sample accepted (Mistral needs seconds, not minutes, of audio). */
 const MAX_VOICE_SAMPLE_BYTES = 10 * 1024 * 1024;
@@ -104,6 +108,39 @@ function voicesError(error, action) {
  * @returns {Promise<string|null>} Path relative to `contents/`, or null when
  *   the id is not usable as a file name
  */
+/**
+ * The `_discover` answer for a listing: the entries, each flagged with the iHub
+ * model that already points at it (`existingModelId`), so the admin does not
+ * import a model twice. A model "points at" a listed one when it has the same
+ * remote model id on the same endpoint; Bedrock models have no URL (the adapter
+ * builds it from the region), so there the remote id among the Bedrock models counts.
+ *
+ * @param {Object} result - `discoverModels` / `discoverBedrockModels` result
+ * @returns {Object} Response body
+ */
+function withExistingModels(result) {
+  const { data: configured = [] } = configCache.getModels(true);
+  const bedrock = result.provider === BEDROCK_API_TYPE;
+  const keyOf = (modelId, url) => (bedrock ? modelId : `${modelId}\n${comparableUrl(url)}`);
+  const existing = new Map();
+  for (const model of configured) {
+    if (bedrock && model.provider !== BEDROCK_API_TYPE) continue;
+    existing.set(keyOf(model.modelId, model.url), model.id);
+  }
+  return {
+    apiType: result.provider,
+    modelsUrl: result.modelsUrl,
+    baseUrl: result.baseUrl,
+    azure: result.azure,
+    gateway: result.gateway || null,
+    ...(result.region ? { region: result.region } : {}),
+    models: result.models.map(model => ({
+      ...model,
+      existingModelId: existing.get(keyOf(model.id, model.url)) || null
+    }))
+  };
+}
+
 function modelPath(modelId) {
   return configStore.resolveIdToPath('models', modelId);
 }
@@ -113,135 +150,6 @@ const MODEL_TEST_MESSAGE = 'Hello, can you respond with a simple "Test successfu
 
 /** Hard cap for one model test call (interactive admin request). */
 const MODEL_TEST_TIMEOUT_MS = 60000;
-
-/**
- * Socket-level failure codes (undici / Node `net`) that deserve a dedicated
- * explanation in the admin UI. Checked before the generic code mapping.
- */
-const MODEL_TEST_NETWORK_CAUSES = Object.freeze({
-  UND_ERR_CONNECT_TIMEOUT: {
-    userMessage: 'Connection timeout',
-    messageKey: 'connectionTimeout',
-    errorMessage:
-      'The model service did not respond within the timeout period. Please check if the model URL is correct and the service is running.'
-  },
-  ECONNREFUSED: {
-    userMessage: 'Connection refused',
-    messageKey: 'connectionRefused',
-    errorMessage:
-      'Unable to connect to the model service. Please verify the URL and ensure the service is running.'
-  },
-  ENOTFOUND: {
-    userMessage: 'Service not found',
-    messageKey: 'serviceNotFound',
-    errorMessage:
-      'The model service hostname could not be resolved. Please check the URL configuration.'
-  }
-});
-
-/**
- * Translate an `LLMError` raised by a model connectivity test into the
- * strings the admin UI shows: a short `userMessage` headline (English,
- * used as a fallback and in logs), a longer `errorMessage` with remediation
- * hints, and a `messageKey` — a stable identifier the client maps to a
- * translated headline (see shared/i18n/*.json `admin.models.testResults.messages`).
- *
- * Keys off `err.code` (and the underlying socket error code for network
- * failures) — never off message substrings, which differ per provider and
- * language.
- *
- * @param {import('../../services/loop/contracts/errors.js').LLMError} err
- * @returns {{ userMessage: string, errorMessage: string, messageKey: string }}
- */
-function describeModelTestFailure(err) {
-  // `fetch failed` wraps the socket error one level deeper (err.cause.cause);
-  // LLMClient also surfaces that code as providerCode for network failures.
-  const socketCode = String(err.providerCode || err.cause?.code || err.cause?.cause?.code || '');
-  if (MODEL_TEST_NETWORK_CAUSES[socketCode]) {
-    return MODEL_TEST_NETWORK_CAUSES[socketCode];
-  }
-
-  const fallback = {
-    userMessage: 'Model test failed',
-    messageKey: 'testFailed',
-    errorMessage: err.message || 'Unknown error occurred'
-  };
-
-  switch (err.code) {
-    case LLM_ERROR_CODES.NETWORK: {
-      const detail =
-        typeof err.details === 'string' && err.details
-          ? err.details
-          : err.cause?.message || err.message;
-      return {
-        userMessage: 'Network error',
-        messageKey: 'networkError',
-        errorMessage: `Network connection failed: ${detail}`
-      };
-    }
-    case LLM_ERROR_CODES.TIMEOUT:
-      return {
-        userMessage: 'Request timeout',
-        messageKey: 'requestTimeout',
-        errorMessage:
-          'The model service took too long to respond. Please try again or check the service status.'
-      };
-    case LLM_ERROR_CODES.AUTH_FAILED:
-      if (err.providerCode === 'API_KEY_UNDECRYPTABLE') {
-        return {
-          userMessage: 'Stored API key cannot be decrypted',
-          messageKey: 'apiKeyUndecryptable',
-          errorMessage: err.message
-        };
-      }
-      if (isMissingApiKeyError(err)) {
-        return {
-          userMessage: 'API key not configured',
-          messageKey: 'apiKeyNotConfigured',
-          errorMessage: err.message
-        };
-      }
-      if (err.status === 403) {
-        return {
-          userMessage: 'Access denied',
-          messageKey: 'accessDenied',
-          errorMessage: 'Access denied by the model service. Please check your API key permissions.'
-        };
-      }
-      return {
-        userMessage: 'Authentication failed',
-        messageKey: 'authenticationFailed',
-        errorMessage:
-          'Invalid API key or authentication credentials. Please check your model configuration.'
-      };
-    case LLM_ERROR_CODES.MODEL_NOT_FOUND:
-      return {
-        userMessage: 'Model not found',
-        messageKey: 'modelNotFound',
-        errorMessage:
-          'The specified model was not found on the service. Please check the model ID configuration.'
-      };
-    case LLM_ERROR_CODES.RATE_LIMITED:
-      return {
-        userMessage: 'Rate limit exceeded',
-        messageKey: 'rateLimitExceeded',
-        errorMessage: 'Too many requests to the model service. Please try again later.'
-      };
-    case LLM_ERROR_CODES.PROVIDER_ERROR:
-      if (typeof err.status === 'number' && err.status >= 500) {
-        return {
-          userMessage: 'Server error',
-          messageKey: 'serverError',
-          errorMessage: 'The model service encountered an internal error. Please try again later.'
-        };
-      }
-      return fallback;
-    default:
-      return fallback;
-  }
-}
-
-export { describeModelTestFailure };
 
 /**
  * Bring a model's link to a provider entry in line with that entry, in place:
@@ -347,6 +255,36 @@ async function ensureStoredDefault(exceptId) {
 }
 
 /**
+ * Response header that names the model the server made the platform default on
+ * its own, without the admin asking for it (AI-B13): the first enabled chat
+ * model when there was none, or the next one when the default was disabled or
+ * deleted. Sent by create, update, `_toggle` and delete (a `204` has no body, so a
+ * body member could not carry it). The value is the model id, URI-encoded.
+ */
+export const DEFAULT_MODEL_ASSIGNED_HEADER = 'Default-Model-Assigned';
+
+/** The model that answers when an app names none, as the config cache has it now. */
+function liveDefaultModelId() {
+  const { data = [] } = configCache.getModels(true);
+  return effectiveDefaultModelId(data);
+}
+
+/**
+ * Tell the admin when the default model changed to one they did not choose.
+ * Call it after the models cache was refreshed.
+ *
+ * @param {import('express').Response} res
+ * @param {string|null} previousId - The default before the change (`liveDefaultModelId()`)
+ * @param {string|null} [chosenId] - The model the request itself made the default, if any
+ */
+function announceAssignedDefault(res, previousId, chosenId = null) {
+  const currentId = liveDefaultModelId();
+  if (currentId && currentId !== previousId && currentId !== chosenId) {
+    res.setHeader(DEFAULT_MODEL_ASSIGNED_HEADER, encodeURIComponent(currentId));
+  }
+}
+
+/**
  * Validate a model's per-user token budget (`usageLimits: { day, week, month }`)
  * in place: windows left empty or set to -1 are unlimited and are dropped, and
  * an empty budget is removed. Used by both create and update.
@@ -363,6 +301,34 @@ function normalizeModelUsageLimits(model) {
   );
   if (Object.keys(limits).length) model.usageLimits = limits;
   else delete model.usageLimits;
+  return null;
+}
+
+/**
+ * Validate the region of a Bedrock model (`config.region`) in place: an empty
+ * value is removed (the provider's region or the environment applies), a set
+ * one is trimmed and must be an AWS region code or `global`. The adapter
+ * refuses a set but invalid region at call time; refusing it on save tells
+ * the admin before a user hits it. Other providers' `config` is not read.
+ *
+ * @param {Object} model
+ * @returns {string|null} An error message, or null when valid
+ */
+function normalizeBedrockModelRegion(model) {
+  if (model.provider !== 'bedrock') return null;
+  const config = model.config;
+  if (!config || typeof config !== 'object' || Array.isArray(config)) return null;
+  if (!('region' in config)) return null;
+  const { region, ...rest } = config;
+  if (region === undefined || region === null || region === '') {
+    model.config = rest;
+    return null;
+  }
+  const trimmed = typeof region === 'string' ? region.trim() : region;
+  if (!isValidBedrockRegion(trimmed)) {
+    return 'config.region must be an AWS region code such as eu-central-1, or global';
+  }
+  model.config = { ...rest, region: trimmed };
   return null;
 }
 
@@ -441,6 +407,15 @@ export default function registerAdminModelsRoutes(app) {
    *       `apiType` and an optional `apiKey` describe a provider that does
    *       not exist yet.
    *
+   *       AWS Bedrock (`providerId: bedrock` or `apiType: bedrock`) is listed
+   *       per region instead of per URL: `ListFoundationModels` and
+   *       `ListInferenceProfiles` of `bedrock.<region>.amazonaws.com`, with the
+   *       Bedrock API key as Bearer token. `region` is the AWS region (or
+   *       `global`); without it the provider's `config.region`, then
+   *       `AWS_REGION` / `AWS_DEFAULT_REGION`, then `eu-central-1` apply. A
+   *       model that needs a cross-region inference profile is listed under
+   *       the profile id; the answer then carries `region`.
+   *
    *       A failure on the endpoint's side answers 502 (never 401, which would
    *       end the admin session) with `{ error, details, messageKey }`.
    *     tags:
@@ -463,8 +438,12 @@ export default function registerAdminModelsRoutes(app) {
    *                 description: Existing LLM provider whose API type and key are used
    *               apiType:
    *                 type: string
-   *                 enum: [openai, openai-responses, mistral, local, anthropic, google]
+   *                 enum: [openai, openai-responses, mistral, local, anthropic, google, bedrock]
    *                 default: openai
+   *               region:
+   *                 type: string
+   *                 example: eu-central-1
+   *                 description: Bedrock only. AWS region code or `global`.
    *               gateway:
    *                 type: string
    *                 enum: [ifinder-model-gateway]
@@ -485,12 +464,15 @@ export default function registerAdminModelsRoutes(app) {
    *         description: The endpoint could not be reached or rejected the request
    */
   app.post(buildServerPath('/api/admin/models/_discover'), adminAuth, async (req, res) => {
-    const { url, providerId, apiType = 'openai', apiKey, gateway } = req.body || {};
+    const { url, providerId, apiType = 'openai', apiKey, gateway, region } = req.body || {};
     if (url !== undefined && url !== null && typeof url !== 'string') {
       throw new ServiceError('BAD_REQUEST', 'Invalid URL');
     }
     if (apiKey !== undefined && apiKey !== null && typeof apiKey !== 'string') {
       throw new ServiceError('BAD_REQUEST', 'Invalid API key');
+    }
+    if (region !== undefined && region !== null && typeof region !== 'string') {
+      throw new ServiceError('BAD_REQUEST', 'Invalid region');
     }
 
     let discoveryUrl = (url || '').trim();
@@ -498,6 +480,8 @@ export default function registerAdminModelsRoutes(app) {
     // Set for an iFinder Model Gateway, which lists and serves models on routes of its own.
     let discoveryGateway = typeof gateway === 'string' && gateway ? gateway : undefined;
     let discoveryKey = (apiKey || '').trim();
+    // Bedrock: the provider entry's region (`config.region`), read below.
+    let providerRegion;
 
     if (providerId !== undefined && providerId !== null && providerId !== '') {
       assertValidId(providerId, 'provider');
@@ -513,8 +497,30 @@ export default function registerAdminModelsRoutes(app) {
       }
       if (!discoveryUrl) discoveryUrl = providerEntry.baseUrl || '';
       if (!discoveryKey) discoveryKey = resolveProviderApiKey(providerEntry) || '';
+      providerRegion = providerEntry.config?.region;
     } else if (typeof apiType !== 'string') {
       throw new ServiceError('BAD_REQUEST', 'Invalid API type');
+    }
+
+    // Bedrock lists its models per AWS region, not behind a URL. The region is
+    // the one typed in the wizard, else the provider's, else the environment's —
+    // the order the adapter resolves it in.
+    if (discoveryApiType === BEDROCK_API_TYPE) {
+      const discoveryRegion =
+        (region || '').trim() ||
+        providerRegion ||
+        process.env.AWS_REGION ||
+        process.env.AWS_DEFAULT_REGION ||
+        DEFAULT_BEDROCK_REGION;
+      if (!isValidBedrockRegion(discoveryRegion)) {
+        throw new ServiceError(
+          'BAD_REQUEST',
+          `"${String(discoveryRegion).slice(0, 40)}" is not an AWS region. Use a region code such as eu-central-1, or global.`
+        );
+      }
+      const result = await discoverBedrockModels({ region: discoveryRegion, apiKey: discoveryKey });
+      res.json(withExistingModels(result));
+      return;
     }
 
     if (!discoveryUrl) {
@@ -528,24 +534,7 @@ export default function registerAdminModelsRoutes(app) {
       gateway: discoveryGateway
     });
 
-    // Flag listed models an existing config already points at (same remote
-    // model id on the same endpoint), so the admin does not import twice.
-    const { data: configured = [] } = configCache.getModels(true);
-    const existing = new Map();
-    for (const model of configured) {
-      existing.set(`${model.modelId}\n${comparableUrl(model.url)}`, model.id);
-    }
-    res.json({
-      apiType: result.provider,
-      modelsUrl: result.modelsUrl,
-      baseUrl: result.baseUrl,
-      azure: result.azure,
-      gateway: result.gateway || null,
-      models: result.models.map(model => ({
-        ...model,
-        existingModelId: existing.get(`${model.id}\n${comparableUrl(model.url)}`) || null
-      }))
-    });
+    res.json(withExistingModels(result));
   });
 
   /**
@@ -671,8 +660,13 @@ export default function registerAdminModelsRoutes(app) {
 
     const limitsError = normalizeModelUsageLimits(updatedModel);
     if (limitsError) throw new ServiceError('BAD_REQUEST', limitsError);
+    const regionError = normalizeBedrockModelRegion(updatedModel);
+    if (regionError) throw new ServiceError('BAD_REQUEST', regionError);
 
-    if (!isChatModel(updatedModel)) updatedModel.default = false;
+    // A disabled model answers nobody, so it cannot stay the default (the toggle
+    // already clears it); the next enabled chat model takes over below.
+    if (!isChatModel(updatedModel) || updatedModel.enabled === false) updatedModel.default = false;
+    const previousDefaultId = liveDefaultModelId();
     if (updatedModel.default === true) await clearOtherDefaults(modelId);
     // The version being replaced, as it is stored: the history's "before". Replaced under the
     // same lock a toggle takes, so the two cannot interleave.
@@ -681,6 +675,7 @@ export default function registerAdminModelsRoutes(app) {
       oldModel = current;
       return updatedModel;
     });
+    if (oldModel?.default === true && updatedModel.default !== true) await ensureStoredDefault();
     await configCache.refreshModelsCache();
     if (oldModel) {
       await saveSnapshot({
@@ -698,6 +693,7 @@ export default function registerAdminModelsRoutes(app) {
       resourceId: modelId,
       summary: `Updated model ${modelId}`
     });
+    announceAssignedDefault(res, previousDefaultId, updatedModel.default === true ? modelId : null);
     res.json(updatedModel);
   });
 
@@ -717,6 +713,8 @@ export default function registerAdminModelsRoutes(app) {
     assertValidId(newModel.id, 'model');
     const limitsError = normalizeModelUsageLimits(newModel);
     if (limitsError) throw new ServiceError('BAD_REQUEST', limitsError);
+    const regionError = normalizeBedrockModelRegion(newModel);
+    if (regionError) throw new ServiceError('BAD_REQUEST', regionError);
 
     const providerLinkError = applyProviderLink(newModel);
     if (providerLinkError) {
@@ -742,7 +740,8 @@ export default function registerAdminModelsRoutes(app) {
     if ((await configStore.readJson(newModelPath)) !== null) {
       throw new ServiceError('CONFLICT', 'Model with this ID already exists');
     }
-    if (!isChatModel(newModel)) newModel.default = false;
+    if (!isChatModel(newModel) || newModel.enabled === false) newModel.default = false;
+    const previousDefaultId = liveDefaultModelId();
     if (newModel.default === true) await clearOtherDefaults(newModel.id);
     await configStore.writeJson(newModelPath, newModel);
     await configCache.refreshModelsCache();
@@ -753,9 +752,53 @@ export default function registerAdminModelsRoutes(app) {
       resourceId: newModel.id,
       summary: `Created model ${newModel.id}`
     });
+    announceAssignedDefault(res, previousDefaultId, newModel.default === true ? newModel.id : null);
     sendCreated(res, `/api/admin/models/${segment(newModel.id)}`, newModel);
   });
 
+  /**
+   * @swagger
+   * /admin/models/{modelIds}/_toggle:
+   *   post:
+   *     summary: Enable or disable models (Admin)
+   *     description: |
+   *       Sets `enabled` on the models named (comma-separated, or `*` for all). A disabled
+   *       model loses the default flag; when no enabled chat model is the default afterwards,
+   *       the first one becomes it, and the `Default-Model-Assigned` header names it.
+   *       Create, update and delete send the same header when they make the server pick a
+   *       new default.
+   *     tags:
+   *       - Admin - Models
+   *     security:
+   *       - bearerAuth: []
+   *       - sessionAuth: []
+   *     requestBody:
+   *       required: true
+   *       content:
+   *         application/json:
+   *           schema:
+   *             type: object
+   *             required: [enabled]
+   *             properties:
+   *               enabled: { type: boolean }
+   *     responses:
+   *       200:
+   *         description: The state set and the ids it was set on
+   *         headers:
+   *           Default-Model-Assigned:
+   *             description: URI-encoded id of the model the server made the default on its own
+   *             schema:
+   *               type: string
+   *         content:
+   *           application/json:
+   *             schema:
+   *               type: object
+   *               properties:
+   *                 enabled: { type: boolean }
+   *                 ids: { type: array, items: { type: string } }
+   *       400:
+   *         description: "`BAD_REQUEST`: missing flag or invalid id"
+   */
   app.post(buildServerPath('/api/admin/models/:modelIds/_toggle'), adminAuth, async (req, res) => {
     const { modelIds } = req.params;
     const { enabled } = req.body;
@@ -767,6 +810,7 @@ export default function registerAdminModelsRoutes(app) {
     const ids = assertValidIds(modelIds, 'model');
 
     const resolvedIds = ids.includes('*') ? (await storedModels()).map(m => m.id) : ids;
+    const previousDefaultId = liveDefaultModelId();
 
     for (const id of resolvedIds) {
       await updateStoredModel(id, stored => ({
@@ -787,6 +831,7 @@ export default function registerAdminModelsRoutes(app) {
       resourceId: resolvedIds.join(','),
       summary: `Batch ${enabled ? 'enabled' : 'disabled'} ${resolvedIds.length} models`
     });
+    announceAssignedDefault(res, previousDefaultId);
     res.json({
       enabled,
       ids: resolvedIds
@@ -803,6 +848,7 @@ export default function registerAdminModelsRoutes(app) {
     if (!model) {
       throw new ServiceError('NOT_FOUND', 'Model not found');
     }
+    const previousDefaultId = liveDefaultModelId();
     if (model.default === true) await ensureStoredDefault(modelId);
     if (!(await configStore.remove(await modelPath(modelId)))) {
       throw new ServiceError('NOT_FOUND', 'Model file not found');
@@ -825,8 +871,167 @@ export default function registerAdminModelsRoutes(app) {
       resourceId: modelId,
       summary: `Deleted model ${modelId}`
     });
+    announceAssignedDefault(res, previousDefaultId);
     res.status(204).end();
   });
+
+  /**
+   * @swagger
+   * /admin/models/{modelId}/_dependants:
+   *   get:
+   *     summary: What refers to a model (Admin)
+   *     description: |
+   *       Read-only. Lists what names the model, so the delete dialog can say what loses
+   *       its reference before the model is deleted. Nothing here blocks a delete: an app
+   *       whose model is gone falls back to the default model, a group entry naming no
+   *       model grants nothing. A delete keeps a copy in the change history, from which
+   *       the model can be restored.
+   *     tags:
+   *       - Admin - Models
+   *     security:
+   *       - bearerAuth: []
+   *       - sessionAuth: []
+   *     parameters:
+   *       - in: path
+   *         name: modelId
+   *         required: true
+   *         schema:
+   *           type: string
+   *     responses:
+   *       200:
+   *         description: The references
+   *         content:
+   *           application/json:
+   *             schema:
+   *               type: object
+   *               properties:
+   *                 apps:
+   *                   type: array
+   *                   description: Apps naming the model
+   *                   items:
+   *                     type: object
+   *                     properties:
+   *                       id: { type: string }
+   *                       name: { description: "Localized name object or text" }
+   *                       references:
+   *                         type: array
+   *                         items:
+   *                           type: string
+   *                           enum: [preferredModel, allowedModels, speechRecognition, voiceMode]
+   *                 workflows:
+   *                   type: array
+   *                   items:
+   *                     type: object
+   *                     properties:
+   *                       id: { type: string }
+   *                       name: { description: "Localized name object or text" }
+   *                       references:
+   *                         type: array
+   *                         items: { type: string, enum: [defaultModel, node] }
+   *                 groups:
+   *                   type: array
+   *                   description: Groups whose model permissions list the model by id
+   *                   items:
+   *                     type: object
+   *                     properties:
+   *                       id: { type: string }
+   *                       name: { type: string }
+   *                 isDefault:
+   *                   type: boolean
+   *                   description: The model is the platform default
+   *                 nextDefaultModelId:
+   *                   type: string
+   *                   description: With isDefault, the model that becomes the default; absent when none can
+   *       400:
+   *         description: "`BAD_REQUEST`: invalid model id"
+   *       404:
+   *         description: "`NOT_FOUND`: no such model"
+   */
+  app.get(
+    buildServerPath('/api/admin/models/:modelId/_dependants'),
+    adminAuth,
+    async (req, res) => {
+      const { modelId } = req.params;
+      assertValidId(modelId, 'model');
+      const { data: models = [] } = configCache.getModels(true);
+      if (!models.some(model => model.id === modelId)) {
+        throw new ServiceError('NOT_FOUND', 'Model not found');
+      }
+      const dependants = findModelDependants(modelId, {
+        apps: configCache.getApps(true)?.data ?? [],
+        workflows: configCache.getWorkflows(true)?.data ?? [],
+        agents: configCache.getAgentProfiles?.(true)?.data ?? [],
+        // The authored file: the cache's groups carry their parents' permissions as their own.
+        groupsConfig: await configStore.readJson('config/groups.json').catch(() => null),
+        models
+      });
+      res.setHeader('Cache-Control', 'no-store');
+      res.json(dependants);
+    }
+  );
+
+  /**
+   * @swagger
+   * /admin/models/{modelId}/_make-default:
+   *   post:
+   *     summary: Make a model the platform default (Admin)
+   *     description: |
+   *       The model answers in every app that names no model of its own. Only an enabled
+   *       chat model can be the default; the flag is taken off every other model.
+   *     tags:
+   *       - Admin - Models
+   *     security:
+   *       - bearerAuth: []
+   *       - sessionAuth: []
+   *     parameters:
+   *       - in: path
+   *         name: modelId
+   *         required: true
+   *         schema:
+   *           type: string
+   *     responses:
+   *       200:
+   *         description: The model as stored now, with `default` true (API key masked)
+   *       400:
+   *         description: "`BAD_REQUEST`: invalid id, or not a chat model"
+   *       404:
+   *         description: "`NOT_FOUND`: no such model"
+   *       409:
+   *         description: "`CONFLICT`: the model is disabled; enable it first"
+   */
+  app.post(
+    buildServerPath('/api/admin/models/:modelId/_make-default'),
+    adminAuth,
+    async (req, res) => {
+      const { modelId } = req.params;
+      assertValidId(modelId, 'model');
+      const file = await modelPath(modelId);
+      const stored = await configStore.readJson(file);
+      if (!stored) throw new ServiceError('NOT_FOUND', 'Model not found');
+      if (!isChatModel(stored)) {
+        throw new ServiceError('BAD_REQUEST', 'Only a chat model can be the default model');
+      }
+      if (stored.enabled === false) {
+        throw new ServiceError('CONFLICT', 'The model is disabled. Enable it first.');
+      }
+      await clearOtherDefaults(modelId);
+      const updated = await updateStoredModel(modelId, current => ({ ...current, default: true }));
+      await configCache.refreshModelsCache();
+      await logAudit({
+        req,
+        action: 'update',
+        resource: 'model',
+        resourceId: modelId,
+        summary: `Made model ${modelId} the default`
+      });
+      const { apiKey, ...visible } = updated || { ...stored, default: true };
+      res.json(
+        apiKey
+          ? { ...visible, apiKeySet: true, apiKeyMasked: '••••••••' }
+          : { ...visible, apiKeySet: false }
+      );
+    }
+  );
 
   /**
    * POST /api/admin/models/:modelId/_test
@@ -835,8 +1040,9 @@ export default function registerAdminModelsRoutes(app) {
    * models are included so an admin can verify a model before enabling it.
    * The call goes through `LLMClient` and is recorded in the run ledger as a
    * `diagnostic` run. Failures answer with a non-2xx status derived from the
-   * `LLMError` code and a body of `{ error, details, code }` — `error` is the
-   * short headline, `details` the remediation text shown by the admin UI.
+   * `LLMError` code and a problem body whose `details` hold `messageKey` (the
+   * cause the admin UI translates), `remediation` (English fallback text) and,
+   * when known, `upstreamStatus`, `host` and `errorCode` (socket or TLS code).
    */
   /**
    * Synthesize one short sentence with a TTS model and report how much audio
@@ -1101,7 +1307,11 @@ export default function registerAdminModelsRoutes(app) {
           upstreamStatus: testError.status,
           error: testError.message
         });
-        const { userMessage, errorMessage, messageKey } = describeModelTestFailure(testError);
+        const { userMessage, errorMessage, messageKey, upstreamStatus, host, errorCode } =
+          describeLlmFailure(testError, {
+            url: model.url,
+            keyless: inspectModelApiKey(model, { quiet: true }).state === 'keyless'
+          });
         const mappedStatus = llmErrorToHttpStatus(testError);
         const httpStatus = mappedStatus >= 400 ? mappedStatus : 502;
         throw new ServiceError(
@@ -1109,7 +1319,15 @@ export default function registerAdminModelsRoutes(app) {
           userMessage,
           {
             status: httpStatus,
-            details: { remediation: errorMessage, messageKey },
+            // The facts (status, host, code) let the admin tell a wrong URL from a
+            // rejected key or a broken service; none of them is a secret.
+            details: {
+              remediation: errorMessage,
+              messageKey,
+              ...(upstreamStatus === null ? {} : { upstreamStatus }),
+              ...(host === null ? {} : { host }),
+              ...(errorCode === null ? {} : { errorCode })
+            },
             cause: testError
           }
         );

@@ -25,7 +25,8 @@ import {
   fetchAdminApps,
   fetchAdminAppTemplates,
   fetchAppStartTemplates,
-  generateAppDraft
+  generateAppDraft,
+  reviseAdminApp
 } from '../../../api/adminApi';
 import { UI_CREATES_PUBLISHED } from '../../../../../shared/appDefaults.js';
 
@@ -36,8 +37,11 @@ import { UI_CREATES_PUBLISHED } from '../../../../../shared/appDefaults.js';
  * @property {(request: { description: string, language?: string, signal: AbortSignal }) => Promise<object>} generateDraft
  * @property {() => Promise<object[]>} fetchModels - The models the author may use.
  * @property {(payload: object, options: { origin: string }) => Promise<object>} createApp
- * @property {Function} [refineDraft] - The call behind "Change the draft". The
- *   screens show that control only when the source has this member.
+ * @property {(request: { draft: object, conversation: object[], language?: string, fields?: string[], allowQuestions?: boolean, signal?: AbortSignal }) => Promise<object>} [refineDraft]
+ *   One turn of the app builder's conversation (`_revise`): a question, a
+ *   change or a message about the app's content. The editor's conversation
+ *   and "Improve with AI" use it; a screen that needs it shows its control
+ *   only when the source has this member.
  * @property {{ describe: boolean, templates: boolean, empty: boolean, copy: boolean, link: boolean, marketplace: boolean }} starts
  * @property {boolean} showAppId - Whether "More details" has the app ID.
  * @property {boolean} showCategory - Whether "More details" has the category.
@@ -50,6 +54,7 @@ export const adminAppSource = Object.freeze({
   kind: 'admin',
   fetchTemplates: fetchAppStartTemplates,
   generateDraft: generateAppDraft,
+  refineDraft: reviseAdminApp,
   // A fresh list: a model that was connected a minute ago must be found.
   fetchModels: () => fetchModels({ skipCache: true }),
   createApp: createAdminApp,

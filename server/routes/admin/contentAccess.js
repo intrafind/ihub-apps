@@ -173,6 +173,24 @@ function buildView(req, groupsData, type, contentId) {
  *         effective:
  *           type: boolean
  *           description: Members of the group can use the content, by any of the above
+ *         via:
+ *           type: array
+ *           description: >
+ *             Every route by which members of the group get the content: the
+ *             group whose own list grants it, whether that list names it or
+ *             holds `*`, and the inheritance chain from this group to it.
+ *           items:
+ *             type: object
+ *             properties:
+ *               groupId:
+ *                 type: string
+ *               kind:
+ *                 type: string
+ *                 enum: [explicit, wildcard]
+ *               path:
+ *                 type: array
+ *                 items:
+ *                   type: string
  *         implicit:
  *           type: boolean
  *           description: >

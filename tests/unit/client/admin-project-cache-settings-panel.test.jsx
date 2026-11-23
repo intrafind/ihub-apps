@@ -8,6 +8,10 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import ProjectSharingSettingsPanel from '../../../client/src/features/admin/components/ProjectSharingSettingsPanel';
+import {
+  SaveSectionsBar,
+  SaveSectionsProvider
+} from '../../../client/src/features/admin/components/SaveSections';
 import { fetchProjectSettings, saveProjectSettings } from '../../../client/src/api/adminApi';
 
 jest.mock('react-i18next', () => ({
@@ -26,6 +30,15 @@ jest.mock('../../../client/src/shared/contexts/PlatformConfigContext', () => ({
 }));
 jest.mock('../../../client/src/features/projects/components/ProjectAppSelect', () => () => null);
 
+/** The panel sits on the Projects page, whose bar saves it. */
+const renderPanel = () =>
+  render(
+    <SaveSectionsProvider>
+      <ProjectSharingSettingsPanel />
+      <SaveSectionsBar />
+    </SaveSectionsProvider>
+  );
+
 const SETTINGS = {
   sharing: { allowUsers: true, allowGroups: true, allowEveryone: false, allowCatalog: false },
   tierPolicy: 'ihub',
@@ -42,6 +55,7 @@ const SETTINGS = {
 };
 
 beforeEach(() => {
+  jest.clearAllMocks();
   fetchProjectSettings.mockResolvedValue(SETTINGS);
   saveProjectSettings.mockImplementation(async body => ({
     ...SETTINGS,
@@ -51,7 +65,7 @@ beforeEach(() => {
 });
 
 test('shows the stored values and saves only the changes', async () => {
-  render(<ProjectSharingSettingsPanel />);
+  renderPanel();
   const entries = await screen.findByLabelText('Search indexes kept in memory');
   expect(entries).toHaveValue(32);
   expect(screen.getByLabelText('Memory share of the search indexes (%)')).toHaveValue(null);
@@ -64,7 +78,7 @@ test('shows the stored values and saves only the changes', async () => {
   fireEvent.change(screen.getByLabelText('Memory share of the cached document texts (%)'), {
     target: { value: '' }
   });
-  fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Save Changes' }));
 
   await waitFor(() => expect(saveProjectSettings).toHaveBeenCalled());
   const body = saveProjectSettings.mock.calls[0][0];
@@ -72,10 +86,15 @@ test('shows the stored values and saves only the changes', async () => {
   expect(body.textCache).toEqual({ maxHeapShare: null });
 });
 
-test('an out-of-range share blocks the save', async () => {
-  render(<ProjectSharingSettingsPanel />);
+test('an out-of-range share blocks the save and the bar says why', async () => {
+  renderPanel();
   const share = await screen.findByLabelText('Memory share of the search indexes (%)');
   fireEvent.change(share, { target: { value: '80' } });
   expect(screen.getByText('Enter 1 to 50, or leave empty.')).toBeInTheDocument();
-  expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled();
+  // The bar shows (the field changed) but Save refuses: nothing is sent.
+  fireEvent.click(screen.getByRole('button', { name: 'Save Changes' }));
+  expect(await screen.findByTestId('save-bar-message')).toHaveTextContent(
+    'Fix the highlighted fields'
+  );
+  expect(saveProjectSettings).not.toHaveBeenCalled();
 });

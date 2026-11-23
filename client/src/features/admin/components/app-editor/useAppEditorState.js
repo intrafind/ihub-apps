@@ -35,11 +35,15 @@ const NOTHING_LOADED = Object.freeze({ appId: null, app: null, savedApp: null, l
  *   loadError: {status: number|null, code: string|null, detail: string, retryAfterSeconds: number|null}|null,
  *   retryLoad: () => Promise<void>,
  *   save: () => Promise<unknown>,
+ *   saveValue: (next: object) => Promise<unknown>,
  *   discard: () => void,
  *   applySaved: (patch: object) => void,
  *   blocker: {state: 'blocked'|'unblocked', proceed: Function, reset: Function}
  * }} `app` and `savedApp` are null until the app has loaded. While `loadError`
- *   is set there is nothing to edit and `save` refuses.
+ *   is set there is nothing to edit and `save` refuses. `saveValue` puts `next`
+ *   into the form and stores it in one step (the conversation's Apply and
+ *   Undo); when the server refuses it, the form goes back to what it held,
+ *   unless the author edited it in the meantime.
  *
  * @example
  * const editor = useAppEditorState({ appId, loadApp, saveApp });
@@ -110,6 +114,26 @@ export function useAppEditorState({ appId, loadApp, saveApp }) {
     return result;
   }, [appId, loadError, update]);
 
+  const saveValue = useCallback(
+    async next => {
+      if (loadError) throw new Error(loadError.detail);
+      const before = latestAppRef.current;
+      if (!before) throw new Error('The app has not loaded yet.');
+      latestAppRef.current = next;
+      update(held => ({ ...held, app: next }));
+      try {
+        const result = await saveAppRef.current(next, appId);
+        update(held => ({ ...held, savedApp: next }));
+        return result;
+      } catch (error) {
+        // Nothing was written: the form shows what it held before, not a change nobody saved.
+        update(held => (held.app === next ? { ...held, app: before } : held));
+        throw error;
+      }
+    },
+    [appId, loadError, update]
+  );
+
   const discard = useCallback(() => update(held => ({ ...held, app: held.savedApp })), [update]);
 
   const applySaved = useCallback(
@@ -131,6 +155,7 @@ export function useAppEditorState({ appId, loadApp, saveApp }) {
     loadError,
     retryLoad: load,
     save,
+    saveValue,
     discard,
     applySaved,
     blocker

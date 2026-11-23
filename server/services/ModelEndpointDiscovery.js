@@ -21,6 +21,7 @@
 
 import { httpFetch, redactUrlSecrets } from '../utils/httpConfig.js';
 import { ServiceError } from '../utils/ServiceError.js';
+import { endpointHost, tlsCertificateErrorCode } from '../utils/connectionErrors.js';
 import logger from '../utils/logger.js';
 import {
   CONTEXT_WINDOW_MAX,
@@ -59,13 +60,23 @@ export const MAX_MODELS = 5000;
  * route answers with.
  */
 export class ModelDiscoveryError extends ServiceError {
-  constructor(messageKey, message, { status = 502, details, upstreamStatus } = {}) {
+  /**
+   * @param {string} messageKey - Stable cause the client translates
+   * @param {string} message - English headline
+   * @param {Object} [options]
+   * @param {number} [options.status=502] - HTTP status of the route's answer
+   * @param {string} [options.details] - English remediation (`details.remediation`)
+   * @param {number} [options.upstreamStatus] - HTTP status the endpoint answered with
+   * @param {string} [options.errorCode] - Socket or TLS certificate error code
+   */
+  constructor(messageKey, message, { status = 502, details, upstreamStatus, errorCode } = {}) {
     super('DISCOVERY_FAILED', message, {
       status,
       details: {
         messageKey,
         ...(details === undefined ? {} : { remediation: details }),
-        ...(upstreamStatus === undefined ? {} : { upstreamStatus })
+        ...(upstreamStatus === undefined ? {} : { upstreamStatus }),
+        ...(errorCode ? { errorCode } : {})
       }
     });
     this.name = 'ModelDiscoveryError';
@@ -619,9 +630,24 @@ function describeFetchFailure(err) {
       details: `No response within ${DISCOVERY_TIMEOUT_MS / 1000} seconds.`
     });
   }
+  const tlsCode = tlsCertificateErrorCode(err);
+  if (tlsCode) {
+    return new ModelDiscoveryError(
+      'certificateUntrusted',
+      'The certificate of the endpoint is not trusted',
+      {
+        errorCode: tlsCode,
+        details:
+          'The iHub server does not trust the TLS certificate of this endpoint (private CA or self-signed certificate). Add the host to the SSL domain whitelist and enable "Ignore invalid SSL certificates" under Admin > Security > SSL / TLS.'
+      }
+    );
+  }
   const code = String(err?.code || err?.cause?.code || err?.errno || '');
   const [messageKey, message] = NETWORK_FAILURES[code] || ['networkError', 'Network error'];
-  return new ModelDiscoveryError(messageKey, message, { details: err?.message });
+  return new ModelDiscoveryError(messageKey, message, {
+    details: err?.message,
+    errorCode: /^(?:E[A-Z]+|UND_ERR_[A-Z_]+)$/.test(code) ? code : undefined
+  });
 }
 
 function describeHttpFailure(status, sentKey) {
@@ -649,22 +675,37 @@ function describeHttpFailure(status, sentKey) {
       details: 'HTTP 404. Check the URL — it usually ends in /v1 or /v1/models.'
     });
   }
+  if (status >= 500) {
+    return new ModelDiscoveryError('serverError', `The endpoint answered with HTTP ${status}`, {
+      upstreamStatus: status,
+      details: `HTTP ${status}. The endpoint itself failed: check the service's status and logs, or a proxy in front of it, and try again.`
+    });
+  }
   return new ModelDiscoveryError('upstreamError', `The endpoint answered with HTTP ${status}`, {
     upstreamStatus: status
   });
 }
 
 /**
- * Whether an HTTP 400 is Google's answer to a wrong key: it reports
- * `API_KEY_INVALID` in the error body instead of answering 401.
+ * Google's answer to a wrong key: HTTP 400 with `API_KEY_INVALID` in the error
+ * body instead of a 401. The default rejection check of {@link fetchListingBody}.
+ *
+ * @param {Response} response - A non-OK answer to a call that sent a key
+ * @returns {Promise<ModelDiscoveryError|null>}
  */
-async function isInvalidKeyAnswer(response) {
-  if (response.status !== 400) return false;
+async function invalidKeyRejection(response) {
+  if (response.status !== 400) return null;
+  let text = '';
   try {
-    return (await response.text()).includes('API_KEY_INVALID');
+    text = await response.text();
   } catch {
-    return false;
+    return null;
   }
+  if (!text.includes('API_KEY_INVALID')) return null;
+  return new ModelDiscoveryError('authenticationFailed', 'The endpoint rejected the API key', {
+    upstreamStatus: response.status,
+    details: 'HTTP 400 (API_KEY_INVALID). Check the API key.'
+  });
 }
 
 function responseTooLarge() {
@@ -705,9 +746,45 @@ async function readJsonBody(response) {
 
 /**
  * GET a listing and read its JSON body. Redirects are not followed and every
- * failure becomes a {@link ModelDiscoveryError} the admin can act on.
+ * failure becomes a {@link ModelDiscoveryError} the admin can act on, naming
+ * the host that was called (`details.host`; never the path or credentials).
+ *
+ * Exported for the listings of other vendors (BedrockModelDiscovery.js), so
+ * they share the timeout, the size cap and the readable failure causes.
+ *
+ * @param {Object} request
+ * @param {typeof httpFetch} request.fetchImpl - `httpFetch` (proxy and SSL whitelist), or a test double
+ * @param {string} request.requestUrl - URL called, with its query
+ * @param {Record<string, string>} request.headers
+ * @param {string} request.modelsUrl - URL named in logs and errors
+ * @param {string} request.provider - API type, for the logs
+ * @param {string} [request.key] - Key sent, if any (decides "key required" vs "rejected")
+ * @param {(response: Response) => Promise<ModelDiscoveryError|null>} [request.rejectionCheck]
+ *   Reads a non-OK answer to a call that sent a key and returns the vendor-specific
+ *   cause, or null for the generic one by status. Defaults to Google's `API_KEY_INVALID`.
+ * @returns {Promise<unknown>} Parsed JSON body
+ * @throws {ModelDiscoveryError}
  */
-async function fetchListingBody({ fetchImpl, requestUrl, headers, modelsUrl, provider, key }) {
+export async function fetchListingBody(request) {
+  try {
+    return await fetchListingBodyOnce(request);
+  } catch (err) {
+    const host = endpointHost(request.modelsUrl);
+    if (err instanceof ModelDiscoveryError && host) err.details.host = host;
+    throw err;
+  }
+}
+
+/** {@link fetchListingBody} without the host on its errors. */
+async function fetchListingBodyOnce({
+  fetchImpl,
+  requestUrl,
+  headers,
+  modelsUrl,
+  provider,
+  key,
+  rejectionCheck = invalidKeyRejection
+}) {
   let response;
   try {
     response = await fetchImpl(requestUrl, {
@@ -745,12 +822,8 @@ async function fetchListingBody({ fetchImpl, requestUrl, headers, modelsUrl, pro
       provider,
       status: response.status
     });
-    if (key && (await isInvalidKeyAnswer(response))) {
-      throw new ModelDiscoveryError('authenticationFailed', 'The endpoint rejected the API key', {
-        upstreamStatus: response.status,
-        details: 'HTTP 400 (API_KEY_INVALID). Check the API key.'
-      });
-    }
+    const rejection = key ? await rejectionCheck(response) : null;
+    if (rejection) throw rejection;
     throw describeHttpFailure(response.status, Boolean(key));
   }
   return readJsonBody(response);

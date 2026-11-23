@@ -404,4 +404,24 @@ describe('decodeBase64Capped', () => {
     expect(decodeBase64Capped(12)).toEqual({ ok: false, reason: 'invalid' });
     expect(decodeBase64Capped('  ')).toEqual({ ok: false, reason: 'empty' });
   });
+
+  it('accepts base64url and padding, and refuses misplaced padding', () => {
+    expect(decodeBase64Capped('aGk_-w')).toMatchObject({ ok: true });
+    expect(decodeBase64Capped('aGk=')).toMatchObject({ ok: true });
+    expect(decodeBase64Capped('aG==')).toMatchObject({ ok: true });
+    expect(decodeBase64Capped('a===')).toEqual({ ok: false, reason: 'invalid' });
+    expect(decodeBase64Capped('aG=k')).toEqual({ ok: false, reason: 'invalid' });
+    expect(decodeBase64Capped('==')).toEqual({ ok: false, reason: 'invalid' });
+  });
+
+  it('refuses an oversized payload by its size, without walking it', () => {
+    const huge = 'A'.repeat(36 * 1024 * 1024);
+    expect(decodeBase64Capped(huge, 25 * 1024 * 1024)).toEqual({
+      ok: false,
+      reason: 'too-large',
+      bytes: Math.floor((huge.length * 3) / 4)
+    });
+    // Over the cap wins over invalid: the size is known without reading it.
+    expect(decodeBase64Capped(`${huge}!`, 1024)).toMatchObject({ reason: 'too-large' });
+  });
 });

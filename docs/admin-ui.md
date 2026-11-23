@@ -200,10 +200,12 @@ palette, from the last step of the setup wizard and from **Duplicate**.
 **Step 1, Start,** offers the following ways to begin:
 
 - **Describe the app.** Write two or three sentences under **What should your app do?** and click
-  **Prepare draft**. The AI model named beside the button prepares a draft. The box is missing
+  **Prepare draft**. The AI model named beside the button prepares a draft: the one chosen under
+  **Platform → Features → Model for drafts** if you may use it, otherwise the standard chat model
+  among the models you may use. The box is missing
   when no AI model is available to you (a notice says so) or when the feature
   **App Drafts with AI** is switched off.
-- **Templates.** Six short starting points, such as **Text Summarizer** or **Email Composer**.
+- **Templates.** Short starting points, such as **Text Summarizer** or **Email Composer**.
   The last card, **Copy an existing app**, lists the published apps to copy one.
 - **Start empty.**
 - **Other ways to start:** **Create a link app** (a link to a website, or a website shown inside
@@ -339,7 +341,7 @@ Models define which AI providers and specific model versions are available on yo
 
 ![Model management list](assets/screenshots/admin-models.png)
 
-**To add a model:** Go to **AI Workspace → Models** and click **Add New Model**, upload a JSON file, install one from the [Marketplace](#marketplace), or use **Import from URL**.
+**To add a model:** Go to **AI Workspace → Models** and click **Import models** or **Add New Model**, upload a JSON file, or install one from the [Marketplace](#marketplace). For a first model, follow [Set up models in the admin UI](models.md#set-up-models-in-the-admin-ui).
 
 **Key fields:**
 - **Model type** — **Chat** (the default), **Transcription** (speech-to-text for recordings and uploads) or **Text-to-Speech** (read aloud). Only chat models appear in the chat's model selector.
@@ -347,13 +349,15 @@ Models define which AI providers and specific model versions are available on yo
 - **Model ID** — the provider's model identifier (e.g. `gpt-5`, `claude-sonnet-5`, `gemini-flash-latest`).
 - **Context window / max output tokens** — the limits apps and chats work with.
 - **Capabilities** — tools, vision, thinking/reasoning, native web search, prompt caching, image generation.
-- **Hints** — a hint, info, warning or alert shown to users who pick the model (see [Model Hints](models.md#model-hints)).
+- **User Hint** — a hint, info, warning or alert shown to users who pick the model (see [Model Hints](models.md#model-hints)).
 
-**Import from URL** reads an endpoint's model list — OpenAI, vLLM, LM Studio, LLM Hub and other OpenAI-compatible servers, Mistral, Anthropic or Google — and creates the models you pick. It asks which provider the models belong to and can create a new provider with its API key on the spot. See [Models → Importing Models from an Endpoint](models.md#importing-models-from-an-endpoint).
+**Import models** reads an endpoint's model list — OpenAI, vLLM, LM Studio, LLM Hub and other OpenAI-compatible servers, Mistral, Anthropic or Google — and creates the models you pick. It asks which provider the models belong to and can create a new provider with its API key on the spot. See [Models → Importing Models from an Endpoint](models.md#importing-models-from-an-endpoint).
 
 ![Import models from URL with the OpenRouter provider and its API key field](assets/screenshots/admin-models-import.png)
 
 **Testing a model:** Use the **Test** button on the model list page to verify connectivity and authentication.
+
+**Cloning a model:** **Clone** in a model's row opens a new model with its settings and the ID `<id>-copy` already filled in, or `<id>-copy-2`, `<id>-copy-3`, … when that ID is taken. Change it before saving if you like. What the form says when something is missing is described in [Errors in a form](#errors-in-a-form).
 
 ---
 
@@ -367,7 +371,7 @@ The web search engines (Brave, Staan, Qwant) are not providers: each is an integ
 
 ![Provider credentials with status and linked models](assets/screenshots/admin-providers.png)
 
-**Add provider** adds an **LLM provider** for an endpoint of your own — for example a gateway such as T-Systems LLM Hub, or a self-hosted vLLM server. It has a name, an ID, the **API type** the endpoint speaks (OpenAI-compatible, vLLM, Mistral, …), an optional base URL and its API key. Its page lists the linked models, adds a model with the provider already chosen and imports more; a provider that models still use cannot be deleted. In the list, each provider's **Models** count opens the Models tab filtered to that provider, and **Import models** opens the import for it. Entries of other categories left over from before web search and storage became integrations stay under a collapsed **Other credentials** group. See [Models → Custom LLM Providers](models.md#custom-llm-providers).
+**Add provider** adds an **LLM provider** for an endpoint of your own — for example a gateway such as T-Systems LLM Hub, or a self-hosted vLLM server. It has a name, an ID, the **API type** the endpoint speaks (OpenAI-compatible, vLLM, Mistral, …), an optional base URL and its API key. The base URL is where the provider's models are listed from when you import them; chat requests go to each model's own API URL. Its page lists the linked models, adds a model with the provider already chosen and imports more; a provider that models still use cannot be deleted. In the list, each provider's **Models** count opens the Models tab filtered to that provider, and **Import models** opens the import for it. Entries of other categories left over from before web search and storage became integrations stay under a collapsed **Other credentials** group. See [Models → Custom LLM Providers](models.md#custom-llm-providers).
 
 ![Create a new LLM provider](assets/screenshots/admin-provider-new.png)
 
@@ -375,11 +379,25 @@ The web search engines (Brave, Staan, Qwant) are not providers: each is an integ
 
 ## Managing Prompts
 
-Prompts are reusable system prompt templates that can be referenced by apps or used standalone.
+Prompts are ready-made texts that users pick from the prompt library and insert into the chat
+input, for example "Summarize this text". A prompt can ask for values, such as a language, before
+it is inserted. It does not change an app's instructions. See [Prompt Library](prompts.md).
 
-Go to **AI Workspace → Prompts**. Prompts and Global Variables are organized as tabs.
+Go to **AI Workspace → Prompts**. The page has the following tabs:
+
+- **Prompts**: the global prompts that administrators and content admins curate. **Create New
+  Prompt** adds one.
+- **User prompts**: prompts that users wrote and shared with a group or with everyone.
+- **Variables**: the global prompt variables.
+
+The tabs **Prompts** and **User prompts** appear while the feature **Prompts Library** is on.
+
+Who sees a global prompt is decided by the groups, like for apps: each prompt editor has a
+**Group access** card. See [Who can use apps, models and prompts](access-control.md).
 
 **Global Variables** are key-value pairs injected into any system prompt that references `{{variableName}}`. They allow you to maintain shared values (company name, product names, URLs) in one place.
+
+**Cloning a prompt:** **Clone** in a prompt's row opens a new prompt with its texts and the ID `<id>-copy` filled in (`<id>-copy-2`, … when taken). **Clone** of a workflow saves the copy at once under the same kind of ID.
 
 The drafts of **New app** always follow iHub's own instructions; no prompt in the library changes them.
 
@@ -405,7 +423,9 @@ Deleting cannot be undone. To stop someone from signing in while keeping what th
 
 ## Managing Groups
 
-Groups control what users can access. Go to **Access & Identity → Groups**.
+Groups control what users can access. Go to **Access & Identity → Groups**. For step-by-step
+tasks, such as limiting an app to one department, see
+[Who can use apps, models and prompts](access-control.md).
 
 **Group inheritance:** Groups can inherit permissions from parent groups. Pick the parents in the **Group Inheritance** card of the group form (**Inherits From**); inheritance is optional and a group can have several parents. A group cannot inherit itself, and a parent that does not exist or a circular chain is refused with an error when you save. For example, the built-in `users` group inherits from `authenticated`, which inherits from `anonymous`. A user's effective permissions are the union of their group's permissions and all inherited parent groups.
 
@@ -451,6 +471,20 @@ See [Marketplace](marketplace.md) for statuses, updates, private registries and 
 ## Features
 
 **Platform → Features** switches platform features on and off — among them the preview features Agent Skills, Workflows and Integrations, plus Marketplace, App Drafts with AI (the description box of **New app**; see [Creating an app](#creating-an-app)), Chat History (keeping chats in a history; every chat is stored either way), Scheduled Tasks, Prompt Library, Usage Tracking, Tools, Projects, User Projects (preview), Compare Mode, Chat Sharing, Short Links, Feedback and Export. The corresponding admin pages and user features appear or disappear with them.
+
+Below the switch **App Drafts with AI**, **Model for drafts** chooses the AI model that prepares
+app drafts, for admin apps and personal apps (`platform.appGenerator.modelId`). It lists the
+enabled chat models; **Automatic (recommended)** names the model it currently picks for an
+administrator: the standard chat model. A chosen model is used only for authors whose groups may
+use it; everyone else gets the automatic choice among the models they may use. A chosen model that
+was later disabled or deleted is marked **(not available)**, and drafts use the automatic choice
+until you pick another one. The setting is saved with **Save Changes**.
+
+The same model answers **Improve with AI** on the instructions and, with the preview switch
+**Change apps in a conversation** on, the conversation view of the app editor (see
+[Build your first app](app-quickstart.md#change-the-app-in-a-conversation-preview)). Each request is
+a model call counted against the usage limit of the person who asked; a person can send 60 such
+requests per hour, apart from the 30 drafts.
 
 ![Platform features with preview toggles](assets/screenshots/admin-features.png)
 
@@ -683,6 +717,21 @@ or the close button closes it and returns focus to the **History** button.
 
 ---
 
+## Saving Changes
+
+On an edit page, the bar at the bottom of the screen shows only while you have unsaved changes. It says **You have unsaved changes** and offers **Save Changes** (**Create** on the page of a new item) and **Discard**. **Discard** puts the page back to what is saved. When there is nothing to save, there is no bar.
+
+The bar is on the edit pages of apps, groups, users, models, prompts, agents, agent inboxes, workflows, document templates, providers, short links, OAuth clients, CIMD clients, custom pages and skills, and on **UI Customization**, **Disclaimer** and **Artifacts**. The settings pages **Authentication**, **Features**, **Feedback**, **Chat History**, **Localization**, **Telemetry**, **Voice Input**, **MCP Gateway**, **OAuth Server**, **Nextcloud Embed**, **Browser Extension**, **Copilot Agent** and **Office Integration** use it too.
+
+Pages and cards with several independent sections have one bar for the whole page, not one Save per section: **Security** (SSL, cookies, CORS, proxy, rate limits, SSRF and tool approval), **Logging** (logging, authentication debugging and privacy), the EU AI Act cards (AI notice, acknowledgement, provenance), **Scheduled Tasks**, the **Integration Builder**, the **Installation** page of an integration (its **Settings** tab, the approval defaults and the instructions for the model on **Overview**), the visual workflow editor, a new project, and the cards embedded in a list page (usage limits, LLM timeouts, project sharing, personal apps, user prompts and skills). **Save** stores every section with changes, in the order of the page, and stops at the first one that fails; the sections already stored stay stored, and a second **Save** sends only the rest. **Discard** puts every section back to what is saved. A section with a refused value (for example a number out of range) is not blocked by a greyed-out button: **Save** says what is wrong in the bar.
+
+- An item made from a template or a copy can be created at once; the bar is there as the page opens.
+- A refused save (for example a missing field or a taken ID) keeps your changes and the bar, and says what is wrong.
+- On a settings page, a refused save is also named in the bar itself, so you see it without scrolling to the top.
+- After a refused save the bar stays even if you put the field back to its stored value: the save may have reached the server and only its answer been lost, so you can send the value again or **Discard**. An edit made while a save is running stays unsaved and keeps the bar.
+- **Localization** saves the default language with the bar; the translation overrides below it keep their own **Save**, **Cancel** and **Reset** for each text.
+- **Save** and the Enter key run the same checks as before; a page with invalid JSON in its JSON mode does not save it.
+
 ## Unsaved Changes
 
 When you have changed something on an admin page and not saved it, leaving the page asks first. A **Leave without saving?** dialog offers **Stay**, which keeps you on the page with your changes, and **Discard changes**, which leaves and drops them. It appears when you:
@@ -699,9 +748,9 @@ Some things never ask:
 - A page that is still loading, or whose settings could not be loaded: there is nothing of yours to lose.
 - Saving and then leaving.
 
-On pages with several sections that each have their own Save button, such as **Security**, every section with unsaved changes is marked with **Unsaved changes** next to its heading and a dot in the section list, and one dialog covers them all. On an integration's page and on **Usage Reports**, edits on the **Settings** and **Limits & quotas** tabs are kept when you switch to another tab of the same page and come back; leaving the page asks first.
+On pages with several sections, such as **Security**, every section with unsaved changes is marked with **Unsaved changes** next to its heading and a dot in the section list, and one dialog covers them all. On an integration's page and on **Usage Reports**, edits on the **Settings** and **Limits & quotas** tabs are kept when you switch to another tab of the same page and come back; leaving the page asks first. The same holds for the settings of **Personal apps** (**Apps**), **User prompts** (**Prompts**) and **User skills** (**Skills**): the tab stays open in the background, and the bar at the bottom still shows the unsaved changes and can save them from the other tab. The settings cards on **Providers** (LLM timeouts) and **Projects** (sharing) ask before you leave the page too.
 
-A few places do not ask yet: the **Authentication** page, the app order on the **Apps** list, the global prompt variables on the **Prompts** list, the OAuth server settings, the CIMD client editor, and forms in dialogs (such as installing an integration).
+A few places do not ask: forms in dialogs (such as installing an integration or editing a credential, which keep their own **Save**), and the **Variables** tab on **Prompts**, which asks when you leave the page but not when you switch tabs.
 
 ### When someone else saved first
 
@@ -734,6 +783,16 @@ removes content pages created under **Pages** in the meantime, and creating a pa
 Customization is open does not make its save fail.
 
 ---
+
+## Errors in a form
+
+The forms for models, prompts, groups and users open without errors, also when they are blank.
+
+- A field says what is missing or wrong once you leave it or change it, as a short instruction in the admin language ("Enter an ID.", "Enter a username.").
+- The first click on save lists every open point in one summary at the top of the form. The summary takes the focus and lists the fields in the order they appear in the form; each entry jumps to its field.
+- Screen readers announce only the summary. A field's own message is read with the field (it describes the input), so a failed save is not read out as several alerts at once.
+- An ID that another model, prompt or group already uses is reported at the ID field while you type.
+- If the server refuses a save for another reason, the message appears above the form and your edits stay.
 
 ## When a page can't load
 

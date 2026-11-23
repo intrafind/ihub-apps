@@ -15,6 +15,7 @@ import {
 } from '../../workflows/editor/workflowEditorUtils';
 import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
 import UnsavedChangesDialog from '../components/UnsavedChangesDialog';
+import AdminSaveBar from '../components/AdminSaveBar';
 
 /** Same character class enforced by validateIdForPath() on the server. */
 const VALID_ID_PATTERN = /^[a-zA-Z0-9._-]+$/;
@@ -62,7 +63,12 @@ function WorkflowEditorPage() {
     () => (flow && workflow ? flowToWorkflow(flow.nodes, flow.edges, workflow) : savedShape),
     [flow, workflow, savedShape]
   );
-  const { blocker, markSaved } = useUnsavedChanges(savedShape, editedShape);
+  const { blocker, markSaved, isDirty } = useUnsavedChanges(savedShape, editedShape);
+  // The editor mounts with the nodes and edges it is given and keeps its own copy. Discard
+  // mounts a new one (a new key) from the saved workflow, which resets nodes, edges and view.
+  const [editorKey, setEditorKey] = useState(0);
+  // Why the last save failed, shown next to the bar as well as in the toast.
+  const [saveError, setSaveError] = useState(null);
   const handleFlowChange = useCallback((nodes, edges) => setFlow({ nodes, edges }), []);
 
   const showToast = useCallback((kind, message) => {
@@ -109,6 +115,7 @@ function WorkflowEditorPage() {
   const persistWorkflow = useCallback(
     async updated => {
       setSaving(true);
+      setSaveError(null);
       try {
         if (isNew) {
           await apiClient.post('/workflows', updated);
@@ -123,12 +130,11 @@ function WorkflowEditorPage() {
         showToast('success', t('workflows.editor.saveSuccess', 'Workflow saved'));
         return updated.id || id;
       } catch (err) {
-        showToast(
-          'error',
-          t('workflows.editor.saveFailed', 'Save failed: {{message}}', {
-            message: workflowSaveErrorMessage(err)
-          })
-        );
+        const failure = t('workflows.editor.saveFailed', 'Save failed: {{message}}', {
+          message: workflowSaveErrorMessage(err)
+        });
+        setSaveError(failure);
+        showToast('error', failure);
         return null;
       } finally {
         setSaving(false);
@@ -155,6 +161,19 @@ function WorkflowEditorPage() {
     },
     [workflow, isNew, persistWorkflow]
   );
+
+  /** The bar's Save: saves the canvas as the editor last reported it. */
+  const handleBarSave = useCallback(() => {
+    if (flow) void handleSave(flow.nodes, flow.edges);
+  }, [flow, handleSave]);
+
+  /** The bar's Discard: back to the saved workflow, canvas included. */
+  const handleDiscard = useCallback(() => {
+    setFlow(null);
+    setSaveError(null);
+    setIdDialog(null);
+    setEditorKey(key => key + 1);
+  }, []);
 
   /** Confirms the new-workflow ID dialog and saves. */
   const handleIdConfirm = useCallback(async () => {
@@ -239,9 +258,9 @@ function WorkflowEditorPage() {
 
       <div className="flex-1 relative min-h-0">
         <WorkflowEditor
+          key={editorKey}
           initialNodes={initialNodes}
           initialEdges={initialEdges}
-          onSave={handleSave}
           onFlowChange={handleFlowChange}
         />
         {toast && (
@@ -305,6 +324,14 @@ function WorkflowEditorPage() {
           </div>
         )}
       </div>
+      <AdminSaveBar
+        dirty={isDirty}
+        saving={saving}
+        saveLabel={isNew ? t('admin.ui.saveBar.create', 'Create') : undefined}
+        message={saveError || undefined}
+        onSave={handleBarSave}
+        onDiscard={handleDiscard}
+      />
       <UnsavedChangesDialog blocker={blocker} />
     </div>
   );

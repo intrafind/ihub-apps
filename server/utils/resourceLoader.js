@@ -59,7 +59,7 @@ export function compareByOrderThenName(a, b) {
  * @param {Function} config.postProcess - Optional post-processing function for all items
  * @param {Function} config.sortComparator - Optional custom sort function (default: `order`, then name)
  * @param {Function} config.inspect - Optional diagnostic run on every loaded item list; must not throw
- * @returns {Object} Resource loader object with loadAll() method
+ * @returns {Object} Resource loader object with loadAll(), and prepareItem() for one stored item
  */
 export function createResourceLoader({
   resourceName,
@@ -72,6 +72,31 @@ export function createResourceLoader({
 }) {
   if (!resourceName || !individualPath) {
     throw new Error('resourceName and individualPath are required');
+  }
+
+  /**
+   * One stored item as the loader holds it: `enabled` defaulted to true, then
+   * processed and validated (for a schema validator: the schema's defaults
+   * applied). Modifies and returns `resource`; pass a copy to keep the
+   * original. Throws what the processor or validator throws.
+   *
+   * @param {Object} resource - The parsed stored body
+   * @param {string} source - Its path, for log lines
+   * @returns {Object}
+   */
+  function prepareItem(resource, source) {
+    let item = resource;
+    // Add enabled field if it doesn't exist (defaults to true)
+    if (item.enabled === undefined) {
+      item.enabled = true;
+    }
+    if (processItem) {
+      item = processItem(item, source);
+    }
+    if (validateItem) {
+      item = validateItem(item, source);
+    }
+    return item;
   }
 
   /**
@@ -110,23 +135,7 @@ export function createResourceLoader({
     for (const document of documents) {
       const source = document.path;
       try {
-        let resource = document.data;
-
-        // Add enabled field if it doesn't exist (defaults to true)
-        if (resource.enabled === undefined) {
-          resource.enabled = true;
-        }
-
-        // Process item if processor is provided
-        if (processItem) {
-          resource = processItem(resource, source);
-        }
-
-        // Validate item if validator is provided
-        if (validateItem) {
-          resource = validateItem(resource, source);
-        }
-
+        const resource = prepareItem(document.data, source);
         resources.push(resource);
         if (verbose) {
           const icon = resource.enabled ? '✅' : '⏸️';
@@ -201,6 +210,7 @@ export function createResourceLoader({
   return {
     loadAll,
     loadFromFiles,
+    prepareItem,
     resourceName,
     individualPath
   };

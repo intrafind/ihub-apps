@@ -7,6 +7,7 @@ import { generatedFilesFromArtifacts } from '../../../../../shared/generatedFile
 import { storedSourceSet } from '../../../../../shared/sources/index.js';
 import { resolveRowSources } from '../../../../../shared/run/activitySourceRefs.js';
 import { toAttachmentViews } from '../messageAttachments/attachmentViews';
+import { failureDiagnostics } from '../utils/failureCause';
 
 /**
  * The provenance fields a stored answer's `activity` restores onto the message
@@ -144,6 +145,9 @@ export function transformStoredMessage(msg) {
     }
     // Stored reasons are English; a known code lets the bubble translate it.
     if (typeof msg.error.code === 'string') message.errorCode = msg.error.code;
+    // A failed model call keeps the cause the server named (never the host).
+    const diagnostics = failureDiagnostics(msg.error);
+    if (diagnostics) message.failureDiagnostics = diagnostics;
   }
 
   return message;

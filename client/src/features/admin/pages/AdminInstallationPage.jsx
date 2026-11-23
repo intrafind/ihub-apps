@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
-import { Suspense, lazy, useCallback, useEffect, useMemo, useState } from 'react';
+import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import Icon from '../../../shared/components/Icon';
@@ -47,6 +47,7 @@ import {
   fetchInstalledIntegrations,
   fetchIntegrationDefinitionFile,
   markInstalledIntegrationActionsReviewed,
+  saveIntegrationInstructions,
   setInstalledIntegrationApproval,
   setInstalledIntegrationEnabled,
   testInstalledIntegration
@@ -54,7 +55,6 @@ import {
 import { ApprovalModeSelect } from '../components/ToolApprovalFields';
 import {
   actionsPendingReview,
-  approvalChanged,
   approvalPayload,
   normalizeApproval,
   withActionMode,
@@ -64,6 +64,7 @@ import {
 import ActionReviewBadge from '../components/integrations/ActionReviewBadge';
 import IntegrationActionDrawer from '../components/integrations/IntegrationActionDrawer';
 import IntegrationInstructionsCard from '../components/integrations/IntegrationInstructionsCard';
+import { instructionsPayload, instructionsStartText } from '../utils/integrationInstructions';
 import { useOptionalAuth } from '../../../shared/contexts/authContextValue';
 import { fetchAdminApps, fetchAdminGroups, getAdminApiErrorMessage } from '../../../api/adminApi';
 import { groupsGranting } from '../utils/groupIntegrationAccess';
@@ -71,6 +72,8 @@ import { GrantedGroups } from '../components/integrations/editors/InstallationEd
 import { deepEqual, useUnsavedChanges } from '../hooks/useUnsavedChanges';
 import UnsavedChangesDialog from '../components/UnsavedChangesDialog';
 import { DirtyReportContext } from '../hooks/useDirtyReport';
+import { SaveSectionsBar, SaveSectionsProvider, useSaveSection } from '../components/SaveSections';
+import { EditorSaveContext } from '../components/integrations/editors/useInstallationEditor';
 
 // The chat test panel brings the whole chat UI; it loads when opened.
 const IntegrationTestPanel = lazy(() => import('../components/integrations/IntegrationTestPanel'));
@@ -164,7 +167,11 @@ function bindingViaLabel(app, instance, t) {
 function AdminInstallationPage() {
   const { instanceId } = useParams();
   // A new id starts from a clean state (no stale detail, test result or dialog).
-  return <InstallationPageContent key={instanceId} instanceId={instanceId} />;
+  return (
+    <SaveSectionsProvider key={instanceId}>
+      <InstallationPageContent instanceId={instanceId} />
+    </SaveSectionsProvider>
+  );
 }
 
 /**
@@ -257,9 +264,14 @@ function InstallationPageContent({ instanceId }) {
   // The tool approval being edited on the Overview (#2945); reset when the
   // stored installation changes.
   const [approvalDraft, setApprovalDraft] = useState(() => normalizeApproval(null));
+  const [approvalError, setApprovalError] = useState(null);
+  // Not on every reload: saving the Settings reloads the installation, and that must not
+  // throw away an approval edit that is waiting for the same Save.
+  const storedApprovalKey = JSON.stringify(normalizeApproval(instance?.approval));
   useEffect(() => {
-    setApprovalDraft(normalizeApproval(instance?.approval));
-  }, [instance]);
+    setApprovalDraft(JSON.parse(storedApprovalKey));
+    setApprovalError(null);
+  }, [storedApprovalKey]);
   // Unsaved edits: the approval draft on the Overview, and whatever the Settings
   // editor reports through DirtyReportContext. Both are lost when the admin
   // leaves the page, so one guard covers them.
@@ -268,7 +280,28 @@ function InstallationPageContent({ instanceId }) {
     () => Boolean(instance) && !deepEqual(approvalDraft, normalizeApproval(instance.approval)),
     [approvalDraft, instance]
   );
-  const { blocker, markSaved } = useUnsavedChanges(false, settingsDirty || approvalDirty);
+  // The text of 'Instructions for the model' being edited, null while it is only shown. It
+  // lives here, not in the card: the Overview unmounts when another tab is shown. `Boolean`
+  // of the error keeps the section dirty after a refused save, so the bar stays for a retry
+  // even when the text is typed back to what it started from (the write may have gone
+  // through and only its answer been lost).
+  const [instructionsDraft, setInstructionsDraft] = useState(null);
+  const [instructionsError, setInstructionsError] = useState(null);
+  const instructionsStart = instructionsStartText(detail?.instructions, lang);
+  const instructionsDirty =
+    Boolean(instance) &&
+    instructionsDraft !== null &&
+    (instructionsDraft !== instructionsStart || Boolean(instructionsError));
+  const { blocker, markSaved } = useUnsavedChanges(
+    false,
+    settingsDirty || approvalDirty || instructionsDirty
+  );
+
+  // The Settings editor hands its save over through this ref and its failure through the
+  // state; both reach the page's one save bar as the 'settings' section.
+  const settingsSaveRef = useRef(null);
+  const [settingsError, setSettingsError] = useState(null);
+  const editorHost = useMemo(() => ({ saveRef: settingsSaveRef, setError: setSettingsError }), []);
   const hasReleases = (definition?.releases?.length || 0) > 0;
   const tabParam = searchParams.get('tab');
   const tab = activeTab(tabParam, hasReleases);
@@ -379,16 +412,68 @@ function InstallationPageContent({ instanceId }) {
 
   const saveApproval = async () => {
     setBusy(true);
+    setApprovalError(null);
     try {
       await setInstalledIntegrationApproval(instance.id, approvalPayload(approvalDraft));
       await load();
       flash('success', t('admin.toolApproval.installationSaved', 'Approval settings saved.'));
+      return true;
     } catch (err) {
-      flash('error', getAdminApiErrorMessage(err));
+      setApprovalError(getAdminApiErrorMessage(err));
+      return false;
     } finally {
       setBusy(false);
     }
   };
+
+  // One save bar for the page: the Settings editor first, then the approval. Each section
+  // saves on its own, so a failed one leaves the other as it was and the bar names the error.
+  useSaveSection('settings', {
+    dirty: settingsDirty,
+    save: () => settingsSaveRef.current?.() ?? Promise.resolve(true),
+    discard: () => setEditorKey(key => key + 1),
+    error: settingsError
+  });
+  useSaveSection('approval', {
+    dirty: approvalDirty,
+    saving: busy && approvalDirty,
+    save: saveApproval,
+    discard: () => {
+      setApprovalDraft(normalizeApproval(instance?.approval));
+      setApprovalError(null);
+    },
+    error: approvalError
+  });
+
+  const saveInstructions = async () => {
+    setBusy(true);
+    setInstructionsError(null);
+    try {
+      await saveIntegrationInstructions(
+        instance.id,
+        instructionsPayload(detail?.instructions, lang, instructionsDraft)
+      );
+      setInstructionsDraft(null);
+      await load();
+      return true;
+    } catch (err) {
+      setInstructionsError(getAdminApiErrorMessage(err));
+      return false;
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  useSaveSection('instructions', {
+    dirty: instructionsDirty,
+    saving: busy && instructionsDirty,
+    save: saveInstructions,
+    discard: () => {
+      setInstructionsDraft(null);
+      setInstructionsError(null);
+    },
+    error: instructionsError
+  });
 
   const runTest = async () => {
     setBusy(true);
@@ -453,11 +538,6 @@ function InstallationPageContent({ instanceId }) {
     // Reload first, then remount the editor: it starts from what the server stored.
     await load();
     setEditorKey(key => key + 1);
-  };
-
-  const onCancel = () => {
-    setEditorKey(key => key + 1);
-    setTab('overview');
   };
 
   const crumbs = [
@@ -754,26 +834,6 @@ function InstallationPageContent({ instanceId }) {
                         )}
                       />
                     </div>
-                    {approvalChanged(instance.approval, approvalDraft) && (
-                      <div className="flex gap-2">
-                        <button
-                          type="button"
-                          onClick={saveApproval}
-                          disabled={busy}
-                          className="inline-flex items-center rounded-md bg-indigo-600 px-3 py-2 text-sm font-medium text-white hover:bg-indigo-700 focus:outline-hidden focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 disabled:opacity-50"
-                        >
-                          {t('admin.toolApproval.saveApproval', 'Save approval')}
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setApprovalDraft(normalizeApproval(instance.approval))}
-                          disabled={busy}
-                          className={SECONDARY_BUTTON_CLASS}
-                        >
-                          {t('common.cancel', 'Cancel')}
-                        </button>
-                      </div>
-                    )}
                   </div>
                   {pendingReview.length > 0 && (
                     <div
@@ -891,6 +951,17 @@ function InstallationPageContent({ instanceId }) {
                     instanceId={instance.id}
                     instructions={detail.instructions}
                     disabled={isMigrationBlocked(instance)}
+                    draft={instructionsDraft}
+                    onDraftChange={setInstructionsDraft}
+                    onEdit={() => {
+                      setInstructionsError(null);
+                      setInstructionsDraft(instructionsStart);
+                    }}
+                    onCancel={() => {
+                      setInstructionsDraft(null);
+                      setInstructionsError(null);
+                    }}
+                    saving={busy && instructionsDirty}
                     onSaved={load}
                   />
                 )}
@@ -1054,7 +1125,7 @@ function InstallationPageContent({ instanceId }) {
                 readOnly={isSettingsReadOnly(instance)}
                 editorKey={editorKey}
                 onSaved={onSaved}
-                onCancel={onCancel}
+                editorHost={editorHost}
                 onDirtyChange={setSettingsDirty}
               />
             </div>
@@ -1150,6 +1221,7 @@ function InstallationPageContent({ instanceId }) {
             onDeny={() => setConfirm(null)}
           />
           <UnsavedChangesDialog blocker={blocker} />
+          <SaveSectionsBar />
         </div>
       </div>
 
@@ -1195,8 +1267,9 @@ function InstallationPageContent({ instanceId }) {
  * @param {boolean} props.unusable - the definition is missing or incompatible
  * @param {boolean} [props.readOnly] - a migration state blocks saving
  * @param {number} props.editorKey
- * @param {(saved: Object) => void} props.onSaved
- * @param {() => void} props.onCancel
+ * @param {(saved: Object) => Promise<void>} props.onSaved
+ * @param {{ saveRef: Object, setError: Function }} props.editorHost - what the editor hands its
+ *   save and its error to, for the page's save bar (`EditorSaveContext`)
  * @param {(dirty: boolean) => void} [props.onDirtyChange] - the editor holds unsaved edits
  */
 function InstallationSettings({
@@ -1208,7 +1281,7 @@ function InstallationSettings({
   readOnly = false,
   editorKey,
   onSaved,
-  onCancel,
+  editorHost,
   onDirtyChange
 }) {
   const { t } = useTranslation();
@@ -1229,7 +1302,6 @@ function InstallationSettings({
       instance={effective}
       definition={definition}
       onSaved={onSaved}
-      onCancel={onCancel}
     />
   ) : (
     <IntegrationInstallForm
@@ -1239,11 +1311,14 @@ function InstallationSettings({
       instanceId={instance.id}
       preloaded={preloaded}
       onSaved={onSaved}
-      onCancel={onCancel}
     />
   );
   if (!readOnly) {
-    return <DirtyReportContext value={onDirtyChange}>{editor}</DirtyReportContext>;
+    return (
+      <EditorSaveContext value={editorHost}>
+        <DirtyReportContext value={onDirtyChange}>{editor}</DirtyReportContext>
+      </EditorSaveContext>
+    );
   }
   return (
     <div className="space-y-4">
@@ -1266,7 +1341,7 @@ function InstallationSettings({
         <legend className="sr-only">
           {t('admin.integrations.migration.settingsReadOnlyLegend', 'Settings (read-only)')}
         </legend>
-        {editor}
+        <EditorSaveContext value={editorHost}>{editor}</EditorSaveContext>
       </fieldset>
     </div>
   );

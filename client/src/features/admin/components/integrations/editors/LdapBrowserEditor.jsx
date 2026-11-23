@@ -17,7 +17,10 @@ import {
   fetchInstalledIntegrations,
   fetchPeopleDirectoryEditorContext
 } from '../../../../../api/integrationsAdminApi';
-import useInstallationEditor, { useInstallationEditorDirty } from './useInstallationEditor';
+import useInstallationEditor, {
+  useInstallationEditorDirty,
+  useInstallationEditorSave
+} from './useInstallationEditor';
 import {
   AccessSection,
   ActionsSection,
@@ -168,8 +171,7 @@ function LdapBrowserEditor({ instance, definition, onSaved, onCancel }) {
     return out;
   }, [editor.fieldErrors, problems]);
 
-  const submit = event => {
-    event.preventDefault();
+  const save = async () => {
     const found = validateBrowserForm(form, { maxResultsLimit: limit });
     if (found.length > 0) {
       setProblems(
@@ -179,10 +181,15 @@ function LdapBrowserEditor({ instance, definition, onSaved, onCancel }) {
           message: t(entry.message.key, entry.message.defaultValue, entry.message.values)
         }))
       );
-      return;
+      return false;
     }
     setProblems([]);
-    void editor.save(browserFormToValues(form));
+    return editor.save(browserFormToValues(form));
+  };
+  useInstallationEditorSave(editor, save);
+  const submit = event => {
+    event.preventDefault();
+    void save();
   };
 
   const directoryBind = directoryBindLabel(directoryValues, t);

@@ -35,6 +35,8 @@ export const APPS = {
   webApproval: 'inj-web-approval',
   actions: 'inj-actions',
   artifact: 'inj-artifact',
+  /** Publishes the hostile artifacts of `hostileArtifacts.mjs`, each by its own trigger. */
+  artifactLab: 'inj-artifact-lab',
   mcp: 'inj-mcp'
 };
 
@@ -42,13 +44,16 @@ export const PROJECTS = {
   /** The poisoned vendor knowledge base every scenario app links. */
   vendor: 'inj-vendor-kb',
   /** Linked only by the HR app, which only admins may use. */
-  hr: 'inj-hr-restricted'
+  hr: 'inj-hr-restricted',
+  /** The hostile-artifact document: linked only by the artifact lab app. */
+  artifactLab: 'inj-artifact-lab-kb'
 };
 
 /** Item ids of the seeded documents (kept by the import). */
 export const ITEMS = {
   vendorDoc: 'itm_1a1a1a1a1a01',
-  hrDoc: 'itm_2b2b2b2b2b02'
+  hrDoc: 'itm_2b2b2b2b2b02',
+  artifactLabDoc: 'itm_3c3c3c3c3c03'
 };
 
 /** The MCP installation the MCP spec creates (approval on writes). */

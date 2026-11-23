@@ -9,6 +9,7 @@ import { useUIConfig } from '../../../shared/contexts/UIConfigContext';
 import TranslationOverridesEditor from '../components/TranslationOverridesEditor';
 import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
 import UnsavedChangesDialog from '../components/UnsavedChangesDialog';
+import AdminSaveBar from '../components/AdminSaveBar';
 import { INPUT_CLASS } from '../components/formStyles';
 
 /**
@@ -29,6 +30,9 @@ function AdminLocalizationPage() {
   const { uiConfig, refreshUIConfig } = useUIConfig();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  // A failed save keeps the bar (to retry or discard) even when the form is back at its saved
+  // state: the write may have gone through and only its answer been lost.
+  const [saveFailed, setSaveFailed] = useState(false);
   const [message, setMessage] = useState('');
   const [defaultLanguage, setDefaultLanguage] = useState('en');
   // Save is only safe once the stored value is actually known: before that the
@@ -37,7 +41,7 @@ function AdminLocalizationPage() {
   const [loaded, setLoaded] = useState(false);
   // The default language as last loaded or saved; null until it loaded.
   const [savedDefaultLanguage, setSavedDefaultLanguage] = useState(null);
-  const { blocker } = useUnsavedChanges(savedDefaultLanguage, defaultLanguage);
+  const { blocker, isDirty } = useUnsavedChanges(savedDefaultLanguage, defaultLanguage);
   // The revision of the configuration this form loaded (or last saved): its
   // save sends exactly this as If-Match, whatever other reads in the tab saw.
   const revisionRef = useRef(null);
@@ -94,6 +98,7 @@ function AdminLocalizationPage() {
   const handleSave = async () => {
     try {
       setSaving(true);
+      setSaveFailed(false);
       setMessage('');
 
       // Only the field this page owns. The endpoint merges named keys over the
@@ -120,6 +125,7 @@ function AdminLocalizationPage() {
       setTimeout(() => setMessage(''), 3000);
     } catch (error) {
       console.error('Failed to save platform configuration:', error);
+      setSaveFailed(true);
       setMessage({
         type: 'error',
         text:
@@ -129,6 +135,13 @@ function AdminLocalizationPage() {
     } finally {
       setSaving(false);
     }
+  };
+
+  // Back to the language as loaded or last saved, with the banner of a refused save gone.
+  const handleDiscard = () => {
+    setDefaultLanguage(savedDefaultLanguage);
+    setSaveFailed(false);
+    setMessage('');
   };
 
   if (loading) {
@@ -240,25 +253,22 @@ function AdminLocalizationPage() {
             </div>
           </div>
         </div>
-
-        <div className="mt-6 flex justify-end border-t border-gray-200 dark:border-gray-700 pt-5">
-          <button
-            type="button"
-            onClick={handleSave}
-            disabled={saving || !loaded}
-            className="inline-flex items-center rounded-lg border border-transparent bg-indigo-600 px-4 py-2 text-sm font-medium text-white shadow-xs hover:bg-indigo-700 focus:outline-hidden focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            {saving
-              ? t('admin.localization.saving', 'Saving...')
-              : t('admin.localization.save', 'Save')}
-          </button>
-        </div>
       </div>
 
       <TranslationOverridesEditor
         languages={availableLanguages.filter(l => !l.untranslated).map(l => l.code)}
         initialLanguage={defaultLanguage}
       />
+      {/* No bar until the stored language is known: the initial 'en' must never be saved over it. */}
+      {loaded && (
+        <AdminSaveBar
+          dirty={isDirty || saveFailed}
+          saving={saving}
+          onSave={() => void handleSave()}
+          onDiscard={handleDiscard}
+          message={message?.type === 'error' ? message.text : undefined}
+        />
+      )}
       <UnsavedChangesDialog blocker={blocker} />
     </div>
   );

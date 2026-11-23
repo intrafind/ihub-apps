@@ -23,6 +23,7 @@ import registerProvenanceRoutes from '../routes/provenanceRoutes.js';
 import registerShortLinkRoutes from '../routes/shortLinkRoutes.js';
 import registerOpenAIProxyRoutes from '../routes/openaiProxy.js';
 import registerAuthRoutes from '../routes/auth.js';
+import registerEmbedAuthRoutes from '../routes/embedAuth.js';
 import registerOAuthRoutes from '../routes/oauth.js';
 import registerOAuthAuthorizeRoutes from '../routes/oauthAuthorize.js';
 import registerOAuthRegisterRoutes from '../routes/oauthRegister.js';
@@ -84,6 +85,7 @@ import { buildApiPath } from '../utils/basePath.js';
  */
 const ROUTE_STEPS = [
   app => registerAuthRoutes(app),
+  app => registerEmbedAuthRoutes(app),
   app => registerOAuthRoutes(app),
   app => registerOAuthAuthorizeRoutes(app),
   app => registerOAuthRegisterRoutes(app),

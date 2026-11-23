@@ -11,11 +11,7 @@ import AdminBreadcrumb from '../components/AdminBreadcrumb';
 import AdminLoadError from '../components/AdminLoadError';
 import AdminTabs from '../components/AdminTabs';
 import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
-import {
-  CALLOUT_CLASS,
-  PRIMARY_BUTTON_CLASS,
-  SECONDARY_BUTTON_CLASS
-} from '../components/formStyles';
+import { CALLOUT_CLASS, SECONDARY_BUTTON_CLASS } from '../components/formStyles';
 import BuilderBasicsStep from '../components/integrations/builder/BuilderBasicsStep';
 import BuilderAuthStep from '../components/integrations/builder/BuilderAuthStep';
 import BuilderSourceStep from '../components/integrations/builder/BuilderSourceStep';
@@ -37,6 +33,7 @@ import {
   fetchBuilderDraft,
   saveCustomIntegration
 } from '../../../api/integrationsAdminApi';
+import AdminSaveBar from '../components/AdminSaveBar';
 import UnsavedChangesDialog from '../components/UnsavedChangesDialog';
 
 /** The label of a builder step. */
@@ -99,7 +96,7 @@ function AdminIntegrationBuilderPage() {
   const [pendingSource, setPendingSource] = useState(null);
   const [exportMessage, setExportMessage] = useState(null);
 
-  const { blocker, markSaved } = useUnsavedChanges(initial, draft);
+  const { isDirty, blocker, markSaved } = useUnsavedChanges(initial, draft);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -272,18 +269,16 @@ function AdminIntegrationBuilderPage() {
           {exportMessage.text}
         </output>
       )}
-      {saveError && (
+      {/* The message of a failed save is in the save bar; the server's issues are listed here. */}
+      {saveError && saveError.details.length > 0 && (
         <div role="alert" className={`mb-4 ${CALLOUT_CLASS.danger}`}>
-          <p>{saveError.message}</p>
-          {saveError.details.length > 0 && (
-            <ul className="mt-2 list-disc pl-5">
-              {saveError.details.slice(0, 10).map((detail, i) => (
-                <li key={i}>
-                  <code>{(detail.path || []).join('.')}</code>: {detail.message}
-                </li>
-              ))}
-            </ul>
-          )}
+          <ul className="list-disc pl-5">
+            {saveError.details.slice(0, 10).map((detail, i) => (
+              <li key={i}>
+                <code>{(detail.path || []).join('.')}</code>: {detail.message}
+              </li>
+            ))}
+          </ul>
         </div>
       )}
 
@@ -337,12 +332,6 @@ function AdminIntegrationBuilderPage() {
               <Icon name="chevron-right" size="sm" />
             </button>
           )}
-          <button type="button" className={PRIMARY_BUTTON_CLASS} onClick={save} disabled={saving}>
-            {saving ? <LoadingSpinner size="sm" /> : <Icon name="check" size="sm" />}
-            {isNew
-              ? t('admin.integrationBuilder.create', 'Create integration')
-              : t('admin.integrationBuilder.save', 'Save')}
-          </button>
         </div>
       </div>
 
@@ -362,6 +351,18 @@ function AdminIntegrationBuilderPage() {
           setDraft(current => withSource(current, source));
         }}
         onDeny={() => setPendingSource(null)}
+      />
+      <AdminSaveBar
+        dirty={isDirty}
+        saving={saving}
+        onSave={save}
+        onDiscard={() => {
+          setDraft(initial);
+          setSaveError(null);
+          setShowErrors(false);
+        }}
+        saveLabel={isNew ? t('admin.integrationBuilder.create', 'Create integration') : undefined}
+        message={saveError?.message}
       />
       <UnsavedChangesDialog blocker={blocker} />
     </div>

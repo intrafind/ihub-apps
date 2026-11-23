@@ -78,6 +78,23 @@ export const INBOUND_INTEGRATIONS = Object.freeze([
     isOn: platform => Boolean(platform?.nextcloudEmbed?.enabled)
   },
   {
+    id: 'embed-auth',
+    href: '/admin/embed-auth',
+    client: true,
+    icon: 'globe-alt',
+    color: 'bg-teal-100 dark:bg-teal-900/40 text-teal-700 dark:text-teal-400',
+    titleKey: 'admin.integrations.cards.embedAuth.title',
+    titleDefault: 'iHub in another site',
+    descriptionKey: 'admin.integrations.cards.embedAuth.description',
+    descriptionDefault:
+      'Show iHub in an iframe of iFinder or a portal, with sign-in through your identity provider (OIDC).',
+    // Switched on and at least one site allowed: a switch with an empty list changes nothing.
+    isOn: platform =>
+      platform?.embedAuth?.enabled === true &&
+      Array.isArray(platform.embedAuth.allowedHostOrigins) &&
+      platform.embedAuth.allowedHostOrigins.length > 0
+  },
+  {
     id: 'mcp-gateway',
     href: '/admin/mcp/gateway',
     client: false,
@@ -107,7 +124,7 @@ export const CLIENTS_GROUP = Object.freeze({
   titleDefault: 'Clients',
   descriptionKey: 'admin.integrations.groups.clients.description',
   descriptionDefault:
-    'Where users work with iHub outside the web app: Outlook, the browser, Nextcloud and Microsoft 365 Copilot. Each one is set up on its own page.'
+    'Where users work with iHub outside the web app: Outlook, the browser, Nextcloud, Microsoft 365 Copilot and other sites that show iHub in a frame. Each one is set up on its own page.'
 });
 
 /**
