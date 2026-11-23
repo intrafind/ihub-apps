@@ -4566,6 +4566,7 @@
         },
         "enabled": "boolean",
         "generator": "boolean",
+        "generatorEnabled": "boolean",
         "maxApps": "number",
         "used": "number"
       }
