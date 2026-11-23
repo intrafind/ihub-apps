@@ -60,7 +60,8 @@ jest.mock('../../../client/src/utils/schemaService', () => ({
   fetchJsonSchema: jest.fn(async () => null)
 }));
 jest.mock('../../../client/src/features/admin/hooks/useUnsavedChanges', () => ({
-  useUnsavedChanges: () => ({ blocker: { state: 'unblocked' }, markSaved: () => {} })
+  // Always dirty: the page's save bar is shown only for unsaved changes.
+  useUnsavedChanges: () => ({ blocker: { state: 'unblocked' }, markSaved: () => {}, isDirty: true })
 }));
 
 const AdminModelEditPage =
@@ -91,7 +92,8 @@ const renderPage = () =>
     </MemoryRouter>
   );
 
-const saveButton = () => screen.getByRole('button', { name: 'admin.models.edit.saveChanges' });
+// The page's save bar, shown while there are unsaved changes; its button is the shared "Save Changes".
+const saveButton = () => screen.getByRole('button', { name: 'Save Changes' });
 
 /** The body of the PUT the page sent when saved. */
 const savedBody = async () => {
