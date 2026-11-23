@@ -34,6 +34,7 @@ import {
 import { inspectModelApiKey } from '../../utils.js';
 import { usageLimitBucketSchema } from '../../validators/common.js';
 import { sendCreated, segment } from '../../utils/created.js';
+import { endpointHost, tlsCertificateErrorCode } from '../../utils/connectionErrors.js';
 
 /** Largest voice sample accepted (Mistral needs seconds, not minutes, of audio). */
 const MAX_VOICE_SAMPLE_BYTES = 10 * 1024 * 1024;
@@ -140,20 +141,31 @@ const MODEL_TEST_NETWORK_CAUSES = Object.freeze({
 });
 
 /**
- * Translate an `LLMError` raised by a model connectivity test into the
- * strings the admin UI shows: a short `userMessage` headline (English,
- * used as a fallback and in logs), a longer `errorMessage` with remediation
- * hints, and a `messageKey` — a stable identifier the client maps to a
- * translated headline (see shared/i18n/*.json `admin.models.testResults.messages`).
- *
- * Keys off `err.code` (and the underlying socket error code for network
- * failures) — never off message substrings, which differ per provider and
- * language.
+ * The headline and remediation of an untrusted TLS certificate: a private CA
+ * or a self-signed certificate the server has not been told to accept.
+ */
+const MODEL_TEST_TLS_FAILURE = Object.freeze({
+  userMessage: 'Certificate not trusted',
+  messageKey: 'certificateUntrusted',
+  errorMessage:
+    'The TLS certificate of the model service is not trusted by the iHub server (private CA or self-signed certificate). Add the host to the SSL domain whitelist and enable "Ignore invalid SSL certificates" under Admin > Security > SSL / TLS, or install a certificate from a trusted CA on the service.'
+});
+
+/** A socket-level error code (`ECONNRESET`, `UND_ERR_SOCKET`), as opposed to a provider's own code. */
+const SOCKET_ERROR_CODE = /^(?:E[A-Z]+|UND_ERR_[A-Z_]+)$/;
+
+/**
+ * The headline and remediation of a failed model test, without its facts.
  *
  * @param {import('../../services/loop/contracts/errors.js').LLMError} err
+ * @param {{ keyless: boolean }} context
  * @returns {{ userMessage: string, errorMessage: string, messageKey: string }}
  */
-function describeModelTestFailure(err) {
+function describeModelTestCause(err, { keyless }) {
+  if (tlsCertificateErrorCode(err)) {
+    return MODEL_TEST_TLS_FAILURE;
+  }
+
   // `fetch failed` wraps the socket error one level deeper (err.cause.cause);
   // LLMClient also surfaces that code as providerCode for network failures.
   const socketCode = String(err.providerCode || err.cause?.code || err.cause?.cause?.code || '');
@@ -201,6 +213,15 @@ function describeModelTestFailure(err) {
           errorMessage: err.message
         };
       }
+      // No key was sent, so none can have been rejected: the endpoint wants one.
+      if (keyless) {
+        return {
+          userMessage: 'The endpoint requires an API key',
+          messageKey: 'apiKeyRequired',
+          errorMessage:
+            'No API key is configured for this model, and the model service asked for one. Enter the key on the model or its provider and test again.'
+        };
+      }
       if (err.status === 403) {
         return {
           userMessage: 'Access denied',
@@ -219,7 +240,7 @@ function describeModelTestFailure(err) {
         userMessage: 'Model not found',
         messageKey: 'modelNotFound',
         errorMessage:
-          'The specified model was not found on the service. Please check the model ID configuration.'
+          'Nothing was found at the model URL. Check the URL path (it usually ends in /v1/chat/completions) and the model ID.'
       };
     case LLM_ERROR_CODES.RATE_LIMITED:
       return {
@@ -227,18 +248,58 @@ function describeModelTestFailure(err) {
         messageKey: 'rateLimitExceeded',
         errorMessage: 'Too many requests to the model service. Please try again later.'
       };
-    case LLM_ERROR_CODES.PROVIDER_ERROR:
+    default:
+      // An upstream 5xx under a code that names no cause of its own
+      // (PROVIDER_ERROR, or a provider code the client does not map).
       if (typeof err.status === 'number' && err.status >= 500) {
         return {
           userMessage: 'Server error',
           messageKey: 'serverError',
-          errorMessage: 'The model service encountered an internal error. Please try again later.'
+          errorMessage:
+            'The model service itself failed to answer. Check its status and logs; the configuration in iHub is probably correct. Try again later.'
         };
       }
       return fallback;
-    default:
-      return fallback;
   }
+}
+
+/**
+ * Translate an `LLMError` raised by a model connectivity test into what the
+ * admin UI shows: a short `userMessage` headline (English, used as a fallback
+ * and in logs), an `errorMessage` with remediation hints (English; the client
+ * shows its own translation per `messageKey`), a `messageKey` — a stable
+ * identifier the client maps to a translated headline (see shared/i18n/*.json
+ * `admin.models.testResults.messages`) — and the facts that help the admin
+ * find the fault: the upstream HTTP status, the host that was called and the
+ * socket or certificate error code.
+ *
+ * Keys off `err.code` (and the underlying socket or certificate error code for
+ * network failures) — never off provider message substrings, which differ per
+ * provider and language. Never returns credentials, a URL path or a query.
+ *
+ * @param {import('../../services/loop/contracts/errors.js').LLMError} err
+ * @param {Object} [context]
+ * @param {string} [context.url] - The model's endpoint URL; only its host is reported
+ * @param {boolean} [context.keyless=false] - The model runs without an API key
+ *   (key status `keyless`), so a 401/403 means "a key is required", not "rejected"
+ * @returns {{ userMessage: string, errorMessage: string, messageKey: string,
+ *   upstreamStatus: number|null, host: string|null, errorCode: string|null }}
+ *
+ * @example
+ *   describeModelTestFailure(err, { url: 'https://llm.example.com/v1/chat/completions' })
+ *   // → { messageKey: 'serverError', upstreamStatus: 503, host: 'llm.example.com', … }
+ */
+function describeModelTestFailure(err, { url, keyless = false } = {}) {
+  const providerCode = typeof err.providerCode === 'string' ? err.providerCode : '';
+  const socketCode = [providerCode, err.cause?.code, err.cause?.cause?.code].find(
+    code => typeof code === 'string' && SOCKET_ERROR_CODE.test(code)
+  );
+  return {
+    ...describeModelTestCause(err, { keyless }),
+    upstreamStatus: typeof err.status === 'number' ? err.status : null,
+    host: endpointHost(url),
+    errorCode: tlsCertificateErrorCode(err) || socketCode || null
+  };
 }
 
 export { describeModelTestFailure };
@@ -835,8 +896,9 @@ export default function registerAdminModelsRoutes(app) {
    * models are included so an admin can verify a model before enabling it.
    * The call goes through `LLMClient` and is recorded in the run ledger as a
    * `diagnostic` run. Failures answer with a non-2xx status derived from the
-   * `LLMError` code and a body of `{ error, details, code }` — `error` is the
-   * short headline, `details` the remediation text shown by the admin UI.
+   * `LLMError` code and a problem body whose `details` hold `messageKey` (the
+   * cause the admin UI translates), `remediation` (English fallback text) and,
+   * when known, `upstreamStatus`, `host` and `errorCode` (socket or TLS code).
    */
   /**
    * Synthesize one short sentence with a TTS model and report how much audio
@@ -1101,7 +1163,11 @@ export default function registerAdminModelsRoutes(app) {
           upstreamStatus: testError.status,
           error: testError.message
         });
-        const { userMessage, errorMessage, messageKey } = describeModelTestFailure(testError);
+        const { userMessage, errorMessage, messageKey, upstreamStatus, host, errorCode } =
+          describeModelTestFailure(testError, {
+            url: model.url,
+            keyless: inspectModelApiKey(model, { quiet: true }).state === 'keyless'
+          });
         const mappedStatus = llmErrorToHttpStatus(testError);
         const httpStatus = mappedStatus >= 400 ? mappedStatus : 502;
         throw new ServiceError(
@@ -1109,7 +1175,15 @@ export default function registerAdminModelsRoutes(app) {
           userMessage,
           {
             status: httpStatus,
-            details: { remediation: errorMessage, messageKey },
+            // The facts (status, host, code) let the admin tell a wrong URL from a
+            // rejected key or a broken service; none of them is a secret.
+            details: {
+              remediation: errorMessage,
+              messageKey,
+              ...(upstreamStatus === null ? {} : { upstreamStatus }),
+              ...(host === null ? {} : { host }),
+              ...(errorCode === null ? {} : { errorCode })
+            },
             cause: testError
           }
         );

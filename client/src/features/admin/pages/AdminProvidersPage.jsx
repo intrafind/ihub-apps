@@ -21,6 +21,8 @@ import {
   getProviderApiType
 } from '../../../../../shared/llmProviders.js';
 import AdminLoadError from '../components/AdminLoadError';
+import ConnectionErrorDetails from '../components/ConnectionErrorDetails';
+import { listCount, resolveListView } from '../utils/listLoadState';
 import LlmTimeoutsCard from '../components/LlmTimeoutsCard';
 import ModelsTabsHeader from '../components/ModelsTabsHeader';
 import useAdminPageAccess from '../hooks/useAdminPageAccess';
@@ -151,7 +153,6 @@ function AdminProvidersPage() {
   const loadData = async () => {
     try {
       setLoading(true);
-      setError(null);
       const [providersResponse, modelsResponse] = await Promise.all([
         makeAdminApiCall('/admin/providers'),
         makeAdminApiCall('/admin/models').catch(() => ({ data: [] }))
@@ -165,15 +166,15 @@ function AdminProvidersPage() {
         : [];
       setProviders(providersArray);
       setModels(modelsArray);
+      setError(null);
 
       if (providersArray.length === 0) {
         console.warn('No providers returned from API');
       }
     } catch (err) {
+      // The providers loaded before (if any) stay listed below the error.
       console.error('Error loading data:', err);
       setError(getAdminApiErrorMessage(err));
-      setProviders([]);
-      setModels([]);
     } finally {
       setLoading(false);
     }
@@ -224,7 +225,8 @@ function AdminProvidersPage() {
           response: data?.response
         });
       } catch (err) {
-        // Server body: { error: headline, details: remediation text, code, messageKey }
+        // Server body: { detail: headline, code, details: { messageKey, remediation,
+        // upstreamStatus?, host?, errorCode? } }
         const body = err?.response?.data || {};
         const failureFallback =
           body.detail || t('admin.providers.health.testFailed', 'Test failed');
@@ -232,9 +234,8 @@ function AdminProvidersPage() {
           model,
           success: false,
           message: translateModelTestMessage(t, body.details?.messageKey, failureFallback),
-          error:
-            body.details?.remediation ||
-            (err?.response?.status ? `HTTP ${err.response.status}` : err.message)
+          details: body.details || null,
+          error: err?.response?.status ? `HTTP ${err.response.status}` : err.message
         });
       }
       // Update incrementally so user sees progress
@@ -321,6 +322,8 @@ function AdminProvidersPage() {
   });
 
   // Group providers by category
+  const listView = resolveListView({ loading, error, rowCount: filteredProviders.length });
+
   const groupedProviders = filteredProviders.reduce((acc, provider) => {
     const category = isLlmProviderEntry(provider) ? 'llm' : 'other';
     if (!acc[category]) {
@@ -347,8 +350,8 @@ function AdminProvidersPage() {
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <ModelsTabsHeader
-          modelCount={loading ? undefined : models.length}
-          providerCount={loading ? undefined : providers.length}
+          modelCount={listCount(models.length, { loading, error })}
+          providerCount={listCount(providers.length, { loading, error })}
           actions={
             <>
               {testableProviderCount > 0 && (
@@ -379,7 +382,13 @@ function AdminProvidersPage() {
         <div role="tabpanel" id="tabpanel-providers" aria-labelledby="tab-providers">
           {/* Error Display */}
           {error && (
-            <AdminLoadError message={error} framed={false} className="mb-6" action={null} />
+            <AdminLoadError
+              title={t('admin.providers.loadError', 'Error loading providers')}
+              message={error}
+              framed={false}
+              className="mb-6"
+              onRetry={loadData}
+            />
           )}
 
           {/* Search and Actions Bar */}
@@ -404,10 +413,11 @@ function AdminProvidersPage() {
           {/* Installation-wide LLM timeouts (providers and models can override them) */}
           <LlmTimeoutsCard />
 
-          {/* Providers List - Grouped by Category */}
-          {loading ? (
+          {/* Providers List - Grouped by Category. A failed load shows only the error above,
+              never the "Create your first provider" empty state (utils/listLoadState.js). */}
+          {listView === 'loading' ? (
             <AdminPageSkeleton rows={5} />
-          ) : (
+          ) : listView === 'error' ? null : (
             <div className="space-y-6">
               {categoryOrder.map(category => {
                 const categoryProviders = groupedProviders[category] || [];
@@ -717,10 +727,12 @@ function AdminProvidersPage() {
                                               <span className="text-gray-500 dark:text-gray-400 ml-1 text-xs">
                                                 ({result.model.id})
                                               </span>
-                                              {result.error && (
-                                                <p className="text-xs text-red-600 dark:text-red-400 mt-0.5">
-                                                  {result.error}
-                                                </p>
+                                              {!result.success && (
+                                                <ConnectionErrorDetails
+                                                  details={result.details}
+                                                  fallback={result.error}
+                                                  textClassName="text-xs text-red-700 dark:text-red-300"
+                                                />
                                               )}
                                             </div>
                                             <span
@@ -758,7 +770,7 @@ function AdminProvidersPage() {
                 );
               })}
 
-              {filteredProviders.length === 0 && (
+              {listView === 'empty' && (
                 <AdminEmptyState
                   icon="wrench-screwdriver"
                   title={

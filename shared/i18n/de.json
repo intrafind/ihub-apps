@@ -2195,7 +2195,8 @@
         "subtitle": "Verbinden Sie einen Dienst, testen Sie ihn, wählen Sie seine Modelle und legen Sie fest, wer sie nutzen darf – in einem Durchgang.",
         "back": "Zurück",
         "backToConnection": "Zurück zur Verbindung"
-      }
+      },
+      "loadError": "Fehler beim Laden der Anbieter"
     },
     "models": {
       "sync": {
@@ -2238,7 +2239,9 @@
           "modelNotFound": "Modell nicht gefunden",
           "rateLimitExceeded": "Ratenlimit überschritten",
           "serverError": "Serverfehler",
-          "apiKeyUndecryptable": "Gespeicherter API-Schlüssel kann nicht entschlüsselt werden"
+          "apiKeyUndecryptable": "Gespeicherter API-Schlüssel kann nicht entschlüsselt werden",
+          "apiKeyRequired": "Der Endpunkt erfordert einen API-Schlüssel",
+          "certificateUntrusted": "Zertifikat nicht vertrauenswürdig"
         }
       },
       "enable": "Aktivieren",
@@ -2566,7 +2569,9 @@
           "connectionRefused": "Verbindung abgelehnt",
           "hostNotFound": "Host nicht gefunden",
           "networkError": "Netzwerkfehler",
-          "providerIdReserved": "Diese ID ist der Name eines API-Typs. Wählen Sie eine andere ID."
+          "providerIdReserved": "Diese ID ist der Name eines API-Typs. Wählen Sie eine andere ID.",
+          "serverError": "Der Endpunkt hat mit einem Serverfehler geantwortet",
+          "certificateUntrusted": "Dem Zertifikat des Endpunkts wird nicht vertraut"
         },
         "unsupported": "iHub kann dieses Modell bei diesem Anbieter nicht ausführen",
         "gatewayCheckbox": "Dieser Endpunkt ist ein iFinder Model Gateway",
@@ -5210,7 +5215,8 @@
       },
       "downloadError": "Die Konfiguration konnte nicht heruntergeladen werden: {{error}}",
       "uploadExists": "Eine App mit der ID „{{id}}“ existiert bereits",
-      "uploadError": "Die Konfiguration konnte nicht hochgeladen werden: {{error}}"
+      "uploadError": "Die Konfiguration konnte nicht hochgeladen werden: {{error}}",
+      "loadError": "Fehler beim Laden der Apps"
     },
     "features": {
       "title": "Funktionen",
@@ -10228,6 +10234,31 @@
         "newItemsWarning": "Neue {{items}}, die Sie später hinzufügen, erscheinen in den umgestellten Gruppen nicht mehr automatisch. Fügen Sie sie diesen Gruppen beim Anlegen hinzu. Die Änderung wird im Verlauf jeder Gruppe festgehalten.",
         "error": "Der Zugriff konnte nicht eingeschränkt werden.",
         "apply": "Zugriff einschränken"
+      }
+    },
+    "connectionErrors": {
+      "facts": {
+        "status": "HTTP {{status}}",
+        "host": "Host: {{host}}",
+        "code": "Code: {{code}}"
+      },
+      "openSslSettings": "SSL-/TLS-Einstellungen öffnen",
+      "remediation": {
+        "certificateUntrusted": "Der iHub-Server vertraut dem TLS-Zertifikat dieses Endpunkts nicht. Das ist typisch für eine private CA oder ein selbstsigniertes Zertifikat. Tragen Sie den Host in die Domain-Whitelist ein und aktivieren Sie „Ungültige SSL-Zertifikate ignorieren“.",
+        "serverError": "Der Endpunkt selbst ist fehlgeschlagen. Prüfen Sie Status und Logs des Dienstes (oder eines vorgeschalteten Proxys) und versuchen Sie es erneut. Die Konfiguration in iHub ist vermutlich korrekt.",
+        "authenticationFailed": "Der Endpunkt hat den API-Schlüssel abgelehnt. Prüfen Sie den Schlüssel beim Modell oder bei seinem Anbieter.",
+        "accessDenied": "Der Endpunkt hat den API-Schlüssel angenommen, erlaubt diese Anfrage aber nicht. Prüfen Sie die Berechtigungen des Schlüssels und welche Modelle das Konto nutzen darf.",
+        "apiKeyRequired": "Der Endpunkt verlangt einen API-Schlüssel, es ist aber keiner hinterlegt. Tragen Sie den Schlüssel beim Anbieter oder beim Modell ein und versuchen Sie es erneut.",
+        "apiKeyNotConfigured": "Es ist kein API-Schlüssel hinterlegt. Tragen Sie einen beim Modell oder bei seinem Anbieter ein oder setzen Sie die Umgebungsvariable.",
+        "apiKeyUndecryptable": "Der gespeicherte API-Schlüssel wurde mit einem anderen Verschlüsselungsschlüssel gespeichert. Geben Sie den Schlüssel erneut ein.",
+        "wrongPath": "Unter dieser URL wurde nichts gefunden. Prüfen Sie den Pfad (er endet meist auf /v1/chat/completions) und die Modell-ID.",
+        "listNotFound": "Unter dieser URL wurde keine Modellliste gefunden. Prüfen Sie den Pfad: Er endet meist auf /v1 oder /v1/models.",
+        "connectionRefused": "Unter diesem Host und Port nimmt nichts Verbindungen an. Prüfen Sie den Port in der URL und ob der Dienst läuft.",
+        "hostNotFound": "Der Hostname konnte nicht aufgelöst werden. Prüfen Sie die Schreibweise der URL oder die DNS- und Proxy-Einstellungen des iHub-Servers.",
+        "timeout": "Der Endpunkt hat nicht rechtzeitig geantwortet. Prüfen Sie die URL, ob der Dienst läuft und ob der iHub-Server ihn erreicht (Firewall, VPN, Proxy).",
+        "requestTimeout": "Der Dienst hat zu lange für die Antwort gebraucht. Versuchen Sie es erneut oder prüfen Sie die Auslastung des Dienstes.",
+        "networkError": "Die Verbindung ist fehlgeschlagen. Prüfen Sie, ob der iHub-Server den Host erreicht (Firewall, VPN, ausgehender Proxy).",
+        "rateLimitExceeded": "Der Endpunkt begrenzt die Anfragen. Warten Sie einen Moment und versuchen Sie es erneut."
       }
     }
   },

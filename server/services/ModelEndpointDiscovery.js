@@ -21,6 +21,7 @@
 
 import { httpFetch, redactUrlSecrets } from '../utils/httpConfig.js';
 import { ServiceError } from '../utils/ServiceError.js';
+import { endpointHost, tlsCertificateErrorCode } from '../utils/connectionErrors.js';
 import logger from '../utils/logger.js';
 import {
   CONTEXT_WINDOW_MAX,
@@ -59,13 +60,23 @@ export const MAX_MODELS = 5000;
  * route answers with.
  */
 export class ModelDiscoveryError extends ServiceError {
-  constructor(messageKey, message, { status = 502, details, upstreamStatus } = {}) {
+  /**
+   * @param {string} messageKey - Stable cause the client translates
+   * @param {string} message - English headline
+   * @param {Object} [options]
+   * @param {number} [options.status=502] - HTTP status of the route's answer
+   * @param {string} [options.details] - English remediation (`details.remediation`)
+   * @param {number} [options.upstreamStatus] - HTTP status the endpoint answered with
+   * @param {string} [options.errorCode] - Socket or TLS certificate error code
+   */
+  constructor(messageKey, message, { status = 502, details, upstreamStatus, errorCode } = {}) {
     super('DISCOVERY_FAILED', message, {
       status,
       details: {
         messageKey,
         ...(details === undefined ? {} : { remediation: details }),
-        ...(upstreamStatus === undefined ? {} : { upstreamStatus })
+        ...(upstreamStatus === undefined ? {} : { upstreamStatus }),
+        ...(errorCode ? { errorCode } : {})
       }
     });
     this.name = 'ModelDiscoveryError';
@@ -619,9 +630,24 @@ function describeFetchFailure(err) {
       details: `No response within ${DISCOVERY_TIMEOUT_MS / 1000} seconds.`
     });
   }
+  const tlsCode = tlsCertificateErrorCode(err);
+  if (tlsCode) {
+    return new ModelDiscoveryError(
+      'certificateUntrusted',
+      'The certificate of the endpoint is not trusted',
+      {
+        errorCode: tlsCode,
+        details:
+          'The iHub server does not trust the TLS certificate of this endpoint (private CA or self-signed certificate). Add the host to the SSL domain whitelist and enable "Ignore invalid SSL certificates" under Admin > Security > SSL / TLS.'
+      }
+    );
+  }
   const code = String(err?.code || err?.cause?.code || err?.errno || '');
   const [messageKey, message] = NETWORK_FAILURES[code] || ['networkError', 'Network error'];
-  return new ModelDiscoveryError(messageKey, message, { details: err?.message });
+  return new ModelDiscoveryError(messageKey, message, {
+    details: err?.message,
+    errorCode: /^(?:E[A-Z]+|UND_ERR_[A-Z_]+)$/.test(code) ? code : undefined
+  });
 }
 
 function describeHttpFailure(status, sentKey) {
@@ -647,6 +673,12 @@ function describeHttpFailure(status, sentKey) {
     return new ModelDiscoveryError('notFound', 'No model list at this URL', {
       upstreamStatus: status,
       details: 'HTTP 404. Check the URL — it usually ends in /v1 or /v1/models.'
+    });
+  }
+  if (status >= 500) {
+    return new ModelDiscoveryError('serverError', `The endpoint answered with HTTP ${status}`, {
+      upstreamStatus: status,
+      details: `HTTP ${status}. The endpoint itself failed: check the service's status and logs, or a proxy in front of it, and try again.`
     });
   }
   return new ModelDiscoveryError('upstreamError', `The endpoint answered with HTTP ${status}`, {
@@ -705,9 +737,21 @@ async function readJsonBody(response) {
 
 /**
  * GET a listing and read its JSON body. Redirects are not followed and every
- * failure becomes a {@link ModelDiscoveryError} the admin can act on.
+ * failure becomes a {@link ModelDiscoveryError} the admin can act on, naming
+ * the host that was called (`details.host`; never the path or credentials).
  */
-async function fetchListingBody({ fetchImpl, requestUrl, headers, modelsUrl, provider, key }) {
+async function fetchListingBody(request) {
+  try {
+    return await fetchListingBodyOnce(request);
+  } catch (err) {
+    const host = endpointHost(request.modelsUrl);
+    if (err instanceof ModelDiscoveryError && host) err.details.host = host;
+    throw err;
+  }
+}
+
+/** {@link fetchListingBody} without the host on its errors. */
+async function fetchListingBodyOnce({ fetchImpl, requestUrl, headers, modelsUrl, provider, key }) {
   let response;
   try {
     response = await fetchImpl(requestUrl, {
