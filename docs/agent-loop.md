@@ -134,6 +134,7 @@ is an object with any of these hooks; register it for every run with
 | `onCircuitBroken(ctx, info)`    | A tool was withheld                                                 | Record / notify                                    |
 | `onCompactionStart(ctx, info)`  | A findings digest is about to be written (`compactionId`, `tokensBefore`, `itemsSummarised`, `kinds`) | Tell the user (the summary call takes a while) |
 | `onCompaction(ctx, info)`       | Transcript was compacted: the fields of the ledger's `context/compaction` (`compactionId`, `trigger` (`proactive`, `overflow`, `retried_call`), `strategy`, `lossy`, `tokensBefore`, `tokensAfter`, `digest`, …) plus `freedTokens` and the new `messages` | Telemetry, rebase a context figure |
+| `onSteerApplied(ctx, info)`     | A message the person sent into the run was read, before the model call of its step (`info.id`, `info.step`, `info.text`, `info.by`, `info.at`) | Tell the reader and store it (the chat: `steer/applied` and a stored user message) |
 | `onAnswer(ctx, info)`           | The model answered without a tool call (`info.stepText` — this step's answer; `info.content` — the run's text so far; `info.canRetry`) | Return `{ handled, retry, error? }` to reject the answer: the loop appends it and the `retry` correction, and the model answers again (only while `canRetry`) |
 
 Built-in seams live in `server/services/loop/seams/`:
@@ -146,9 +147,18 @@ Built-in seams live in `server/services/loop/seams/`:
   checkpoint and resumes the same step from the answer
   (`services/workflow/questionPause.js`).
 - Steer — a `steer` human event of the run's owner (`POST /api/runs/:runId/human-events`) is
-  queued for the run's loop (`services/loop/steering.js`) and appended before
-  the next model call as a `role: 'user'` message carrying the `[steer]` trust
-  marker; the ledger records it as `message/user { synthetic: 'steer' }`.
+  queued for the run's loop under the id the route minted (`services/loop/steering.js`) and
+  appended before the next model call as a `role: 'user'` message carrying the `[steer]` trust
+  marker; the ledger records it as `message/user { synthetic: 'steer', steerId, text, by }` and
+  the seams are told (`onSteerApplied`). The marker is rendered from the message's metadata
+  (`_origin: 'person'`, `_steerId`); the literal `[steer]` in a tool result is rewritten to
+  `(steer)` before the model reads it, and so is a workflow's answer to a question
+  (`questionPause.answeredToolContent`). A workflow answer carries `_steer` but no `_steerId`, so it
+  is never reported as a message of the person. A queued message can be removed until it is read
+  (`DELETE /api/runs/:runId/human-events/:id`); a `mode: 'afterwards'` message is not read at a
+  step, and what waits when the run ends is the leftover its surface sends as the next turn or
+  drops; a run that is not a chat turn drops it when its `run/end` is recorded (see
+  [Run ledger, Human events](run-ledger.md#human-events)).
 - `passthroughSeam` — `passthrough: true` tools stream their own answer to the
   user and end the turn.
 - `imageLiftSeam` — image payloads in tool results become `message.imageData`.

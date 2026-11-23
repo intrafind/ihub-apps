@@ -883,6 +883,8 @@ export async function hydrateHistoryForPrompt(
     out.push({
       role: entry.role,
       content: typeof entry.content === 'string' ? entry.content : '',
+      // A message the person sent while the answer was written stays one.
+      ...(entry.role === 'user' && entry.steer === true ? { steer: true } : {}),
       ...(Array.isArray(skills) && skills.length > 0 ? { activeSkills: skills } : {}),
       ...(hydratedFiles.length > 0 ? { fileData: hydratedFiles } : {})
     });

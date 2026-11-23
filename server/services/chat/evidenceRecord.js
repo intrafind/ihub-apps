@@ -227,6 +227,8 @@ export async function buildEvidence({
   let awaitingHeader = [];
   const knowledge = [];
   const errors = [];
+  /** Messages the person sent into the running answer, read at a step. */
+  const steers = [];
   let start = null;
   let end = null;
   let messages = [];
@@ -378,6 +380,22 @@ export async function buildEvidence({
         }
         break;
       }
+      case RUN_LOG_EVENTS.MESSAGE_USER:
+        // Only a message the person sent (it has an id); a workflow answer and
+        // the loop's own nudges are part of the calls' messages alone.
+        if (data.synthetic === 'steer' && typeof data.steerId === 'string') {
+          steers.push(
+            compact({
+              id: data.steerId,
+              step: data.step,
+              by: data.by ?? undefined,
+              sentAt: data.at,
+              readAt: event.ts,
+              content: collector.ref(typeof data.text === 'string' ? data.text : data.content)
+            })
+          );
+        }
+        break;
       case RUN_LOG_EVENTS.KNOWLEDGE_SCOPE:
         for (const project of Array.isArray(data.projects) ? data.projects : []) {
           knowledge.push(
@@ -475,6 +493,7 @@ export async function buildEvidence({
     }),
     calls: calls.map(({ settings: _settings, ...call }) => call),
     toolCalls: toolCallRecords,
+    steers: steers.length > 0 ? steers : undefined,
     errors: errors.length > 0 ? errors : undefined,
     knowledge,
     truncated: collector.truncated.size > 0 ? [...collector.truncated.values()] : undefined

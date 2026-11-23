@@ -235,7 +235,19 @@ describe('route inventory: the probed rows are true', () => {
       guestWithCookie: { cookie: run.cookie },
       idHolder: {}
     }[caller];
-    return { run, interactionId, as };
+    // A message the run's owner sent into the running answer, through the real route.
+    let messageId = 'none';
+    if (probe.queuedMessage) {
+      const sent = await h.send(
+        'post',
+        `/api/runs/${run.runId}/human-events`,
+        guest ? { cookie: run.cookie } : { user: USERS.owner },
+        { kind: 'steer', message: 'Use the newer report' }
+      );
+      assert.equal(sent.status, 200, JSON.stringify(sent.body));
+      messageId = sent.body.id;
+    }
+    return { run, interactionId, messageId, as };
   }
 
   for (const row of ROUTE_INVENTORY) {
@@ -243,10 +255,11 @@ describe('route inventory: the probed rows are true', () => {
       it(`${row.route}${entry.when ? ` (${entry.when})` : ''}: ${entry.intent}`, async () => {
         const [method, template] = row.route.split(' ');
         for (const caller of CALLERS) {
-          const { run, interactionId, as } = await sceneFor(caller, entry.probe);
+          const { run, interactionId, messageId, as } = await sceneFor(caller, entry.probe);
           const url = template
             .replace(':runId', run.runId)
-            .replace(':interactionId', interactionId);
+            .replace(':interactionId', interactionId)
+            .replace(':id', messageId);
           assert.equal(url.includes(':'), false, `${row.route}: a parameter has no value`);
           const res = await h.send(method.toLowerCase(), url, as, entry.probe.body);
           assert.equal(

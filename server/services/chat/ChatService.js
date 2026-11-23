@@ -63,6 +63,7 @@ import {
   structuredOutputSeam
 } from '../loop/seams/index.js';
 import { createChatChannel } from './chatChannel.js';
+import { chatSteerSeam, createLeftover } from './chatSteering.js';
 import { discardRunActivity, recordRunActivity } from './runActivity.js';
 import { createPageReadGate, resolveMaxPageReads } from './pageReadLimit.js';
 import { createTurnSkillLog } from './turnSkillLog.js';
@@ -324,6 +325,22 @@ function clientConnectedOf(persist, chatId) {
   return hasChatClient(chatId);
 }
 
+/**
+ * Whether a chat claimed for `runId` before its turn started is no longer
+ * claimed for it, or another turn is in flight on it: the turn then yields
+ * (`ChatService.runTurn`, `claimed`). Read right before the turn registers.
+ *
+ * @param {Object|null|undefined} repository
+ * @param {string} chatId
+ * @param {string} runId
+ * @returns {Promise<boolean>}
+ */
+async function claimLost(repository, chatId, runId) {
+  if (!repository) return false;
+  const current = await repository.getChat(chatId).catch(() => null);
+  return current?.activeRunId !== runId || hasActiveChatRequest(chatId);
+}
+
 class ChatService {
   /**
    * @param {Object} [options]
@@ -463,6 +480,30 @@ class ChatService {
         error: err.message
       });
     }
+  }
+
+  /**
+   * The answer of a turn the chat was claimed for that yielded to a newer turn
+   * (`runTurn`, `claimed`).
+   *
+   * @param {string} chatId
+   * @param {string} runId
+   * @returns {Object}
+   */
+  _yieldedTurn(chatId, runId) {
+    logger.info('Next turn made of messages sent while answering yields to a newer turn', {
+      component: COMPONENT,
+      chatId,
+      runId
+    });
+    return {
+      runId,
+      status: 'superseded',
+      superseded: true,
+      content: '',
+      finishReason: 'aborted',
+      knowledgeSources: []
+    };
   }
 
   _endLedgerRun(
@@ -614,8 +655,18 @@ class ChatService {
    * @param {boolean} [params.promptResent] - The next turn resends this turn's prompt as it
    *   is (whole history, nothing left out, no context only this turn carries): only then is
    *   the stored context one a next turn can start from.
+   * @param {boolean} [params.startsLeftover=false] - The caller starts the messages the person
+   *   sent into this answer and the answer did not read as the next turn of a kept chat
+   *   (the chat route does, `chatTurnStart.js`): the chat is claimed for that turn when this
+   *   one lets go of it, and the result names it (`leftover`). Otherwise they are dropped.
+   * @param {boolean} [params.claimed=false] - The chat was claimed for `runId` before this
+   *   turn started (a next turn made of an answer's leftover, `chatTurnStart.js`). The turn
+   *   then yields to any newer one: it runs only while that claim holds and no other turn
+   *   is in flight on the chat, checked before it would supersede anything and again under
+   *   the chat lock when its question is stored. A turn that yields stores nothing and
+   *   answers `{ status: 'superseded', superseded: true }`.
    * @returns {Promise<Object>} `{ runId, status, content, finishReason, usage, messages, knowledgeSources,
-   *   pendingInteraction?, toolName?, error?, errorInfo?, structuredOutput?, refusal? }`
+   *   pendingInteraction?, toolName?, error?, errorInfo?, structuredOutput?, refusal?, leftover? }`
    */
   async runTurn({
     prep,
@@ -644,7 +695,9 @@ class ChatService {
     clientTimezone = null,
     outputId = undefined,
     priorContext = null,
-    promptResent = false
+    promptResent = false,
+    startsLeftover = false,
+    claimed = false
   }) {
     const {
       app,
@@ -701,6 +754,15 @@ class ChatService {
       }
     }
 
+    // A turn the chat was claimed for already never supersedes a newer one: a
+    // message the person sent while it was being prepared wins. Checked right
+    // before the turn registers, with nothing awaited in between, so a newer
+    // turn on this worker either registered first (this one yields) or comes
+    // after and supersedes this one.
+    if (claimed && (await claimLost(persistence?.repository, chatId, runId))) {
+      return this._yieldedTurn(chatId, runId);
+    }
+
     const controller = new AbortController();
     const trackRequest = !!chatId && (streaming || !!persistence?.repository);
     if (trackRequest) {
@@ -750,6 +812,12 @@ class ChatService {
         : [];
     // What the run used before the pause: its end counts the whole turn.
     const carriedUsage = continued?.paused?.data?.usage || null;
+    // The messages the person sent into this answer that it did not read: they
+    // become the next turn, or are dropped, when the turn lets go of the chat.
+    const leftover = createLeftover({
+      runId,
+      startsNextTurn: startsLeftover === true && Boolean(persistence?.repository)
+    });
 
     // The turn's SSE v2 emitter (chat stream id = chatId, run id = this turn).
     // A caller with its own consumer (the inference API turning frames into
@@ -830,10 +898,27 @@ class ChatService {
         projects: persist.projects,
         projectId: persist.projectId,
         origin: persist.origin,
-        temporary: persist.temporary === true
+        temporary: persist.temporary === true,
+        onlyWhileClaimed: claimed === true
       });
       const { refusal } = settled;
       chatStored = settled.chatStored === true;
+      // Claimed for this turn before it started, and taken by a newer turn on
+      // another worker since: nothing of it was stored, and nothing was told
+      // (`run/started` comes after this), so the newer turn's stream stays its own.
+      if (settled.superseded) {
+        discardRunActivity(runId);
+        this._endLedgerRun(runId, {
+          status: 'aborted',
+          finishReason: 'aborted',
+          usage: carriedUsage,
+          cause: abortCause('superseded', { via: 'ChatService.runTurn' }),
+          startedAt
+        });
+        if (stream !== NO_STREAM) unbindStreamRun(chatId, runId);
+        if (activeRequests.get(chatId) === controller) activeRequests.delete(chatId);
+        return this._yieldedTurn(chatId, runId);
+      }
       // The chat's container changed under this turn (a first turn that
       // raced it opened the chat in another project): nothing of it was
       // stored, and it ends here, before the model is called.
@@ -1021,7 +1106,14 @@ class ChatService {
       ),
       imageLiftSeam,
       ...(outputSeam ? [outputSeam] : []),
-      turnSeam
+      turnSeam,
+      // A message the person sent into the answer, read at a step: told and stored.
+      chatSteerSeam({
+        chatId,
+        runId,
+        stream,
+        repository: chatStored ? persist.repository : null
+      })
     ];
 
     const pageReads = createPageReadGate(resolveMaxPageReads(app));
@@ -1307,7 +1399,8 @@ class ChatService {
           summary: outcome,
           clientConnected: clientConnectedOf(persist, chatId),
           message: persist.assistant,
-          runLog: this.runLog
+          runLog: this.runLog,
+          takeLeftover: leftover.takerFor(outcome.status, outcome.abortCause?.kind)
         });
         // A named chat is easier to find again. After the answer is stored and
         // not awaited: the title never delays the turn, and it works the same
@@ -1324,6 +1417,9 @@ class ChatService {
           });
         }
       }
+      // A leftover the caller starts as the next turn (`chatTurnStart.js`).
+      const next = leftover.finish(persist ? 'superseded' : 'run_ended');
+      if (next) outcome.leftover = next;
       return outcome;
     } catch (error) {
       // The loop never throws for model or tool failures; this is a bug path.
@@ -1359,11 +1455,15 @@ class ChatService {
             errorInfo: { code: 'INTERNAL_ERROR', message: error.message || 'Internal error' }
           },
           clientConnected: clientConnectedOf(persist, chatId),
-          runLog: this.runLog
+          runLog: this.runLog,
+          takeLeftover: leftover.takerFor('error')
         });
       }
       throw error;
     } finally {
+      // Whatever the turn did not settle above is dropped: a run that no
+      // longer held its chat was replaced by a newer message.
+      leftover.finish(persist ? 'superseded' : 'run_ended');
       if (stream !== NO_STREAM) unbindStreamRun(chatId, runId);
       if (trackRequest && activeRequests.get(chatId) === controller) {
         activeRequests.delete(chatId);

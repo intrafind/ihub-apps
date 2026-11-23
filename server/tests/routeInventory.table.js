@@ -117,6 +117,8 @@ const CHAT_SUITES =
  * @property {Object} [probe] - how the test asks the real route
  * @property {Object} [probe.body] - the request body
  * @property {boolean} [probe.interaction] - the route addresses a pending approval
+ * @property {boolean} [probe.queuedMessage] - the route addresses a message the run's owner
+ *   queued for the running answer (`:id`)
  * @property {string} [declared] - for a case the test does not ask: where it is tested
  */
 
@@ -218,6 +220,18 @@ export const ROUTE_INVENTORY = Object.freeze([
         when: "kind: 'feedback'",
         expect: RUN_OWNER_ONLY,
         probe: { body: { kind: 'feedback', rating: 1 } }
+      }
+    ]
+  },
+  {
+    route: 'DELETE /api/runs/:runId/human-events/:id',
+    cases: [
+      {
+        check: 'authorizeRun',
+        // Removing a queued message is the owner's own, like sending it.
+        intent: 'steer',
+        expect: statuses(204, 403, 403, 204, 403),
+        probe: { queuedMessage: true }
       }
     ]
   },

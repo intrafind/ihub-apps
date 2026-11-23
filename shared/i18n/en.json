@@ -13941,6 +13941,7 @@
     "EVIDENCE_NOT_RECORDED": "No evidence record was kept for this answer.",
     "JOURNAL_NOT_KEPT": "The events of this run are no longer kept. Read its evidence record instead.",
     "RUN_STEER_FORBIDDEN": "Only the person this answer is written for can send a message while it is being written.",
+    "STEER_ALREADY_APPLIED": "iHub has already read or sent this message, so it can no longer be removed.",
     "MCP_AUTH_REFRESH_FAILED": "The sign-in to the MCP server could not be refreshed. Try again in a moment.",
     "APPROVAL_REQUIRED_NO_USER": "This call needs a person's approval, and this client cannot ask for it.",
     "APPROVAL_ALREADY_ANSWERED": "This approval was already answered.",

@@ -89,6 +89,9 @@ above, and each call row source that `message.sources` already holds sent as
 | `interaction/answered` | `{ interactionId, kind, answer }`                                                                                             | The touchpoint was answered                                                   |
 | `progress/node`        | `{ executionId?, nodeId, nodeName?, nodeType?, status, iteration?, progress?, output?, error? }`                              | Workflow node progress (also chat-launched workflows)                         |
 | `meta`                 | `{ conversationId?, title?, messageId?, responseMessageId?, chatId?, executionId?, extra? }`                                   | Surface metadata that is not run semantics                                    |
+| `steer/queued`         | `{ id, kind: steer \| send_after, text, at? }`                                                                                | A message the person sent into the running answer waits (see below)           |
+| `steer/applied`        | `{ id, kind, text, step?, nextRunId?, activityKind? }`                                                                        | The message was read at step `step`, or sent as the question of the next turn, which runs as `nextRunId` |
+| `steer/dropped`        | `{ id, kind, text, reason }`                                                                                                  | The message will never be read; the client can give its text back             |
 
 ### Failure cause
 
@@ -284,6 +287,46 @@ frame with the rebased figure follows the `completed` frame.
 | `planCreated`     | workflow planner                    | the plan                                               |
 | `checkpointSaved` | workflow engine                     | `true`                                                 |
 
+
+### Messages for the running answer
+
+The frames about a message the person sent into the running answer
+(`POST /api/runs/{runId}/human-events`, `kind: 'steer'`, see
+[Run ledger, Human events](run-ledger.md#human-events)). The server decides each of them and sends
+what the client needs to draw it; the client and `shared/run/` never work one out from a tool id,
+a text or the absence of a frame. Every frame names the message by the `id` the POST answered,
+its `kind` (`steer`: read at the next step; `send_after`: sent after the answer) and its `text`.
+
+- `steer/queued`: the message waits. Sent by the server process that runs the answer, on the
+  run's own id. A message that was left over and waits in the next turn (see below) is queued
+  again on the run of that turn; it is still removed under the run it was sent to.
+- `steer/applied` with `step`: the answer read the message before the model call of `step` (the
+  step of `step/delta`). `activityKind: 'user_message'` is the row it makes in the chat's activity
+  list ("Read your message"), decided by the server (`utils/toolDisplay.js`). A re-sync
+  (`view=sse`) carries the same frame, projected from the journal's
+  `message/user { synthetic: 'steer' }`. The stored chat holds the message as a user message of the
+  run (see [Chat persistence](chat-persistence.md#messages-for-the-running-answer)).
+- `steer/applied` with `nextRunId`: the answer ended before it read the message, and the message
+  is the question of the next turn, which runs as `nextRunId`. Sent on the run of the answer that
+  ended, after its `run/ended`, and only live: it is not in the journal. Exactly one of `step`
+  and `nextRunId` is set.
+- `steer/dropped`: the message will never be read. `reason` is one of `expired` (not read within
+  its lifetime), `queue_full` (the oldest of more than 20), `removed` (the person removed it:
+  nothing to give back), `run_paused` (the answer stopped for a question or an approval),
+  `run_stopped`, `run_failed`, `superseded` (a newer message replaced the answer),
+  `temporary_chat` (the answer ended in a temporary or guest chat, where the server starts no next
+  turn), `run_ended` (the answer ended where nothing starts a next turn, such as an API run or a
+  workflow) and `not_started` (the next turn could not be started). A next turn made of messages
+  the answer did not read that finds a newer message holding the chat yields to it: its messages
+  are dropped with `superseded`, after their `steer/applied` with `nextRunId`. The text is in the
+  frame, so the client can put it back where the person can send it again.
+
+Only `steer/applied` with `step` is in the journal. `steer/queued`, `steer/dropped` and
+`steer/applied` with `nextRunId` are not, so a re-sync (`view=sse`) never carries them. A client
+that attaches again rebuilds what waits from `pending` of `GET /api/chats/:chatId`, and learns of
+a next turn made of a message it sent from the chat's `activeRunId` and its stored messages (the
+message is the question of that run). A restart of the server process that runs the answer loses
+what waits without a frame.
 
 ## Where a Tool Call Looked
 

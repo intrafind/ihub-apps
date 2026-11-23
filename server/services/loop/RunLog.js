@@ -166,6 +166,13 @@ export class RunLog {
     /** @type {Map<string, {seq:number, kind:string, anonymous:boolean, principalId:string, startedAt:string, refs:Object, listeners:Set<Function>, ended:boolean, owned:boolean}>} */
     this._runs = new Map();
     this._globalListeners = new Set();
+    /**
+     * Called once when a run of this worker ends. Unlike a global listener it
+     * does not make every run "recording" (`isRecording`).
+     *
+     * @type {Set<(end: {runId: string, kind: string, status: string, refs: Object}) => void>}
+     */
+    this._runEndHooks = new Set();
     this._deleteHooks = new Set();
     this._cleanupTimer = null;
     this._journalTimer = null;
@@ -761,6 +768,15 @@ export class RunLog {
         logger.warn('RunLog global listener threw', { component: 'RunLog', error: err.message });
       }
     }
+    if (type === RUN_LOG_EVENTS.RUN_END) {
+      for (const fn of this._runEndHooks) {
+        try {
+          fn({ runId, kind: entry.kind, status: parsed.status, refs: entry.refs || {} });
+        } catch (err) {
+          logger.warn('RunLog run end hook threw', { component: 'RunLog', error: err.message });
+        }
+      }
+    }
 
     if (this.isEnabled()) {
       // Fire-and-forget by design (see runLedgerStore): the persistence layer
@@ -919,6 +935,18 @@ export class RunLog {
   subscribeAll(fn) {
     this._globalListeners.add(fn);
     return () => this._globalListeners.delete(fn);
+  }
+
+  /**
+   * Register a hook called synchronously when a run ends on this worker
+   * (`run/end` appended here), with its id, kind, status and refs.
+   *
+   * @param {(end: {runId: string, kind: string, status: string, refs: Object}) => void} fn
+   * @returns {() => void} unregisters the hook
+   */
+  onRunEnd(fn) {
+    this._runEndHooks.add(fn);
+    return () => this._runEndHooks.delete(fn);
   }
 
   /**

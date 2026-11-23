@@ -11,6 +11,7 @@
  *   GET    /api/runs/:runId/interactions              pending interactions of a run
  *   POST   /api/runs/:runId/interactions/:id/answer   THE one answer endpoint (owner or approver group)
  *   POST   /api/runs/:runId/human-events              steer / feedback (owner), stop (owner, or admin: audited)
+ *   DELETE /api/runs/:runId/human-events/:id          remove a queued message before it is read (owner)
  *   GET    /api/interactions/pending                  the interactions queue (approver-group filtered)
  *
  * Every access check names its intent (`services/loop/runAccess.js`); a new
@@ -44,7 +45,7 @@ import {
 import { isChatToolApproval } from '../services/chat/chatToolApproval.js';
 import { isViewToolApproval } from '../services/mcp/mcpViewToolApproval.js';
 import { redactInteractionForViewer } from '../utils/toolApproval.js';
-import { steerRun } from '../services/loop/steering.js';
+import { cancelSteer, newSteerId, steerRun } from '../services/loop/steering.js';
 import { createRunSteerLimiter } from '../middleware/rateLimiting.js';
 import { logAudit } from '../services/AuditLogService.js';
 import { RUN_LOG_EVENTS } from '../../shared/runEvents.js';
@@ -524,6 +525,16 @@ export default function registerRunRoutes(app) {
    *       an anonymous visitor the owner is the browser session that owns its chat.
    *       A `steer` is refused while the run waits for an approval, and one caller
    *       sends at most 30 of them per minute.
+   *
+   *       A `steer` is a message into the running answer. With `mode: 'steer'` (the
+   *       default) it is read at the next step; with `mode: 'afterwards'` it is sent
+   *       as the next message once the answer ends. The answer names its `id` (for
+   *       `DELETE /api/runs/{runId}/human-events/{id}`) when a running answer took
+   *       it; without `id` and `effect` no answer is running any more, and the
+   *       client sends the text as a new message. A steer the answer did not read
+   *       before it ended is sent as the next turn by the server. Only a chat
+   *       answer takes `mode: 'afterwards'` (400 otherwise); a workflow, agent or
+   *       API run drops what it did not read when it ends (`steer/dropped`).
    *     tags:
    *       - Runs
    *     security:
@@ -548,6 +559,10 @@ export default function registerRunRoutes(app) {
    *                 enum: [steer, stop, feedback]
    *               message:
    *                 type: string
+   *               mode:
+   *                 type: string
+   *                 enum: [steer, afterwards]
+   *                 description: '`steer` only: read at the next step (default), or sent after the answer'
    *               messageId:
    *                 type: string
    *               rating:
@@ -556,9 +571,20 @@ export default function registerRunRoutes(app) {
    *                   - type: string
    *     responses:
    *       200:
-   *         description: Event recorded (`effect` names what a stop aborted)
+   *         description: >-
+   *           Event recorded. `effect` names what a stop aborted, or where a steer went
+   *           (`steer_queued`, `steer_relayed`); a steer a running answer took also has its `id`.
+   *         content:
+   *           application/json:
+   *             schema:
+   *               type: object
+   *               properties:
+   *                 runId: { type: string }
+   *                 seq: { type: integer, nullable: true }
+   *                 id: { type: string, description: 'A steer a running answer took' }
+   *                 effect: { type: string }
    *       400:
-   *         description: Invalid body
+   *         description: "Invalid body, or `mode: 'afterwards'` for a run that is not a chat answer"
    *       403:
    *         description: >-
    *           Not the run's owner. `RUN_STEER_FORBIDDEN` for a `steer`, `FORBIDDEN` for the
@@ -580,7 +606,7 @@ export default function registerRunRoutes(app) {
     if (!parsed.success) {
       throw parsed.error;
     }
-    const { kind, message, messageId, rating } = parsed.data;
+    const { kind, message, messageId, rating, mode } = parsed.data;
     // Each kind is its own intent: a steer and a rating are the owner's alone,
     // a stop is also an admin's.
     const auth = await requireRunAccess(runId, req.user, kind);
@@ -596,6 +622,27 @@ export default function registerRunRoutes(app) {
         'This run waits for an approval; answer the approval before sending a message'
       );
     }
+    const chatId = auth.meta?.refs?.chatId || runLog.getRunMeta(runId)?.refs?.chatId || null;
+    // Only a chat turn has a next turn to send a message with afterwards; a
+    // workflow, an agent or an API run would hold it until it expired unseen.
+    if (
+      kind === 'steer' &&
+      mode === 'afterwards' &&
+      !(chatId && (auth.meta?.kind || 'chat') === 'chat')
+    ) {
+      throw new ServiceError(
+        'BAD_REQUEST',
+        "Only a chat answer takes a message to send afterwards; send it with mode 'steer'"
+      );
+    }
+    // A message into the running answer gets its id here, before it is relayed
+    // to the worker that runs the answer: the caller removes it by this id.
+    const steer = kind === 'steer' ? { id: newSteerId(), mode: mode || 'steer' } : null;
+    // The sender as the run's ledger names it; a removal is checked against it.
+    const by = await resolveActorId(req.user, {
+      mode: auth.meta?.identityMode || runLog.identityMode()
+    });
+    const at = new Date().toISOString();
     // The run may live on another worker: continue its persisted sequence.
     const event = await runLog.appendRecovered(
       runId,
@@ -605,10 +652,9 @@ export default function registerRunRoutes(app) {
         ...(message !== undefined ? { message } : {}),
         ...(messageId !== undefined ? { messageId } : {}),
         ...(rating !== undefined ? { rating } : {}),
-        by: await resolveActorId(req.user, {
-          mode: auth.meta?.identityMode || runLog.identityMode()
-        }),
-        at: new Date().toISOString()
+        ...(steer ? { steerId: steer.id, mode: steer.mode } : {}),
+        by,
+        at
       },
       { kind: auth.meta?.kind || 'chat' }
     );
@@ -642,14 +688,122 @@ export default function registerRunRoutes(app) {
       }
     }
     // A steer reaches the running loop at its next step boundary (queued on
-    // the worker that owns the run, relayed there in a cluster); without an
-    // active loop it is recorded only.
-    if (kind === 'steer') {
-      const routed = steerRun(runId, { message, by: event?.data?.by ?? null, at: event?.ts });
+    // the worker that owns the run, asked there in a cluster); without an
+    // active loop it is recorded only, and the answer has no id.
+    let id = null;
+    if (steer) {
+      const routed = await steerRun(runId, {
+        ...steer,
+        message,
+        by,
+        at,
+        chatId
+      });
       effect = routed ? `steer_${routed}` : null;
+      id = routed ? steer.id : null;
     }
-    res.json({ runId, seq: event?.seq ?? null, ...(effect ? { effect } : {}) });
+    // 200, as the route always answered: the event is recorded either way.
+    res.json({
+      runId,
+      seq: event?.seq ?? null,
+      ...(id ? { id } : {}),
+      ...(effect ? { effect } : {})
+    });
   });
+
+  /**
+   * @swagger
+   * /runs/{runId}/human-events/{id}:
+   *   delete:
+   *     summary: Remove a queued message before the running answer reads it
+   *     description: |
+   *       Removes a message sent with `POST /api/runs/{runId}/human-events`
+   *       (`kind: 'steer'`, either mode) while it waits. A removed message is never
+   *       read and never sent as the next turn. A message the answer already read,
+   *       or sent as the next turn, cannot be removed (409 `STEER_ALREADY_APPLIED`).
+   *       Only the run's owner removes a message, as only the owner sends one; for a
+   *       run of an anonymous visitor the owner is the browser session that owns
+   *       its chat. In a cluster the worker that runs the answer is asked. A message
+   *       that waits in the next turn's run (it was queued behind the message sent as
+   *       that turn) is removed under the run it was sent to, as the chat's `pending[]`
+   *       names it (`runId`).
+   *     tags:
+   *       - Runs
+   *     security:
+   *       - bearerAuth: []
+   *       - cookieAuth: []
+   *     parameters:
+   *       - in: path
+   *         name: runId
+   *         required: true
+   *         schema:
+   *           type: string
+   *       - in: path
+   *         name: id
+   *         required: true
+   *         description: The `id` the POST answered with
+   *         schema:
+   *           type: string
+   *     responses:
+   *       204:
+   *         description: Removed; it will not be read
+   *       400:
+   *         description: Invalid id
+   *       403:
+   *         description: '`RUN_STEER_FORBIDDEN`: not the run''s owner (an admin neither)'
+   *       404:
+   *         description: Run not found, or no such message waits (removed, dropped, or never sent)
+   *       409:
+   *         description: '`STEER_ALREADY_APPLIED`: the answer already read it or sent it as the next turn'
+   *       503:
+   *         description: >-
+   *           The server process that runs the answer did not answer, or the answer is
+   *           ending and what becomes of the message is being decided; try again
+   */
+  app.delete(
+    buildServerPath('/api/runs/:runId/human-events/:id'),
+    authRequired,
+    async (req, res) => {
+      const { runId, id } = req.params;
+      assertValidId(runId, 'run');
+      assertValidId(id, 'message');
+      // The owner's own message: the same right as sending it.
+      const auth = await requireRunAccess(runId, req.user, 'steer');
+      const by = await resolveActorId(req.user, {
+        mode: auth.meta?.identityMode || runLog.identityMode()
+      });
+      const result = await cancelSteer(runId, id, { by });
+      if (result === 'applied') {
+        throw new ServiceError(
+          'STEER_ALREADY_APPLIED',
+          'iHub has already read or sent this message, so it can no longer be removed'
+        );
+      }
+      if (result === 'unavailable') {
+        throw new ServiceError(
+          'SERVICE_UNAVAILABLE',
+          'The message could not be removed right now; try again'
+        );
+      }
+      if (result !== 'removed') throw new ServiceError('NOT_FOUND', 'Message not found');
+      // On the ledger beside the event that sent it, so the record says why it was never read.
+      await runLog
+        .appendRecovered(
+          runId,
+          RUN_LOG_EVENTS.HUMAN_EVENT,
+          { kind: 'steer', steerId: id, removed: true, by, at: new Date().toISOString() },
+          { kind: auth.meta?.kind || 'chat' }
+        )
+        .catch(error =>
+          logger.warn('Removal of a queued message not recorded', {
+            component: 'RunRoutes',
+            runId,
+            error: error.message
+          })
+        );
+      res.status(204).end();
+    }
+  );
 
   /**
    * @swagger

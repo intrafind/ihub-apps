@@ -15,7 +15,9 @@ import {
   STEP_DELTA_KINDS,
   RUN_STATUSES,
   RUN_KINDS,
-  ACTIVITY_ORIGINS
+  ACTIVITY_ORIGINS,
+  PENDING_MESSAGE_KINDS,
+  STEER_DROP_REASONS
 } from '../../../../shared/runEvents.js';
 import {
   usageSchema,
@@ -424,6 +426,34 @@ export const metaData = z.object({
   extra: z.record(z.any()).optional()
 });
 
+/** What every frame about a queued message says: which one, of what kind, and its text. */
+const steerFrame = {
+  id: z.string().min(1),
+  kind: z.enum(PENDING_MESSAGE_KINDS),
+  text: z.string()
+};
+
+export const steerQueuedData = z.object({ ...steerFrame, at: ts.optional() });
+
+export const steerAppliedData = z
+  .object({
+    ...steerFrame,
+    /** Read at this step of the run (the step of `step/delta`). */
+    step: z.number().int().nonnegative().optional(),
+    /** Sent as the question of the next turn, which runs as this run. */
+    nextRunId: z.string().min(1).optional(),
+    /** The row it makes in the chat's activity list, decided by the server (`toolDisplay.js`). */
+    activityKind: z.literal('user_message').optional()
+  })
+  .refine(data => (data.step === undefined) !== (data.nextRunId === undefined), {
+    message: 'steer/applied names either the step or the next run'
+  });
+
+export const steerDroppedData = z.object({
+  ...steerFrame,
+  reason: z.enum(STEER_DROP_REASONS)
+});
+
 const base = {
   v: z.literal(2),
   seq: z.number().int().nonnegative(),
@@ -462,7 +492,10 @@ export const sseV2EventSchema = z.discriminatedUnion('type', [
     data: interactionAnsweredData
   }),
   z.object({ ...base, type: z.literal(SSE_V2_EVENTS.PROGRESS_NODE), data: progressNodeData }),
-  z.object({ ...base, type: z.literal(SSE_V2_EVENTS.META), data: metaData })
+  z.object({ ...base, type: z.literal(SSE_V2_EVENTS.META), data: metaData }),
+  z.object({ ...base, type: z.literal(SSE_V2_EVENTS.STEER_QUEUED), data: steerQueuedData }),
+  z.object({ ...base, type: z.literal(SSE_V2_EVENTS.STEER_APPLIED), data: steerAppliedData }),
+  z.object({ ...base, type: z.literal(SSE_V2_EVENTS.STEER_DROPPED), data: steerDroppedData })
 ]);
 
 export const sseV2EventDataSchemas = Object.freeze({
@@ -484,7 +517,10 @@ export const sseV2EventDataSchemas = Object.freeze({
   [SSE_V2_EVENTS.INTERACTION_RAISED]: interactionRaisedData,
   [SSE_V2_EVENTS.INTERACTION_ANSWERED]: interactionAnsweredData,
   [SSE_V2_EVENTS.PROGRESS_NODE]: progressNodeData,
-  [SSE_V2_EVENTS.META]: metaData
+  [SSE_V2_EVENTS.META]: metaData,
+  [SSE_V2_EVENTS.STEER_QUEUED]: steerQueuedData,
+  [SSE_V2_EVENTS.STEER_APPLIED]: steerAppliedData,
+  [SSE_V2_EVENTS.STEER_DROPPED]: steerDroppedData
 });
 
 /**

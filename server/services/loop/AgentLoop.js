@@ -44,7 +44,8 @@ import {
   sourcesFromGrounding
 } from '../../../shared/sources/index.js';
 import { planToolBatches } from './segmentPlanner.js';
-import { takeSteers, steerMessage, STEER_MARKER } from './steering.js';
+import { takeSteers, steerMessage, openSteering, STEER_MARKER } from './steering.js';
+import { neutraliseSteerMarker } from '../../../shared/steerMarker.js';
 import {
   isNativeWebSearchRejection,
   isNativeWebSearchUnavailable,
@@ -295,6 +296,8 @@ export class AgentLoop {
     const toolExecution = request.toolExecution === 'caller' ? 'caller' : 'server';
     const seams = [...this._seams, ...(request.seams || [])];
     const runId = request.runId || null;
+    // A run that continues after a pause takes messages from its person again.
+    openSteering(runId);
     // Ledger events need a well-formed run id; anything else is telemetry-only.
     const ledgerId = runId && isValidRunId(runId) ? runId : null;
     if (runId && !ledgerId) {
@@ -612,13 +615,28 @@ export class AgentLoop {
 
         // Human steer messages queued for this run are delivered here, at the
         // step boundary, inside an explicit trust marker (see steering.js).
+        // Here every tool call of the previous step has its result, so a
+        // message never lands between a call and its result, nor inside a
+        // batch of calls that ran side by side.
         for (const steer of takeSteers(runId)) {
           const message = steerMessage(steer);
           ctx.messages.push(message);
           this._ledger(ledgerId, RUN_LOG_EVENTS.MESSAGE_USER, {
             step: iteration,
             content: message.content,
-            synthetic: 'steer'
+            synthetic: 'steer',
+            steerId: steer.id,
+            text: steer.message,
+            by: steer.by,
+            at: steer.at
+          });
+          // The surface tells its reader and stores the message at this step.
+          await runHooks(seams, 'onSteerApplied', ctx, {
+            id: steer.id,
+            step: iteration,
+            text: steer.message,
+            by: steer.by,
+            at: steer.at
           });
         }
 
@@ -1554,6 +1572,8 @@ export class AgentLoop {
       })
     };
     await runHooks(seams, 'postTool', ctx, info, outcome);
+    // No tool result poses as a message of the person (`shared/steerMarker.js`).
+    outcome.message = withoutSteerMarker(outcome.message);
     messages.push(outcome.message);
 
     const verdict = classifyToolResult(outcome.message);
@@ -2348,6 +2368,34 @@ function wrappedUpIn(messages) {
     if (!synthetic) return false;
   }
   return false;
+}
+
+/**
+ * A tool message with the marker of a person's message neutralised in its
+ * text: a tool result, a report or a file the tool read never starts or holds
+ * what reads as a message the person sent into the running answer. The same
+ * message comes back when there is nothing to change.
+ *
+ * @param {*} message - a `role: 'tool'` message; anything else is returned as it is
+ * @returns {*}
+ */
+export function withoutSteerMarker(message) {
+  if (!message || typeof message !== 'object') return message;
+  const { content } = message;
+  if (typeof content === 'string') {
+    const neutral = neutraliseSteerMarker(content);
+    return neutral === content ? message : { ...message, content: neutral };
+  }
+  if (!Array.isArray(content)) return message;
+  let changed = false;
+  const parts = content.map(part => {
+    if (typeof part?.text !== 'string') return part;
+    const neutral = neutraliseSteerMarker(part.text);
+    if (neutral === part.text) return part;
+    changed = true;
+    return { ...part, text: neutral };
+  });
+  return changed ? { ...message, content: parts } : message;
 }
 
 /**

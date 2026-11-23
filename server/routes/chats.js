@@ -5,7 +5,7 @@
  * Chat routes — the durable-chat surface (#2304 §9).
  *
  *   GET    /api/chats            ?limit&cursor   the caller's chats, newest activity first
- *   GET    /api/chats/:chatId                    chat metadata + stored transcript
+ *   GET    /api/chats/:chatId                    chat metadata + stored transcript (+ pending, maySteer)
  *   GET    /api/chats/:chatId/artifacts             what this chat's turns produced
  *   GET    /api/chats/:chatId/artifacts/:artifactId  the bytes of one of them
  *   POST   /api/chats/:chatId/artifacts/zip          several (or all) of them as one ZIP
@@ -95,6 +95,7 @@ import { markRunChatSeen } from '../services/scheduler/tasks/taskService.js';
 import { publicChatView } from '../services/chat/chatToolApproval.js';
 import { sendCreated, segment } from '../utils/created.js';
 import { clientMessages } from '../services/loop/clientProjection.js';
+import { chatPendingView } from '../services/chat/chatSteering.js';
 
 const COMPONENT = 'ChatRoutes';
 
@@ -408,10 +409,15 @@ export default function registerChatRoutes(app) {
     // `messages` is the array, not the stored envelope — a hydrating client
     // should not have to reach through `messages.messages`. The document's
     // schema version rides alongside it so a future migration is visible.
+    // What waits for the running answer, and whether this reader may send
+    // more: for whoever may read the chat, with the actions for its owner only.
+    // Without the feature `steering` neither field is sent.
+    const steering = await chatPendingView(chat, { owner: !nonOwner });
     res.json({
       chat: publicChatView(seen || chat),
       messages: clientMessages(stored.messages),
-      version: stored.version
+      version: stored.version,
+      ...(steering || {})
     });
   });
 

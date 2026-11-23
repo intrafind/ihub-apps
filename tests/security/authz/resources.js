@@ -499,7 +499,13 @@ export const RESOURCES = [
         params: { runId: 'executionId' },
         data: { value: 'approve' }
       },
-      { route: 'POST /api/runs/:runId/human-events', data: { kind: 'stop' } }
+      { route: 'POST /api/runs/:runId/human-events', data: { kind: 'stop' } },
+      // Removing a queued message is the sender's own act on her run: an attacker
+      // is refused before the message id is looked at.
+      {
+        route: 'DELETE /api/runs/:runId/human-events/:id',
+        params: { id: 'fakeSteerId' }
+      }
     ]
   },
   {
@@ -1159,6 +1165,7 @@ export const ADMIN_ONLY = [
 export const FIXED_IDS = {
   fakeArtifactId: FAKE_ARTIFACT_ID,
   fakeSha256: FAKE_SHA256,
+  fakeSteerId: 'c'.repeat(32),
   revision: '1',
   toolId: 'ask_user',
   artifactName: 'report.md',
