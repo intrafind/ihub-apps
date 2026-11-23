@@ -33,7 +33,12 @@ jest.mock('../../../client/src/features/admin/components/ResourceSelector', () =
   )
 }));
 jest.mock('../../../client/src/features/admin/hooks/useUnsavedChanges', () => ({
-  useUnsavedChanges: () => ({ blocker: { state: 'unblocked' }, markSaved: jest.fn() })
+  useUnsavedChanges: () => ({
+    blocker: { state: 'unblocked' },
+    markSaved: jest.fn(),
+    // Always dirty: the page's save bar is shown only for unsaved changes.
+    isDirty: true
+  })
 }));
 jest.mock('react-router-dom', () => ({
   useNavigate: () => mockNavigate,

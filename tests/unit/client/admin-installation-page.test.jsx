@@ -384,7 +384,7 @@ describe('installation page: settings', () => {
     const baseUrl = within(editor).getByLabelText(/iFinder base URL/);
 
     fireEvent.change(baseUrl, { target: { value: '' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Save Changes' }));
     expect(await screen.findByRole('alert')).toHaveTextContent('Enter the iFinder base URL.');
     expect(mockApi.updateInstalledIntegration).not.toHaveBeenCalled();
 
@@ -393,7 +393,7 @@ describe('installation page: settings', () => {
       target: { value: 'a\n\nc, a' }
     });
     fireEvent.change(within(editor).getByLabelText('Label'), { target: { value: 'Search' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Save Changes' }));
 
     await waitFor(() => expect(mockApi.updateInstalledIntegration).toHaveBeenCalledTimes(1));
     const [id, body] = mockApi.updateInstalledIntegration.mock.calls[0];
@@ -444,7 +444,10 @@ describe('installation page: settings', () => {
     expect(tested.values).toEqual({ apiKeyRef: 'brave-key' });
     expect(await screen.findByTestId('test-results')).toHaveTextContent('Search engine test');
 
-    fireEvent.click(within(editor).getByRole('button', { name: 'Save' }));
+    // Nothing is edited yet, so there is nothing to save.
+    expect(screen.queryByRole('button', { name: 'Save Changes' })).not.toBeInTheDocument();
+    fireEvent.change(within(editor).getByLabelText('Label'), { target: { value: 'Brave' } });
+    fireEvent.click(await screen.findByRole('button', { name: 'Save Changes' }));
     await waitFor(() => expect(mockApi.updateInstalledIntegration).toHaveBeenCalledTimes(1));
     const [savedId, body] = mockApi.updateInstalledIntegration.mock.calls[0];
     expect(savedId).toBe('brave');
@@ -508,7 +511,7 @@ describe('installation page: unsaved changes', () => {
       ...IFINDER_DETAIL,
       values: { ...IFINDER_DETAIL.values, baseUrl: 'https://edited.example.com' }
     }));
-    fireEvent.click(within(editor).getByRole('button', { name: 'Save' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Save Changes' }));
     expect(await screen.findByText('Integration "ifinder" saved.')).toBeInTheDocument();
     await waitFor(() =>
       expect(

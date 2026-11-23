@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
-import { Suspense, lazy, useEffect, useState } from 'react';
+import { Suspense, lazy, useCallback, useEffect, useRef, useState } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
@@ -28,6 +28,7 @@ import EditItemDialog from '../../projects/components/EditItemDialog';
 import ProjectItemTextDialog from '../../projects/components/ProjectItemTextDialog';
 import RefreshTtlDialog from '../../projects/components/RefreshTtlDialog';
 import AdminProjectSettingsForm from '../components/AdminProjectSettingsForm';
+import AdminSaveBar from '../components/AdminSaveBar';
 import AdminProjectSettingsPanel from '../components/AdminProjectSettingsPanel';
 import ProjectUsedByCard from '../components/ProjectUsedByCard';
 import {
@@ -135,7 +136,19 @@ function AdminProjectEditPageContent({ id }) {
   const [bulkDelete, setBulkDelete] = useState([]);
   const [bulkDeleting, setBulkDeleting] = useState(false);
 
-  const { blocker, markSaved } = useUnsavedChanges(initialForm, form);
+  const { blocker, markSaved, isDirty } = useUnsavedChanges(initialForm, form);
+  const formRef = useRef(null);
+  // Tags are kept in the form as parsed, but what was typed counts too (a lone comma parses to none).
+  const createDirty = isNew && (isDirty || tagsText !== '');
+
+  /** Back to the empty form: everything typed, the derived id and the messages. */
+  const handleDiscard = useCallback(() => {
+    setForm(createEmptyProjectForm());
+    setTagsText('');
+    setIdEdited(false);
+    setValidationErrors({});
+    setError(null);
+  }, []);
 
   const checks = useAdminProjectChecks(id);
   const { estimate, byItem: estimateByItem, clearEstimate } = checks;
@@ -377,7 +390,7 @@ function AdminProjectEditPageContent({ id }) {
         setForm(prev => ({ ...prev, tags: parseTags(text) }));
       }}
       onSubmit={handleCreate}
-      onCancel={() => navigate('/admin/projects')}
+      formRef={formRef}
     />
   );
 
@@ -654,6 +667,16 @@ function AdminProjectEditPageContent({ id }) {
         onConfirm={handleBulkDelete}
         onDeny={() => setBulkDelete([])}
       />
+      {isNew && (
+        <AdminSaveBar
+          dirty={createDirty}
+          saving={saving}
+          saveLabel={t('admin.projects.createAndContinue', 'Create and add items')}
+          message={error || undefined}
+          onSave={() => formRef.current?.requestSubmit()}
+          onDiscard={handleDiscard}
+        />
+      )}
       <UnsavedChangesDialog blocker={blocker} />
 
       {split && (

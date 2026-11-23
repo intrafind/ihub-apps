@@ -25,13 +25,7 @@ const SAVE_CONTROL =
 const GUARD = /useUnsavedChanges|useAdminResourceEditor|AdminEditPageShell|AdminSettingsPage/;
 
 /** Pages with a save control and no guard yet. Shrink-only. */
-const BASELINE = new Map([
-  // Not in the finding lists of the unsaved-guards PR; follow-ups.
-  ['AdminAppsPage.jsx', 'app order draft (Save order)'],
-  ['AdminPromptsPage.jsx', 'global prompt variables'],
-  ['AdminOAuthCimdClientEditPage.jsx', 'CIMD client editor'],
-  ['AdminOAuthServerPage.jsx', 'OAuth server settings']
-]);
+const BASELINE = new Map([]);
 
 function pageFiles() {
   return fs
@@ -55,8 +49,8 @@ describe('admin unsaved-changes guard coverage', () => {
   it('recognizes a guarded page and a page with a save control', () => {
     const security = fs.readFileSync(path.join(PAGES_DIR, 'AdminSecurityPage.jsx'), 'utf8');
     expect(GUARD.test(security)).toBe(true);
-    const logging = fs.readFileSync(path.join(PAGES_DIR, 'AdminLoggingPage.jsx'), 'utf8');
-    expect(SAVE_CONTROL.test(logging)).toBe(true);
+    const credentials = fs.readFileSync(path.join(PAGES_DIR, 'AdminCredentialsPage.jsx'), 'utf8');
+    expect(SAVE_CONTROL.test(credentials)).toBe(true);
   });
 
   it('every admin page with a save control uses the unsaved-changes guard (or is baselined)', () => {

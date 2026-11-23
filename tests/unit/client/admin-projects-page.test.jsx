@@ -225,11 +225,11 @@ describe('AdminProjectsPage – sharing of user projects', () => {
     renderPage();
     const catalog = await screen.findByRole('checkbox', { name: /The project catalog/ });
     expect(catalog).not.toBeChecked();
-    const save = screen.getByRole('button', { name: 'Save' });
-    expect(save).toBeDisabled();
+    // The page's bar carries Save; it is not there before a change.
+    expect(screen.queryByRole('region', { name: 'Save changes' })).not.toBeInTheDocument();
 
     fireEvent.click(catalog);
-    fireEvent.click(save);
+    fireEvent.click(screen.getByRole('button', { name: 'Save Changes' }));
     await waitFor(() =>
       expect(mockApi.saveProjectSettings).toHaveBeenCalledWith({
         sharing: { allowUsers: true, allowGroups: true, allowEveryone: false, allowCatalog: true },
@@ -246,7 +246,7 @@ describe('AdminProjectsPage – sharing of user projects', () => {
     const ihub = await screen.findByRole('radio', { name: /iHub projects only/ });
     expect(ihub).toBeChecked();
     fireEvent.click(screen.getByRole('radio', { name: /iHub projects and iFinder smart/ }));
-    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Save Changes' }));
     await waitFor(() =>
       expect(mockApi.saveProjectSettings).toHaveBeenCalledWith(
         expect.objectContaining({ tierPolicy: 'both' })
@@ -270,7 +270,7 @@ describe('AdminProjectsPage – sharing of user projects', () => {
     fireEvent.change(screen.getByLabelText('Size of one project (MB)'), {
       target: { value: '1024' }
     });
-    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Save Changes' }));
     await waitFor(() =>
       expect(mockApi.saveProjectSettings).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -315,7 +315,7 @@ describe('AdminProjectsPage – sharing of user projects', () => {
     fireEvent.change(screen.getByLabelText('Files and web pages checked at once'), {
       target: { value: '16' }
     });
-    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Save Changes' }));
     await waitFor(() =>
       expect(mockApi.saveProjectSettings).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -326,15 +326,25 @@ describe('AdminProjectsPage – sharing of user projects', () => {
     );
   });
 
-  test('keeps Save off while a limit is out of range', async () => {
+  test('refuses to save while a limit is out of range and says why', async () => {
+    mockApi.saveProjectSettings.mockImplementation(async settings => ({
+      ...settings,
+      maxFilesCeiling: 200
+    }));
     renderPage();
     const items = await screen.findByLabelText('Items per project');
     fireEvent.change(items, { target: { value: '201' } });
     expect(items).toHaveAttribute('aria-invalid', 'true');
     expect(screen.getByText('Enter a number in the allowed range.')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled();
+    // The bar is there (the field changed) but Save refuses and says why.
+    fireEvent.click(screen.getByRole('button', { name: 'Save Changes' }));
+    expect(await screen.findByTestId('save-bar-message')).toHaveTextContent(
+      'Fix the highlighted fields'
+    );
+    expect(mockApi.saveProjectSettings).not.toHaveBeenCalled();
     fireEvent.change(items, { target: { value: '200' } });
-    expect(screen.getByRole('button', { name: 'Save' })).toBeEnabled();
+    fireEvent.click(screen.getByRole('button', { name: 'Save Changes' }));
+    await waitFor(() => expect(mockApi.saveProjectSettings).toHaveBeenCalled());
   });
 
   test('is not shown to a content admin', async () => {

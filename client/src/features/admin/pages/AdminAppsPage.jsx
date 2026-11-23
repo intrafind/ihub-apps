@@ -30,6 +30,9 @@ import { buildBulkToggleConfirm, chunkIdsForPath } from '../utils/bulkToggleConf
 import { deleteConfirmText } from '../utils/confirmText';
 import { appDeleteConsequences, deleteWithHistoryMessage } from '../utils/deleteDependants';
 import ReorderableList from '../components/ReorderableList';
+import AdminSaveBar from '../components/AdminSaveBar';
+import UnsavedChangesDialog from '../components/UnsavedChangesDialog';
+import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
 import { DataTable, SearchInput, FilterSelect } from '../components/data-table';
 import UploadConfigButton from '../components/UploadConfigButton';
 import AdminLoadError from '../components/AdminLoadError';
@@ -229,7 +232,12 @@ function AdminAppsPage() {
   // Reorder mode replaces the table with a draggable list; `orderDraft` holds
   // the pending order until it is saved, so cancelling changes nothing.
   const [orderDraft, setOrderDraft] = useState(null);
+  // The ids in the order the draft started with: what Discard restores and what the
+  // bar and the leave-guard compare against.
+  const [orderStart, setOrderStart] = useState(null);
   const [savingOrder, setSavingOrder] = useState(false);
+  const draftIds = orderDraft ? orderDraft.map(app => app.id) : orderStart;
+  const { blocker, markSaved, isDirty: orderDirty } = useUnsavedChanges(orderStart, draftIds);
   // The tab "Personal apps" is for full admins, whether or not the feature is
   // on. A content admin gets the page without tabs.
   const user = useOptionalAuth()?.user;
@@ -297,7 +305,24 @@ function AdminAppsPage() {
   // saving a filtered subset would leave the apps outside it with stale numbers.
   const startReordering = () => {
     setError(null);
-    setOrderDraft([...apps].sort(byDisplayOrder));
+    const sorted = [...apps].sort(byDisplayOrder);
+    setOrderStart(sorted.map(app => app.id));
+    setOrderDraft(sorted);
+  };
+
+  const leaveReordering = () => {
+    setOrderDraft(null);
+    setOrderStart(null);
+  };
+
+  /** Back to the order the list was opened with; stays in reorder mode. */
+  const discardOrder = () => {
+    setError(null);
+    setOrderDraft(previous => {
+      if (!previous || !orderStart) return previous;
+      const byId = new Map(previous.map(app => [app.id, app]));
+      return orderStart.map(id => byId.get(id)).filter(Boolean);
+    });
   };
 
   const saveOrder = async () => {
@@ -306,7 +331,8 @@ function AdminAppsPage() {
       setSavingOrder(true);
       setError(null);
       await reorderApps(orderDraft.map(app => app.id));
-      setOrderDraft(null);
+      markSaved();
+      leaveReordering();
       await loadApps();
     } catch (err) {
       setError(getAdminApiErrorMessage(err));
@@ -699,26 +725,17 @@ function AdminAppsPage() {
           <div className="mt-4 sm:mt-0 sm:ml-16 sm:flex-none">
             <div className="flex flex-wrap gap-2">
               {orderDraft ? (
-                <>
-                  <button
-                    type="button"
-                    className="inline-flex items-center justify-center rounded-md border border-transparent bg-indigo-600 px-4 py-2 text-sm font-medium text-white shadow-xs hover:bg-indigo-700 focus:outline-hidden focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
-                    onClick={saveOrder}
-                    disabled={savingOrder}
-                  >
-                    {savingOrder
-                      ? t('admin.apps.savingOrder', 'Saving order...')
-                      : t('admin.apps.saveOrder', 'Save order')}
-                  </button>
-                  <button
-                    type="button"
-                    className="inline-flex items-center justify-center rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-200 shadow-xs hover:bg-gray-50 dark:hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed"
-                    onClick={() => setOrderDraft(null)}
-                    disabled={savingOrder}
-                  >
-                    {t('common.cancel', 'Cancel')}
-                  </button>
-                </>
+                // Saving is the bar at the bottom, which shows once the order changed.
+                <button
+                  type="button"
+                  className="inline-flex items-center justify-center rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-200 shadow-xs hover:bg-gray-50 dark:hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed"
+                  onClick={leaveReordering}
+                  disabled={savingOrder}
+                >
+                  {orderDirty
+                    ? t('common.cancel', 'Cancel')
+                    : t('admin.apps.doneReordering', 'Done')}
+                </button>
               ) : (
                 <>
                   <button
@@ -807,7 +824,7 @@ function AdminAppsPage() {
               <p className="mb-3 text-sm text-gray-600 dark:text-gray-300">
                 {t(
                   'admin.apps.reorderHelp',
-                  'Drag a row or use the arrows to set the order apps appear in for users — in the apps browser, on the start page and in the sidebar. Every app is listed, so search and filters do not apply here. Nothing is saved until you choose "Save order".'
+                  'Drag a row or use the arrows to set the order apps appear in for users — in the apps browser, on the start page and in the sidebar. Every app is listed, so search and filters do not apply here. Nothing is saved until you save the new order at the bottom of the page.'
                 )}
               </p>
               <ReorderableList
@@ -942,6 +959,15 @@ function AdminAppsPage() {
       />
 
       <ConfirmDialog {...confirmDialogProps} />
+      <AdminSaveBar
+        dirty={orderDirty}
+        saving={savingOrder}
+        saveLabel={t('admin.apps.saveOrder', 'Save order')}
+        message={orderDirty && error ? error : undefined}
+        onSave={saveOrder}
+        onDiscard={discardOrder}
+      />
+      <UnsavedChangesDialog blocker={blocker} />
     </div>
   );
 }

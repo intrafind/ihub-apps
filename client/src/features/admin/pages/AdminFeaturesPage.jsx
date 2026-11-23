@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { makeAdminApiCall } from '../../../api/adminApi';
 import { usePlatformConfig } from '../../../shared/contexts/PlatformConfigContext';
@@ -10,6 +10,7 @@ import Badge from '../../../shared/components/Badge';
 import Switch from '../../../shared/components/Switch';
 import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
 import UnsavedChangesDialog from '../components/UnsavedChangesDialog';
+import AdminSaveBar from '../components/AdminSaveBar';
 import AppDraftModelSetting from '../components/AppDraftModelSetting';
 import { useAdminConfigLoad } from '../hooks/useAdminConfigLoad';
 
@@ -43,6 +44,15 @@ function AdminFeaturesPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState('');
+  // The last save failed. Its outcome on the server can be unknown (a lost response), so the
+  // bar stays until a save succeeds or the changes are discarded, even if the toggles were
+  // put back: Save then sends the values the page shows.
+  const [saveFailed, setSaveFailed] = useState(false);
+  const [loadFailed, setLoadFailed] = useState(false);
+  // The write of the draft model failed: the server may hold the new model although the page
+  // still counts the old one as saved. The next save sends the model again, also when the
+  // select was put back to what was loaded.
+  const draftModelUncertainRef = useRef(false);
   const [features, setFeatures] = useState([]);
   const [categories, setCategories] = useState({});
   const [dirtyFlags, setDirtyFlags] = useState({});
@@ -66,7 +76,7 @@ function AdminFeaturesPage() {
       }
     }
   });
-  const { blocker } = useUnsavedChanges(
+  const { blocker, isDirty } = useUnsavedChanges(
     savedFeatures ? { features: savedFeatures, draftModelId: savedDraftModelId } : null,
     { features, draftModelId: draftModel ? draftModel.modelId : null }
   );
@@ -81,6 +91,7 @@ function AdminFeaturesPage() {
       setDirtyFlags({});
     } catch (error) {
       console.error('Error loading features:', error);
+      setLoadFailed(true);
       setMessage(t('admin.features.loadError', 'Failed to load features'));
     } finally {
       setLoading(false);
@@ -104,13 +115,16 @@ function AdminFeaturesPage() {
     draftModel.modelId !== savedDraftModelId;
 
   const handleSave = async () => {
-    if (Object.keys(dirtyFlags).length === 0 && !draftModelChanged) return;
+    const writeDraftModel = (draftModelChanged || draftModelUncertainRef.current) && !!draftModel;
+    if (Object.keys(dirtyFlags).length === 0 && !writeDraftModel) return;
 
     // Whether a write went through: then the shared configuration is re-read even
     // when the other write fails, and only the failed change stays unsaved.
     let wrote = false;
+    let writingDraftModel = false;
     try {
       setSaving(true);
+      setSaveFailed(false);
       setMessage('');
 
       if (Object.keys(dirtyFlags).length > 0) {
@@ -123,7 +137,8 @@ function AdminFeaturesPage() {
         setSavedFeatures(features);
       }
 
-      if (draftModelChanged) {
+      if (writeDraftModel) {
+        writingDraftModel = true;
         // A scoped merge patch of this one field: other sections of
         // platform.json are not touched. `null` removes the field, which
         // means the automatic choice.
@@ -132,6 +147,7 @@ function AdminFeaturesPage() {
           body: { appGenerator: { modelId: draftModel.modelId || null } }
         });
         wrote = true;
+        draftModelUncertainRef.current = false;
         setSavedDraftModelId(draftModel.modelId);
       }
 
@@ -141,6 +157,8 @@ function AdminFeaturesPage() {
       setTimeout(() => setMessage(''), 3000);
     } catch (error) {
       console.error('Error saving features:', error);
+      if (writingDraftModel) draftModelUncertainRef.current = true;
+      setSaveFailed(true);
       setMessage(t('admin.features.saveError', 'Failed to save features'));
     } finally {
       if (wrote) refreshConfig();
@@ -158,7 +176,15 @@ function AdminFeaturesPage() {
     }))
     .filter(group => group.features.length > 0);
 
-  const hasChanges = Object.keys(dirtyFlags).length > 0 || draftModelChanged;
+  // Back to what was loaded or last saved: the toggles, the draft model and the message.
+  const handleDiscard = () => {
+    setFeatures(savedFeatures || []);
+    setDirtyFlags({});
+    setDraftModel(prev => (prev ? { ...prev, modelId: savedDraftModelId } : prev));
+    draftModelUncertainRef.current = false;
+    setSaveFailed(false);
+    setMessage('');
+  };
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
@@ -185,6 +211,14 @@ function AdminFeaturesPage() {
           </div>
         ) : (
           <div className="space-y-8">
+            {message && (
+              <p
+                role={saveFailed || loadFailed ? 'alert' : 'status'}
+                className={`text-sm ${saveFailed || loadFailed ? 'text-red-600 dark:text-red-400' : 'text-green-700 dark:text-green-400'}`}
+              >
+                {message}
+              </p>
+            )}
             {groupedFeatures.map(group => (
               <div key={group.id}>
                 <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">
@@ -231,33 +265,17 @@ function AdminFeaturesPage() {
                 </div>
               </div>
             ))}
-
-            {/* Save button and message */}
-            <div className="flex items-center justify-between pt-4">
-              <div>
-                {message && (
-                  <p
-                    className={`text-sm ${message.includes('Failed') || message.includes('Error') ? 'text-red-600 dark:text-red-400' : 'text-green-700 dark:text-green-400'}`}
-                  >
-                    {message}
-                  </p>
-                )}
-              </div>
-              <button
-                onClick={handleSave}
-                disabled={!hasChanges || saving}
-                className={`px-6 py-2 rounded-lg text-sm font-medium text-white transition-colors ${
-                  hasChanges && !saving
-                    ? 'bg-indigo-600 hover:bg-indigo-700 cursor-pointer'
-                    : 'bg-gray-300 dark:bg-gray-600 cursor-not-allowed'
-                }`}
-              >
-                {saving ? t('common.saving', 'Saving...') : t('common.saveChanges', 'Save Changes')}
-              </button>
-            </div>
           </div>
         )}
       </div>
+      {/* Nothing to save while loading or when the features could not be loaded. */}
+      <AdminSaveBar
+        dirty={savedFeatures !== null && (isDirty || saveFailed)}
+        saving={saving}
+        onSave={() => void handleSave()}
+        onDiscard={handleDiscard}
+        message={saveFailed ? message : undefined}
+      />
       <UnsavedChangesDialog blocker={blocker} />
     </div>
   );

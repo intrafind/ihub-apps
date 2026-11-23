@@ -22,6 +22,9 @@ import { useFilterState } from '../hooks/useFilterState';
 import { DataTable, SearchInput, FilterSelect } from '../components/data-table';
 import UploadConfigButton from '../components/UploadConfigButton';
 import AdminLoadError from '../components/AdminLoadError';
+import AdminSaveBar from '../components/AdminSaveBar';
+import UnsavedChangesDialog from '../components/UnsavedChangesDialog';
+import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
 import ConfirmDialog from '../../../shared/components/ConfirmDialog';
 import { useConfirmAction } from '../hooks/useConfirmAction';
 import { buildBulkToggleConfirm } from '../utils/bulkToggleConfirm';
@@ -665,15 +668,16 @@ function AdminPromptsPage() {
 
 function VariablesTabContent() {
   const { t } = useTranslation();
-  const [platformConfig, setPlatformConfig] = useState(null);
   const [globalPromptVariables, setGlobalPromptVariables] = useState(null);
+  // What the server has (loaded, or last saved): the bar shows while the form differs from it.
+  const [savedVariables, setSavedVariables] = useState(null);
   // The revision of the configuration this form loaded (or last saved): its
   // save sends exactly this as If-Match, whatever other reads in the tab saw.
   const revisionRef = useRef(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
-  const [hasChanges, setHasChanges] = useState(false);
+  const { blocker, markSaved, isDirty } = useUnsavedChanges(savedVariables, globalPromptVariables);
 
   useEffect(() => {
     void loadPlatformConfig();
@@ -686,21 +690,15 @@ function VariablesTabContent() {
       const response = await makeAdminApiCall('/admin/configs/platform', {
         revision: revisionRef
       });
-      setPlatformConfig(response.data);
-      setGlobalPromptVariables(
-        response.data.globalPromptVariables || { context: '', variables: {} }
-      );
+      const loaded = response.data.globalPromptVariables || { context: '', variables: {} };
+      setSavedVariables(loaded);
+      setGlobalPromptVariables(loaded);
     } catch (err) {
       console.error('Error loading platform config:', err);
       setError(getAdminApiErrorMessage(err));
     } finally {
       setLoading(false);
     }
-  };
-
-  const handleVariablesChange = updatedVariables => {
-    setGlobalPromptVariables(updatedVariables);
-    setHasChanges(true);
   };
 
   const handleSave = async () => {
@@ -715,8 +713,8 @@ function VariablesTabContent() {
         body: { globalPromptVariables },
         revision: revisionRef
       });
-      setPlatformConfig(previous => ({ ...previous, globalPromptVariables }));
-      setHasChanges(false);
+      markSaved();
+      setSavedVariables(globalPromptVariables);
     } catch (err) {
       console.error('Error saving platform config:', err);
       // Shown in the page's error callout; no native alert on top of it.
@@ -726,13 +724,9 @@ function VariablesTabContent() {
     }
   };
 
-  const handleCancel = () => {
-    if (platformConfig) {
-      setGlobalPromptVariables(
-        platformConfig.globalPromptVariables || { context: '', variables: {} }
-      );
-      setHasChanges(false);
-    }
+  const handleDiscard = () => {
+    setGlobalPromptVariables(savedVariables);
+    setError(null);
   };
 
   if (loading) {
@@ -767,25 +761,19 @@ function VariablesTabContent() {
         />
       )}
 
-      <GlobalPromptVariablesEditor value={globalPromptVariables} onChange={handleVariablesChange} />
+      <GlobalPromptVariablesEditor
+        value={globalPromptVariables}
+        onChange={setGlobalPromptVariables}
+      />
 
-      <div className="mt-6 flex justify-end gap-3">
-        <button
-          onClick={handleCancel}
-          disabled={!hasChanges || saving}
-          className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-xs text-sm font-medium text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed"
-        >
-          {t('common.cancel', 'Cancel')}
-        </button>
-        <button
-          onClick={handleSave}
-          disabled={!hasChanges || saving}
-          className="px-4 py-2 border border-transparent rounded-md shadow-xs text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center"
-        >
-          {saving && <Icon name="refresh" className="animate-spin h-4 w-4 mr-2" />}
-          {t('common.save', 'Save Changes')}
-        </button>
-      </div>
+      <AdminSaveBar
+        dirty={isDirty}
+        saving={saving}
+        message={error || undefined}
+        onSave={handleSave}
+        onDiscard={handleDiscard}
+      />
+      <UnsavedChangesDialog blocker={blocker} />
     </div>
   );
 }

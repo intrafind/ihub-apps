@@ -26,6 +26,7 @@ import { listCount, resolveListView } from '../utils/listLoadState';
 import { DataTable, SearchInput } from '../components/data-table';
 import { PRIMARY_BUTTON_CLASS, SECONDARY_BUTTON_CLASS } from '../components/formStyles';
 import LlmTimeoutsCard from '../components/LlmTimeoutsCard';
+import { SaveSectionsBar, SaveSectionsProvider } from '../components/SaveSections';
 import ModelsTabsHeader from '../components/ModelsTabsHeader';
 import useAdminPageAccess from '../hooks/useAdminPageAccess';
 import { isLlmProviderEntry } from '../utils/modelsArea';
@@ -616,148 +617,151 @@ function AdminProvidersPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <ModelsTabsHeader
-          modelCount={listCount(models.length, { loading, error })}
-          providerCount={listCount(providers.length, { loading, error })}
-          actions={
-            <>
-              {testableProviderCount > 0 && (
-                <button
-                  onClick={testAllProviders}
-                  disabled={testingAll}
-                  className={SECONDARY_BUTTON_CLASS}
-                >
-                  {testingAll ? (
-                    <span className="animate-spin rounded-full h-4 w-4 border-b-2 border-current inline-block" />
-                  ) : (
-                    <Icon name="SignalIcon" className="w-4 h-4" />
-                  )}
-                  {t('admin.providers.testAll', 'Test All')}
-                </button>
-              )}
-              <button onClick={createProvider} className={PRIMARY_BUTTON_CLASS}>
-                <Icon name="plus" className="h-4 w-4" />
-                {t('admin.providers.add', 'Add provider')}
-              </button>
-            </>
-          }
-        />
-
-        <div role="tabpanel" id="tabpanel-providers" aria-labelledby="tab-providers">
-          {/* Error Display */}
-          {error && (
-            <AdminLoadError
-              title={t('admin.providers.loadError', 'Error loading providers')}
-              message={error}
-              framed={false}
-              className="mb-6"
-              onRetry={loadData}
-            />
-          )}
-
-          {/* Search */}
-          <div className="mb-6">
-            <SearchInput
-              value={searchTerm}
-              onChange={setSearchTerm}
-              placeholder={t('admin.providers.search', 'Search providers...')}
-              ariaLabel={t('admin.providers.searchLabel', 'Search providers')}
-            />
-          </div>
-
-          {/* Installation-wide LLM timeouts (providers and models can override them) */}
-          <LlmTimeoutsCard />
-
-          {/* Providers List - Grouped by Category. A failed load shows only the error above,
-              never the "Create your first provider" empty state (utils/listLoadState.js). */}
-          {listView === 'loading' ? (
-            <AdminPageSkeleton rows={5} />
-          ) : listView === 'error' ? null : (
-            <div className="space-y-6">
-              {categoryOrder.map(category => {
-                const categoryProviders = groupedProviders[category] || [];
-                if (categoryProviders.length === 0) return null;
-                const isLlm = category === 'llm';
-
-                return (
-                  <CategorySection
-                    key={category}
-                    isLlm={isLlm}
-                    title={categoryLabels[category]}
-                    count={categoryProviders.length}
+    <SaveSectionsProvider>
+      <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+          <ModelsTabsHeader
+            modelCount={listCount(models.length, { loading, error })}
+            providerCount={listCount(providers.length, { loading, error })}
+            actions={
+              <>
+                {testableProviderCount > 0 && (
+                  <button
+                    onClick={testAllProviders}
+                    disabled={testingAll}
+                    className={SECONDARY_BUTTON_CLASS}
                   >
-                    <DataTable
-                      columns={providerColumns(isLlm)}
-                      data={categoryProviders}
-                      getRowId={provider => provider.id}
-                      actions={providerActions(isLlm)}
-                      kebabThreshold={5}
-                      onRowClick={provider => editProvider(provider.id)}
-                      getRowExpansion={isLlm ? providerTestResults : undefined}
-                      stickyHeader={false}
-                    />
-                  </CategorySection>
-                );
-              })}
-
-              {listView === 'empty' && (
-                <AdminEmptyState
-                  icon="wrench-screwdriver"
-                  title={
-                    searchTerm
-                      ? t('admin.providers.noResults', 'No providers found matching your search.')
-                      : t('admin.providers.noProviders', 'No providers configured.')
-                  }
-                  description={
-                    searchTerm
-                      ? t('admin.providers.adjustSearch', 'Try adjusting your search term.')
-                      : t(
-                          'admin.providers.createFirst',
-                          'Create your first provider to get started.'
-                        )
-                  }
-                  action={
-                    !searchTerm ? (
-                      <button
-                        onClick={createProvider}
-                        className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center justify-center gap-2"
-                      >
-                        <Icon name="PlusIcon" className="w-5 h-5" />
-                        {t('admin.providers.add', 'Add provider')}
-                      </button>
-                    ) : null
-                  }
-                />
-              )}
-            </div>
-          )}
-        </div>
-
-        {/* Info Box */}
-        <div className="mt-6 bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
-          <div className="flex items-start">
-            <Icon
-              name="InformationCircleIcon"
-              className="w-5 h-5 text-blue-600 dark:text-blue-400 mt-0.5 mr-2 shrink-0"
-            />
-            <div className="text-sm text-blue-700 dark:text-blue-300">
-              <p className="font-medium mb-1">
-                {t('admin.providers.info.title', 'API Key Priority')}
-              </p>
-              <p>
-                {t(
-                  'admin.providers.info.description',
-                  'When a model requests an API key, the system checks in this order: 1) Model-specific API key, 2) Provider-level API key (configured here), 3) Environment variable. This allows you to set a default API key for all models of a provider while still allowing individual models to override it.'
+                    {testingAll ? (
+                      <span className="animate-spin rounded-full h-4 w-4 border-b-2 border-current inline-block" />
+                    ) : (
+                      <Icon name="SignalIcon" className="w-4 h-4" />
+                    )}
+                    {t('admin.providers.testAll', 'Test All')}
+                  </button>
                 )}
-              </p>
+                <button onClick={createProvider} className={PRIMARY_BUTTON_CLASS}>
+                  <Icon name="plus" className="h-4 w-4" />
+                  {t('admin.providers.add', 'Add provider')}
+                </button>
+              </>
+            }
+          />
+
+          <div role="tabpanel" id="tabpanel-providers" aria-labelledby="tab-providers">
+            {/* Error Display */}
+            {error && (
+              <AdminLoadError
+                title={t('admin.providers.loadError', 'Error loading providers')}
+                message={error}
+                framed={false}
+                className="mb-6"
+                onRetry={loadData}
+              />
+            )}
+
+            {/* Search */}
+            <div className="mb-6">
+              <SearchInput
+                value={searchTerm}
+                onChange={setSearchTerm}
+                placeholder={t('admin.providers.search', 'Search providers...')}
+                ariaLabel={t('admin.providers.searchLabel', 'Search providers')}
+              />
+            </div>
+
+            {/* Installation-wide LLM timeouts (providers and models can override them) */}
+            <LlmTimeoutsCard />
+
+            {/* Providers List - Grouped by Category. A failed load shows only the error above,
+              never the "Create your first provider" empty state (utils/listLoadState.js). */}
+            {listView === 'loading' ? (
+              <AdminPageSkeleton rows={5} />
+            ) : listView === 'error' ? null : (
+              <div className="space-y-6">
+                {categoryOrder.map(category => {
+                  const categoryProviders = groupedProviders[category] || [];
+                  if (categoryProviders.length === 0) return null;
+                  const isLlm = category === 'llm';
+
+                  return (
+                    <CategorySection
+                      key={category}
+                      isLlm={isLlm}
+                      title={categoryLabels[category]}
+                      count={categoryProviders.length}
+                    >
+                      <DataTable
+                        columns={providerColumns(isLlm)}
+                        data={categoryProviders}
+                        getRowId={provider => provider.id}
+                        actions={providerActions(isLlm)}
+                        kebabThreshold={5}
+                        onRowClick={provider => editProvider(provider.id)}
+                        getRowExpansion={isLlm ? providerTestResults : undefined}
+                        stickyHeader={false}
+                      />
+                    </CategorySection>
+                  );
+                })}
+
+                {listView === 'empty' && (
+                  <AdminEmptyState
+                    icon="wrench-screwdriver"
+                    title={
+                      searchTerm
+                        ? t('admin.providers.noResults', 'No providers found matching your search.')
+                        : t('admin.providers.noProviders', 'No providers configured.')
+                    }
+                    description={
+                      searchTerm
+                        ? t('admin.providers.adjustSearch', 'Try adjusting your search term.')
+                        : t(
+                            'admin.providers.createFirst',
+                            'Create your first provider to get started.'
+                          )
+                    }
+                    action={
+                      !searchTerm ? (
+                        <button
+                          onClick={createProvider}
+                          className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center justify-center gap-2"
+                        >
+                          <Icon name="PlusIcon" className="w-5 h-5" />
+                          {t('admin.providers.add', 'Add provider')}
+                        </button>
+                      ) : null
+                    }
+                  />
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* Info Box */}
+          <div className="mt-6 bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
+            <div className="flex items-start">
+              <Icon
+                name="InformationCircleIcon"
+                className="w-5 h-5 text-blue-600 dark:text-blue-400 mt-0.5 mr-2 shrink-0"
+              />
+              <div className="text-sm text-blue-700 dark:text-blue-300">
+                <p className="font-medium mb-1">
+                  {t('admin.providers.info.title', 'API Key Priority')}
+                </p>
+                <p>
+                  {t(
+                    'admin.providers.info.description',
+                    'When a model requests an API key, the system checks in this order: 1) Model-specific API key, 2) Provider-level API key (configured here), 3) Environment variable. This allows you to set a default API key for all models of a provider while still allowing individual models to override it.'
+                  )}
+                </p>
+              </div>
             </div>
           </div>
         </div>
+        <ConfirmDialog {...confirmDialogProps} />
+        <SaveSectionsBar />
       </div>
-      <ConfirmDialog {...confirmDialogProps} />
-    </div>
+    </SaveSectionsProvider>
   );
 }
 

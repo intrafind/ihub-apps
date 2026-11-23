@@ -1701,11 +1701,60 @@ describe('apps list', () => {
     // Every app, whatever the search says; an app that is not published is marked.
     expect(screen.getByText('Chat')).toBeInTheDocument();
     expect(screen.getByText('(Not published)')).toBeInTheDocument();
+    // Nothing to save until the order changes.
+    expect(screen.queryByRole('button', { name: 'Save order' })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Move Chat up' }));
     await act(async () => {
       fireEvent.click(screen.getByRole('button', { name: 'Save order' }));
     });
-    // `order` first (Travel policy has 7), then by name.
-    expect(mockApi.reorderApps).toHaveBeenCalledWith(['travel-policy', 'chat', 'draft-app']);
+    // `order` first (Travel policy has 7), then by name: Chat moved above it.
+    expect(mockApi.reorderApps).toHaveBeenCalledWith(['chat', 'travel-policy', 'draft-app']);
+  });
+
+  it('"Reorder": the bar shows only for a changed order, Discard restores it, Cancel leaves', async () => {
+    mockApi.reorderApps.mockResolvedValue({});
+    renderList('/admin/apps');
+    await screen.findByText('Travel policy');
+    fireEvent.click(screen.getByRole('button', { name: 'Reorder' }));
+    expect(screen.queryByRole('region', { name: 'Save changes' })).toBeNull();
+    // Nothing changed yet: the way out is "Done".
+    expect(screen.getByRole('button', { name: 'Done' })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Move Chat up' }));
+    const bar = screen.getByRole('region', { name: 'Save changes' });
+    expect(screen.getByRole('button', { name: 'Cancel' })).toBeInTheDocument();
+
+    // Moving it back is no change at all.
+    fireEvent.click(screen.getByRole('button', { name: 'Move Chat down' }));
+    expect(screen.queryByRole('region', { name: 'Save changes' })).toBeNull();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Move Chat up' }));
+    fireEvent.click(
+      within(screen.getByRole('region', { name: 'Save changes' })).getByRole('button', {
+        name: 'Discard'
+      })
+    );
+    expect(screen.queryByRole('region', { name: 'Save changes' })).toBeNull();
+    expect(bar).not.toBeInTheDocument();
+    expect(mockApi.reorderApps).not.toHaveBeenCalled();
+    // Still in reorder mode, with the order it started with.
+    expect(screen.getByRole('button', { name: 'Done' })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Done' }));
+    expect(screen.getByRole('button', { name: 'Reorder' })).toBeInTheDocument();
+  });
+
+  it('"Reorder": a failed save keeps the bar and shows the reason in it', async () => {
+    mockApi.reorderApps.mockRejectedValue(new Error('Order refused'));
+    renderList('/admin/apps');
+    await screen.findByText('Travel policy');
+    fireEvent.click(screen.getByRole('button', { name: 'Reorder' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Move Chat up' }));
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Save order' }));
+    });
+    const bar = screen.getByRole('region', { name: 'Save changes' });
+    expect(within(bar).getByText('Order refused')).toBeInTheDocument();
   });
 
   it.each([

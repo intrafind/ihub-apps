@@ -28,6 +28,7 @@ import {
   updateAgentProfile
 } from '../../../api/agentsAdminApi';
 import AdminLoadError from '../components/AdminLoadError';
+import AdminSaveBar from '../components/AdminSaveBar';
 import UnsavedChangesDialog from '../components/UnsavedChangesDialog';
 
 const BLANK_PROFILE = {
@@ -142,7 +143,7 @@ export default function AdminAgentEditPage() {
   const [availableGroups, setAvailableGroups] = useState([]);
   const { isDark } = useDarkMode();
 
-  const { blocker, markSaved } = useUnsavedChanges(initialData, profile);
+  const { isDirty, blocker, markSaved } = useUnsavedChanges(initialData, profile);
 
   useEffect(() => {
     void (async () => {
@@ -325,6 +326,15 @@ export default function AdminAgentEditPage() {
     }
   }
 
+  // Invalid JSON is never saved silently: the bar says why and the page shows the alert.
+  const saveBlocked = mode === 'json' && !jsonValid;
+
+  function handleDiscard() {
+    setProfile(structuredClone(initialData));
+    setError(null);
+    setJsonValid(true);
+  }
+
   if (loading) {
     return (
       <div className="p-8 text-gray-600 dark:text-gray-400">{t('common.loading', 'Loading…')}</div>
@@ -362,17 +372,10 @@ export default function AdminAgentEditPage() {
                 : t('admin.common.viewForm', 'Form')}
             </button>
             <button
-              onClick={handleSave}
-              disabled={saving || (mode === 'json' && !jsonValid)}
-              className="px-4 py-2 text-sm bg-indigo-600 text-white rounded-sm disabled:opacity-50"
-            >
-              {saving ? t('common.saving', 'Saving…') : t('common.save', 'Save')}
-            </button>
-            <button
               onClick={() => navigate('/admin/agents')}
               className="px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200 rounded-sm hover:bg-gray-50 dark:hover:bg-gray-600"
             >
-              {t('common.cancel', 'Cancel')}
+              {t('common.back', 'Back')}
             </button>
           </div>
         </div>
@@ -1331,6 +1334,24 @@ export default function AdminAgentEditPage() {
           </div>
         )}
       </div>
+
+      <AdminSaveBar
+        dirty={isDirty}
+        saving={saving}
+        saveLabel={isNew ? t('admin.ui.saveBar.create', 'Create') : undefined}
+        message={
+          saveBlocked
+            ? t(
+                'admin.agents.edit.jsonInvalid',
+                'The JSON is not valid. Fix it before you save or switch to the form.'
+              )
+            : error || undefined
+        }
+        onSave={() => {
+          if (!saveBlocked) void handleSave();
+        }}
+        onDiscard={handleDiscard}
+      />
 
       <UnsavedChangesDialog blocker={blocker} />
     </div>

@@ -140,6 +140,10 @@ const {
 const UserAppSettingsPanel =
   require('../../../client/src/features/admin/components/UserAppSettingsPanel').default;
 const {
+  SaveSectionsBar,
+  SaveSectionsProvider
+} = require('../../../client/src/features/admin/components/SaveSections');
+const {
   changedKeys,
   groupsWithPermission,
   PUBLISHING_AVAILABLE
@@ -253,11 +257,23 @@ const renderAppsPage = (url = '/admin/apps') =>
 const renderTab = (url = '/admin/apps?tab=personal') =>
   renderAt(url, <Route path="*" element={<AdminUserAppsTab />} />);
 
+// The panel sits on a tab whose bar carries Save and Discard.
 const renderPanel = props =>
   renderAt(
     '/admin/apps?tab=personal',
-    <Route path="*" element={<UserAppSettingsPanel {...props} />} />
+    <Route
+      path="*"
+      element={
+        <SaveSectionsProvider>
+          <UserAppSettingsPanel {...props} />
+          <SaveSectionsBar />
+        </SaveSectionsProvider>
+      }
+    />
   );
+
+const SAVE_BAR = 'Save changes';
+const saveButton = () => screen.getByRole('button', { name: text('admin.ui.save') });
 
 /** The table row that names an app. */
 const rowOf = name => screen.getByText(name).closest('tr');
@@ -788,8 +804,9 @@ describe('the settings panel', () => {
     expect(screen.getByRole('spinbutton')).toHaveValue(20);
     expect(await screen.findByText('Carl Left')).toBeInTheDocument();
     expect(screen.getByText('dora')).toBeInTheDocument();
-    const save = screen.getByRole('button', { name: 'Save' });
-    expect(save).toBeDisabled();
+    // No Save button of its own, and no bar until something changes.
+    expect(screen.queryByRole('button', { name: 'Save' })).toBeNull();
+    expect(screen.queryByRole('region', { name: SAVE_BAR })).toBeNull();
 
     // The audiences and the publishing switch with the checkbox under it.
     fireEvent.click(box(text('admin.userApps.settings.allowUsers')));
@@ -831,9 +848,9 @@ describe('the settings panel', () => {
       })
     );
 
-    expect(save).toBeEnabled();
+    expect(screen.getByRole('region', { name: SAVE_BAR })).toBeInTheDocument();
     await act(async () => {
-      fireEvent.click(save);
+      fireEvent.click(saveButton());
     });
     expect(mockApi.saveUserAppSettings).toHaveBeenCalledTimes(1);
     // Only the keys that changed: the server merges key by key.
@@ -851,7 +868,7 @@ describe('the settings panel', () => {
     });
 
     // The answer of the server is what the panel shows afterwards.
-    await waitFor(() => expect(save).toBeDisabled());
+    await waitFor(() => expect(screen.queryByRole('region', { name: SAVE_BAR })).toBeNull());
     expect(box(text('admin.userApps.settings.allowUsers'))).not.toBeChecked();
     expect(box(text('admin.userApps.settings.allowEveryone'))).toBeChecked();
     expect(box(text('admin.userApps.settings.allowPublish'))).toBeChecked();
@@ -871,7 +888,7 @@ describe('the settings panel', () => {
 
     fireEvent.click(box(text('admin.userApps.capability.upload')));
     await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+      fireEvent.click(saveButton());
     });
     // Not the other switches nor the list of connected systems as the panel
     // loaded them: another admin may have changed them since.
@@ -881,7 +898,7 @@ describe('the settings panel', () => {
 
     fireEvent.click(box(text('admin.userApps.settings.allowEveryone')));
     await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+      fireEvent.click(saveButton());
     });
     expect(mockApi.saveUserAppSettings).toHaveBeenLastCalledWith({
       sharing: { allowEveryone: true }
@@ -903,9 +920,19 @@ describe('the settings panel', () => {
 
     fireEvent.change(screen.getByRole('spinbutton'), { target: { value: '-1' } });
     expect(screen.getByRole('spinbutton')).toHaveAttribute('aria-invalid', 'true');
-    expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled();
+    // The bar is there, but Save refuses and says why; nothing is sent.
+    await act(async () => {
+      fireEvent.click(saveButton());
+    });
+    expect(screen.getByTestId('save-bar-message')).toHaveTextContent(
+      'Enter a whole number for the limit'
+    );
+    expect(mockApi.saveUserAppSettings).not.toHaveBeenCalled();
     fireEvent.change(screen.getByRole('spinbutton'), { target: { value: '0' } });
-    expect(screen.getByRole('button', { name: 'Save' })).toBeEnabled();
+    await act(async () => {
+      fireEvent.click(saveButton());
+    });
+    expect(mockApi.saveUserAppSettings).toHaveBeenCalledWith({ limits: { maxAppsPerUser: 0 } });
   });
 
   it('lists a stored installation that is gone, so its functions can be removed', async () => {
@@ -924,7 +951,7 @@ describe('the settings panel', () => {
     const gone = (await screen.findByText('old-crm', { selector: 'legend' })).closest('fieldset');
     fireEvent.click(within(gone).getByRole('checkbox', { name: 'findContact' }));
     await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+      fireEvent.click(saveButton());
     });
     expect(mockApi.saveUserAppSettings).toHaveBeenCalledWith({
       capabilities: { integrations: [] }

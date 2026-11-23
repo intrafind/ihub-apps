@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { getAdminApiErrorMessage, makeAdminApiCall } from '../../../api/adminApi';
@@ -13,12 +13,9 @@ import AdminBreadcrumb from '../components/AdminBreadcrumb';
 import useAdminPageAccess from '../hooks/useAdminPageAccess';
 import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
 import UnsavedChangesDialog from '../components/UnsavedChangesDialog';
-import {
-  INPUT_CLASS,
-  LABEL_CLASS,
-  PRIMARY_BUTTON_CLASS,
-  SECONDARY_BUTTON_CLASS
-} from '../components/formStyles';
+import { INPUT_CLASS, LABEL_CLASS } from '../components/formStyles';
+import AdminSaveBar from '../components/AdminSaveBar';
+import ImplicitSubmit from '../../../shared/components/ImplicitSubmit';
 
 /**
  * The empty form a new provider starts from; also the unsaved-changes baseline.
@@ -48,9 +45,20 @@ function AdminProviderCreatePage() {
   const [formData, setFormData] = useState(INITIAL_FORM);
   // Once the provider is created nothing is left to lose: the form is locked
   // and the guard stays clean until the delayed redirect to the list.
-  const { blocker, markSaved } = useUnsavedChanges(success ? null : INITIAL_FORM, formData);
+  const { isDirty, blocker, markSaved } = useUnsavedChanges(
+    success ? null : INITIAL_FORM,
+    formData
+  );
   // The ID follows the name until the admin types one of their own.
   const [idEdited, setIdEdited] = useState(false);
+
+  const formRef = useRef(null);
+
+  const handleDiscard = () => {
+    setFormData(INITIAL_FORM);
+    setIdEdited(false);
+    setError(null);
+  };
 
   const handleChange = (field, value) => {
     if (field === 'id') setIdEdited(true);
@@ -158,7 +166,12 @@ function AdminProviderCreatePage() {
         {error && <AdminLoadError message={error} framed={false} className="mb-6" action={null} />}
 
         {/* Form */}
-        <form onSubmit={handleSave} className="bg-white dark:bg-gray-800 shadow-sm rounded-lg p-6">
+        <form
+          ref={formRef}
+          onSubmit={handleSave}
+          className="bg-white dark:bg-gray-800 shadow-sm rounded-lg p-6"
+        >
+          <ImplicitSubmit disabled={saving} />
           <p className="mb-6 text-xs text-gray-500 dark:text-gray-400">
             {t(
               'admin.providers.create.llmHelp',
@@ -188,24 +201,16 @@ function AdminProviderCreatePage() {
               />
             </div>
           </fieldset>
-
-          {/* Action Buttons */}
-          <div className="flex flex-wrap justify-end gap-3">
-            <button
-              type="button"
-              onClick={() => navigate('/admin/providers')}
-              className={SECONDARY_BUTTON_CLASS}
-            >
-              {t('admin.providers.create.cancel', 'Cancel')}
-            </button>
-            <button type="submit" disabled={saving || success} className={PRIMARY_BUTTON_CLASS}>
-              {saving
-                ? t('admin.providers.create.saving', 'Creating...')
-                : t('admin.providers.create.save', 'Create Provider')}
-            </button>
-          </div>
         </form>
       </div>
+      {/* Save goes through the form's own submit handler, so its validation runs. */}
+      <AdminSaveBar
+        dirty={isDirty && !success}
+        saving={saving}
+        saveLabel={t('admin.ui.saveBar.create', 'Create')}
+        onSave={() => formRef.current?.requestSubmit()}
+        onDiscard={handleDiscard}
+      />
       <UnsavedChangesDialog blocker={blocker} />
     </div>
   );

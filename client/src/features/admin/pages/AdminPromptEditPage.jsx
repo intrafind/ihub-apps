@@ -1,13 +1,13 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
-import AdminEditPageShell, {
-  AdminSaveCancelButtons
-} from '../../../shared/components/AdminEditPageShell';
+import AdminEditPageShell from '../../../shared/components/AdminEditPageShell';
+import AdminSaveBar from '../components/AdminSaveBar';
+import ImplicitSubmit from '../../../shared/components/ImplicitSubmit';
 import { useAdminResourceEditor } from '../hooks/useAdminResourceEditor';
 import ContentAccessSection from '../components/ContentAccessSection';
 import {
@@ -57,6 +57,8 @@ function AdminPromptEditPage() {
   const {
     data: promptData,
     setData: setPromptData,
+    initialData,
+    isDirty,
     loading,
     error,
     isNew: isNewPrompt,
@@ -201,6 +203,20 @@ function AdminPromptEditPage() {
     setPromptData(newData);
   };
 
+  const formRef = useRef(null);
+  // A prompt made from a template is complete as it opens: it can be created at once.
+  const [templateDiscarded, setTemplateDiscarded] = useState(false);
+  const startsFromTemplate =
+    isNewPrompt && Boolean(location.state?.templatePrompt) && !templateDiscarded;
+
+  const handleDiscard = () => {
+    setPromptData(initialData);
+    setSaveError(null);
+    // Discarding the draft of a template puts the template back and ends the "can be
+    // created at once": the bar is for edits again.
+    setTemplateDiscarded(true);
+  };
+
   /**
    * The form saves only when it is valid: otherwise every error shows, with the summary on
    * top. Checks left to the browser come next, with the browser's own message.
@@ -326,9 +342,11 @@ function AdminPromptEditPage() {
       )}
 
       {/* noValidate: the form's own messages come first (see handleFormSubmit). */}
-      <form onSubmit={handleFormSubmit} noValidate className="space-y-8">
+      <form ref={formRef} onSubmit={handleFormSubmit} noValidate className="space-y-8">
+        <ImplicitSubmit disabled={saving} />
         <DualModeEditor
           value={promptData}
+          savedValue={initialData}
           onChange={handleDataChange}
           formComponent={PromptFormEditor}
           onValidationChange={setFormValidation}
@@ -352,18 +370,16 @@ function AdminPromptEditPage() {
 
         {/* Group access — which groups may use this prompt (groups.json) */}
         <ContentAccessSection resourceType="prompts" resourceId={promptId} isNew={isNewPrompt} />
-
-        {/* Save buttons */}
-        <AdminSaveCancelButtons
-          onCancel={() => navigate('/admin/prompts')}
-          cancelLabel={t('admin.prompts.edit.cancel', 'Cancel')}
-          saving={saving}
-          saveLabel={t('admin.prompts.edit.save', 'Save Prompt')}
-          savingLabel={t('admin.prompts.edit.saving', 'Saving...')}
-          cancelClassName="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-xs text-sm font-medium text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-          saveClassName="px-4 py-2 border border-transparent rounded-md shadow-xs text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50"
-        />
       </form>
+
+      {/* Save goes through the form's own submit handler, so its validation runs. */}
+      <AdminSaveBar
+        dirty={isDirty || startsFromTemplate}
+        saving={saving}
+        saveLabel={isNewPrompt ? t('admin.ui.saveBar.create', 'Create') : undefined}
+        onSave={() => formRef.current?.requestSubmit()}
+        onDiscard={handleDiscard}
+      />
     </AdminEditPageShell>
   );
 }

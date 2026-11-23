@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { getLocalizedContent } from '../../../utils/localizeContent';
@@ -22,13 +22,9 @@ import AdminBreadcrumb from '../components/AdminBreadcrumb';
 import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
 import AdminLoadError from '../components/AdminLoadError';
 import UnsavedChangesDialog from '../components/UnsavedChangesDialog';
-import {
-  HELP_CLASS,
-  INPUT_CLASS,
-  LABEL_CLASS,
-  PRIMARY_BUTTON_CLASS,
-  SECONDARY_BUTTON_CLASS
-} from '../components/formStyles';
+import { HELP_CLASS, INPUT_CLASS, LABEL_CLASS } from '../components/formStyles';
+import AdminSaveBar from '../components/AdminSaveBar';
+import ImplicitSubmit from '../../../shared/components/ImplicitSubmit';
 
 function AdminProviderEditPage() {
   const { t, i18n } = useTranslation();
@@ -61,7 +57,8 @@ function AdminProviderEditPage() {
   // Connectivity test state — kept out of formData so running a test never
   // looks like an unsaved edit.
 
-  const { blocker, markSaved } = useUnsavedChanges(initialData, formData);
+  const { isDirty, blocker, markSaved } = useUnsavedChanges(initialData, formData);
+  const formRef = useRef(null);
 
   // Entries without a category are the original built-in LLM providers.
   const isLlmProvider = (formData.category || 'llm') === 'llm';
@@ -122,11 +119,26 @@ function AdminProviderEditPage() {
     if (response) setModels(Array.isArray(response.data?.items) ? response.data.items : []);
   }, []);
 
+  // The redirect after a save. An edit made while it is pending cancels it, so the page stays
+  // and the bar offers the new change.
+  const redirectTimerRef = useRef(null);
+  useEffect(() => () => clearTimeout(redirectTimerRef.current), []);
+
   const handleChange = (field, value) => {
+    if (redirectTimerRef.current) {
+      clearTimeout(redirectTimerRef.current);
+      redirectTimerRef.current = null;
+      setSuccess(false);
+    }
     setFormData(prev => ({
       ...prev,
       [field]: value
     }));
+  };
+
+  const handleDiscard = () => {
+    if (initialData) setFormData(initialData);
+    setError(null);
   };
 
   const handleSave = async e => {
@@ -176,7 +188,8 @@ function AdminProviderEditPage() {
       markSaved();
 
       // Redirect after a short delay
-      setTimeout(() => {
+      redirectTimerRef.current = setTimeout(() => {
+        redirectTimerRef.current = null;
         navigate('/admin/providers');
       }, 1500);
     } catch (err) {
@@ -242,7 +255,12 @@ function AdminProviderEditPage() {
         {error && <AdminLoadError message={error} framed={false} className="mb-6" action={null} />}
 
         {/* Form */}
-        <form onSubmit={handleSave} className="bg-white dark:bg-gray-800 shadow-sm rounded-lg p-6">
+        <form
+          ref={formRef}
+          onSubmit={handleSave}
+          className="bg-white dark:bg-gray-800 shadow-sm rounded-lg p-6"
+        >
+          <ImplicitSubmit disabled={saving} />
           <ProviderFormFields
             data={formData}
             onChange={handleChange}
@@ -313,22 +331,6 @@ function AdminProviderEditPage() {
                 </p>
               </div>
             </div>
-          </div>
-
-          {/* Action Buttons */}
-          <div className="flex flex-wrap justify-end gap-3">
-            <button
-              type="button"
-              onClick={() => navigate('/admin/providers')}
-              className={SECONDARY_BUTTON_CLASS}
-            >
-              {t('admin.providers.edit.cancel', 'Cancel')}
-            </button>
-            <button type="submit" disabled={saving} className={PRIMARY_BUTTON_CLASS}>
-              {saving
-                ? t('admin.providers.edit.saving', 'Saving...')
-                : t('admin.providers.edit.save', 'Save Changes')}
-            </button>
           </div>
         </form>
 
@@ -437,6 +439,13 @@ function AdminProviderEditPage() {
         />
       )}
 
+      {/* Save goes through the form's own submit handler. */}
+      <AdminSaveBar
+        dirty={isDirty && !success}
+        saving={saving}
+        onSave={() => formRef.current?.requestSubmit()}
+        onDiscard={handleDiscard}
+      />
       <UnsavedChangesDialog blocker={blocker} />
     </div>
   );
