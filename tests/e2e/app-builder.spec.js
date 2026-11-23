@@ -541,7 +541,7 @@ test.describe('Creating an app', () => {
       const errors = [];
       page.on('pageerror', error => errors.push(error.message));
       await page.goto('/admin/groups/anonymous');
-      const search = page.getByPlaceholder('Search apps to add...');
+      const search = page.getByPlaceholder(tr('de', 'admin.groups.form.searchApps'));
       await expect(search).toBeVisible();
       await search.fill('Grüße');
       await expect(page.getByRole('button', { name: /E2E AB Grüße/ })).toBeVisible();
