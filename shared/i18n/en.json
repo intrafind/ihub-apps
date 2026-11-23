@@ -10177,6 +10177,7 @@
     "modelTakesNoImage": "The selected model cannot process images. Select a model with vision, or remove the image attachment.",
     "streamingError": "An error occurred during streaming",
     "connectionLost": "The connection was lost before the answer was complete.",
+    "requestTimedOut": "Request timed out. The operation may have taken longer than expected.",
     "runInterrupted": "This answer was interrupted: the server stopped while it was being produced.",
     "failedToGenerateResponse": "Failed to generate response. Please try again or select a different model.",
     "sessionExpired": "Your session has expired. Please log in again to continue.",
