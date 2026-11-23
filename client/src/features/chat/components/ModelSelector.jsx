@@ -24,6 +24,10 @@ function ModelSelector({
   onModelChange,
   currentLanguage,
   disabled = false,
+  // Why it is off (a turn runs): its title and, by `disabledReasonId`, its
+  // accessible description while disabled.
+  disabledReason = null,
+  disabledReasonId,
   dropdownDirection = 'up', // 'up' or 'down' - controls where the dropdown opens
   // In the one-line composer the button is as tall as the toolbar's other
   // buttons on a phone too (36px, 40px from `sm`), so the toolbar row is as
@@ -133,7 +137,10 @@ function ModelSelector({
             ? 'bg-gray-100 text-gray-600 cursor-not-allowed dark:bg-gray-700 dark:text-gray-300'
             : 'bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600'
         }`}
-        title={t('appConfig.selectModel', 'Select Model')}
+        title={(disabled && disabledReason) || t('appConfig.selectModel', 'Select Model')}
+        aria-describedby={
+          disabled && disabledReason && disabledReasonId ? disabledReasonId : undefined
+        }
         aria-haspopup="menu"
         aria-expanded={isOpen}
       >

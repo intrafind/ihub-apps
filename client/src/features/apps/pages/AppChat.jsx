@@ -81,6 +81,11 @@ import {
 } from '../../../shared/hooks/useChats';
 import { ensureTokenizer, estimateTokensSync } from '../../../shared/utils/tokenEstimatorClient.js';
 import ChatInput from '../../chat/components/ChatInput';
+import PendingWorkStrip from '../../chat/components/PendingWorkStrip';
+import DroppedMessageNotices from '../../chat/components/DroppedMessageNotices';
+import { notSentText } from '../../chat/hooks/useRunSteering';
+import { composerWhileRunning, withCopiedText } from '../../chat/composerWhileRunning';
+import { useToasts } from '../../../shared/components/ToastHost';
 import FloatingComposer from '../../chat/components/FloatingComposer';
 import ChatMessageList from '../../chat/components/ChatMessageList';
 import CompareModeView from '../../chat/components/CompareModeView';
@@ -903,7 +908,9 @@ function AppChat({
     resetConversationState,
     addUserMessage,
     addAssistantMessage,
-    updateAssistantMessage
+    updateAssistantMessage,
+    runningRunId,
+    steering
   } = useAppChat({
     appId,
     chatId,
@@ -1207,6 +1214,18 @@ function AppChat({
     setChatProjectId(prev => prev || containerProjectId);
   }, [containerProjectId]);
 
+  // A message while iHub is working (#3191): the feature `steering`, and the
+  // server's word that this person may send into the chat's running answer.
+  const steeringEnabled = featureFlags.isEnabled('steering', false);
+  const adoptSteering = steering.adopt;
+  const refreshSteering = steering.refresh;
+  const { show: showToast } = useToasts();
+  // A chat started here is read once its first turn runs, for `maySteer`.
+  useEffect(() => {
+    if (!steeringEnabled || !runningRunId || steering.maySteer !== null) return;
+    void refreshSteering();
+  }, [steeringEnabled, runningRunId, steering.maySteer, refreshSteering]);
+
   // The chat the last hydration attempt was for.
   const chatHydratedRef = useRef(null);
   // Whether the fetch below is still out. A re-run of the effect must not end
@@ -1254,6 +1273,8 @@ function AppChat({
         // kept, with the stored history restored in front of it.
         const storedMessages = Array.isArray(result?.messages) ? result.messages : [];
         loadServerMessages(storedMessages, { preserveLocal: true });
+        // Whether this person may send into a running answer, and what waits for it.
+        adoptSteering(result);
         // `modelId` lives on the chat document rather than inside `settings`,
         // so it is folded in here; `useAppSettings` still checks the app
         // allows it before selecting it.
@@ -1340,7 +1361,7 @@ function AppChat({
     })();
 
     return undefined;
-  }, [app, chatId, messages.length, loadServerMessages, finishHydration]);
+  }, [app, chatId, messages.length, loadServerMessages, finishHydration, adoptSteering]);
 
   // A scheduled run that was waiting on this chat's approval finished on the
   // server: its answer is in the store, not on screen, so read it back — unless
@@ -2933,6 +2954,70 @@ function AppChat({
     return { text, streaming: Boolean(last.loading) };
   }, [messages]);
 
+  // A message typed while iHub is working (#3191): read at the next step of the
+  // running answer, or sent as the next message once it is done ('afterwards').
+  // The field is emptied at once; a message that could not be sent comes back
+  // into it (unless something new was typed meanwhile) and a toast says why.
+  const handleSteer = async (text, mode) => {
+    const runId = runningRunId;
+    if (!runId || !text?.trim()) return;
+    setInput('');
+    const result = await steering.send(runId, text, mode);
+    if (result.delivered) return;
+    setInput(current => current || text);
+    showToast({
+      id: `steer-not-sent-${Date.now()}`,
+      tone: result.error ? 'danger' : 'info',
+      text: result.error
+        ? notSentText(t, result.error)
+        : t(
+            'chat.steer.answerFinished',
+            'Not sent. The answer had already finished: press Send to send it as a new message.'
+          )
+    });
+  };
+
+  // Offered where the server says so, in the chat page only: not in a comparison,
+  // not while a recording is transcribed.
+  const whileRunning = composerWhileRunning({
+    steeringEnabled,
+    maySteer: steering.maySteer,
+    compareModeActive,
+    isTranscribing,
+    runningRunId,
+    clarificationPending,
+    full: steering.full,
+    onSteer: text => void handleSteer(text, 'steer'),
+    onSendAfter: text => void handleSteer(text, 'afterwards')
+  });
+
+  // What waits for the running answer and what was not delivered, inside the composer.
+  const pendingWork =
+    steeringEnabled && (steering.items.length > 0 || steering.dropped.length > 0) ? (
+      <>
+        <PendingWorkStrip
+          items={steering.items}
+          onAction={(action, item) => {
+            if (action === 'remove') void steering.remove(item);
+          }}
+        />
+        {steering.full && (
+          <p className="mx-2 mt-1 text-xs text-amber-800 dark:text-amber-300">
+            {t('chat.steer.full', '20 messages are waiting. Remove one or wait.')}
+          </p>
+        )}
+        <DroppedMessageNotices
+          items={steering.dropped}
+          onCopy={item => {
+            setInput(current => withCopiedText(current, item.text));
+            steering.dismissDropped(item.id);
+            setTimeout(() => inputRef.current?.focus(), 0);
+          }}
+          onDismiss={steering.dismissDropped}
+        />
+      </>
+    ) : null;
+
   // `own`: the full-screen dock's composer. It mounts and unmounts with the dock, so
   // it must not take the page's `inputRef` / `formRef`: React would leave them null
   // when it goes, and every `formRef.current.requestSubmit()` (resend, auto-send)
@@ -3047,7 +3132,11 @@ function AppChat({
       sendChatHistory,
       // A passage quoted from the workspace pane, sent with the next message.
       quote: workspaceQuote,
-      onRemoveQuote: () => setWorkspaceQuote(null)
+      onRemoveQuote: () => setWorkspaceQuote(null),
+      // A message while iHub is working (#3191): only here, and only when the
+      // server says this person may send into the running answer.
+      whileRunning,
+      pendingWork
     };
 
     // Always use ChatInput (which now has the NextGen design with model selector)

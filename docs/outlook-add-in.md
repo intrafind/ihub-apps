@@ -136,6 +136,10 @@ Only chats whose app the pane offers are listed — a chat is continued through 
 
 Outlook opens the browser through `Office.context.ui.openBrowserWindow`, and the browser extension through a new tab. When the client cannot confirm the browser opened (a client without that API, where only a popup is left and a blocked one looks the same as an opened one), the notice strip below the chat shows the address to open by hand; one click selects it for copying.
 
+#### Messages while iHub is working
+
+The pane does not offer [messages while iHub is working](user-guide.md#while-ihub-is-working): with the **Messages while iHub is working** feature on or off, the pane's input is closed while an answer is written and keeps its one button that stops the answer. A chat opened from the pane in the web app (**Open in web app**) offers it there. Messages sent into a running answer in the web app are shown in the pane when the chat is reopened from **Chat history**, inside the answer that read them.
+
 ### A larger window
 
 Outlook decides how wide an add-in's task pane is. In classic Outlook for Windows users can drag the pane wider; in Outlook on the web and the new Outlook for Windows the pane has a fixed width of roughly 320 px, and an add-in cannot change it — neither the manifest nor Office.js has a setting for it. (Copilot's own pane is part of Outlook itself, not an add-in, which is why it can be resized.)

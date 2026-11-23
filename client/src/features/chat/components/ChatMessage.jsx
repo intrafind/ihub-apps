@@ -1029,8 +1029,14 @@ function ChatMessage({
         )}
         {/* Searches, sources and other tool calls behind the answer. Above it,
             like the thoughts, so it stays put while the answer streams. */}
-        {!isUser && toolActivity && (
-          <ToolActivity activity={toolActivity} loading={!!message.loading} />
+        {/* With the activity: the messages the person sent while the answer was
+            written, each a row at the step where it was read, live and reopened. */}
+        {!isUser && (toolActivity || message.appliedMessages?.length > 0) && (
+          <ToolActivity
+            activity={toolActivity}
+            loading={!!message.loading}
+            applied={message.appliedMessages}
+          />
         )}
         {/* Interactive MCP App views the answer's tool calls rendered. */}
         {!isUser && message.mcpApps?.length > 0 && (

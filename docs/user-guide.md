@@ -117,6 +117,35 @@ in the form again. The values stay with the chat, so they are still there when y
   or reload the page.
 - The counter above the input shows roughly how much of the model's context window the chat uses.
 
+#### While iHub is working
+
+Where your administrator switched on **Messages while iHub is working** (a preview), the input
+stays open while an answer is written, shows **Stop answer** and **Send** as two buttons, and you
+can keep typing:
+
+- **Enter** or **Send** hands your message to the running answer, for example "use the 2025
+  numbers instead". iHub reads it at its next step: before it asks the model again, after a search
+  or another tool. It does not stop or restart the answer. Enter never stops an answer; only
+  **Stop answer** does.
+- The arrow next to **Send** (**More ways to send**) offers **Send after this answer**, also
+  **Alt+Enter**: the message is sent as your next message once the answer is done, and the running
+  answer stays as it is.
+- Above the input a list shows what waits: *Will be read at the next step* or *Will be sent as the
+  next message*. **×** removes a message until iHub has read it; one that was read already stays,
+  and a notice says *Already read by iHub*. At most 20 messages wait.
+- A message iHub read appears inside the answer, among the steps of its activity at the step where
+  iHub read it, captioned *Sent while iHub was working*, the same way after a reload.
+- A message iHub could not take (the answer was stopped, ended with an error or asked you
+  something first; in a temporary chat, where nothing is sent on its own) comes back as a notice
+  with **Copy to input**. A message the answer ended before reading is sent as your next message.
+- While the answer waits for your answer to a question or an approval, the input asks you to
+  answer it first. Attaching files, the model selector and voice input wait until the answer is
+  finished.
+- A message that waits is held by the server that writes the answer; if that server restarts, it
+  is lost.
+
+Without the feature, the input is closed while an answer is written and one button stops it.
+
 ### Answers
 
 Answers stream in as they are written. Under each answer a badge says what it is based on — *AI
@@ -301,7 +330,9 @@ documents and search results that only you may see.
 Your administrator may also offer iHub inside other tools: the **Outlook add-in** (reply to or
 summarize the open email), the **browser extension** (chat about the page you are reading),
 **Microsoft Teams** and **Nextcloud**. They offer the same apps; the Outlook add-in and the browser
-extension also list your chat history.
+extension also list your chat history. Sending a message while iHub is working is offered in iHub's
+own chat page only; the Outlook add-in and the browser extension keep one button that stops the
+answer.
 
 ## Getting help
 

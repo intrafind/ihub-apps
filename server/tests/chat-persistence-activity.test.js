@@ -212,6 +212,59 @@ describe('recording what a turn did', () => {
     assert.equal(isRecordingRunActivity(RUN_ID), false, 'taking the activity ends the recording');
   });
 
+  it('keeps the step of each call for a turn that read a message at a step, and only then', () => {
+    const turn = readMessage => {
+      recordRunActivity(RUN_ID);
+      const stream = emitter();
+      stream.emit(SSE_V2_EVENTS.RUN_STARTED, { kind: 'chat', refs: {} });
+      for (const [step, callId] of [
+        [1, 'call-a'],
+        [2, 'call-b']
+      ]) {
+        if (step === 2 && readMessage) {
+          stream.emit(SSE_V2_EVENTS.STEER_APPLIED, {
+            id: 'steer-1',
+            kind: 'steer',
+            text: 'Use the 2025 numbers',
+            step: 2,
+            activityKind: 'user_message'
+          });
+        }
+        stream.emit(SSE_V2_EVENTS.TOOL_STARTED, {
+          step,
+          callId,
+          toolId: 'lookup',
+          name: 'lookup',
+          args: {}
+        });
+        stream.emit(SSE_V2_EVENTS.TOOL_COMPLETED, {
+          step,
+          callId,
+          toolId: 'lookup',
+          name: 'lookup'
+        });
+      }
+      stream.emit(SSE_V2_EVENTS.RUN_ENDED, { status: 'completed', finishReason: 'stop' });
+      return boundStoredActivity(takeRunActivity(RUN_ID)).toolActivity.items;
+    };
+
+    // Where the chat places the stored message: before the first call of its step.
+    assert.deepEqual(
+      turn(true).map(item => [item.id, item.step]),
+      [
+        ['call-a', 1],
+        ['call-b', 2]
+      ]
+    );
+    // The message's text is stored as the message, not in the activity.
+    assert.equal(JSON.stringify(turn(true)).includes('2025'), false);
+    // A turn that read none stores its activity as before.
+    assert.equal(
+      turn(false).some(item => 'step' in item),
+      false
+    );
+  });
+
   it('records nothing for a run nobody asked to record', () => {
     emitSearchingTurn(emitter());
     assert.equal(takeRunActivity(RUN_ID), null);

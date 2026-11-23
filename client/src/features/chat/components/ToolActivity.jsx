@@ -31,6 +31,11 @@ import {
 } from '../activityHeadline.js';
 import { isStalled } from '../activityTiming.js';
 import { ActivityHint, ArgumentProgress, BusyIcon, RowChip, useNow } from './ActivityProgress';
+import AppliedMessages, {
+  AppliedMessageRow,
+  placeAppliedMessages,
+  shownAppliedMessages
+} from './AppliedMessages';
 
 /** Colour of the label of a call or status that is active right now. */
 const ACTIVE_LABEL = 'font-medium text-gray-800 dark:text-gray-200';
@@ -98,8 +103,13 @@ function useTechnicalDetails() {
  * @param {{items: Array<Object>, reading: string|null, idle?: Object, answering?: boolean}} props.activity
  *   - see shared/run/toolActivity; `idle` makes a headline-only line when there are no rows
  * @param {boolean} [props.loading] - whether the turn is still going
+ * @param {Array<Object>} [props.applied] - the messages the person sent while the
+ *   answer was written and that it read at a step (`{ id, text, step, activityKind }`):
+ *   rows of the list, each at its step ({@link placeAppliedMessages}). An answer
+ *   with such a message shows its list open, so the message can be seen where it
+ *   was read.
  */
-function ToolActivity({ activity, loading = false }) {
+function ToolActivity({ activity, loading = false, applied = null }) {
   const { t } = useTranslation();
   const listId = useId();
   const hintId = useId();
@@ -117,7 +127,8 @@ function ToolActivity({ activity, loading = false }) {
   // The clock only runs while something is going on.
   const now = useNow(anyActive);
 
-  const open = expanded ?? loading;
+  const appliedShown = shownAppliedMessages(applied);
+  const open = expanded ?? (loading || appliedShown.length > 0);
   // When the list closes by itself (the turn ended) with the keyboard inside it,
   // focus moves to the headline button instead of falling onto the page.
   const wasOpen = useRef(open);
@@ -133,7 +144,16 @@ function ToolActivity({ activity, loading = false }) {
     }
   }, [open]);
 
-  if (items.length === 0) return idle ? <IdleLine idle={idle} /> : null;
+  if (items.length === 0) {
+    if (appliedShown.length === 0) return idle ? <IdleLine idle={idle} /> : null;
+    // No row to place them among: the messages on their own, below the idle line.
+    return (
+      <>
+        {idle && <IdleLine idle={idle} />}
+        <AppliedMessages items={appliedShown} />
+      </>
+    );
+  }
   const headline = headlineOf(t, { ...activity, items }, loading);
   const owner = headline.owner;
   // Arguments, tool and duration have no meaning while a turn is still going.
@@ -224,14 +244,18 @@ function ToolActivity({ activity, loading = false }) {
           aria-busy={anyActive}
           className={`${canShowDetails ? 'mt-1' : 'mt-1.5'} ms-1.5 ps-3 border-s border-gray-200 dark:border-gray-700 space-y-1`}
         >
-          {items.map(item => (
-            <ActivityItem
-              key={item.id}
-              item={item}
-              stalled={isStalled(item, now)}
-              details={details}
-            />
-          ))}
+          {placeAppliedMessages(items, appliedShown).map(row =>
+            row.type === 'applied' ? (
+              <AppliedMessageRow key={`applied-${row.entry.id}`} entry={row.entry} />
+            ) : (
+              <ActivityItem
+                key={row.item.id}
+                item={row.item}
+                stalled={isStalled(row.item, now)}
+                details={details}
+              />
+            )
+          )}
         </ol>
       )}
     </div>

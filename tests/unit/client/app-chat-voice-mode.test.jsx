@@ -374,7 +374,23 @@ jest.mock('../../../client/src/features/chat/hooks/useAppChat', () => {
     addUserMessage: noop,
     addAssistantMessage: noop,
     updateAssistantMessage: noop,
-    removeMessage: noop
+    removeMessage: noop,
+    // Messages while iHub is working (#3191): nothing waits, not offered.
+    runningRunId: null,
+    steering: {
+      items: [],
+      dropped: [],
+      maySteer: null,
+      full: false,
+      adopt: noop,
+      refresh: noop,
+      send: noop,
+      remove: noop,
+      onFrame: noop,
+      hasWaitingFor: () => false,
+      checkAfterEnd: noop,
+      dismissDropped: noop
+    }
   };
   return { __esModule: true, default: () => chat };
 });

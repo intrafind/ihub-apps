@@ -875,7 +875,13 @@ While an answer is written, its owner can send messages into it
   makes in the activity list at step `appliedAtStep`, decided by the server as in the live
   `steer/applied` frame, so a reloaded chat draws the same row. It follows the chat's retention and deletion, an edit or a
   regenerate before it removes it like any message, and later turns read it as the model read it
-  then, behind the `[steer]` marker.
+  then, behind the `[steer]` marker. The chat page draws it inside the answer of its run, with
+  the caption "Sent while iHub was working", in the same place as live: a row of the answer's
+  activity list, before the first call of step `appliedAtStep` (`appliedMessages` of the answer,
+  built from the stored messages by `transformStoredMessages` in
+  `client/src/features/chat/hooks/useChatMessages.js`). To place it there, the stored activity of
+  an answer that read a message keeps the step of each call (`step` of a `toolActivity` item);
+  the activity of an answer that read none is stored as before.
 - **Left over.** A message the answer did not read before it ended (one sent during its last model
   call, every message sent with `mode: 'afterwards'`) becomes the next turn. The server takes it
   where the answer lets go of the chat, under the chat lock and only while that answer still holds
@@ -892,8 +898,8 @@ While an answer is written, its owner can send messages into it
   answer stopped for a question or an approval (`run_paused`), was stopped (`run_stopped`), failed
   (`run_failed`), was replaced by a newer message (`superseded`), or ran in a temporary or guest
   chat (`temporary_chat`): the server starts no turn of its own in a chat that ends when its reader
-  leaves. The frame carries the text, so the client can give it back to the person. Until the
-  chat input offers the feature, nothing in the chat shows a dropped message.
+  leaves. The frame carries the text, so the client can give it back to the person: the chat
+  page shows a notice with the text and **Copy to input**.
 - **Read model.** With the feature `steering` (Admin → Features, preview, off by default) on,
   `GET /api/chats/:chatId` also answers `pending`, the messages that wait for the chat's running
   answer, oldest first, each `{ id, runId, kind: 'steer' | 'send_after', text, labelKey, actions }`

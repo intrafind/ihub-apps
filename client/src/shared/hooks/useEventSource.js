@@ -55,6 +55,14 @@ function createRseqFilter() {
   };
 }
 
+/**
+ * How long a stream stays open after its turn ended while messages the person
+ * sent into that turn wait for the frame that says what became of them
+ * (`holdAfterTurnEnd`). The server sends those frames right after the turn's
+ * `run/ended`; this is the limit for a frame that never comes.
+ */
+export const TURN_END_HOLD_MS = 10000;
+
 /** The first top-level `run/started` on a connection is the turn's own run. */
 function startsTurn(envelope, turnRunId) {
   return envelope.type === RUN_EVENTS.RUN_STARTED && !turnRunId && !envelope.data?.parentRunId;
@@ -99,6 +107,12 @@ function endsTurn(envelope, turnRunId) {
  *   following a turn it did not start. Only then does the heartbeat treat "the
  *   server is running nothing on this chat" as a reason to stop — see
  *   {@link startHeartbeat}.
+ * @param {(runId: string) => boolean} [options.holdAfterTurnEnd] - Asked at the end
+ *   of the turn a chat's GET stream follows, and after every frame while it holds:
+ *   true keeps the stream open after the turn's `run/ended`, for the frames the
+ *   server sends after it (what became of the messages the person sent into the
+ *   turn, `steer/*`), at most {@link TURN_END_HOLD_MS}. A turn's own POST stream
+ *   needs none: it ends when the server ends it.
  */
 function useEventSource({
   appId,
@@ -106,7 +120,8 @@ function useEventSource({
   timeoutDuration = 60000,
   onEvent,
   onProcessingChange,
-  isFollowingExistingRun
+  isFollowingExistingRun,
+  holdAfterTurnEnd
 }) {
   // Stores the AbortController for the active fetch stream — non-null == connected
   const abortControllerRef = useRef(null);
@@ -307,6 +322,12 @@ function useEventSource({
       // ending must not end the turn).
       let turnRunId = null;
       const keep = createRseqFilter();
+      // The turn that ended while the stream stays open for what follows its end.
+      let held = null;
+      const endHold = () => {
+        if (held) clearTimeout(held.timer);
+        held = null;
+      };
 
       const emit = envelope => {
         if (stoppingRef.current === ac) return;
@@ -314,6 +335,7 @@ function useEventSource({
       };
 
       const releaseSlot = () => {
+        endHold();
         abortControllerRef.current = null;
         if (onProcessingChange) onProcessingChange(false);
         // Release the browser's HTTP/1.1 connection slot. Without this the
@@ -358,18 +380,41 @@ function useEventSource({
             if (envelope.type === RUN_EVENTS.STREAM_CONNECTED) {
               connectionEstablished = true;
             }
-            if (startsTurn(envelope, turnRunId)) turnRunId = envelope.runId;
+            const starts = startsTurn(envelope, turnRunId);
+            if (starts) {
+              turnRunId = envelope.runId;
+              // A turn that follows on this stream: it is followed like the first.
+              endHold();
+            }
 
             emit(envelope);
 
-            const isTurnEnd = endsTurn(envelope, turnRunId);
-            if (isTurnEnd) serverRunActiveRef.current = false;
-            if (isTurnEnd || envelope.type === RUN_EVENTS.STREAM_ERROR) {
+            if (envelope.type === RUN_EVENTS.STREAM_ERROR) {
               releaseSlot();
+              return;
             }
+            if (held) {
+              // Every message of the held turn is settled: nothing more to wait for.
+              if (!starts && holdAfterTurnEnd?.(held.runId) !== true) releaseSlot();
+              return;
+            }
+            if (!endsTurn(envelope, turnRunId)) return;
+            serverRunActiveRef.current = false;
+            if (holdAfterTurnEnd?.(envelope.runId) === true) {
+              held = {
+                runId: envelope.runId,
+                timer: setTimeout(() => {
+                  if (abortControllerRef.current === ac) releaseSlot();
+                }, TURN_END_HOLD_MS)
+              };
+              turnRunId = null;
+              return;
+            }
+            releaseSlot();
           }
         });
       } catch (err) {
+        endHold();
         // AbortError means we cancelled intentionally — not an error to report
         if (err.name === 'AbortError') return;
 
@@ -384,6 +429,7 @@ function useEventSource({
         );
         if (onProcessingChange) onProcessingChange(false);
       } finally {
+        endHold();
         // Always abort the controller — release the HTTP/1.1 connection slot.
         // The terminal-frame path already aborts on the happy path; this
         // finally covers the failure paths (mid-stream network error,
@@ -416,7 +462,8 @@ function useEventSource({
       onProcessingChange,
       onEvent,
       startHeartbeat,
-      timeoutDuration
+      timeoutDuration,
+      holdAfterTurnEnd
     ]
   );
 

@@ -24,14 +24,15 @@ import { APPROVAL_APP, TOOLS_APP, USER } from '../config/agents-scenario.mjs';
  *   answers the card.
  * - The question card is a group in the page, not a modal dialog: Tab moves on
  *   past its last control.
- * - The list of what waits in a chat works by keyboard with four items and
- *   does not scroll sideways at 320 px in German.
+ *
+ * The list of what waits in a chat is checked in the real composer, by keyboard
+ * with four items at 320 px in German: steer.spec.js.
  *
  * The cards come from the model stub: the script `hold-then-call` holds the
  * model's tool call until the spec releases it, so the person is typing when the
- * card arrives. The chat input is disabled while an answer runs (until a later
- * pull request lets a person write into a running answer), so the person types
- * into the app search (Ctrl+K), a text field that is open during a run.
+ * card arrives. The chat input is disabled while an answer runs (with the
+ * feature `steering` off, as seeded), so the person types into the app search
+ * (Ctrl+K), a text field that is open during a run.
  */
 
 /** The page's one polite live region (`AnnouncerProvider`). */
@@ -189,100 +190,6 @@ test.describe('Focus policy of the cards', () => {
       await submit.focus();
       await page.keyboard.press('Tab');
       expect(await group.evaluate(node => node.contains(document.activeElement))).toBe(false);
-    }
-  );
-});
-
-test.describe('What waits in a chat', () => {
-  test(
-    'four items are reached and removed by keyboard, and nothing scrolls sideways at 320 px in German',
-    { tag: '@gate' },
-    async ({ page }) => {
-      await signInPage(page, USER);
-      await page.setViewportSize({ width: 320, height: 640 });
-      await page.goto(`/apps/${TOOLS_APP}?language=de`);
-      await expect(composer(page).or(page.getByRole('textbox').first())).toBeVisible();
-      // One announcer region for the page, beside the shell: it does not make the page scroll.
-      const shell = await page.evaluate(() => ({
-        regions: document.querySelectorAll('[aria-live="polite"][data-testid="announcer"]').length,
-        height: document.documentElement.scrollHeight,
-        viewport: window.innerHeight
-      }));
-      expect(shell.regions).toBe(1);
-      expect(shell.height).toBeLessThanOrEqual(shell.viewport);
-
-      // Mount the strip as the chat will (next pull request) with four items in the
-      // shape the server sends (`pending[]` of GET /api/chats/:chatId), through the
-      // app's own modules: the same React, the same translations, the same styles.
-      await page.evaluate(async () => {
-        const deps = performance
-          .getEntriesByType('resource')
-          .map(entry => entry.name)
-          .filter(name => name.includes('/node_modules/.vite/deps/'));
-        const dep = name => deps.find(url => new URL(url).pathname.endsWith(`/deps/${name}`));
-        const reactModule = await import(dep('react.js'));
-        const React = reactModule.default ?? reactModule;
-        const clientModule = await import(dep('react-dom_client.js'));
-        const createRoot = clientModule.createRoot ?? clientModule.default.createRoot;
-        const { default: PendingWorkStrip } =
-          await import('/src/features/chat/components/PendingWorkStrip.jsx');
-        const text =
-          'Bitte verwenden Sie die Zahlen aus dem Geschäftsbericht 2025 und nicht die aus dem Vorjahr';
-        const initial = [1, 2, 3, 4].map(n => ({
-          id: `steer-${n}`,
-          runId: 'run-1',
-          kind: n === 4 ? 'send_after' : 'steer',
-          labelKey: n === 4 ? 'chat.pending.sendAfter' : 'chat.pending.steer',
-          text: `${n}: ${text}`,
-          actions: ['remove']
-        }));
-        function Host() {
-          const [items, setItems] = React.useState(initial);
-          return React.createElement(PendingWorkStrip, {
-            items,
-            onAction: (action, item) =>
-              setItems(current => current.filter(entry => entry.id !== item.id))
-          });
-        }
-        const slot = document.createElement('div');
-        slot.id = 'pending-strip-check';
-        (document.querySelector('main') || document.body).prepend(slot);
-        createRoot(slot).render(React.createElement(Host));
-      });
-
-      const strip = page.getByTestId('pending-work-strip');
-      await expect(strip).toBeVisible();
-      await expect(strip.getByRole('list', { name: 'In diesem Chat ausstehend' })).toBeVisible();
-      const disclosure = strip.getByRole('button', { name: '4 ausstehend · Alle anzeigen' });
-      await disclosure.focus();
-      await page.keyboard.press('Enter');
-      await expect(strip.getByRole('listitem')).toHaveCount(4);
-
-      // Nothing scrolls sideways: not the page, not the strip, no row past the edge.
-      const widths = await page.evaluate(() => {
-        const root = document.querySelector('[data-testid="pending-work-strip"]');
-        return {
-          page: document.documentElement.scrollWidth,
-          viewport: window.innerWidth,
-          strip: [root.scrollWidth, root.clientWidth],
-          rightmost: Math.max(
-            ...[...root.querySelectorAll('li, button')].map(
-              node => node.getBoundingClientRect().right
-            )
-          )
-        };
-      });
-      expect(widths.page).toBeLessThanOrEqual(widths.viewport);
-      expect(widths.strip[0]).toBeLessThanOrEqual(widths.strip[1]);
-      expect(widths.rightmost).toBeLessThanOrEqual(widths.viewport);
-
-      // Shift+Tab from the disclosure reaches the fourth item's remove button.
-      await page.keyboard.press('Shift+Tab');
-      const fourth = strip.getByRole('button', { name: /^Nachricht entfernen: 4:/ });
-      await expect(fourth).toBeFocused();
-      await page.keyboard.press('Enter');
-      await expect(strip.getByRole('listitem')).toHaveCount(3);
-      await expect(strip.getByRole('button', { name: /^Nachricht entfernen: 3:/ })).toBeFocused();
     }
   );
 });

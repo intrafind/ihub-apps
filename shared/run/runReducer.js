@@ -21,7 +21,13 @@
  *
  * @module shared/run/runReducer
  */
-import { ACTIVITY_ORIGINS, SKILL_ACTIVATORS, SSE_V2_EVENTS } from '../runEvents.js';
+import {
+  ACTIVITY_ORIGINS,
+  PENDING_MESSAGE_KINDS,
+  SKILL_ACTIVATORS,
+  SSE_V2_EVENTS,
+  STEER_DROP_REASONS
+} from '../runEvents.js';
 import { emptySourceSet, mergeSources } from '../sources/sourceSet.js';
 import { generatedFilesOf } from '../generatedFiles.js';
 import { ARGS_OUTCOMES, KNOWN_ARGS_OUTCOMES, PROGRESS_PHASES } from './argProgress.js';
@@ -107,6 +113,12 @@ export function createRunState(runId, init = {}) {
     interactions: {},
     interactionOrder: [],
     pendingInteractionId: null,
+    // Messages the person sent into the running answer (`steer/*`), by id, and
+    // the order they first appeared in: `{ id, kind, text, status: 'queued' |
+    // 'applied' | 'dropped', step, nextRunId, activityKind, reason }`. What each
+    // one became is the server's frame, never worked out here.
+    steers: {},
+    steerOrder: [],
     // surface metadata
     meta: { extra: {} },
     // What the answer is based on, as the server named it on `run/ended`
@@ -588,6 +600,67 @@ function foldToolProgress(run, frame, envelope) {
   }
 }
 
+/** The frames about a message the person sent into the running answer. */
+const STEER_FRAMES = new Set([
+  SSE_V2_EVENTS.STEER_QUEUED,
+  SSE_V2_EVENTS.STEER_APPLIED,
+  SSE_V2_EVENTS.STEER_DROPPED
+]);
+
+/** What a `steer/*` frame makes of a message: its new status and the fields the frame names. */
+function steerUpdate(type, data) {
+  if (type === SSE_V2_EVENTS.STEER_QUEUED) return { status: 'queued' };
+  if (type === SSE_V2_EVENTS.STEER_DROPPED) {
+    return {
+      status: 'dropped',
+      reason: STEER_DROP_REASONS.includes(data.reason) ? data.reason : null
+    };
+  }
+  // Exactly one of `step` and `nextRunId` is set (the server's contract).
+  return {
+    status: 'applied',
+    step: Number.isInteger(data.step) ? data.step : null,
+    nextRunId: textOrNull(data.nextRunId),
+    // The activity item the server decided for a message read at a step.
+    activityKind: textOrNull(data.activityKind)
+  };
+}
+
+/**
+ * Fold a `steer/queued`, `steer/applied` or `steer/dropped` frame into the run
+ * it was told on. A message that was read or dropped stays so: a late
+ * `steer/queued` (frames of two server processes) does not bring it back.
+ *
+ * @param {Object} run - RunState
+ * @param {string} type - The frame type
+ * @param {Object} data - `{ id, kind, text, step?, nextRunId?, activityKind?, reason? }`
+ * @returns {Object} RunState
+ */
+function foldSteerFrame(run, type, data) {
+  const id = textOrNull(data.id);
+  if (!id) return run;
+  const steers = run.steers || {};
+  const known = steers[id];
+  if (known && known.status !== 'queued' && type === SSE_V2_EVENTS.STEER_QUEUED) return run;
+  const entry = {
+    step: null,
+    nextRunId: null,
+    activityKind: null,
+    reason: null,
+    ...known,
+    id,
+    kind: PENDING_MESSAGE_KINDS.includes(data.kind) ? data.kind : known?.kind || 'steer',
+    text: typeof data.text === 'string' ? data.text : known?.text || '',
+    ...steerUpdate(type, data)
+  };
+  const order = run.steerOrder || [];
+  return {
+    ...run,
+    steers: { ...steers, [id]: entry },
+    steerOrder: order.includes(id) ? order : [...order, id]
+  };
+}
+
 /**
  * Whether `envelope` opens the continuation of a run that is not running.
  *
@@ -655,6 +728,11 @@ export function reduceRunEvent(state, envelope) {
 
   // ── run-scoped events ─────────────────────────────────────────────────
   if (typeof runId !== 'string' || runId === '') return next;
+  // A message for a run this stream never saw start (one queued again in the
+  // next turn's run, told on the answer that ended) makes no run of its own.
+  if (STEER_FRAMES.has(type)) {
+    return state.runs[runId] ? withRun(next, foldSteerFrame(state.runs[runId], type, data)) : next;
+  }
   const init =
     type === SSE_V2_EVENTS.RUN_STARTED
       ? {
@@ -1112,6 +1190,40 @@ export function getNodes(run) {
 /** Runs in first-seen order. */
 export function getRuns(state) {
   return state?.order ? state.order.map(id => state.runs[id]).filter(Boolean) : [];
+}
+
+/**
+ * The messages the person sent into a run, in the order they first appeared,
+ * as the `steer/*` frames left them.
+ *
+ * @param {Object|null} run - RunState
+ * @returns {Array<{id: string, kind: string, text: string, status: string, step: number|null,
+ *   nextRunId: string|null, activityKind: string|null, reason: string|null}>}
+ */
+export function getSteers(run) {
+  return run?.steerOrder ? run.steerOrder.map(id => run.steers[id]).filter(Boolean) : [];
+}
+
+/**
+ * The messages a run read at a step, in step order (the order they were read
+ * in for one step): what the chat draws in the answer, with the activity item
+ * the server named (`activityKind`). A message sent as the next turn
+ * (`nextRunId`) is that turn's question, not part of this answer.
+ *
+ * @param {Object|null} run - RunState
+ * @returns {Array<{id: string, text: string, step: number, activityKind: string|null}>}
+ */
+export function getAppliedSteers(run) {
+  return getSteers(run)
+    .filter(entry => entry.status === 'applied' && Number.isInteger(entry.step))
+    .map((entry, index) => ({ entry, index }))
+    .sort((a, b) => a.entry.step - b.entry.step || a.index - b.index)
+    .map(({ entry }) => ({
+      id: entry.id,
+      text: entry.text,
+      step: entry.step,
+      activityKind: entry.activityKind
+    }));
 }
 
 /** Interactions of a run in raised order. */

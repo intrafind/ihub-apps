@@ -205,7 +205,20 @@ function ChatInput({
   // long prompt in a host that caps it at a few lines (#3524). Only the Outlook
   // task pane turns it on. The expanded box collapses on send, on Escape, on a
   // second click and when the conversation starts or a new one does.
-  expandable = false
+  expandable = false,
+  // A message while iHub is working (#3191): opt in, given only by the chat page
+  // when the server says this person may send into the running answer
+  // (`maySteer`). `{ enabled, ready, blockedReason, full, onSteer(text), onSendAfter(text) }`:
+  // `ready` false while the turn's run has not started (nothing to send into yet),
+  // `blockedReason` while a question or an approval waits, `full` with 20 waiting.
+  // While a turn runs with it, the text field stays open, Stop and Send are two
+  // controls (and a menu with "Send after this answer"), and Enter never stops.
+  // Left out (the Outlook pane, the canvas, the start page, the extension), the
+  // composer keeps its single Send/Stop button.
+  whileRunning = null,
+  // What waits in the chat (the strip of messages for the running answer, the
+  // notices of the ones not delivered): rendered inside the composer, above the text.
+  pendingWork = null
 }) {
   const { t, i18n } = useTranslation();
   const { uiConfig } = useUIConfig();
@@ -238,6 +251,31 @@ function ChatInput({
   const { attachmentProcessing, onProcessingChange: handleAttachmentProcessingChange } =
     useAttachmentProcessing(isAttachmentProcessing, onAttachmentProcessingChange);
   const sendBlockedByAttachment = attachmentProcessing && !isProcessing;
+  // A turn runs and this person may send into it (`whileRunning`, #3191).
+  const steering = Boolean(whileRunning?.enabled) && isProcessing;
+  // The answer waits for the person (a question or an approval above): the text
+  // field stays focusable, but takes no text.
+  const steerBlocked = steering && Boolean(whileRunning?.blockedReason);
+  const canSteer =
+    steering &&
+    !steerBlocked &&
+    whileRunning?.ready !== false &&
+    whileRunning?.full !== true &&
+    Boolean(value?.trim());
+  const [sendMenuOpen, setSendMenuOpen] = useState(false);
+  // The menu belongs to a running turn; it closes with it (adjusted while rendering).
+  if (sendMenuOpen && !steering) setSendMenuOpen(false);
+  const sendMenuId = useId();
+  const steerHintId = useId();
+  // Why attach, the model selector and voice mode are off while a turn runs with
+  // `whileRunning`: on each control as its title and its accessible description.
+  const availableAfterId = useId();
+  const availableAfter = steering
+    ? t('chat.steer.availableAfter', 'Available when the answer is finished')
+    : null;
+  const sendMenuButtonRef = useRef(null);
+  const sendAfterItemRef = useRef(null);
+  const sendMenuRef = useRef(null);
 
   const promptsListEnabled =
     uiConfig?.promptsList?.enabled !== false && app?.features?.promptsList !== false;
@@ -446,7 +484,11 @@ function ChatInput({
 
   // Determine placeholder text based on state
   let defaultPlaceholder;
-  if (clarificationPending) {
+  if (steerBlocked) {
+    defaultPlaceholder = t('chat.steer.blockedPlaceholder', 'Answer the question above first');
+  } else if (steering) {
+    defaultPlaceholder = t('chat.steer.placeholder', 'Add an instruction for the running answer…');
+  } else if (clarificationPending) {
     // When waiting for clarification response, show a helpful message
     defaultPlaceholder = t(
       'pages.appChat.answerQuestionAbove',
@@ -691,8 +733,57 @@ function ChatInput({
     };
   }, [value, minLines, maxLines, expanded, actualInputRef]);
 
+  // While a turn runs (`whileRunning`): the text goes to the running answer,
+  // read at its next step. Never a stop.
+  const submitWhileRunning = () => {
+    if (canSteer) whileRunning?.onSteer?.(value);
+    setTimeout(() => focusInputAtEnd(), 0);
+  };
+
+  // "Send after this answer" (menu item, Alt+Enter): the next message once the answer is done.
+  const handleSendAfter = () => {
+    setSendMenuOpen(false);
+    if (canSteer) whileRunning?.onSendAfter?.(value);
+    setTimeout(() => focusInputAtEnd(), 0);
+  };
+
+  // The send menu: closed by a press outside it, by Escape and by Tab.
+  useEffect(() => {
+    if (!sendMenuOpen) return undefined;
+    const onPointer = event => {
+      if (sendMenuRef.current?.contains(event.target)) return;
+      if (sendMenuButtonRef.current?.contains(event.target)) return;
+      setSendMenuOpen(false);
+    };
+    document.addEventListener('mousedown', onPointer);
+    return () => document.removeEventListener('mousedown', onPointer);
+  }, [sendMenuOpen]);
+
+  const openSendMenu = ({ focusItem = false } = {}) => {
+    setSendMenuOpen(true);
+    if (focusItem) setTimeout(() => sendAfterItemRef.current?.focus(), 0);
+  };
+
+  const handleSendMenuItemKeyDown = e => {
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      setSendMenuOpen(false);
+      sendMenuButtonRef.current?.focus();
+    } else if (e.key === 'Tab') {
+      setSendMenuOpen(false);
+    } else if (['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(e.key)) {
+      // One item: the arrows keep it.
+      e.preventDefault();
+      sendAfterItemRef.current?.focus();
+    }
+  };
+
   const handleSubmit = e => {
     e.preventDefault();
+    if (steering) {
+      submitWhileRunning();
+      return;
+    }
     // A form submit (a starter prompt, `send=true`, an MCP app) does not go
     // through the disabled Send button: an unacknowledged alert blocks it here.
     if (
@@ -800,6 +891,13 @@ function ChatInput({
     if (expanded && e.key === 'Escape') {
       e.preventDefault();
       setExpandedByUser(false);
+      return;
+    }
+
+    // Alt+Enter while a turn runs: send after this answer.
+    if (steering && e.altKey && e.key === 'Enter') {
+      e.preventDefault();
+      handleSendAfter();
       return;
     }
 
@@ -954,6 +1052,7 @@ function ChatInput({
               : 'border-gray-300 dark:border-gray-600 focus-within:ring-indigo-500 focus-within:border-indigo-500'
           }`}
         >
+          {pendingWork}
           {quote && <ComposerQuote quote={quote} onRemove={onRemoveQuote} />}
           {/* Top line: User input */}
           <div className="relative flex-1">
@@ -965,14 +1064,22 @@ function ChatInput({
               value={value}
               onChange={handleInputChange}
               onKeyDown={handleKeyDown}
-              disabled={isInputDisabled || isProcessing || audioOnly}
+              // While a turn runs with `whileRunning`, the field stays open; with a
+              // question above, read-only and still focusable.
+              disabled={
+                (steering
+                  ? disabled || requiresAlertAcknowledgment
+                  : isInputDisabled || isProcessing) || audioOnly
+              }
+              readOnly={steerBlocked}
+              aria-disabled={steerBlocked ? 'true' : undefined}
               className={`chat-input-textarea${compact ? ' chat-input-textarea--compact' : ''}${
                 oneLine ? ' chat-input-textarea--one-line' : ''
               }${expanded ? ' chat-input-textarea--expanded' : ''} w-full px-3 ${expandable ? 'pr-16' : 'pr-10'} bg-transparent border-0 focus:ring-0 focus:outline-hidden resize-none dark:text-gray-100 rounded-t-2xl`}
               placeholder={defaultPlaceholder}
               ref={actualInputRef}
               aria-label={t('chat.inputLabel', 'Type your message')}
-              aria-describedby={sendHintId}
+              aria-describedby={steering ? `${sendHintId} ${steerHintId}` : sendHintId}
               // One row, so the content and `--composer-min-lines` decide the
               // height: the browser's default of two would set a floor of its own.
               rows={1}
@@ -981,6 +1088,19 @@ function ChatInput({
             <span id={sendHintId} className="sr-only">
               {sendHint}
             </span>
+            {steering && (
+              <span id={availableAfterId} className="sr-only">
+                {availableAfter}
+              </span>
+            )}
+            {steering && (
+              <span id={steerHintId} className="sr-only">
+                {t(
+                  'chat.steer.hint',
+                  'iHub reads it at the next step of the running answer. Alt+Enter sends it after this answer.'
+                )}
+              </span>
+            )}
             {expandable && (
               <button
                 type="button"
@@ -1089,7 +1209,9 @@ function ChatInput({
                 type="button"
                 onClick={handleAttachFile}
                 disabled={isInputDisabled || isProcessing}
-                title={t('chatActions.attachFile', 'Attach File')}
+                title={availableAfter || t('chatActions.attachFile', 'Attach File')}
+                aria-label={t('chatActions.attachFile', 'Attach File')}
+                aria-describedby={steering ? availableAfterId : undefined}
                 className="hidden md:flex p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors disabled:opacity-50"
               >
                 <Icon name="paper-clip" size="md" />
@@ -1210,6 +1332,8 @@ function ChatInput({
                 // An unacknowledged alert hint blocks sending, not switching:
                 // picking another model is the way out of it (#3811).
                 disabled={disabled || clarificationPending || isProcessing}
+                disabledReason={availableAfter}
+                disabledReasonId={steering ? availableAfterId : undefined}
                 // Not `oneLine`: the toolbar, and with it Send, keeps its
                 // place when the composer is expanded and collapsed. Its
                 // height matches the one-line text row.
@@ -1229,32 +1353,130 @@ function ChatInput({
                   isRecordingTranscription ||
                   (isProcessing && !voiceModeActive)
                 }
+                disabledReason={availableAfter}
+                disabledReasonId={steering ? availableAfterId : undefined}
               />
             )}
 
-            {/* Send/Stop Button */}
-            <button
-              type="button"
-              onClick={isProcessing ? handleCancel : handleSubmit}
-              disabled={
-                isInputDisabled ||
-                sendBlockedByAttachment ||
-                (!allowEmptySubmit && !value.trim() && !isProcessing)
-              }
-              className={`shrink-0 p-2 sm:p-2.5 rounded-lg font-medium flex items-center justify-center transition-colors ${
-                disabled ||
-                sendBlockedByAttachment ||
-                (!allowEmptySubmit && !value.trim() && !isProcessing)
-                  ? 'bg-gray-200 text-gray-600 cursor-not-allowed dark:bg-gray-700 dark:text-gray-300'
-                  : isProcessing
-                    ? 'bg-red-500 text-white hover:bg-red-600 dark:bg-red-600 dark:hover:bg-red-700'
-                    : 'bg-indigo-500 text-white hover:bg-indigo-600 dark:bg-indigo-600 dark:hover:bg-indigo-700'
-              }`}
-              aria-label={isProcessing ? t('common.cancel', 'Cancel') : t('common.send', 'Send')}
-              title={isProcessing ? t('common.cancel', 'Cancel') : t('common.send', 'Send')}
-            >
-              {isProcessing ? <Icon name="close" size="md" /> : <Icon name="arrow-up" size="md" />}
-            </button>
+            {steering ? (
+              /* While a turn runs (`whileRunning`): Stop, Send and the send menu,
+                 in this order on screen and for the keyboard. Send keeps its
+                 colour; Stop is its own named control, and Enter never stops. */
+              <div className="flex shrink-0 items-center gap-1.5">
+                <button
+                  type="button"
+                  onClick={handleCancel}
+                  aria-label={t('chat.steer.stop', 'Stop answer')}
+                  title={t('chat.steer.stop', 'Stop answer')}
+                  className="shrink-0 inline-flex items-center gap-1.5 p-2 sm:px-2.5 rounded-lg border border-red-600 text-red-700 hover:bg-red-50 focus:outline-hidden focus-visible:ring-2 focus-visible:ring-red-500 dark:border-red-500 dark:text-red-300 dark:hover:bg-red-950/40"
+                >
+                  <Icon name="stop" size="md" solid />
+                  <span className="hidden sm:inline text-sm font-medium">
+                    {t('chat.steer.stop', 'Stop answer')}
+                  </span>
+                </button>
+                <div className="relative flex shrink-0">
+                  <button
+                    type="button"
+                    onClick={handleSubmit}
+                    disabled={!canSteer}
+                    aria-describedby={steerHintId}
+                    className={`shrink-0 p-2 sm:p-2.5 rounded-l-lg font-medium flex items-center justify-center transition-colors ${
+                      canSteer
+                        ? 'bg-indigo-500 text-white hover:bg-indigo-600 dark:bg-indigo-600 dark:hover:bg-indigo-700'
+                        : 'bg-gray-200 text-gray-600 cursor-not-allowed dark:bg-gray-700 dark:text-gray-300'
+                    }`}
+                    aria-label={t('common.send', 'Send')}
+                    title={t('common.send', 'Send')}
+                  >
+                    <Icon name="arrow-up" size="md" />
+                  </button>
+                  <button
+                    type="button"
+                    ref={sendMenuButtonRef}
+                    onClick={() => (sendMenuOpen ? setSendMenuOpen(false) : openSendMenu())}
+                    onKeyDown={e => {
+                      if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+                        e.preventDefault();
+                        openSendMenu({ focusItem: true });
+                      } else if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        if (sendMenuOpen) setSendMenuOpen(false);
+                        else openSendMenu({ focusItem: true });
+                      } else if (e.key === 'Escape' && sendMenuOpen) {
+                        e.preventDefault();
+                        setSendMenuOpen(false);
+                      }
+                    }}
+                    disabled={!canSteer}
+                    aria-haspopup="menu"
+                    aria-expanded={sendMenuOpen}
+                    aria-controls={sendMenuOpen ? sendMenuId : undefined}
+                    aria-label={t('chat.steer.moreWays', 'More ways to send')}
+                    title={t('chat.steer.moreWays', 'More ways to send')}
+                    className={`shrink-0 min-w-6 px-1.5 rounded-r-lg border-l flex items-center justify-center self-stretch transition-colors ${
+                      canSteer
+                        ? 'border-indigo-300 bg-indigo-500 text-white hover:bg-indigo-600 dark:border-indigo-400 dark:bg-indigo-600 dark:hover:bg-indigo-700'
+                        : 'border-gray-300 bg-gray-200 text-gray-600 cursor-not-allowed dark:border-gray-600 dark:bg-gray-700 dark:text-gray-300'
+                    }`}
+                  >
+                    <Icon name="chevron-up" size="sm" />
+                  </button>
+                  {sendMenuOpen && (
+                    <div
+                      ref={sendMenuRef}
+                      id={sendMenuId}
+                      role="menu"
+                      aria-label={t('chat.steer.moreWays', 'More ways to send')}
+                      className="absolute bottom-full right-0 z-30 mb-2 min-w-max rounded-lg border border-gray-200 bg-white py-1 shadow-lg dark:border-gray-700 dark:bg-gray-800"
+                    >
+                      <button
+                        type="button"
+                        role="menuitem"
+                        ref={sendAfterItemRef}
+                        onClick={handleSendAfter}
+                        onKeyDown={handleSendMenuItemKeyDown}
+                        aria-keyshortcuts="Alt+Enter"
+                        className="flex min-h-6 w-full items-center justify-between gap-4 px-3 py-2 text-left text-sm text-gray-800 hover:bg-gray-100 focus:bg-gray-100 focus:outline-hidden dark:text-gray-100 dark:hover:bg-gray-700 dark:focus:bg-gray-700"
+                      >
+                        <span>{t('chat.steer.sendAfter', 'Send after this answer')}</span>
+                        <kbd className="font-sans text-xs text-gray-600 dark:text-gray-400">
+                          {t('chat.steer.sendAfterShortcut', 'Alt+Enter')}
+                        </kbd>
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </div>
+            ) : (
+              /* The single Send/Stop button */
+              <button
+                type="button"
+                onClick={isProcessing ? handleCancel : handleSubmit}
+                disabled={
+                  isInputDisabled ||
+                  sendBlockedByAttachment ||
+                  (!allowEmptySubmit && !value.trim() && !isProcessing)
+                }
+                className={`shrink-0 p-2 sm:p-2.5 rounded-lg font-medium flex items-center justify-center transition-colors ${
+                  disabled ||
+                  sendBlockedByAttachment ||
+                  (!allowEmptySubmit && !value.trim() && !isProcessing)
+                    ? 'bg-gray-200 text-gray-600 cursor-not-allowed dark:bg-gray-700 dark:text-gray-300'
+                    : isProcessing
+                      ? 'bg-red-500 text-white hover:bg-red-600 dark:bg-red-600 dark:hover:bg-red-700'
+                      : 'bg-indigo-500 text-white hover:bg-indigo-600 dark:bg-indigo-600 dark:hover:bg-indigo-700'
+                }`}
+                aria-label={isProcessing ? t('common.cancel', 'Cancel') : t('common.send', 'Send')}
+                title={isProcessing ? t('common.cancel', 'Cancel') : t('common.send', 'Send')}
+              >
+                {isProcessing ? (
+                  <Icon name="close" size="md" />
+                ) : (
+                  <Icon name="arrow-up" size="md" />
+                )}
+              </button>
+            )}
           </div>
         </form>
 

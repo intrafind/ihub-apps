@@ -53,7 +53,20 @@ function lastUserText(body) {
  * @returns {Object} A turn
  */
 export function holdThenCall(body) {
-  const text = lastUserText(body);
+  return callFrom(lastUserText(body), 'hold-then-call', { hold: true });
+}
+
+/**
+ * The call of a `hold=<key> tool=<name> args=<json>` message, held until the
+ * release of `<key>` when `hold` is set; a message it cannot read gets a text
+ * that says so.
+ *
+ * @param {string} text - The user message with the marker
+ * @param {string} name - The script, for the text of a message it cannot read
+ * @param {{hold: boolean}} options
+ * @returns {Object} A turn
+ */
+function callFrom(text, name, { hold: held }) {
   const hold = /\bhold=([\w-]+)/.exec(text)?.[1];
   const tool = /\btool=([\w-]+)/.exec(text)?.[1];
   const at = text.indexOf(' args=');
@@ -64,10 +77,50 @@ export function holdThenCall(body) {
     args = null;
   }
   if (!hold || !tool || !args || typeof args !== 'object' || Array.isArray(args)) {
-    return say('E2E script hold-then-call: needs hold=<key> tool=<name> args=<json>');
+    return say(`E2E script ${name}: needs hold=<key> tool=<name> args=<json>`);
   }
-  return { ...callTools({ name: tool, args }), hangKey: hold };
+  return { ...callTools({ name: tool, args }), ...(held ? { hangKey: hold } : {}) };
 }
+
+/** The text of the user message that named the script `name`, or ''. */
+function scriptMessageText(body, name) {
+  const marker = `e2e-script:${name}`;
+  const users = (body?.messages || []).filter(message => message.role === 'user');
+  for (let i = users.length - 1; i >= 0; i--) {
+    const content = users[i].content;
+    const text =
+      typeof content === 'string'
+        ? content
+        : (Array.isArray(content) ? content : [])
+            .map(part => (typeof part === 'string' ? part : part?.text || ''))
+            .join(' ');
+    if (text.includes(marker)) return text;
+  }
+  return '';
+}
+
+/**
+ * The second turn of `steer-two-steps`: the same call again, at once, read from
+ * the message that named the script (the last user message is now the one the
+ * person sent into the running answer).
+ *
+ * @param {Object} body - The chat request
+ * @returns {Object} A turn
+ */
+export function callAgain(body) {
+  return callFrom(scriptMessageText(body, 'steer-two-steps'), 'steer-two-steps', {
+    hold: false
+  });
+}
+
+/**
+ * The scripts that go on past a message the person sent into the running answer
+ * (a user message that starts with `[steer]`): such a request is answered from
+ * the script the user message before it named, by the same turn count. Every
+ * other script answers such a request with the default reply, which shows the
+ * message as the model got it.
+ */
+export const SCRIPTS_THROUGH_STEERS = new Set(['steer-two-steps']);
 
 /** @type {Record<string, Array<Object|Function>>} */
 export const E2E_SCRIPTS = {
@@ -77,5 +130,9 @@ export const E2E_SCRIPTS = {
   // A tool call that comes only when the spec releases it, so the page can be busy
   // with something else when the call (an approval, a question) arrives.
   // tests/e2e-agents/focus-policy.spec.js.
-  'hold-then-call': [holdThenCall, say('E2E script hold-then-call: done')]
+  'hold-then-call': [holdThenCall, say('E2E script hold-then-call: done')],
+  // A held tool call at step 1, the same call again at step 2, then the answer: a
+  // message sent while step 1 is held is read at step 2, between the two calls.
+  // It goes on past that message (SCRIPTS_THROUGH_STEERS). tests/e2e-agents/steer.spec.js.
+  'steer-two-steps': [holdThenCall, callAgain, say('E2E script steer-two-steps: done')]
 };

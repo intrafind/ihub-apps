@@ -16,7 +16,11 @@
  *
  * @module features/chat/runToMessage
  */
-import { isRunFinished, getInteractions } from '../../../../shared/run/runReducer.js';
+import {
+  isRunFinished,
+  getInteractions,
+  getAppliedSteers
+} from '../../../../shared/run/runReducer.js';
 import { buildToolActivity } from '../../../../shared/run/toolActivity.js';
 import {
   buildWorkflowSteps,
@@ -205,6 +209,11 @@ function addToolSideChannels(extras, run) {
   // Files the turn's tools generated (a PDF from `create_pdf`): download cards.
   const generatedFiles = generatedFilesOf((run.tools || []).flatMap(tool => tool.files || []));
   if (generatedFiles.length) extras.generatedFiles = generatedFiles;
+  // Messages the person sent while the answer was written and the answer read
+  // at a step (`steer/applied` with `step`), with the activity item the server
+  // named: the same field a stored answer gets from its stored messages.
+  const appliedMessages = getAppliedSteers(run);
+  if (appliedMessages.length) extras.appliedMessages = appliedMessages;
 }
 
 function addCompletionMetadata(extras, run, finished) {

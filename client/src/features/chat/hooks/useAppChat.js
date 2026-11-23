@@ -5,7 +5,7 @@ import { useState, useRef, useCallback, useEffect, useLayoutEffect } from 'react
 import { v4 as uuidv4 } from 'uuid';
 import { useTranslation } from 'react-i18next';
 import useChatMessages from './useChatMessages';
-import useEventSource from '../../../shared/hooks/useEventSource';
+import useEventSource, { TURN_END_HOLD_MS } from '../../../shared/hooks/useEventSource';
 import { sendAppChatMessage, checkAppChatStatus, fetchChat } from '../../../api';
 import { enhanceApiError, expireSession } from '../../../api/utils/apiErrors';
 import { buildApiUrl } from '../../../utils/runtimeBasePath';
@@ -29,6 +29,7 @@ import { splitFilesForWire } from '../utils/chatFileUpload';
 import { refreshMyUsage } from '../../../shared/hooks/useMyUsage';
 import { useAiAcknowledgement } from '../../../shared/hooks/useAiAcknowledgement';
 import { setConnectResumeStatus } from '../../integrations/connect/connectResumeStatus';
+import useRunSteering, { isSteerFrame } from './useRunSteering';
 
 import useFeatureFlags from '../../../shared/hooks/useFeatureFlags';
 
@@ -113,6 +114,13 @@ const APPROVAL_USED_EVENTS = new Set([
 
 /** Refusals after which an approval card must not ask again: the decision is final. */
 const APPROVAL_FINAL_CODES = new Set(['APPROVAL_ALREADY_ANSWERED', 'APPROVAL_NOT_PENDING']);
+
+/**
+ * Past the end of the hold of the chat's GET stream (`TURN_END_HOLD_MS`), how
+ * long a next turn followed on that stream may still take to start before it is
+ * re-attached to instead.
+ */
+const NEXT_TURN_GRACE_MS = 500;
 
 /** Refusals of a continuation after a connect (#3752): the Connect card says what happened. */
 const CONNECT_RESUME_CODES = new Set([
@@ -206,6 +214,9 @@ function useAppChat({
   const postStreamEnabled = useFeatureFlags().isEnabled(CHAT_POST_STREAM_FEATURE, false);
   const postStreamEnabledRef = useRef(postStreamEnabled);
   postStreamEnabledRef.current = postStreamEnabled;
+  // Whether the stream open now is a turn's own POST stream (it ends with its
+  // turn) rather than the chat's GET stream (it carries every run of the chat).
+  const onPostStreamRef = useRef(false);
   const onSendRefusedRef = useRef(onSendRefused);
   onSendRefusedRef.current = onSendRefused;
   // Use the chatId directly instead of storing it in a ref
@@ -222,6 +233,26 @@ function useAppChat({
   // Clarification state - tracks when a clarification question is pending
   const [clarificationPending, setClarificationPending] = useState(false);
   const activeClarificationRef = useRef(null); // Store active clarification data
+  // The turn's own run while it runs (not a workflow a tool started inside it):
+  // where a message for the running answer goes.
+  const [runningRunId, setRunningRunId] = useState(null);
+  const runningRunIdRef = useRef(null);
+  const markRunningRun = useCallback(runId => {
+    runningRunIdRef.current = runId;
+    setRunningRunId(runId);
+  }, []);
+  // Messages the person sends into the running answer (#3191).
+  const steering = useRunSteering({ chatId });
+  const steeringRef = useRef(steering);
+  steeringRef.current = steering;
+  // The next turn the server made of messages the answer did not read
+  // (`steer/applied` with `nextRunId`): `{ runId, chatId, texts, userMessageId,
+  // placeholderId, scheduled }`. `scheduled` while the switch to its stream waits.
+  const nextTurnRef = useRef(null);
+  // The next turn whose stream was just opened: asked about once it is connected.
+  const followCheckRef = useRef(null);
+  // `rereadStoredChat`, declared below the event handler that needs it.
+  const rereadStoredChatRef = useRef(null);
 
   // Refs to keep mutable values between renders without relying on window
   const lastMessageIdRef = useRef(null);
@@ -319,6 +350,9 @@ function useAppChat({
     setProcessing(false);
     setClarificationPending(false);
     activeClarificationRef.current = null;
+    markRunningRun(null);
+    nextTurnRef.current = null;
+    followCheckRef.current = null;
     lastMessageIdRef.current = null;
     // The prompt of the chat being left. It used to survive the switch, and
     // `reattachToRun` folds a ledger replay through the *live* `handleEvent` —
@@ -330,7 +364,7 @@ function useAppChat({
     lastUserMessageRef.current = null;
     pendingMessageDataRef.current = null;
     isCancellingRef.current = false;
-  }, [chatId]);
+  }, [chatId, markRunningRun]);
 
   /**
    * The protocol fields every send shares, consumed once per request.
@@ -696,6 +730,184 @@ function useAppChat({
     pending.onSettled?.();
   }, []);
 
+  /**
+   * Follow the next turn the server made of messages the answer did not read,
+   * once the frames that announce it are in: its stream is opened like the one
+   * of a turn re-attached to (the ledger first, then the chat's stream), drawn
+   * into the answer already placed for it, and what waits behind it is read
+   * from the chat again. The transcript is read once the turn ends.
+   *
+   * @param {string} runId - The next turn's run
+   */
+  const reattachNextTurn = useCallback(runId => {
+    const next = nextTurnRef.current;
+    if (!next || next.runId !== runId || !next.scheduled) return;
+    nextTurnRef.current = { ...next, scheduled: false };
+    if (currentChatIdRef.current !== next.chatId) return;
+    // Its frames that came on the ended answer's stream are drawn again from the ledger.
+    const runs = { ...streamStateRef.current.runs };
+    delete runs[runId];
+    streamStateRef.current = { ...streamStateRef.current, runs };
+    followCheckRef.current = runId;
+    void reattachToRunRef.current?.(runId, {
+      replaceMessageId: next.placeholderId,
+      onSettled: () => rereadStoredChatRef.current?.()
+    });
+  }, []);
+
+  /**
+   * Follow the next turn the server made of messages the answer did not read.
+   *
+   * On the chat's GET stream, the stream itself carries it: the stream stays
+   * open past the answer's end while the switch waits (`holdAfterTurnEnd`) and
+   * follows the next turn's `run/started` like any turn's, into the answer
+   * already placed for it. Opening a second stream there would draw the frames
+   * that already arrived twice. Only should that `run/started` not come before
+   * the hold ends is the turn re-attached to.
+   *
+   * A turn's own POST stream ends with its turn, so the next turn is re-attached
+   * to: the ledger first, then the chat's stream.
+   *
+   * @param {string} runId - The next turn's run
+   */
+  const followNextTurn = useCallback(
+    runId => {
+      const next = nextTurnRef.current;
+      if (!next || next.runId !== runId || !next.scheduled) return;
+      void steeringRef.current.refresh();
+      if (onPostStreamRef.current) {
+        reattachNextTurn(runId);
+        return;
+      }
+      nextTurnRef.current = { ...next, onStream: true };
+      // The answer that ended said so; the next one is on its way.
+      setProcessing(true);
+      setTimeout(() => reattachNextTurn(runId), TURN_END_HOLD_MS + NEXT_TURN_GRACE_MS);
+    },
+    [reattachNextTurn]
+  );
+
+  /**
+   * A message the person sent into the answer is the question of the next turn
+   * (`steer/applied` with `nextRunId`). The server started that turn on its own;
+   * it has no request of this page. Its question and an answer to draw into are
+   * placed at once, bound to its run, so a frame of it that arrives before the
+   * switch lands there and never in the answer that ended. Several messages
+   * that make one question arrive as one frame each: they are joined as the
+   * server joins them.
+   *
+   * @param {Object} envelope - The `steer/applied` frame
+   */
+  const prepareNextTurn = useCallback(
+    envelope => {
+      const { nextRunId, id, text } = envelope.data || {};
+      const content = typeof text === 'string' ? text : '';
+      const next = nextTurnRef.current;
+      if (next?.runId === nextRunId) {
+        // One frame per message: two messages with the same text are both in
+        // the question, as the server joins them.
+        if (!next.ids.includes(id)) {
+          next.ids = [...next.ids, id];
+          next.texts = [...next.texts, content];
+          editMessage(next.userMessageId, next.texts.join('\n\n'));
+        }
+        return;
+      }
+      const userMessageId = addUserMessage(content, { clientMessageId: id });
+      // The server names the next turn's message by the first message's id.
+      const placeholderId = addAssistantMessage(id);
+      runMessageMapRef.current.set(nextRunId, placeholderId);
+      lastMessageIdRef.current = placeholderId;
+      lastUserMessageRef.current = content;
+      nextTurnRef.current = {
+        runId: nextRunId,
+        chatId,
+        ids: [id],
+        texts: [content],
+        userMessageId,
+        placeholderId,
+        scheduled: true
+      };
+      // After the frames of this read: the ones behind it may belong to the same turn.
+      setTimeout(() => followNextTurn(nextRunId), 0);
+    },
+    [addUserMessage, addAssistantMessage, editMessage, chatId, followNextTurn]
+  );
+
+  /**
+   * Once the stream of a followed next turn is open: a turn that ended before
+   * that (the stub of a model can be that fast) sends nothing more on it, so the
+   * chat is asked. Not running that turn any more, and nothing of it arrived:
+   * the store has it.
+   *
+   * @param {string} runId - The followed turn's run
+   */
+  const verifyFollowedTurn = useCallback(
+    async runId => {
+      let body = null;
+      try {
+        body = await fetchChat(chatId);
+      } catch {
+        return;
+      }
+      if (currentChatIdRef.current !== chatId || reattachedRunRef.current?.runId !== runId) return;
+      steeringRef.current.adopt(body);
+      const running = body?.chat?.status === 'running' && body.chat.activeRunId === runId;
+      if (running || getRun(streamStateRef.current, runId)) return;
+      detachEventSourceRef.current?.();
+      setProcessing(false);
+      markRunningRun(null);
+      const pending = reattachedRunRef.current;
+      reattachedRunRef.current = null;
+      pending?.onSettled?.();
+    },
+    [chatId, markRunningRun]
+  );
+
+  /**
+   * The run a message for the running answer goes to (`runningRunId`), and the
+   * next turn made of messages the answer did not read, as the frames of the
+   * chat's stream move them: a turn's own run that starts or goes on after a
+   * pause is it; one that pauses, ends or whose stream breaks is not.
+   *
+   * @param {Object} envelope - SSE v2 envelope
+   * @param {Object|null} run - Its run as folded
+   */
+  const trackRunToSendInto = useCallback(
+    (envelope, run) => {
+      const { type, runId, data } = envelope;
+      const topLevel = !data?.parentRunId && !run?.parentRunId;
+      const next = nextTurnRef.current;
+      if (type === RUN_EVENTS.RUN_STARTED && !data?.parentRunId) {
+        markRunningRun(runId);
+        // The next turn, followed on this stream: the switch is done.
+        if (next?.runId === runId && next.scheduled) {
+          nextTurnRef.current = { ...next, scheduled: false };
+          setProcessing(true);
+        }
+      } else if (type === RUN_EVENTS.RUN_RESUMED && run && topLevel) {
+        // A turn continued after a pause keeps its run.
+        markRunningRun(runId);
+      } else if (type === RUN_EVENTS.RUN_PAUSED && runningRunIdRef.current === runId) {
+        // Paused for the person: nothing to send into until it goes on.
+        markRunningRun(null);
+      } else if (type === RUN_EVENTS.STREAM_ERROR) {
+        // The stream broke without the turn's end: its run is not the one to send into.
+        markRunningRun(null);
+      } else if (type === RUN_EVENTS.RUN_ENDED && run && topLevel) {
+        if (runningRunIdRef.current === runId) markRunningRun(null);
+        // Messages sent into it that no frame settled: the chat is asked a moment later.
+        steeringRef.current.checkAfterEnd(runId);
+        // A next turn followed on this stream: once it ends, the store has it.
+        if (next?.runId === runId && next.onStream && !next.scheduled) {
+          nextTurnRef.current = null;
+          void rereadStoredChatRef.current?.();
+        }
+      }
+    },
+    [markRunningRun]
+  );
+
   const handleEvent = useCallback(
     async event => {
       const envelope = event?.envelope;
@@ -716,7 +928,25 @@ function useAppChat({
       const streamState = { ...reduceRunEvent(streamStateRef.current, envelope), gap: null };
       streamStateRef.current = streamState;
 
+      // A message the person sent into the answer (#3191): what became of it is
+      // the server's frame. A replayed one (the ledger of a turn re-attached to)
+      // only redraws the answer.
+      if (isSteerFrame(envelope)) {
+        if (!event.replay) {
+          steeringRef.current.onFrame(envelope);
+          if (type === RUN_EVENTS.STEER_APPLIED && typeof data?.nextRunId === 'string') {
+            prepareNextTurn(envelope);
+          }
+        }
+        // A frame of a run this page does not show (one queued again in the next
+        // turn's run) changes no message.
+        if (!runMessageMapRef.current.has(runId)) return;
+      }
+
       if (type === RUN_EVENTS.STREAM_CONNECTED) {
+        const followed = followCheckRef.current;
+        followCheckRef.current = null;
+        if (followed) void verifyFollowedTurn(followed);
         await sendPendingMessage();
         return;
       }
@@ -747,6 +977,7 @@ function useAppChat({
         }
         onRunStartedRef.current?.(chatId);
       }
+      trackRunToSendInto(envelope, run);
 
       if (type === RUN_EVENTS.META) {
         if (data?.title) setConversationTitle(data.title);
@@ -884,6 +1115,9 @@ function useAppChat({
       chatId,
       bindRunToMessage,
       sendPendingMessage,
+      prepareNextTurn,
+      verifyFollowedTurn,
+      trackRunToSendInto,
       reopenToolApproval,
       settleReattachedRun,
       updateAssistantMessage,
@@ -892,6 +1126,11 @@ function useAppChat({
       messagesRef,
       shouldPersistConversationId
     ]
+  );
+
+  const holdAfterTurnEnd = useCallback(
+    runId => steeringRef.current.hasWaitingFor(runId) || nextTurnRef.current?.scheduled === true,
+    []
   );
 
   const { initEventSource, startTurn, detachEventSource, stopEventSource } = useEventSource({
@@ -903,7 +1142,10 @@ function useAppChat({
     // is what makes the heartbeat's "nothing is running on this chat" answer
     // safe to act on. A turn this surface sent itself is briefly connected
     // before its POST lands, and acting on it there would cancel it.
-    isFollowingExistingRun: () => reattachedRunRef.current !== null
+    isFollowingExistingRun: () => reattachedRunRef.current !== null,
+    // Open past the turn's end while messages sent into it wait for their frame,
+    // or while the switch to the next turn made of them waits.
+    holdAfterTurnEnd: holdAfterTurnEnd
   });
 
   // Store the detach function in a ref for access in callbacks
@@ -951,6 +1193,7 @@ function useAppChat({
       console.warn('Could not re-read the settled chat:', err.message);
     }
   }, [chatId, loadServerMessages]);
+  rereadStoredChatRef.current = rereadStoredChat;
 
   /**
    * Re-attach to a turn whose POST stream broke before its end. The turn may
@@ -1040,9 +1283,11 @@ function useAppChat({
     if (!pending) return;
     const url = buildApiUrl(`apps/${pending.appId}/chat/${pending.chatId}`);
     if (!postStreamEnabledRef.current) {
+      onPostStreamRef.current = false;
       initEventSource(url);
       return;
     }
+    onPostStreamRef.current = true;
     const params = toolApprovals
       ? { ...pending.params, toolApprovalCapable: true }
       : pending.params;
@@ -1062,6 +1307,7 @@ function useAppChat({
         onAnswer: () => {
           if (pendingMessageDataRef.current === pending) pendingMessageDataRef.current = null;
           onMessageAcceptedRef.current?.(pending.chatId);
+          onPostStreamRef.current = false;
           initEventSource(url);
         },
         onDropped: resumeDroppedTurn,
@@ -1106,6 +1352,9 @@ function useAppChat({
         // when the new message arrives, and says so in what it records.
         detachEventSource();
         setProcessing(true);
+        // The run of an earlier turn is not the one to send into: this turn's
+        // `run/started` names its own.
+        markRunningRun(null);
         const exchangeId = `msg-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
         lastMessageIdRef.current = exchangeId;
 
@@ -1188,6 +1437,7 @@ function useAppChat({
       openTurn,
       addSystemMessage,
       takeProtocolParams,
+      markRunningRun,
       t,
       appId,
       chatId
@@ -1302,13 +1552,19 @@ function useAppChat({
       setProcessing(false);
       setClarificationPending(false);
       activeClarificationRef.current = null;
+      // Messages that waited for the stopped answer: its stream is closed, so
+      // the chat is asked what became of them.
+      if (runningRunIdRef.current) {
+        steeringRef.current.checkAfterEnd(runningRunIdRef.current, { reason: 'run_stopped' });
+      }
+      markRunningRun(null);
 
       // Reset the cancellation flag after a short delay to allow cleanup to complete
       setTimeout(() => {
         isCancellingRef.current = false;
       }, 100);
     },
-    [stopEventSource, appendToAssistantMessage, t]
+    [stopEventSource, appendToAssistantMessage, t, markRunningRun]
   );
 
   /**
@@ -1504,6 +1760,9 @@ function useAppChat({
         isCancellingRef.current = false;
         detachEventSource();
         setProcessing(true);
+        // The run of an earlier turn is not the one to send into: this turn's
+        // `run/started` names its own.
+        markRunningRun(null);
         const exchangeId = `msg-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
         lastMessageIdRef.current = exchangeId;
         addUserMessage(displayText, {
@@ -1545,6 +1804,7 @@ function useAppChat({
       addSystemMessage,
       messagesRef,
       takeProtocolParams,
+      markRunningRun,
       t,
       appId,
       chatId
@@ -1568,6 +1828,9 @@ function useAppChat({
         isCancellingRef.current = false;
         detachEventSource();
         setProcessing(true);
+        // The run of an earlier turn is not the one to send into: this turn's
+        // `run/started` names its own.
+        markRunningRun(null);
         const exchangeId = `msg-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
         lastMessageIdRef.current = exchangeId;
         addAssistantMessage(exchangeId);
@@ -1585,6 +1848,7 @@ function useAppChat({
           // `true` would be stored over a chat that opted out.
           params: { ...params, ...takeProtocolParams(params.sendChatHistory) }
         };
+        onPostStreamRef.current = false;
         initEventSource(buildApiUrl(`apps/${appId}/chat/${chatId}`));
         return true;
       } catch (err) {
@@ -1600,6 +1864,7 @@ function useAppChat({
       getMessagesForApi,
       initEventSource,
       takeProtocolParams,
+      markRunningRun,
       appId,
       chatId
     ]
@@ -1688,7 +1953,7 @@ function useAppChat({
           // counter from the wrong space.
           const { seq: ledgerSeq, ...live } = envelope;
           if (Number.isInteger(ledgerSeq) && ledgerSeq > lastLedgerSeq) lastLedgerSeq = ledgerSeq;
-          await handleEvent({ envelope: live });
+          await handleEvent({ envelope: live, replay: true });
         }
         // The last lifecycle frame says where the run is: a turn continued
         // after a pause keeps its id, so the replay may pass a pause.
@@ -1730,6 +1995,7 @@ function useAppChat({
       // The stream starts with what the ledger does not have: the text and
       // thinking of the step in progress, then the ledger past what was
       // replayed here, then the live frames.
+      onPostStreamRef.current = false;
       initEventSource(
         buildApiUrl(
           `apps/${appId}/chat/${chatId}?resumeRun=${encodeURIComponent(runId)}&afterLedgerSeq=${lastLedgerSeq}`
@@ -1751,6 +2017,9 @@ function useAppChat({
     finishHydration,
     clarificationPending,
     conversationTitle,
+    // The run of the turn that runs now, or null; and the messages for it (#3191).
+    runningRunId,
+    steering,
     sendMessage,
     resendMessage,
     deleteMessage: deleteFromMessage,
