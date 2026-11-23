@@ -10,6 +10,7 @@ import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
 
 import { getAdminApiErrorMessage } from '../../../api/adminApi';
 import AdminLoadError from '../components/AdminLoadError';
+import AdminSaveBar from '../components/AdminSaveBar';
 import UnsavedChangesDialog from '../components/UnsavedChangesDialog';
 // Parse a checklist-style markdown body into structured items so the form
 // editor can manipulate them. Lines that don't match the checkbox shape are
@@ -75,7 +76,7 @@ export default function AdminAgentInboxEditPage() {
   const [view, setView] = useState('form'); // 'form' | 'raw'
   const [rawBody, setRawBody] = useState('');
 
-  const { blocker, markSaved } = useUnsavedChanges(initialData, parsed);
+  const { isDirty, blocker, markSaved } = useUnsavedChanges(initialData, parsed);
 
   const [newText, setNewText] = useState('');
   const [newPriority, setNewPriority] = useState('p2');
@@ -172,6 +173,13 @@ export default function AdminAgentInboxEditPage() {
     }
   }
 
+  // Back to the last saved state, in both views.
+  function handleDiscard() {
+    setParsed(initialData);
+    setRawBody(serializeBody(initialData));
+    setError(null);
+  }
+
   if (loading) {
     return (
       <div className="p-8 text-gray-600 dark:text-gray-400">{t('common.loading', 'Loading…')}</div>
@@ -214,13 +222,6 @@ export default function AdminAgentInboxEditPage() {
               {view === 'form'
                 ? t('admin.common.viewRaw', 'Raw')
                 : t('admin.common.viewForm', 'Form')}
-            </button>
-            <button
-              onClick={handleSave}
-              disabled={saving}
-              className="px-4 py-2 text-sm bg-indigo-600 text-white rounded-sm disabled:opacity-50"
-            >
-              {saving ? t('common.saving', 'Saving…') : t('common.save', 'Save')}
             </button>
             <button
               onClick={() => navigate('/admin/agents/inboxes')}
@@ -378,6 +379,13 @@ export default function AdminAgentInboxEditPage() {
           </>
         )}
       </div>
+
+      <AdminSaveBar
+        dirty={isDirty}
+        saving={saving}
+        onSave={() => void handleSave()}
+        onDiscard={handleDiscard}
+      />
 
       <UnsavedChangesDialog blocker={blocker} />
     </div>

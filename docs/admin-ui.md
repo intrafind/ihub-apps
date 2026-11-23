@@ -697,6 +697,16 @@ or the close button closes it and returns focus to the **History** button.
 
 ---
 
+## Saving Changes
+
+On an edit page, the bar at the bottom of the screen shows only while you have unsaved changes. It says **You have unsaved changes** and offers **Save Changes** (**Create** on the page of a new item) and **Discard**. **Discard** puts the page back to what is saved. When there is nothing to save, there is no bar.
+
+The bar is on the edit pages of apps, groups, users, models, prompts, agents, agent inboxes, workflows, document templates, providers, short links, OAuth clients, CIMD clients, custom pages and skills, and on **UI Customization**, **Disclaimer** and **Artifacts**. Other settings pages still have their own Save button and move to the bar step by step.
+
+- An item made from a template or a copy can be created at once; the bar is there as the page opens.
+- A refused save (for example a missing field or a taken ID) keeps your changes and the bar, and says what is wrong.
+- **Save** and the Enter key run the same checks as before; a page with invalid JSON in its JSON mode does not save it.
+
 ## Unsaved Changes
 
 When you have changed something on an admin page and not saved it, leaving the page asks first. A **Leave without saving?** dialog offers **Stay**, which keeps you on the page with your changes, and **Discard changes**, which leaves and drops them. It appears when you:
@@ -715,7 +725,7 @@ Some things never ask:
 
 On pages with several sections that each have their own Save button, such as **Security**, every section with unsaved changes is marked with **Unsaved changes** next to its heading and a dot in the section list, and one dialog covers them all. On an integration's page and on **Usage Reports**, edits on the **Settings** and **Limits & quotas** tabs are kept when you switch to another tab of the same page and come back; leaving the page asks first.
 
-A few places do not ask yet: the **Authentication** page, the app order on the **Apps** list, the global prompt variables on the **Prompts** list, the OAuth server settings, the CIMD client editor, and forms in dialogs (such as installing an integration).
+A few places do not ask yet: the **Authentication** page, the app order on the **Apps** list, the global prompt variables on the **Prompts** list, the OAuth server settings, and forms in dialogs (such as installing an integration).
 
 ### When someone else saved first
 

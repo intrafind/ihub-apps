@@ -11,7 +11,7 @@
  * chosen, and the editor warns when the grant types change on an existing
  * client, because that changes what the lists mean.
  */
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 
@@ -88,6 +88,13 @@ function postCalls() {
   return mockMakeAdminApiCall.mock.calls.filter(
     ([url, options]) => url === '/admin/oauth/clients' && options?.method === 'POST'
   );
+}
+
+/** The save bar's primary button (the last one; Discard comes first) submits the form. */
+function clickBarSave() {
+  const bar = screen.getByRole('region', { name: /save changes/i });
+  const buttons = within(bar).getAllByRole('button');
+  fireEvent.click(buttons[buttons.length - 1]);
 }
 
 describe('oauthClientGrants', () => {
@@ -192,12 +199,26 @@ describe('new machine client', () => {
     expect(screen.queryByText(/By default, "All \(\*\)" is selected/)).not.toBeInTheDocument();
   });
 
+  test('a new client has no save bar until something is typed; then it offers Create', async () => {
+    renderEditor('new');
+    await screen.findByLabelText(/Client Name/);
+    expect(screen.queryByRole('region', { name: /save changes/i })).toBeNull();
+
+    fireEvent.change(screen.getByLabelText(/Client Name/), { target: { value: 'Billing' } });
+
+    const bar = screen.getByRole('region', { name: /save changes/i });
+    expect(within(bar).getByRole('button', { name: 'Create' })).toBeInTheDocument();
+    fireEvent.click(within(bar).getByRole('button', { name: 'Discard' }));
+    expect(screen.getByLabelText(/Client Name/)).toHaveValue('');
+    expect(screen.queryByRole('region', { name: /save changes/i })).toBeNull();
+  });
+
   test('cannot be created without an app', async () => {
     renderEditor('new');
     fireEvent.change(await screen.findByLabelText(/Client Name/), {
       target: { value: 'Billing export' }
     });
-    fireEvent.click(screen.getByRole('button', { name: 'Create' }));
+    clickBarSave();
 
     expect(
       await screen.findByText(/A client-credentials client needs at least one app, model or prompt/)
@@ -215,7 +236,7 @@ describe('new machine client', () => {
     fireEvent.click(allCheckbox(0));
     expect(screen.getByText(/All \(\*\) gives this client-credentials client/)).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Create' }));
+    clickBarSave();
 
     await waitFor(() => expect(postCalls()).toHaveLength(1));
     const body = postCalls()[0][1].body;
@@ -238,6 +259,23 @@ describe('existing client', () => {
     allowedPrompts: [],
     grantTypes: ['client_credentials']
   };
+
+  test('the save bar appears with a change, says Save, and Discard restores the stored client', async () => {
+    renderEditor('svc-1', STORED);
+    const name = await screen.findByDisplayValue('Reporting');
+    expect(screen.queryByRole('region', { name: /save changes/i })).toBeNull();
+
+    fireEvent.change(name, { target: { value: 'Reporting v2' } });
+
+    const bar = screen.getByRole('region', { name: /save changes/i });
+    expect(within(bar).getByText('You have unsaved changes')).toBeInTheDocument();
+    expect(within(bar).getByRole('button', { name: 'Save Changes' })).toBeInTheDocument();
+
+    fireEvent.click(within(bar).getByRole('button', { name: 'Discard' }));
+
+    expect(screen.getByDisplayValue('Reporting')).toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: /save changes/i })).toBeNull();
+  });
 
   test('loads the client record and warns when the grant types change', async () => {
     renderEditor('svc-1', STORED);
@@ -262,7 +300,7 @@ describe('existing client', () => {
       screen.getByText(/has no apps, models or prompts, so its tokens can do nothing/)
     ).toBeInTheDocument();
     fireEvent.change(name, { target: { value: 'Reporting (parked)' } });
-    fireEvent.click(screen.getByRole('button', { name: /Update|Save/ }));
+    clickBarSave();
 
     await waitFor(() => expect(putCalls()).toHaveLength(1));
     expect(putCalls()[0][1].body.name).toBe('Reporting (parked)');
@@ -275,7 +313,7 @@ describe('existing client', () => {
 
     // The chip's remove button (an icon only) sits inside the chip.
     fireEvent.click(screen.getByText('Chat').querySelector('button'));
-    fireEvent.click(screen.getByRole('button', { name: /Update|Save/ }));
+    clickBarSave();
 
     expect(await screen.findByText(/needs at least one app, model or prompt/)).toBeInTheDocument();
     expect(putCalls()).toHaveLength(0);
@@ -303,7 +341,9 @@ describe('existing client', () => {
       screen.queryByText(/has no apps, models or prompts, so its tokens can do nothing/)
     ).toBeNull();
 
-    fireEvent.click(screen.getByRole('button', { name: /Update|Save/ }));
+    // A change makes the save bar appear; a key without apps is not blocked from saving.
+    fireEvent.change(screen.getByDisplayValue('My key'), { target: { value: 'My key (renamed)' } });
+    clickBarSave();
     await waitFor(() => expect(putCalls()).toHaveLength(1));
   });
 

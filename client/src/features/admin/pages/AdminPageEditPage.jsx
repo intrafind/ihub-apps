@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { CHECKBOX_CLASS, INPUT_CLASS } from '../components/formStyles';
@@ -15,6 +15,7 @@ import {
 import AdminBreadcrumb from '../components/AdminBreadcrumb';
 import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
 import UnsavedChangesDialog from '../components/UnsavedChangesDialog';
+import AdminSaveBar from '../components/AdminSaveBar';
 
 function AdminPageEditPage() {
   const { t } = useTranslation();
@@ -39,7 +40,8 @@ function AdminPageEditPage() {
   // Inline message under the Page ID field (no native alert).
   const [idError, setIdError] = useState(null);
 
-  const { blocker, markSaved } = useUnsavedChanges(initialData, page);
+  const { isDirty, blocker, markSaved } = useUnsavedChanges(initialData, page);
+  const formRef = useRef(null);
 
   useEffect(() => {
     if (isNew) {
@@ -110,6 +112,12 @@ function AdminPageEditPage() {
     }
   };
 
+  const handleDiscard = () => {
+    setPage(initialData);
+    setError(null);
+    setIdError(null);
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex justify-center py-8">
@@ -132,7 +140,7 @@ function AdminPageEditPage() {
             }
           ]}
         />
-        <form onSubmit={handleSubmit} className="space-y-6">
+        <form ref={formRef} onSubmit={handleSubmit} className="space-y-6">
           <div>
             <label
               htmlFor="page-id"
@@ -243,24 +251,26 @@ function AdminPageEditPage() {
             </p>
           </div>
           {error && <div className="text-red-600 dark:text-red-400 text-sm">{error}</div>}
-          <div className="flex justify-end space-x-2">
+          <div className="flex justify-start">
             <button
               type="button"
               onClick={() => navigate('/admin/pages')}
               className="px-4 py-2 rounded-md bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-200"
             >
-              {t('common.cancel', 'Cancel')}
-            </button>
-            <button
-              type="submit"
-              disabled={saving}
-              className="px-4 py-2 rounded-md bg-indigo-600 text-white"
-            >
-              {saving ? t('common.saving', 'Saving...') : t('common.save', 'Save')}
+              {t('common.back', 'Back')}
             </button>
           </div>
         </form>
       </div>
+
+      {/* Save goes through the form's own submit handler, so its checks run. */}
+      <AdminSaveBar
+        dirty={isDirty}
+        saving={saving}
+        saveLabel={isNew ? t('admin.ui.saveBar.create', 'Create') : undefined}
+        onSave={() => formRef.current?.requestSubmit()}
+        onDiscard={handleDiscard}
+      />
 
       <UnsavedChangesDialog blocker={blocker} />
     </div>

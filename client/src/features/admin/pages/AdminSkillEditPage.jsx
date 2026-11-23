@@ -22,6 +22,7 @@ import {
 import AdminLoadError from '../components/AdminLoadError';
 import ConfirmDialog from '../../../shared/components/ConfirmDialog';
 import UnsavedChangesDialog from '../components/UnsavedChangesDialog';
+import AdminSaveBar from '../components/AdminSaveBar';
 import { useConfirmAction } from '../hooks/useConfirmAction';
 import { deleteConfirmText } from '../utils/confirmText';
 /**
@@ -58,7 +59,7 @@ function AdminSkillEditPage() {
   });
   const [initialOverrides, setInitialOverrides] = useState(null);
 
-  const { blocker, markSaved } = useUnsavedChanges(initialOverrides, overrides);
+  const { blocker, markSaved, isDirty } = useUnsavedChanges(initialOverrides, overrides);
 
   /** Active tab for organizing content sections. */
   const [activeTab, setActiveTab] = useState('overview'); // overview | files | config
@@ -132,6 +133,13 @@ function AdminSkillEditPage() {
     } finally {
       setSaving(false);
     }
+  };
+
+  /** Drops the unsaved overrides: the fields go back to what is saved. */
+  const handleDiscard = () => {
+    setOverrides(initialOverrides);
+    setError(null);
+    setSuccessMessage(null);
   };
 
   /**
@@ -674,37 +682,18 @@ function AdminSkillEditPage() {
                   />
                 </div>
               </div>
-
-              {/* Save / Cancel bar */}
-              <div className="px-6 py-4 border-t border-gray-200 dark:border-gray-700 flex justify-end space-x-3">
-                <button
-                  onClick={() => navigate('/admin/skills')}
-                  className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-xs text-sm font-medium text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-                >
-                  {t('common.cancel', 'Cancel')}
-                </button>
-                <button
-                  onClick={handleSaveOverrides}
-                  disabled={saving}
-                  className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-xs text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50"
-                >
-                  {saving ? (
-                    <>
-                      <Icon name="refresh" className="animate-spin h-4 w-4 mr-2" />
-                      {t('common.saving', 'Saving...')}
-                    </>
-                  ) : (
-                    <>
-                      <Icon name="check" className="h-4 w-4 mr-2" />
-                      {t('common.save', 'Save')}
-                    </>
-                  )}
-                </button>
-              </div>
             </div>
           </>
         )}
       </div>
+
+      {/* The overrides are the only editable data; the bar shows from any tab. */}
+      <AdminSaveBar
+        dirty={isDirty}
+        saving={saving}
+        onSave={() => void handleSaveOverrides()}
+        onDiscard={handleDiscard}
+      />
 
       <UnsavedChangesDialog blocker={blocker} />
       <ConfirmDialog {...confirmDialogProps} />

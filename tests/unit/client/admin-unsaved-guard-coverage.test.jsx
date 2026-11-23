@@ -29,7 +29,6 @@ const BASELINE = new Map([
   // Not in the finding lists of the unsaved-guards PR; follow-ups.
   ['AdminAppsPage.jsx', 'app order draft (Save order)'],
   ['AdminPromptsPage.jsx', 'global prompt variables'],
-  ['AdminOAuthCimdClientEditPage.jsx', 'CIMD client editor'],
   ['AdminOAuthServerPage.jsx', 'OAuth server settings']
 ]);
 

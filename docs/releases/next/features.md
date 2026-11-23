@@ -50,3 +50,13 @@ Admins can now choose which AI model prepares app drafts, for admin apps and per
   drafts with the automatic choice. A chosen model that is disabled or deleted is marked as not
   available, and drafts use the automatic choice until another model is picked.
 - The **New app** page names the model the description is sent to, as before.
+
+## Admin Edit Pages: The Save Bar Shows Only When Something Changed
+
+When you change something on an admin edit page, a bar at the bottom of the screen now offers **Save Changes** and **Discard**. It is gone when nothing changed. Until now only a few pages worked this way, and most others had a Save button that was always there.
+
+- **The edit pages of** prompts, models, users, agents, agent inboxes, workflows, document templates, providers, short links, OAuth clients, CIMD clients, custom pages and skills use the bar, as apps and groups already did.
+- **A new item** says **Create** instead of **Save Changes**. An item made from a template or a copy can be created at once.
+- **Discard** puts the page back to what is saved, including the JSON view and the fields next to the form.
+- **The CIMD client editor** now asks before you leave it with unsaved changes.
+- Other settings pages will follow.

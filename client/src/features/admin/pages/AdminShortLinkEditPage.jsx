@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { Link, useParams, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { CHECKBOX_CLASS, INPUT_CLASS } from '../components/formStyles';
@@ -12,6 +12,7 @@ import { apiErrorMessage } from '../../../utils/apiErrorMessage';
 import AdminBreadcrumb from '../components/AdminBreadcrumb';
 import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
 import UnsavedChangesDialog from '../components/UnsavedChangesDialog';
+import AdminSaveBar from '../components/AdminSaveBar';
 import { getBasePath } from '../../../utils/runtimeBasePath';
 import {
   buildShortLinkTarget,
@@ -87,11 +88,14 @@ function AdminShortLinkEditPage() {
   const [link, setLink] = useState(defaultLink);
   const [initialData, setInitialData] = useState(isNew ? defaultLink : null);
   const [paramsText, setParamsText] = useState('{}');
+  // The Params (JSON) text as loaded: the field is not part of `link`, so it is compared on its own.
+  const [initialParamsText, setInitialParamsText] = useState('{}');
   const [loading, setLoading] = useState(!isNew);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
 
-  const { blocker, markSaved } = useUnsavedChanges(initialData, link);
+  const { isDirty, blocker, markSaved } = useUnsavedChanges(initialData, link);
+  const formRef = useRef(null);
 
   // The app search box offers every app by its name in the current language;
   // an app id that is no longer configured stays visible so it can be replaced.
@@ -114,7 +118,9 @@ function AdminShortLinkEditPage() {
           const loadedLink = editableShortLink(res.data);
           setLink(loadedLink);
           setInitialData(loadedLink);
-          setParamsText(JSON.stringify(loadedLink.params, null, 2));
+          const loadedParamsText = JSON.stringify(loadedLink.params, null, 2);
+          setParamsText(loadedParamsText);
+          setInitialParamsText(loadedParamsText);
         } catch (e) {
           setError(e.message);
         } finally {
@@ -135,6 +141,12 @@ function AdminShortLinkEditPage() {
 
   const handleChange = (field, value) => {
     setLink(l => ({ ...l, [field]: value }));
+  };
+
+  const handleDiscard = () => {
+    if (initialData) setLink(initialData);
+    setParamsText(initialParamsText);
+    setError(null);
   };
 
   const handleSave = async e => {
@@ -209,7 +221,7 @@ function AdminShortLinkEditPage() {
             {error}
           </div>
         )}
-        <form onSubmit={handleSave} className="space-y-4">
+        <form ref={formRef} onSubmit={handleSave} className="space-y-4">
           <div>
             <label
               htmlFor="shortlink-code"
@@ -361,25 +373,17 @@ function AdminShortLinkEditPage() {
               {targetPreview}
             </code>
           </p>
-          <div className="flex justify-end space-x-4">
-            <button
-              type="button"
-              onClick={() => navigate('/admin/shortlinks')}
-              className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700"
-            >
-              {t('common.cancel', 'Cancel')}
-            </button>
-            <button
-              type="submit"
-              disabled={saving}
-              className="px-4 py-2 border border-transparent rounded-md text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700"
-            >
-              {saving ? t('common.saving', 'Saving...') : t('common.save', 'Save')}
-            </button>
-          </div>
         </form>
       </div>
 
+      {/* Save goes through the form's own submit handler. */}
+      <AdminSaveBar
+        dirty={isDirty || paramsText !== initialParamsText}
+        saving={saving}
+        saveLabel={isNew ? t('admin.ui.saveBar.create', 'Create') : undefined}
+        onSave={() => formRef.current?.requestSubmit()}
+        onDiscard={handleDiscard}
+      />
       <UnsavedChangesDialog blocker={blocker} />
     </div>
   );
