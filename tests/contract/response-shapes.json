@@ -2374,6 +2374,7 @@
       "apps": [],
       "groups": [],
       "isDefault": "boolean",
+      "nextDefaultModelId": "string",
       "workflows": []
     }
   },

@@ -31,6 +31,8 @@ import { REVISED_INSTRUCTIONS_MARK } from '../config/e2e-llm-stub.mjs';
 const PREFIX = 'e2e-ab-';
 const STUB_URL = process.env.E2E_APP_BUILDER_LLM_URL;
 const STUB_MODEL = 'e2e-stub';
+/** Every model the e2e contents set up (`tests/config/e2e-contents.mjs`): all off is "no model". */
+const STUB_MODELS = [STUB_MODEL, 'e2e-stub-tools'];
 const here = path.dirname(fileURLToPath(import.meta.url));
 
 /** The texts of the UI, so German labels are the ones the product ships. */
@@ -1196,11 +1198,27 @@ test.describe('Without a model', () => {
     browser,
     baseURL
   }) => {
-    const toggleModel = enabled =>
-      adminApi.post(`/api/admin/models/${STUB_MODEL}/_toggle`, { data: { enabled } });
-    const off = await toggleModel(false);
-    expect(off.ok(), await off.text()).toBeTruthy();
+    // Every stub model goes off, or one left on still counts as a model. Each model is
+    // toggled on its own and the failures are reported together, so a failed restore of
+    // one model does not leave the other one off for the tests that follow.
+    const toggleModels = async enabled => {
+      const failures = [];
+      for (const model of STUB_MODELS) {
+        try {
+          const response = await adminApi.post(`/api/admin/models/${model}/_toggle`, {
+            data: { enabled }
+          });
+          if (!response.ok())
+            failures.push(`${model}: ${response.status()} ${await response.text()}`);
+        } catch (error) {
+          failures.push(`${model}: ${error?.message || error}`);
+        }
+      }
+      expect(failures, `toggling the stub models to enabled=${enabled}`).toEqual([]);
+    };
     try {
+      // Inside the try: if only one model goes off, the finally still turns it back on.
+      await toggleModels(false);
       await page.goto('/admin/apps/new');
       const notice = page.getByRole('status').filter({ hasText: 'No AI model is set up yet' });
       await expect(notice).toBeVisible();
@@ -1257,8 +1275,7 @@ test.describe('Without a model', () => {
         await context.close();
       }
     } finally {
-      const on = await toggleModel(true);
-      expect(on.ok(), 'the stub model is enabled again').toBeTruthy();
+      await toggleModels(true);
     }
   });
 });

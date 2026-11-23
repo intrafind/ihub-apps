@@ -5,12 +5,13 @@
  * The contents directory the end-to-end servers run on (`e2e-server.mjs`, the dev
  * stack, and `subpath-server.mjs`, a production build behind a path prefix): a fresh
  * install seeded the way the server seeds `contents/`, with every rate limit raised,
- * the remote marketplace off and one default model served by a local stub.
+ * the remote marketplace off and two models served by a local stub: the default one,
+ * and `e2e-stub-tools`, which is offered tools.
  */
 
 import fs from 'node:fs';
 import path from 'node:path';
-import { STUB_MODEL_ID, startLlmStub } from './e2e-llm-stub.mjs';
+import { STUB_MODEL_ID, STUB_TOOLS_MODEL_ID, startLlmStub } from './e2e-llm-stub.mjs';
 
 const RAISED_LIMIT = 1_000_000;
 
@@ -68,8 +69,8 @@ export async function prepareE2eContents({ root, contentsDir, llmPort, stubOptio
   }
   fs.rmSync(path.resolve(root, CONTENTS_DIR, '.registry-cache'), { recursive: true, force: true });
 
-  // One model, the default, served by a local stub (see e2e-llm-stub.mjs): a chat
-  // turn runs end to end without a model key or network.
+  // The default model, served by a local stub (see e2e-llm-stub.mjs): a chat turn
+  // runs end to end without a model key or network.
   await startLlmStub(LLM_PORT, stubOptions);
   fs.writeFileSync(
     path.resolve(root, CONTENTS_DIR, 'models', 'e2e-stub.json'),
@@ -89,6 +90,32 @@ export async function prepareE2eContents({ root, contentsDir, llmPort, stubOptio
         supportsTools: 'none',
         enabled: true,
         default: true
+      },
+      null,
+      2
+    )}\n`
+  );
+  // The same stub as a second model that is offered tools (`e2e-tool:` and the other
+  // markers of e2e-llm-stub.mjs call them). Not the default: the default model keeps
+  // `supportsTools: 'none'`, so the requests of the existing specs carry no tool list.
+  fs.writeFileSync(
+    path.resolve(root, CONTENTS_DIR, 'models', 'e2e-stub-tools.json'),
+    `${JSON.stringify(
+      {
+        id: 'e2e-stub-tools',
+        modelId: STUB_TOOLS_MODEL_ID,
+        name: { en: 'E2E stub model with tools', de: 'E2E-Stub-Modell mit Werkzeugen' },
+        description: {
+          en: 'Calls the tools a test message names.',
+          de: 'Ruft die Werkzeuge auf, die eine Testnachricht nennt.'
+        },
+        url: `http://127.0.0.1:${LLM_PORT}/v1/chat/completions`,
+        provider: 'local',
+        contextWindow: 64000,
+        maxOutputTokens: 2000,
+        supportsTools: 'auto',
+        enabled: true,
+        default: false
       },
       null,
       2

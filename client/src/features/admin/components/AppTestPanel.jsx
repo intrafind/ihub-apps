@@ -175,6 +175,9 @@ const isNotFound = error => (error?.status ?? error?.response?.status) === 404;
  * @param {() => void} [props.onOpenAccess] - Opens "Who can use this app" in the editor
  * @param {number} [props.focusToken=0] - A new number above 0 moves the focus to the
  *   panel: the author followed a link to the test. Its button leaves the focus alone.
+ * @param {boolean} [props.focusChatOnOpen=true] - Whether the chat's message box takes the
+ *   focus when the panel opens. False where the panel opens beside another input the author
+ *   types into (the app conversation's composer): the chat must not take that typing.
  */
 function AppTestPanel({
   appId,
@@ -186,14 +189,17 @@ function AppTestPanel({
   noModel = false,
   modelSetupHref = null,
   onOpenAccess,
-  focusToken = 0
+  focusToken = 0,
+  focusChatOnOpen = true
 }) {
   const { t } = useTranslation();
   const [restarts, setRestarts] = useState(0);
   // Why the chat (re)started: a save restarts it through `reloadKey`, and the page
   // that saved keeps the focus; opening the panel or the restart button hands the
-  // focus to the message box as before.
-  const startCause = useRef('open');
+  // focus to the message box as before. Beside the app conversation ('beside') the
+  // panel opens on its own while the page loads, and the author may already be typing
+  // in the composer: the chat must not take that typing.
+  const startCause = useRef(focusChatOnOpen ? 'open' : 'beside');
   const seenReloadKey = useRef(reloadKey);
   if (seenReloadKey.current !== reloadKey) {
     seenReloadKey.current = reloadKey;
@@ -235,7 +241,7 @@ function AppTestPanel({
       <TestChat
         key={`${reloadKey}-${restarts}`}
         appId={appId}
-        focusComposerOnStart={startCause.current !== 'save'}
+        focusComposerOnStart={startCause.current === 'open' || startCause.current === 'restart'}
         renderLoadError={explainLoadError}
       />
     );
