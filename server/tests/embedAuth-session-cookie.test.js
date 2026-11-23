@@ -258,7 +258,10 @@ describe('the popup page of the sign-in in a frame, as the server really serves 
   };
 
   beforeEach(() => {
-    state.platform.embedAuth = { allowedHostOrigins: ['https://ifinder.example.com'] };
+    state.platform.embedAuth = {
+      enabled: true,
+      allowedHostOrigins: ['https://ifinder.example.com']
+    };
   });
 
   it('shows the page that asks for the code to a visitor with a valid session cookie', async () => {

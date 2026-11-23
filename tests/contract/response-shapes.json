@@ -1528,6 +1528,14 @@
   "GET /api/admin/document-templates/:id/files/:slot": {
     "skipped": "its parent path is not a readable list"
   },
+  "GET /api/admin/embed-auth/config": {
+    "status": 200,
+    "shape": {
+      "active": "boolean",
+      "allowedHostOrigins": [],
+      "enabled": "boolean"
+    }
+  },
   "GET /api/admin/eu-ai-act/acknowledgements/_export": {
     "status": 200,
     "type": "text/csv"

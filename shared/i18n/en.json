@@ -2601,6 +2601,9 @@
         "ldapLookupHelp": "When set, look up the authenticated user's group memberships in the selected LDAP provider and merge them with the groups supplied via the groups header and JWT claim. The LDAP provider must have admin credentials and group search configured."
       },
       "resource": "authentication settings",
+      "embedHintTitle": "Using iHub in an iframe of another site?",
+      "embedHintText": "Identity providers do not allow their login page in a frame. Allow the site that shows iHub, and the sign-in opens in a pop-up instead.",
+      "embedHintLink": "Set up iHub in another site",
       "subtitle": "Configure multiple authentication methods and user access settings. Enable dual authentication for maximum flexibility.",
       "saved": "Authentication configuration saved.",
       "saveFailed": "Failed to save configuration: {{error}}",
@@ -2824,6 +2827,32 @@
       "regenerateAddinIdTitle": "Generate a new add-in ID?",
       "regenerateAddinIdConsequence": "Outlook treats a manifest with a new ID as a different add-in. Everyone using the add-in must install the new manifest, and the old one keeps pointing at this server until it is removed.",
       "resource": "Office integration settings"
+    },
+    "embedAuth": {
+      "title": "iHub in another site",
+      "description": "Show iHub in an iframe of another product, such as iFinder or a portal, and let people sign in there through your identity provider.",
+      "resource": "settings for iHub in another site",
+      "statusTitle": "Sign-in in a frame",
+      "enabledLabel": "Allow sign-in when iHub is shown in another site",
+      "enabledHint": "Identity providers such as Microsoft Entra ID do not allow their login page in a frame. With this on, the sign-in opens in a pop-up window and the frame continues when it is done.",
+      "noSiteWarning": "The switch is on, but no site is allowed yet, so nothing changes. Add the site that shows iHub below.",
+      "offWithSitesNote": "The switch is off. The list is kept but not in force: the sign-in in a frame is not available, and iHub is not limited to these sites.",
+      "insecurePage": "iHub is not served over HTTPS here. The session cookie of the frame needs HTTPS, so the sign-in in a frame will not work.",
+      "originsTitle": "Sites that may show iHub",
+      "originsDesc": "While the switch is on, only these sites, and iHub itself, can show iHub in a frame. Add every site that does so, for example iFinder, an intranet portal or a Teams tab: a site that is not listed can no longer show iHub.",
+      "originLabel": "Site address",
+      "originInvalid": "Enter an origin such as https://ifinder.example.com: scheme and host, without a path.",
+      "addOrigin": "Add",
+      "noOrigins": "No site added yet.",
+      "remove": "Remove",
+      "removeOrigin": "Remove {{origin}}",
+      "httpOrigin": "{{origin}} is not served over HTTPS. The session cookie of the frame needs HTTPS, so signing in from that site will not work.",
+      "howTitle": "What people see, and what to know",
+      "how1": "People click Sign in in the frame and allow the pop-up if their browser asks. If they are already signed in at the identity provider, the window closes by itself.",
+      "how2": "Both sites need HTTPS. The session of the frame is a cookie that scripts cannot read, and it is sent only while iHub is shown by the site it was made for.",
+      "how3": "Saved settings apply at once, without a restart. Signing out in the frame ends the frame’s session only.",
+      "saved": "Settings saved. They apply at once.",
+      "saveError": "The settings could not be saved."
     },
     "nextcloudEmbed": {
       "title": "Nextcloud Embed",
@@ -5105,6 +5134,10 @@
           "title": "Nextcloud Embed",
           "description": "Embed iHub inside Nextcloud. Users start a chat from Nextcloud Files with documents pre-attached, similar to the Outlook add-in."
         },
+        "embedAuth": {
+          "title": "iHub in another site",
+          "description": "Show iHub in an iframe of iFinder or a portal, with sign-in through your identity provider (OIDC)."
+        },
         "copilotAgent": {
           "title": "Microsoft 365 Copilot",
           "description": "Make iHub an agent in Microsoft 365 Copilot. Copilot runs iHub's apps through the MCP gateway, signed in with the user's iHub account."
@@ -5238,7 +5271,7 @@
       "groups": {
         "clients": {
           "title": "Clients",
-          "description": "Where users work with iHub outside the web app: Outlook, the browser, Nextcloud and Microsoft 365 Copilot. Each one is set up on its own page."
+          "description": "Where users work with iHub outside the web app: Outlook, the browser, Nextcloud, Microsoft 365 Copilot and other sites that show iHub in a frame. Each one is set up on its own page."
         },
         "peopleDirectories": {
           "title": "People directories",

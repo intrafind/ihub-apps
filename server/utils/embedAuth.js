@@ -64,15 +64,19 @@ export function isValidCodeVerifier(value) {
 }
 
 /**
- * The origins of the sites that may show iHub in a frame, from
- * `embedAuth.allowedHostOrigins` of the platform configuration. Only `http(s)`
- * origins count; anything else (a path, another scheme, a non-string) is dropped.
+ * The origins of the sites that may show iHub in a frame, from `embedAuth.allowedHostOrigins` of
+ * the platform configuration, while `embedAuth.enabled` is on. Only `http(s)` origins count;
+ * anything else (a path, another scheme, a non-string) is dropped.
+ *
+ * Switched off, the list is not in force: nothing is restricted and nothing is allowed, so an
+ * admin can keep the list and turn the feature off.
  *
  * @param {object} [platform] - The platform configuration.
  * @returns {string[]} Distinct origins, such as `https://ifinder.example.com`.
  */
 export function getEmbedAuthOrigins(platform) {
-  const configured = platform?.embedAuth?.allowedHostOrigins;
+  if (platform?.embedAuth?.enabled !== true) return [];
+  const configured = platform.embedAuth.allowedHostOrigins;
   if (!Array.isArray(configured)) return [];
   const origins = [];
   for (const item of configured) {
@@ -89,7 +93,8 @@ export function getEmbedAuthOrigins(platform) {
 }
 
 /**
- * Whether the sign-in in a frame is switched on: at least one host origin is allowed.
+ * Whether the sign-in in a frame is in force: the switch is on and at least one host origin is
+ * allowed. A switch that is on with an empty list does nothing, rather than locking out every site.
  *
  * @param {object} [platform] - The platform configuration.
  * @returns {boolean}

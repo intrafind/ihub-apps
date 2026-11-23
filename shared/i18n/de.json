@@ -3101,6 +3101,9 @@
         "ldapLookupHelp": "Wenn gesetzt, werden die Gruppenmitgliedschaften des angemeldeten Benutzers beim gewählten LDAP-Anbieter nachgeschlagen und mit den Gruppen aus dem Gruppen-Header und dem JWT-Claim zusammengeführt. Der LDAP-Anbieter benötigt Administrator-Zugangsdaten und eine konfigurierte Gruppensuche."
       },
       "resource": "Authentifizierungseinstellungen",
+      "embedHintTitle": "iHub in einem iframe einer anderen Website verwenden?",
+      "embedHintText": "Identitätsanbieter erlauben ihre Anmeldeseite nicht in einem Frame. Erlauben Sie die Website, die iHub anzeigt, dann öffnet sich die Anmeldung stattdessen in einem Pop-up.",
+      "embedHintLink": "iHub in einer anderen Website einrichten",
       "subtitle": "Konfigurieren Sie mehrere Anmeldemethoden und den Benutzerzugriff. Aktivieren Sie mehrere Methoden gleichzeitig für maximale Flexibilität.",
       "saved": "Authentifizierungskonfiguration gespeichert.",
       "saveFailed": "Konfiguration konnte nicht gespeichert werden: {{error}}",
@@ -3324,6 +3327,32 @@
       "regenerateAddinIdTitle": "Neue Add-in-ID erzeugen?",
       "regenerateAddinIdConsequence": "Outlook behandelt ein Manifest mit neuer ID als anderes Add-in. Alle Benutzer müssen das neue Manifest installieren, und das alte zeigt weiter auf diesen Server, bis es entfernt wird.",
       "resource": "Einstellungen der Office-Integration"
+    },
+    "embedAuth": {
+      "title": "iHub in einer anderen Website",
+      "description": "Zeigen Sie iHub in einem iframe eines anderen Produkts, etwa iFinder oder eines Portals, und lassen Sie die Benutzer sich dort über Ihren Identitätsanbieter anmelden.",
+      "resource": "Einstellungen für iHub in einer anderen Website",
+      "statusTitle": "Anmeldung in einem Frame",
+      "enabledLabel": "Anmeldung erlauben, wenn iHub in einer anderen Website angezeigt wird",
+      "enabledHint": "Identitätsanbieter wie Microsoft Entra ID erlauben ihre Anmeldeseite nicht in einem Frame. Ist dies aktiviert, öffnet sich die Anmeldung in einem Pop-up-Fenster, und der Frame läuft danach weiter.",
+      "noSiteWarning": "Der Schalter ist aktiviert, aber es ist noch keine Website erlaubt. Es ändert sich daher nichts. Fügen Sie unten die Website hinzu, die iHub anzeigt.",
+      "offWithSitesNote": "Der Schalter ist deaktiviert. Die Liste bleibt erhalten, gilt aber nicht: Die Anmeldung in einem Frame ist nicht verfügbar, und iHub ist nicht auf diese Websites beschränkt.",
+      "insecurePage": "iHub wird hier nicht über HTTPS ausgeliefert. Das Sitzungs-Cookie des Frames benötigt HTTPS, die Anmeldung in einem Frame funktioniert daher nicht.",
+      "originsTitle": "Websites, die iHub anzeigen dürfen",
+      "originsDesc": "Solange der Schalter aktiviert ist, können nur diese Websites und iHub selbst iHub in einem Frame anzeigen. Tragen Sie jede Website ein, die das tut, zum Beispiel iFinder, ein Intranet-Portal oder einen Teams-Tab: Eine Website, die nicht in der Liste steht, kann iHub nicht mehr anzeigen.",
+      "originLabel": "Adresse der Website",
+      "originInvalid": "Geben Sie einen Origin wie https://ifinder.example.com ein: Schema und Host, ohne Pfad.",
+      "addOrigin": "Hinzufügen",
+      "noOrigins": "Noch keine Website hinzugefügt.",
+      "remove": "Entfernen",
+      "removeOrigin": "{{origin}} entfernen",
+      "httpOrigin": "{{origin}} wird nicht über HTTPS ausgeliefert. Das Sitzungs-Cookie des Frames benötigt HTTPS, die Anmeldung von dieser Website aus funktioniert daher nicht.",
+      "howTitle": "Was Benutzer sehen und was zu beachten ist",
+      "how1": "Benutzer klicken im Frame auf Anmelden und erlauben das Pop-up, falls der Browser danach fragt. Sind sie beim Identitätsanbieter bereits angemeldet, schließt sich das Fenster von selbst.",
+      "how2": "Beide Websites benötigen HTTPS. Die Sitzung des Frames ist ein Cookie, das Skripte nicht lesen können. Es wird nur gesendet, solange iHub von der Website angezeigt wird, für die es erstellt wurde.",
+      "how3": "Gespeicherte Einstellungen gelten sofort, ohne Neustart. Das Abmelden im Frame beendet nur die Sitzung des Frames.",
+      "saved": "Einstellungen gespeichert. Sie gelten sofort.",
+      "saveError": "Die Einstellungen konnten nicht gespeichert werden."
     },
     "nextcloudEmbed": {
       "title": "Nextcloud-Embed",
@@ -5605,6 +5634,10 @@
           "title": "Nextcloud-Embed",
           "description": "iHub innerhalb von Nextcloud einbetten. Benutzer starten Chats aus Nextcloud Files mit vorausgewählten Dokumenten — analog zum Outlook-Add-in."
         },
+        "embedAuth": {
+          "title": "iHub in einer anderen Website",
+          "description": "Zeigen Sie iHub in einem iframe von iFinder oder einem Portal, mit Anmeldung über Ihren Identitätsanbieter (OIDC)."
+        },
         "copilotAgent": {
           "title": "Microsoft 365 Copilot",
           "description": "Machen Sie iHub zu einem Agenten in Microsoft 365 Copilot. Copilot führt die iHub-Apps über das MCP-Gateway aus, angemeldet mit dem iHub-Konto des Benutzers."
@@ -5738,7 +5771,7 @@
       "groups": {
         "clients": {
           "title": "Clients",
-          "description": "Wo Benutzer iHub außerhalb der Web-App nutzen: in Outlook, im Browser, in Nextcloud und in Microsoft 365 Copilot. Jeder Client wird auf seiner eigenen Seite eingerichtet."
+          "description": "Wo Benutzer iHub außerhalb der Web-App nutzen: in Outlook, im Browser, in Nextcloud, in Microsoft 365 Copilot und in anderen Websites, die iHub in einem Frame anzeigen. Jeder Client wird auf seiner eigenen Seite eingerichtet."
         },
         "peopleDirectories": {
           "title": "Personenverzeichnisse",

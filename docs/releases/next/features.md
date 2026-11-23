@@ -187,8 +187,9 @@ through OpenID Connect. Identity providers like Microsoft Entra ID refuse to be 
 so the frame used to end in an error page. The sign-in now opens in a popup, and the frame gets
 its own session without a token ever reaching a script.
 
-- **Opt-in.** Add the origins of the sites that may show iHub to `embedAuth.allowedHostOrigins` in
-  `platform.json`, for example `https://ifinder.example.com`. Without one, nothing changes.
+- **Opt-in, set up in the admin.** Open **Admin → Integrations → iHub in another site** (also in the
+  **Clients** section), switch it on and add the origins of the sites that may show iHub, for
+  example `https://ifinder.example.com`. Saved settings apply at once. Until then, nothing changes.
 - **Only those sites can frame iHub.** While the list is set, iHub's pages carry a
   `frame-ancestors` policy for iHub itself and the listed origins. List every other site that
   shows iHub in a frame too.

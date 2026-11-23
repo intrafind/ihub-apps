@@ -927,19 +927,21 @@ For detailed setup instructions see [LDAP/NTLM Authentication](ldap-ntlm-authent
 
 Lets iHub show its OpenID Connect sign-in inside a frame of another site, such as iFinder. Identity
 providers refuse to be framed, so the sign-in runs in a popup. Not set by default: the feature is
-off. The setting is edited in `platform.json` (the admin page does not show it yet) and read at
-start-up.
+off. Edited in **Admin → Integrations → iHub in another site**; saved settings apply at once.
 
 ```json
 {
   "embedAuth": {
+    "enabled": true,
     "allowedHostOrigins": ["https://ifinder.example.com"]
   }
 }
 ```
 
-- `allowedHostOrigins`: the origins of the sites that may show iHub in a frame. While the list is
-  set, iHub's pages carry `Content-Security-Policy: frame-ancestors 'self'` plus these origins.
+- `enabled`: the switch. Anything but `true` turns the feature off and keeps the list.
+- `allowedHostOrigins`: the origins of the sites that may show iHub in a frame (at most 50). While the
+  switch is on and the list is not empty, iHub's pages carry
+  `Content-Security-Policy: frame-ancestors 'self'` plus these origins.
 
 The flow, the cookie and its limits are described in
 [Embed Mode](embed-mode.md#signing-in-inside-a-frame).

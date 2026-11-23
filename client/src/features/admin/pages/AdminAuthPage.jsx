@@ -3,6 +3,7 @@
 
 import { useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { Link } from 'react-router-dom';
 import Icon from '../../../shared/components/Icon';
 import DualModeEditor from '../../../shared/components/DualModeEditor';
 import PlatformFormEditor from '../components/PlatformFormEditor';
@@ -210,6 +211,30 @@ function AdminAuthPage() {
                       {message.text}
                     </p>
                   </div>
+                </div>
+              )}
+
+              {config?.oidcAuth?.enabled && (
+                <div
+                  role="note"
+                  data-testid="admin-auth-embed-hint"
+                  className="mb-6 rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-800 dark:border-blue-800 dark:bg-blue-900/20 dark:text-blue-300"
+                >
+                  <p className="font-medium">
+                    {t('admin.auth.embedHintTitle', 'Using iHub in an iframe of another site?')}
+                  </p>
+                  <p className="mt-1">
+                    {t(
+                      'admin.auth.embedHintText',
+                      'Identity providers do not allow their login page in a frame. Allow the site that shows iHub, and the sign-in opens in a pop-up instead.'
+                    )}{' '}
+                    <Link
+                      to="/admin/embed-auth"
+                      className="font-medium underline hover:no-underline"
+                    >
+                      {t('admin.auth.embedHintLink', 'Set up iHub in another site')}
+                    </Link>
+                  </p>
                 </div>
               )}
 

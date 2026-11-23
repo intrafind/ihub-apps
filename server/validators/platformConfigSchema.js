@@ -1221,13 +1221,15 @@ export const platformConfigSchema = z
     /**
      * Sign-in for iHub in a frame of another site (iFinder, a portal). Identity providers such as
      * Microsoft Entra ID refuse to be framed, so the sign-in runs in a popup and the frame gets a
-     * partitioned `HttpOnly` cookie (`utils/embedAuth.js`). `allowedHostOrigins` lists the origins
-     * of the sites that may frame iHub, for example `https://ifinder.example.com`. Empty or absent
-     * switches the feature off. While it is on, the app pages carry
+     * partitioned `HttpOnly` cookie (`utils/embedAuth.js`). `enabled` switches it on (Admin →
+     * Integrations → iHub in another site); `allowedHostOrigins` lists the origins of the sites that
+     * may frame iHub, for example `https://ifinder.example.com`. Off, absent or with an empty list,
+     * nothing changes. While it is on, the app pages carry
      * `Content-Security-Policy: frame-ancestors 'self' <origins>`, so no other site can frame iHub.
      */
     embedAuth: z
       .object({
+        enabled: z.boolean().optional(),
         allowedHostOrigins: z.array(z.string()).optional()
       })
       .passthrough()
