@@ -12,13 +12,20 @@ spec:
     spec:
       # The stubs need no Kubernetes API access.
       automountServiceAccountToken: false
+      # The image runs as `node` (uid/gid 1000, tests/load/Dockerfile).
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        seccompProfile: { type: RuntimeDefault }
       # Example: pin to the node the iHub under test runs on, so no network hop
       # between them varies; requests keep their CPU apart. Optional.
       # nodeSelector:
       #   kubernetes.io/hostname: <idle-node>
       containers:
         - name: stubs
-          image: ihub-loadtest
+          # The tag is replaced by the kustomization's images entry.
+          image: ihub-loadtest:loadtest-runner
           args: ['stub/server.mjs']
           ports:
             - { name: llm, containerPort: 8979 }
@@ -30,8 +37,13 @@ spec:
             - { name: STUB_SITE_PAGES, value: '300' }
           resources:
             # ~200 streams in flight at 1,500 users; below this the stub adds latency itself.
-            requests: { cpu: '2', memory: 512Mi }
-            limits: { cpu: '4', memory: 2Gi }
+            requests: { cpu: '2', memory: 512Mi, ephemeral-storage: 64Mi }
+            limits: { cpu: '4', memory: 2Gi, ephemeral-storage: 256Mi }
+          # The stubs serve generated responses from memory; they write no files.
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: { drop: [ALL] }
           readinessProbe:
             httpGet: { path: /v1/models, port: llm }
 ---

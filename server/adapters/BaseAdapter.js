@@ -130,6 +130,10 @@ export class BaseAdapter {
    * thing while looking like a considered choice. `medium` is the default when
    * nothing says otherwise.
    *
+   * `xhigh` is sent as `high`. Most providers reject an effort they do not
+   * know, and the level exists for the vLLM reasoning budget
+   * (`THINKING_LEVEL_BUDGETS` in `vllm.js`), which reads the level directly.
+   *
    * @param {Object} options - Request options (thinkingLevel)
    * @param {Object} model - Model config (model.thinking.level)
    * @returns {'minimal'|'low'|'medium'|'high'} Reasoning effort
@@ -139,6 +143,7 @@ export class BaseAdapter {
     if (!level) return 'medium';
     const allowed = new Set(['minimal', 'low', 'medium', 'high']);
     const lower = String(level).toLowerCase();
+    if (lower === 'xhigh') return 'high';
     return allowed.has(lower) ? lower : 'medium';
   }
 

@@ -137,6 +137,27 @@ describe('openExternalUrl', () => {
     expect(openExternalUrl('')).toBe(false);
     expect(windowOpen).not.toHaveBeenCalled();
   });
+
+  it.each([
+    'javascript:alert(document.cookie)',
+    'data:text/html,<script>alert(1)</script>',
+    'blob:https://example.test/1234',
+    'file:///etc/passwd',
+    'vbscript:msgbox(1)'
+  ])('never hands %p to any host', url => {
+    const openBrowserWindow = jest.fn();
+    global.Office = { context: { ui: { openBrowserWindow } } };
+    expect(openExternalUrl(url)).toBe(false);
+    expect(openBrowserWindow).not.toHaveBeenCalled();
+    expect(windowOpen).not.toHaveBeenCalled();
+  });
+
+  it('does not create an extension tab for a javascript: URL', async () => {
+    const create = jest.fn();
+    global.chrome = { tabs: { create } };
+    await expect(openExternalUrlSettled('javascript:alert(1)')).resolves.toBe(false);
+    expect(create).not.toHaveBeenCalled();
+  });
 });
 
 describe('openExternalUrlSettled', () => {

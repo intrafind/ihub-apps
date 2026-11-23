@@ -1,4 +1,5 @@
 {
+  "job": ["en:userApps.list.empty.mine"],
   "lease": ["en:abortCauses.lease_lost"],
   "worker": [
     "de:abortCauses.lease_lost",
@@ -11,6 +12,8 @@
     "de:admin.systemResources.processes.missing",
     "de:admin.systemResources.processes.missingAlert",
     "de:admin.systemResources.processes.worker",
+    "de:admin.ui.pwa.enableHint",
+    "de:admin.ui.pwa.swNote",
     "en:abortCauses.lease_lost",
     "en:admin.projects.caches.hint",
     "en:admin.security.rateLimits.perAddress",
@@ -21,6 +24,8 @@
     "en:admin.systemResources.processes.missing",
     "en:admin.systemResources.processes.missingAlert",
     "en:admin.systemResources.processes.worker",
+    "en:admin.ui.pwa.enableHint",
+    "en:admin.ui.pwa.swNote",
     "features:chatPostStream.description.de",
     "features:chatPostStream.description.en"
   ],

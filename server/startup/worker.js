@@ -643,6 +643,18 @@ export async function startWorker({ stickyRouting }) {
   activityTracker.start();
   projectActivityTracker.start();
   await initConfigCache();
+  // Stamp the company apps of personal apps published with 5.7.4, once per
+  // installation, before any route can release a record for a missing stamp.
+  // Never throws: a failure is logged and the pass runs again on next start.
+  try {
+    const { ensureCompanyAppStamps } = await import('../services/userApps/companyAppStamps.js');
+    await ensureCompanyAppStamps();
+  } catch (error) {
+    logger.error('The upgrade pass of the company app stamps could not start', {
+      component: 'Server',
+      error: error.message
+    });
+  }
   logProxyConfig();
   // TLS whitelist hosts are SSRF-trusted too (PL-B12): name them once at boot.
   try {

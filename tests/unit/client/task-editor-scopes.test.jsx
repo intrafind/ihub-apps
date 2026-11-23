@@ -35,7 +35,17 @@ jest.mock('react-i18next', () => ({
 
 jest.mock('../../../client/src/shared/hooks/useApps', () => ({
   __esModule: true,
-  default: () => ({ apps: [{ id: 'ifinder-search', name: { en: 'iFinder Search' } }] })
+  default: () => ({
+    apps: [
+      { id: 'ifinder-search', name: { en: 'iFinder Search' } },
+      // A personal app the viewer owns: scheduled tasks cannot run it.
+      {
+        id: 'uap_3f9c2a0b1d4e5f60718293a4b5c6d7e8',
+        name: { en: 'Job ad writer' },
+        ownership: 'user'
+      }
+    ]
+  })
 }));
 
 jest.mock('../../../client/src/features/tasks/components/ScheduleBuilder', () => ({
@@ -170,6 +180,13 @@ describe('TaskEditorPage: where the task searches', () => {
     expect(createScheduledTask).toHaveBeenCalledWith(
       expect.objectContaining({ integrationScopes: { ifinder: 'contracts' } })
     );
+  });
+
+  it('offers company apps only: a scheduled task cannot run a personal app', async () => {
+    await renderEditor('/tasks/new');
+    const options = [...document.querySelectorAll('option')].map(option => option.textContent);
+    expect(options).toContain('iFinder Search');
+    expect(options).not.toContain('Job ad writer');
   });
 
   it('shows and changes the scope of a saved task', async () => {

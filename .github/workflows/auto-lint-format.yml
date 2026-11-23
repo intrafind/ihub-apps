@@ -5,14 +5,16 @@ on:
     types: [opened, synchronize, reopened]
 
 permissions:
-  contents: write
-  issues: write         # ← allow creating issue and PR comments
-  pull-requests: write # ← allow updating PRs
-  actions: read        # ← allow reading CI results on PRs
+  contents: read
 
 jobs:
   auto-lint-format:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write       # ← push the auto-fix commit to the PR branch
+      issues: write         # ← allow creating issue and PR comments
+      pull-requests: write  # ← allow updating PRs
+      actions: read         # ← allow reading CI results on PRs
 
     # Skip if the commit message contains [skip-lint]
     if: "!contains(github.event.head_commit.message, '[skip-lint]')"

@@ -98,7 +98,12 @@ initOfficeTheme();
   // Re-target the Axios clients at the iHub server (chrome-extension://
   // origin obviously doesn't host the API), then attach the Bearer-token
   // and 401-refresh interceptors the office bridge already provides.
-  installExtensionAuth(config);
+  try {
+    installExtensionAuth(config);
+  } catch (err) {
+    renderError(rootEl, err.message || 'Failed to configure the iHub connection.');
+    return;
+  }
 
   // i18next must be loaded *after* installExtensionAuth — the module
   // kicks off `loadPlatformConfig()` (apiClient.get('/configs/ui')) at

@@ -346,6 +346,10 @@ async function takePending(repository, chatId, interactionId, grants, stored) {
  * @param {Object|null} params.chat - the chat document
  * @param {Object|null} params.lastMessage - the message of this POST
  * @param {Object} params.repository - ChatRepository
+ * @param {boolean} [params.chatGrants=true] - `false`: "allow for this chat"
+ *   does not exist in this chat (a personal app someone else wrote). The
+ *   grants the chat stores are not handed to the turn, and `grant` of an
+ *   `approvalResponse` is dropped: the answer approves that one call.
  * @param {Object} [params.interactionService]
  * @param {Function} [params.authorizeInteraction]
  * @returns {Promise<{grants: string[], refusal: Object|null,
@@ -360,12 +364,15 @@ export async function prepareChatApproval({
   chat,
   lastMessage,
   repository,
+  chatGrants = true,
   interactionService = defaultInteractionService,
   authorizeInteraction = defaultAuthorizeInteraction
 }) {
   const state = chatApprovalState(chat);
-  const response = parseApprovalResponse(lastMessage?.approvalResponse);
-  const result = { grants: state.grants, refusal: null, commit: null };
+  const honoured = chatGrants !== false;
+  const parsed = parseApprovalResponse(lastMessage?.approvalResponse);
+  const response = parsed && !honoured ? { ...parsed, grant: null } : parsed;
+  const result = { grants: honoured ? state.grants : [], refusal: null, commit: null };
 
   if (lastMessage?.approvalResponse !== undefined && !response) {
     result.refusal = {
@@ -430,8 +437,8 @@ export async function prepareChatApproval({
   if (stored.runId) {
     result.pausedTurn = { runId: stored.runId, interactionId: stored.interactionId };
   }
-  result.commit = async () =>
-    commitChatApproval({
+  result.commit = async () => {
+    const committed = await commitChatApproval({
       chatId,
       user,
       response,
@@ -442,6 +449,9 @@ export async function prepareChatApproval({
       interactionService,
       cancelOthers
     });
+    // Whatever the chat stored: the turn is handed no grant.
+    return honoured ? committed : { ...committed, grants: [] };
+  };
   return result;
 }
 

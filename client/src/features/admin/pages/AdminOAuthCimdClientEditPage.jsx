@@ -222,8 +222,8 @@ function AdminOAuthCimdClientEditPage() {
       <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 pt-6">
         <AdminBreadcrumb
           crumbs={[
-            { label: 'Admin', href: '/admin' },
-            { label: 'OAuth', href: '/admin/oauth/clients' },
+            { label: t('documentTitle.admin', 'Admin'), href: '/admin' },
+            { label: t('admin.nav.oauth', 'OAuth'), href: '/admin/oauth/clients' },
             { label: client?.name || t('admin.auth.oauth.kind.cimd', 'Client metadata') }
           ]}
         />

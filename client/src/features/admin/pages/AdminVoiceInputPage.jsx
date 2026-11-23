@@ -224,7 +224,10 @@ function AdminVoiceInputPage() {
           subscriptionKey: config.azure.subscriptionKey
         }
       });
-      const result = response.data || { ok: false, message: 'No response' };
+      const result = response.data || {
+        ok: false,
+        message: t('admin.voiceInput.azure.test.noResponse', 'No response')
+      };
       setAzureTestResult({ ok: result.ok, message: describeAzureTest(result) });
     } catch (error) {
       setAzureTestResult({ ok: false, message: error.message || 'Test request failed' });

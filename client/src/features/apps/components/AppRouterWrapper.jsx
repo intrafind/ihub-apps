@@ -9,6 +9,8 @@ import { useTranslation } from 'react-i18next';
 import AppChat from '../pages/AppChat';
 import RedirectApp from '../pages/RedirectApp';
 import IframeApp from '../pages/IframeApp';
+import { PersonalAppUnavailable } from './PersonalAppNotice';
+import RetiredAppPage from './RetiredAppPage';
 
 /**
  * AppRouterWrapper component
@@ -69,6 +71,16 @@ function AppRouterWrapper() {
         <div className="text-red-500 mb-4">{t('pages.notFound.title')}</div>
       </div>
     );
+  }
+
+  // A personal app the caller may see but not chat with. The server says which
+  // case it is; nothing is derived from the ID.
+  if (app.ownership === 'user') {
+    if (app.state === 'retired') {
+      // Published, and this person may use the company app: point there.
+      return <RetiredAppPage app={app} />;
+    }
+    if (app.permissions?.canUse !== true) return <PersonalAppUnavailable app={app} />;
   }
 
   // Route to appropriate component based on app type

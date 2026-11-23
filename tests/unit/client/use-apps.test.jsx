@@ -7,7 +7,8 @@ jest.mock('../../../client/src/shared/contexts/AuthContext', () => ({
 
 import { fetchApps } from '../../../client/src/api';
 import { useAuth } from '../../../client/src/shared/contexts/AuthContext';
-import useApps, { invalidateAppsCache } from '../../../client/src/shared/hooks/useApps';
+import useApps from '../../../client/src/shared/hooks/useApps';
+import { invalidateAppsCache } from '../../../client/src/shared/hooks/appsCache';
 
 /**
  * useApps backs the sidebar, the start page and the apps browser with ONE

@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useImperativeHandle, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import MonacoJsonEditor from './MonacoJsonEditor';
 import Icon from './Icon';
@@ -27,6 +27,12 @@ import ConfirmDialog from './ConfirmDialog';
  * @param {string} props.description - Description for the editor section
  * @param {boolean} props.showValidationSummary - Whether to show validation summary
  * @param {string} props.className - Additional CSS classes
+ * @param {Object} [props.savedValue] - The value as it is stored. When given, "Unsaved changes"
+ *   compares with it and Reset goes back to it, so both follow a save made outside the editor.
+ *   Without it they refer to the value the editor was mounted with, or last switched modes with.
+ * @param {React.RefObject} [props.controlRef] - Receives `{ switchMode(mode) }`, for a caller
+ *   that has to bring the editor into a mode itself (a link to a field of the form). It is
+ *   the click on the mode button: with unsaved changes the editor asks first.
  * @returns {React.Component} DualModeEditor component
  */
 const DualModeEditor = ({
@@ -42,22 +48,26 @@ const DualModeEditor = ({
   title: _title,
   description: _description,
   showValidationSummary = true,
-  className = ''
+  className = '',
+  savedValue,
+  controlRef
 }) => {
   const { t } = useTranslation();
   const { isDark } = useDarkMode();
   const [editingMode, setEditingMode] = useState(defaultMode);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [validationState, setValidationState] = useState({ isValid: true, errors: [] });
-  const initialValueRef = useRef(JSON.stringify(value));
+  const followsSaved = savedValue !== undefined;
+  const initialValueRef = useRef(JSON.stringify(followsSaved ? savedValue : value));
   // Pending question: { kind: 'switch', mode } or { kind: 'reset' } (no window.confirm).
   const [pendingConfirm, setPendingConfirm] = useState(null);
 
   // Track changes to detect unsaved modifications
   useEffect(() => {
+    if (followsSaved) initialValueRef.current = JSON.stringify(savedValue);
     const currentValueString = JSON.stringify(value);
     setHasUnsavedChanges(currentValueString !== initialValueRef.current);
-  }, [value]);
+  }, [value, savedValue, followsSaved]);
 
   /**
    * Handle mode switching with confirmation for unsaved changes
@@ -77,13 +87,18 @@ const DualModeEditor = ({
    */
   const performModeSwitch = newMode => {
     setEditingMode(newMode);
-    initialValueRef.current = JSON.stringify(value);
-    setHasUnsavedChanges(false);
+    // A caller that names the stored value keeps it as the point to compare with.
+    if (!followsSaved) {
+      initialValueRef.current = JSON.stringify(value);
+      setHasUnsavedChanges(false);
+    }
 
     if (onModeChange) {
       onModeChange(newMode);
     }
   };
+
+  useImperativeHandle(controlRef, () => ({ switchMode: handleModeSwitch }));
 
   /**
    * Handle data changes from form or JSON editor
@@ -112,7 +127,7 @@ const DualModeEditor = ({
     setPendingConfirm({ kind: 'reset' });
   };
 
-  /** Discards the edits since the last mode switch (after confirmation). */
+  /** Discards the edits since the stored value or the last mode switch (after confirmation). */
   const performReset = () => {
     try {
       const initialValue = JSON.parse(initialValueRef.current);

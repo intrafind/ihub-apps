@@ -1,7 +1,8 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
-import { useState, useEffect } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { flushSync } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import StarterPromptsSection from './app-form/StarterPromptsSection';
 import UsageGuideSection from './app-form/UsageGuideSection';
@@ -24,7 +25,14 @@ import AiNoticeSection from './app-form/AiNoticeSection';
 import SystemInstructionsSection from './app-form/SystemInstructionsSection';
 import ProjectsConfigSection from './app-form/ProjectsConfigSection';
 import SettingsConfigSection from './app-form/SettingsConfigSection';
-import { validateWithSchema, errorsToFieldErrors } from '../../../utils/schemaValidation';
+import ModelSection from './app-form/ModelSection';
+import ChatBehaviourSection from './app-form/ChatBehaviourSection';
+import EditorGroup from './app-form/EditorGroup';
+import { AppFormLanguageProvider } from './app-form/AppLanguageField';
+import { useEditorGroups } from './app-form/useEditorGroups';
+import { validateWithSchema } from '../../../utils/schemaValidation';
+import { languageNamer } from '../../../shared/utils/languageName';
+import { listFieldLabel, schemaErrorMessage } from './app-form/validationText';
 import useFeatureFlags from '../../../shared/hooks/useFeatureFlags';
 import AdminFormErrorSummary from './AdminFormErrorSummary';
 import { FormValidationProvider } from '../../../shared/contexts/formValidationContext';
@@ -33,28 +41,67 @@ import useAdminTtsModels from '../hooks/useAdminTtsModels';
 import BasicInfoSection from './app-form/BasicInfoSection';
 import InputModeSection from './app-form/InputModeSection';
 import parseNumberOrUndefined from '../utils/parseNumberOrUndefined';
+import { primaryLanguageOf } from '../../../../../shared/appDefaults.js';
+
+const NO_ERRORS = Object.freeze([]);
+
+/** True when a localized text has text in at least one language. */
+const hasText = value =>
+  Boolean(value) &&
+  typeof value === 'object' &&
+  Object.values(value).some(text => typeof text === 'string' && text.trim() !== '');
 
 /**
- * AppFormEditor - Form-based editor for app configuration
- * This component contains all the form fields for editing app configuration
- * and is designed to be integrated with the DualModeEditor component.
+ * The form of the app editor: the sections of an app in the editor's groups
+ * (`app-form/editorGroups.js`). Made for `DualModeEditor`.
  *
- * @component
- * @param {Object} props - Component props
- * @param {Object} props.value - The app configuration object
- * @param {Function} props.onChange - Callback fired when configuration changes
- * @param {Function} props.onValidationChange - Callback fired when validation state changes
- * @param {Array} props.availableModels - Available AI models
- * @param {Object} props.uiConfig - UI configuration for categories etc.
- * @returns {React.Component} AppFormEditor component
+ * Every group stays mounted while it is collapsed, so validation and what is
+ * saved do not depend on what is open. The group "Who can use this app" is
+ * not part of the form; the page renders it.
+ *
+ * @param {object} props
+ * @param {object} props.value - The app as the editor holds it.
+ * @param {function(object): void} props.onChange - Receives the changed app.
+ * @param {function({isValid: boolean, errors: Array<{field: string, message: string}>}): void} [props.onValidationChange]
+ * @param {Array<object>} [props.availableModels] - The models the author may use.
+ * @param {object|null} [props.uiConfig] - The UI configuration (categories).
+ * @param {object} [props.jsonSchema] - The JSON schema of an app.
+ * @param {object} [props.groups] - The state of `useEditorGroups`, when the
+ *   page shares it with its index and save bar. Without it the form keeps its own.
+ * @returns {JSX.Element}
  */
-function AppFormEditor({
+function AppFormEditor(props) {
+  return props.groups ? <AppForm {...props} /> : <SelfGroupedAppForm {...props} />;
+}
+
+/** The form with a group state of its own, for a caller that shares none. */
+function SelfGroupedAppForm({ onValidationChange, ...props }) {
+  const { i18n } = useTranslation();
+  const [errors, setErrors] = useState(NO_ERRORS);
+  const { value: app, availableModels } = props;
+  const extra = useMemo(
+    () => ({ models: availableModels || [], language: i18n.language }),
+    [availableModels, i18n.language]
+  );
+  const groups = useEditorGroups({ app, errors, extra });
+  const handleValidationChange = useCallback(
+    state => {
+      setErrors(state.errors);
+      onValidationChange?.(state);
+    },
+    [onValidationChange]
+  );
+  return <AppForm {...props} groups={groups} onValidationChange={handleValidationChange} />;
+}
+
+function AppForm({
   value: app,
   onChange,
   onValidationChange,
   availableModels = [],
   uiConfig = null,
-  jsonSchema
+  jsonSchema,
+  groups
 }) {
   const { t, i18n } = useTranslation();
   const currentLanguage = i18n.language;
@@ -66,6 +113,17 @@ function AppFormEditor({
   // Projects (#1036) can be linked only while the projects feature is enabled
   const isProjectsEnabled = featureFlags.isEnabled('projects', true);
 
+  // The language the texts are edited in first. It is fixed per app, so that
+  // it does not jump while the author empties and retypes the name.
+  const languageKey = `${app?.id ?? ''}|${currentLanguage}`;
+  const [primary, setPrimary] = useState(() => ({
+    key: languageKey,
+    language: primaryLanguageOf(app, currentLanguage)
+  }));
+  if (primary.key !== languageKey) {
+    setPrimary({ key: languageKey, language: primaryLanguageOf(app, currentLanguage) });
+  }
+
   // Validation function
   const validateApp = appData => {
     let errors = {};
@@ -73,51 +131,47 @@ function AppFormEditor({
     // Use schema validation if available
     if (jsonSchema) {
       const validation = validateWithSchema(appData, jsonSchema);
-      if (!validation.isValid) {
-        errors = errorsToFieldErrors(validation.errors);
+      // The schema's own sentences are English and name the field by its
+      // path; the form says each violated rule in the author's language.
+      for (const error of validation.errors) {
+        if (error.field && !errors[error.field]) {
+          errors[error.field] = schemaErrorMessage(error, t, appData);
+        }
       }
     } else {
       // Fallback to manual validation if no schema
       if (!appData.id) {
-        errors.id = t('admin.apps.edit.validation.idRequired', 'App ID is required');
+        errors.id = t('admin.apps.edit.validation.idRequired');
       } else if (!/^[a-zA-Z0-9_-]+$/.test(appData.id)) {
-        errors.id = t(
-          'admin.apps.edit.validation.idInvalid',
-          'App ID can only contain letters, numbers, hyphens, and underscores'
-        );
-      }
-
-      if (!appData.name || !Object.keys(appData.name).length) {
-        errors.name = t('admin.apps.edit.validation.nameRequired', 'App name is required');
+        errors.id = t('admin.apps.edit.validation.idInvalid');
       }
     }
 
-    if (!appData.description || !Object.keys(appData.description).length) {
-      errors.description = t(
-        'admin.apps.edit.validation.descriptionRequired',
-        'App description is required'
-      );
-    }
-
-    // System instructions are required for chat-type apps
-    const appType = appData.type || 'chat';
-    if (appType === 'chat') {
-      if (!appData.system || !Object.keys(appData.system).length) {
-        errors.system = t(
-          'admin.apps.edit.validation.systemRequired',
-          'System instructions are required'
-        );
+    // A required text needs content in at least one language. One message per
+    // field stands for it, in place of one per empty language.
+    const requireText = (field, message) => {
+      if (hasText(appData[field])) return;
+      for (const key of Object.keys(errors)) {
+        if (key.startsWith(`${field}.`)) delete errors[key];
       }
+      errors[field] = message;
+    };
+    requireText('name', t('admin.apps.edit.validation.nameRequired'));
+    requireText('description', t('admin.apps.edit.validation.descriptionRequired'));
+    // Instructions are required for chat apps. A save drops a text without
+    // content, so the server would not report it.
+    if ((appData.type || 'chat') === 'chat') {
+      requireText('system', t('admin.apps.edit.validation.systemRequired'));
     }
 
     if (!appData.color) {
-      errors.color = t('admin.apps.edit.validation.colorRequired', 'Color is required');
+      errors.color = t('admin.apps.edit.validation.colorRequired');
     } else if (!/^#[0-9A-Fa-f]{6}$/.test(appData.color)) {
-      errors.color = t('admin.apps.edit.validation.colorInvalid', 'Color must be a valid hex code');
+      errors.color = t('admin.apps.edit.validation.colorInvalid');
     }
 
     if (!appData.icon) {
-      errors.icon = t('admin.apps.edit.validation.iconRequired', 'Icon is required');
+      errors.icon = t('admin.apps.edit.validation.iconRequired');
     }
 
     setValidationErrors(errors);
@@ -155,176 +209,213 @@ function AppFormEditor({
 
   if (!app) {
     return (
-      <div className="p-8 text-center text-gray-500">
-        <Icon name="exclamation-triangle" className="h-12 w-12 mx-auto mb-4 text-gray-500" />
-        <p className="text-lg font-medium">
-          {t('admin.apps.edit.noAppData', 'No app data available')}
-        </p>
+      <div className="p-8 text-center text-gray-500 dark:text-gray-400">
+        <Icon name="exclamation-triangle" className="h-12 w-12 mx-auto mb-4" />
+        <p className="text-lg font-medium">{t('admin.apps.edit.noAppData')}</p>
       </div>
     );
   }
 
   const errorLabels = {
-    id: t('admin.apps.edit.appId', 'App ID'),
-    name: t('admin.apps.edit.name', 'Name'),
-    description: t('admin.apps.edit.description', 'Description'),
-    color: t('admin.apps.edit.color', 'Color'),
-    icon: t('admin.apps.edit.icon', 'Icon'),
-    system: t('admin.apps.edit.systemPrompt', 'System Prompt')
+    id: t('admin.apps.edit.appId'),
+    name: t('admin.apps.edit.name'),
+    description: t('admin.apps.edit.description'),
+    color: t('admin.apps.edit.color'),
+    icon: t('admin.apps.edit.icon'),
+    system: t('admin.apps.edit.systemPrompt'),
+    prompt: t('admin.apps.edit.prompt'),
+    messagePlaceholder: t('admin.apps.edit.messagePlaceholder'),
+    variables: t('admin.apps.edit.variables'),
+    starterPrompts: t('admin.apps.edit.starterPrompts'),
+    type: t('admin.apps.edit.appType'),
+    order: t('admin.apps.edit.order'),
+    category: t('admin.apps.edit.category'),
+    preferredModel: t('admin.apps.edit.preferredModel'),
+    allowedModels: t('admin.apps.edit.allowedModels'),
+    preferredOutputFormat: t('admin.apps.edit.outputFormat'),
+    iframeConfig: t('admin.apps.edit.iframeConfig'),
+    'iframeConfig.url': t('admin.apps.edit.iframeUrl'),
+    redirectConfig: t('admin.apps.edit.redirectConfig'),
+    'redirectConfig.url': t('admin.apps.edit.redirectUrl'),
+    'startForm.submitLabel': t('admin.apps.edit.startFormSubmitLabel')
   };
+  // A field of an input field or a conversation starter is named in the
+  // editor's words ("Input field 1, Placeholder"), not by its path.
+  const nameLanguage = languageNamer(currentLanguage);
+  const summaryErrors = Object.entries(validationErrors).map(([field, message]) => ({
+    field,
+    message,
+    label: listFieldLabel(field, t, nameLanguage)
+  }));
+
+  /**
+   * A link of the error summary leads to a field. Its group has to be open
+   * before the summary looks the field up and moves the focus, so every
+   * collapsed group with an error opens within the click.
+   */
+  const openGroupsWithErrors = () => {
+    const collapsed = groups.groups.filter(
+      group => groups.errorCount(group.id) > 0 && !groups.isOpen(group.id)
+    );
+    if (collapsed.length === 0) return;
+    // eslint-disable-next-line @eslint-react/dom-no-flush-sync -- the summary's click handler runs next and needs the group shown
+    flushSync(() => collapsed.forEach(group => groups.open(group.id)));
+  };
+
+  const isChat = app.type === 'chat' || !app.type;
+  const toolSearchEnabled = featureFlags.isEnabled('toolSearch', false);
 
   return (
     <FormValidationProvider errors={validationErrors}>
-      <div className="app-form-editor space-y-6">
-        <AdminFormErrorSummary
-          errors={validationErrors}
-          labels={errorLabels}
-          title={t('admin.apps.edit.fixErrors', 'Please fix the following errors')}
-        />
-        <BasicInfoSection
-          app={app}
-          onChange={onChange}
-          t={t}
-          currentLanguage={currentLanguage}
-          uiConfig={uiConfig}
-          availableModels={availableModels}
-          validationErrors={validationErrors}
-          jsonSchema={jsonSchema}
-        />
+      <AppFormLanguageProvider value={primary.language}>
+        <div className="app-form-editor space-y-4">
+          <div onClickCapture={openGroupsWithErrors}>
+            <AdminFormErrorSummary
+              errors={summaryErrors}
+              labels={errorLabels}
+              title={t('admin.apps.edit.fixErrors')}
+            />
+          </div>
 
-        {/* Type-specific Configuration */}
-        {(app.type === 'chat' || !app.type) && (
-          <>
-            {/* System Instructions - Only for chat apps */}
-            <SystemInstructionsSection
+          <EditorGroup id="basics" groups={groups}>
+            <BasicInfoSection
               app={app}
               onChange={onChange}
               t={t}
+              currentLanguage={currentLanguage}
+              uiConfig={uiConfig}
               validationErrors={validationErrors}
             />
-          </>
-        )}
 
-        {/* Iframe Configuration - Only for iframe apps */}
-        {app.type === 'iframe' && (
-          <IframeConfigSection app={app} onChange={handleInputChange} t={t} />
-        )}
+            {/* Link apps keep Basics plus their one configuration card. */}
+            {app.type === 'iframe' && (
+              <IframeConfigSection app={app} onChange={handleInputChange} t={t} />
+            )}
+            {app.type === 'redirect' && (
+              <RedirectConfigSection app={app} onChange={handleInputChange} t={t} />
+            )}
+          </EditorGroup>
 
-        {/* Redirect Configuration - Only for redirect apps */}
-        {app.type === 'redirect' && (
-          <RedirectConfigSection app={app} onChange={handleInputChange} t={t} />
-        )}
+          {/* The groups below apply to chat apps only. */}
+          {isChat && (
+            <>
+              <EditorGroup id="instructions" groups={groups}>
+                <SystemInstructionsSection
+                  app={app}
+                  onChange={onChange}
+                  t={t}
+                  validationErrors={validationErrors}
+                />
+                <VariablesSection app={app} onChange={onChange} />
+                <StarterPromptsSection app={app} onChange={onChange} />
+              </EditorGroup>
 
-        {/* Chat-specific sections - Only show for chat apps */}
-        {(app.type === 'chat' || !app.type) && (
-          <>
-            {/* Integrations: web search, iAssistant, people directories and every
-                other installed integration, each in one place (#3061) */}
-            <IntegrationsConfigSection
-              app={app}
-              onChange={onChange}
-              toolSearchEnabled={featureFlags.isEnabled('toolSearch', false)}
-            />
+              <EditorGroup id="model" groups={groups}>
+                <ModelSection app={app} onChange={onChange} availableModels={availableModels} />
+              </EditorGroup>
 
-            {/* Tool use and approval (the tools themselves come from the integrations above) */}
-            <ToolsConfigSection
-              toolChoice={app.toolChoice}
-              onToolChoiceChange={toolChoice => handleInputChange('toolChoice', toolChoice)}
-              toolApproval={app.toolApproval}
-              onToolApprovalChange={toolApproval => handleInputChange('toolApproval', toolApproval)}
-              {...(featureFlags.isEnabled('toolSearch', false)
-                ? {
-                    toolSearch: app.toolSearch,
-                    onToolSearchChange: toolSearch => handleInputChange('toolSearch', toolSearch)
+              <EditorGroup id="knowledge" groups={groups}>
+                {/* Connected systems: web search, iAssistant, people directories and
+                    every other installed integration, each in one place (#3061) */}
+                <IntegrationsConfigSection
+                  app={app}
+                  onChange={onChange}
+                  toolSearchEnabled={toolSearchEnabled}
+                />
+
+                {/* Tool use and approval (the tools themselves come from the integrations above) */}
+                <ToolsConfigSection
+                  toolChoice={app.toolChoice}
+                  onToolChoiceChange={toolChoice => handleInputChange('toolChoice', toolChoice)}
+                  toolApproval={app.toolApproval}
+                  onToolApprovalChange={toolApproval =>
+                    handleInputChange('toolApproval', toolApproval)
                   }
-                : {})}
-            />
+                  {...(toolSearchEnabled
+                    ? {
+                        toolSearch: app.toolSearch,
+                        onToolSearchChange: toolSearch =>
+                          handleInputChange('toolSearch', toolSearch)
+                      }
+                    : {})}
+                />
 
-            {/* Workflows Configuration */}
-            {featureFlags.isEnabled('workflows', true) && (
-              <WorkflowsConfigSection
-                selectedWorkflows={app.workflows || []}
-                onWorkflowsChange={workflows => handleInputChange('workflows', workflows)}
-              />
-            )}
+                {featureFlags.isEnabled('workflows', true) && (
+                  <WorkflowsConfigSection
+                    selectedWorkflows={app.workflows || []}
+                    onWorkflowsChange={workflows => handleInputChange('workflows', workflows)}
+                  />
+                )}
 
-            {/* Apps-as-Tools Configuration */}
-            {featureFlags.isEnabled('appAsTool', false) && (
-              <AppsConfigSection
-                appId={app.id}
-                selectedApps={app.apps || []}
-                onAppsChange={apps => handleInputChange('apps', apps)}
-              />
-            )}
+                {/* Apps as tools */}
+                {featureFlags.isEnabled('appAsTool', false) && (
+                  <AppsConfigSection
+                    appId={app.id}
+                    selectedApps={app.apps || []}
+                    onAppsChange={apps => handleInputChange('apps', apps)}
+                  />
+                )}
 
-            {/* Skills Configuration */}
-            {featureFlags.isEnabled('skills', false) && (
-              <SkillsConfigSection
-                enabled={app.skillSettings?.enabled === true}
-                allowPersonal={app.skillSettings?.allowPersonal !== false}
-                selectedSkills={app.skills || []}
-                onEnabledChange={enabled =>
-                  handleInputChange('skillSettings', { ...app.skillSettings, enabled })
-                }
-                onAllowPersonalChange={allowPersonal =>
-                  handleInputChange('skillSettings', { ...app.skillSettings, allowPersonal })
-                }
-                onSkillsChange={skills => handleInputChange('skills', skills)}
-              />
-            )}
+                {featureFlags.isEnabled('skills', false) && (
+                  <SkillsConfigSection
+                    enabled={app.skillSettings?.enabled === true}
+                    allowPersonal={app.skillSettings?.allowPersonal !== false}
+                    selectedSkills={app.skills || []}
+                    onEnabledChange={enabled =>
+                      handleInputChange('skillSettings', { ...app.skillSettings, enabled })
+                    }
+                    onAllowPersonalChange={allowPersonal =>
+                      handleInputChange('skillSettings', { ...app.skillSettings, allowPersonal })
+                    }
+                    onSkillsChange={skills => handleInputChange('skills', skills)}
+                  />
+                )}
 
-            {/* Variables Configuration */}
-            <VariablesSection app={app} onChange={onChange} />
+                {/* Linked projects - only while the projects feature is enabled */}
+                {isProjectsEnabled && <ProjectsConfigSection app={app} onChange={onChange} t={t} />}
+              </EditorGroup>
 
-            {/* Starter Prompts */}
-            <StarterPromptsSection app={app} onChange={onChange} />
+              <EditorGroup id="chat" groups={groups}>
+                <UploadConfigSection
+                  app={app}
+                  onChange={handleInputChange}
+                  t={t}
+                  parseNumberOrUndefined={parseNumberOrUndefined}
+                />
+                <MagicPromptSection
+                  app={app}
+                  onChange={onChange}
+                  availableModels={availableModels}
+                />
+                <ExportConfigSection app={app} onChange={onChange} />
+                {/* Document template (generated PDF, Word, PowerPoint files) */}
+                <DocumentTemplateSection app={app} onChange={onChange} />
+                <CompareModeSection app={app} onChange={onChange} />
+                <FeedbackSection app={app} onChange={onChange} />
+                {/* First-turn AI notice (EU AI Act Art. 50(1)) */}
+                <AiNoticeSection app={app} onChange={onChange} />
+                <UsageGuideSection app={app} onChange={onChange} />
+                <ChatBehaviourSection app={app} onChange={onChange} />
+              </EditorGroup>
 
-            {/* Usage Guide */}
-            <UsageGuideSection app={app} onChange={onChange} />
+              <EditorGroup id="input" groups={groups}>
+                <InputModeSection
+                  app={app}
+                  onChange={onChange}
+                  t={t}
+                  transcriptionModels={transcriptionModels}
+                  ttsModels={ttsModels}
+                  currentLanguage={currentLanguage}
+                />
+              </EditorGroup>
 
-            {/* Upload Configuration */}
-            <UploadConfigSection
-              app={app}
-              onChange={handleInputChange}
-              t={t}
-              parseNumberOrUndefined={parseNumberOrUndefined}
-            />
-
-            {/* Magic Prompt Configuration */}
-            <MagicPromptSection app={app} onChange={onChange} availableModels={availableModels} />
-
-            {/* Export Configuration */}
-            <ExportConfigSection app={app} onChange={onChange} />
-
-            {/* Document template (generated PDF, Word, PowerPoint files) */}
-            <DocumentTemplateSection app={app} onChange={onChange} />
-
-            {/* Compare Mode Configuration */}
-            <CompareModeSection app={app} onChange={onChange} />
-
-            {/* Response Feedback */}
-            <FeedbackSection app={app} onChange={onChange} />
-
-            {/* First-turn AI notice (EU AI Act Art. 50(1)) */}
-            <AiNoticeSection app={app} onChange={onChange} />
-
-            <InputModeSection
-              app={app}
-              onChange={onChange}
-              t={t}
-              transcriptionModels={transcriptionModels}
-              ttsModels={ttsModels}
-              currentLanguage={currentLanguage}
-            />
-
-            {/* Linked projects - only while the projects feature is enabled */}
-            {isProjectsEnabled && <ProjectsConfigSection app={app} onChange={onChange} t={t} />}
-
-            {/* Settings Configuration */}
-            <SettingsConfigSection app={app} onChange={onChange} t={t} />
-          </>
-        )}
-      </div>
+              <EditorGroup id="userSettings" groups={groups}>
+                <SettingsConfigSection app={app} onChange={onChange} t={t} />
+              </EditorGroup>
+            </>
+          )}
+        </div>
+      </AppFormLanguageProvider>
     </FormValidationProvider>
   );
 }
