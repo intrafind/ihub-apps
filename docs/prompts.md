@@ -22,8 +22,7 @@ Each prompt is a standalone JSON file named after the prompt's `id`:
 contents/prompts/
 ├── summarize.json
 ├── translate-de.json
-├── faq-question.json
-└── app-generator.json
+└── faq-question.json
 ```
 
 The server loads all `*.json` files from that directory automatically. No central index file is needed. New prompts are available immediately after the file is saved because the configuration is reloaded from cache.

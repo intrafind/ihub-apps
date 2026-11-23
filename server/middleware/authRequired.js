@@ -9,6 +9,20 @@ import authDebugService from '../utils/authDebugService.js';
 import configCache from '../configCache.js';
 import { hasIdCaseInsensitive } from '../utils/resourceLookup.js';
 import { ServiceError } from '../utils/ServiceError.js';
+import { isUserAppId } from '../../shared/userAppContent.js';
+
+/**
+ * The gate of the chat routes for an ID of the personal shape
+ * (`chatUserAppAccess` in `./userAppAccess.js`). Loaded when the first such
+ * ID arrives: this file is imported by nearly every route, and the gate
+ * brings the store of personal apps with it.
+ */
+let personalAppGate = null;
+async function loadPersonalAppGate() {
+  personalAppGate ??= (await import('./userAppAccess.js')).chatUserAppAccess;
+  return personalAppGate;
+}
+
 /**
  * Middleware that requires authentication when anonymousAuth is disabled
  * @param {Object} req - Express request object
@@ -181,6 +195,18 @@ export function chatAuthRequired(req, res, next) {
       if (isAnonymousAccessAllowed(platformConfig)) {
         req.user = enhanceUserWithPermissions(null, platformConfig.auth || {}, platformConfig);
       }
+    }
+
+    // A personal app (an ID of the personal shape that no config app has) is
+    // not granted by groups: its owner and its shares decide. Neither answer
+    // of `appAccessRequired` fits it: 403 without the `apps` wildcard, and
+    // "pass" with it. The caller gets the app or the 404 of an unknown ID.
+    // A config app that happens to have such an ID is handed back to
+    // `appAccessRequired` by the gate.
+    if (isUserAppId(req.params.appId)) {
+      return loadPersonalAppGate()
+        .then(gate => gate(appAccessRequired)(req, res, next))
+        .catch(next);
     }
 
     // Check app access permissions whenever a principal exists.

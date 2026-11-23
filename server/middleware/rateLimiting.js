@@ -6,6 +6,11 @@ import { recordRateLimitHit } from '../telemetry/metrics.js';
 import { ClusterRateLimitStore } from '../utils/clusterRateLimitStore.js';
 
 import { ServiceError } from '../utils/ServiceError.js';
+import {
+  APP_GENERATOR_DRAFT_LIMIT,
+  APP_GENERATOR_DRAFT_WINDOW_MS,
+  APP_GENERATOR_LIMITER
+} from '../../shared/appGenerator.js';
 /**
  * Rate limiting middleware configuration for API protection
  * Creates configurable rate limiters based on platform configuration
@@ -145,6 +150,8 @@ export function adminApiAuthenticatedOrSucceeded(req, res) {
  * @param {(req: import('express').Request, res: import('express').Response) => boolean}
  *   [options.requestWasSuccessful] - Which finished requests count as successful for
  *   `skipSuccessfulRequests` / `skipFailedRequests`; status below 400 when omitted.
+ * @param {Object} [options.details] - `details` of the `RATE_LIMITED` error this limiter
+ *   answers with, so a client can tell it from the other limiters (`{ limiter: 'appGenerator' }`).
  * @returns {Function} Express rate limiter middleware
  */
 function createRateLimiter(
@@ -152,7 +159,13 @@ function createRateLimiter(
   defaults = {},
   type = 'API',
   skip = undefined,
-  { shared = false, keyGenerator = undefined, limit = undefined, requestWasSuccessful } = {}
+  {
+    shared = false,
+    keyGenerator = undefined,
+    limit = undefined,
+    requestWasSuccessful,
+    details = undefined
+  } = {}
 ) {
   const finalConfig = { ...defaults, ...config };
 
@@ -190,7 +203,8 @@ function createRateLimiter(
           : (options.message?.error ?? options.message?.message);
       next(
         new ServiceError('RATE_LIMITED', text || 'Too many requests', {
-          status: options.statusCode
+          status: options.statusCode,
+          ...(details ? { details } : {})
         })
       );
     }
@@ -363,7 +377,17 @@ const LIMITER_FALLBACKS = Object.freeze({
   inferenceApi: { limit: 500, windowMs: 1 * 60 * 1000 },
   // Provenance lookup (`POST /api/eu-ai-act/provenance/_verify`): a membership oracle for a
   // candidate text, so it gets its own, stricter budget per client.
-  provenanceVerifyApi: { limit: 60, windowMs: 60 * 1000, skipFailedRequests: false }
+  provenanceVerifyApi: { limit: 60, windowMs: 60 * 1000, skipFailedRequests: false },
+  // App drafts (`POST /api/admin/apps/_generate`): every request is a paid model call, also
+  // one whose answer cannot be used, so failed requests count. Code defaults only: it is not
+  // in RATE_LIMITER_KEYS, so platform.json and Admin → Security do not carry it.
+  appGeneratorApi: {
+    limit: APP_GENERATOR_DRAFT_LIMIT,
+    windowMs: APP_GENERATOR_DRAFT_WINDOW_MS,
+    skipSuccessfulRequests: false,
+    skipFailedRequests: false,
+    message: 'Too many drafts were prepared in the last hour. Try again later.'
+  }
 });
 
 /**
@@ -521,4 +545,58 @@ export function createRunSteerLimiter(config = {}) {
     req => req.body?.kind !== 'steer',
     { shared: true, keyGenerator: userKeyOptions(settings).keyGenerator }
   );
+}
+
+/**
+ * The limiter of the app draft generator (`POST /api/admin/apps/_generate`): 30 drafts per
+ * user per hour, counted across cluster workers. Failed requests count, because a draft that
+ * ends in an unusable answer is a model call that was paid for, and the admin limiter skips
+ * failed requests as shipped. The route mounts it itself, after `contentAdminAuth`, so the
+ * key is always a signed-in user.
+ *
+ * Its 429 carries `details.limiter: 'appGenerator'`: `RATE_LIMITED` is also the code of the
+ * admin limiter and of a throttled model provider, and the client shows a different message.
+ *
+ * Limit and window are code defaults (`LIMITER_FALLBACKS.appGeneratorApi`). Only the header
+ * settings follow `rateLimit.default` of the platform configuration.
+ *
+ * @param {Object} platformConfig - Platform configuration object
+ * @returns {Function} Express rate limiter middleware
+ */
+function createAppGeneratorLimiter(platformConfig = {}) {
+  const { standardHeaders = true, legacyHeaders = false } =
+    platformConfig?.rateLimit?.default || {};
+  return createRateLimiter(
+    { standardHeaders, legacyHeaders, ...LIMITER_FALLBACKS.appGeneratorApi },
+    {},
+    'app generator',
+    undefined,
+    {
+      shared: true,
+      keyGenerator: adminApiRateLimitKey,
+      details: { limiter: APP_GENERATOR_LIMITER }
+    }
+  );
+}
+
+let sharedAppGeneratorLimiter = null;
+
+/**
+ * The one draft limiter of this process. The admin draft route and the draft route of personal
+ * apps both mount this instance, so a user has one budget of drafts for the two routes together,
+ * also on a server with a single worker, where every limiter instance counts for itself.
+ *
+ * The instance is created on the first call, so the header settings of later calls are ignored.
+ *
+ * @param {Object} platformConfig - Platform configuration object
+ * @returns {Function} Express rate limiter middleware
+ */
+export function appGeneratorLimiter(platformConfig = {}) {
+  sharedAppGeneratorLimiter ??= createAppGeneratorLimiter(platformConfig);
+  return sharedAppGeneratorLimiter;
+}
+
+/** Forget the shared draft limiter, so the next route registration counts from zero (tests). */
+export function resetAppGeneratorLimiter() {
+  sharedAppGeneratorLimiter = null;
 }

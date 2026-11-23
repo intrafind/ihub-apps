@@ -6,7 +6,7 @@ import { useTranslation } from 'react-i18next';
 import { getLocalizedContent } from '../../../utils/localizeContent';
 import Icon from '../../../shared/components/Icon';
 import { useUIConfig } from '../../../shared/contexts/UIConfigContext';
-import { getHttpUrl } from '../../../utils/safeUrl';
+import { getHttpUrl } from '../../../utils/httpUrl';
 
 /**
  * RedirectApp component

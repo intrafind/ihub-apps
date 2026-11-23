@@ -84,7 +84,18 @@ export const chatPostSchema = {
     bypassAppPrompts: z.any().optional(),
     thinkingEnabled: z.boolean().optional(),
     thinkingLevel: z
-      .enum(['minimal', 'low', 'medium', 'high', 'MINIMAL', 'LOW', 'MEDIUM', 'HIGH'])
+      .enum([
+        'minimal',
+        'low',
+        'medium',
+        'high',
+        'xhigh',
+        'MINIMAL',
+        'LOW',
+        'MEDIUM',
+        'HIGH',
+        'XHIGH'
+      ])
       .optional(),
     thinkingThoughts: z.boolean().optional(),
     enabledTools: z.array(z.string()).optional(),

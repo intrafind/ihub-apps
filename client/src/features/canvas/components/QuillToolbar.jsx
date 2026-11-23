@@ -1,12 +1,13 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
-import { useRef, useEffect, useState } from 'react';
+import { useRef, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import ExportMenu from './ExportMenu';
 import Icon from '../../../shared/components/Icon';
 import CanvasVoiceInput from './CanvasVoiceInput';
 import useFeatureFlags from '../../../shared/hooks/useFeatureFlags';
+import { htmlToPlainText } from '../../../utils/htmlText';
 import './QuillToolbar.css';
 
 const QuillToolbar = ({
@@ -27,7 +28,7 @@ const QuillToolbar = ({
   // Check if export is enabled at both platform and app levels
   const exportEnabled = featureFlags.isBothEnabled(app, 'export', true);
 
-  const characterCount = content.replace(/<[^>]*>/g, '').length;
+  const characterCount = useMemo(() => htmlToPlainText(content).length, [content]);
 
   // Update undo/redo button states and current format
   useEffect(() => {

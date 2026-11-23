@@ -46,10 +46,10 @@ function SkillsConfigSection({
 
   return (
     <div className="bg-white dark:bg-gray-800 shadow-sm px-4 py-5 sm:rounded-lg sm:p-6">
-      <div className="md:grid md:grid-cols-3 md:gap-6">
-        <div className="md:col-span-1">
+      <div className="md:form-cols:grid md:form-cols:grid-cols-3 md:form-cols:gap-6">
+        <div className="md:form-cols:col-span-1">
           <h3 className="text-lg font-medium leading-6 text-gray-900 dark:text-gray-100">
-            {t('admin.apps.edit.skills', 'Skills')}
+            {t('admin.apps.edit.skillsTitle')}
           </h3>
           <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
             {t(
@@ -58,7 +58,7 @@ function SkillsConfigSection({
             )}
           </p>
         </div>
-        <div className="mt-5 md:mt-0 md:col-span-2 space-y-4">
+        <div className="mt-5 md:form-cols:mt-0 md:form-cols:col-span-2 space-y-4">
           <CheckboxField
             id="skills-enabled"
             checked={enabled}
@@ -71,7 +71,7 @@ function SkillsConfigSection({
           />
           {enabled && (
             <fieldset className="space-y-2">
-              <legend className="sr-only">{t('admin.apps.edit.skills', 'Skills')}</legend>
+              <legend className="sr-only">{t('admin.apps.edit.skillsTitle')}</legend>
               <div>
                 <label className="flex items-start gap-3 cursor-pointer text-sm font-medium text-gray-900 dark:text-gray-100">
                   <input

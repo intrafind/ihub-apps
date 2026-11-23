@@ -126,7 +126,9 @@ function AdminGroupEditPage() {
     if (!data) data = group;
 
     if (!data.id || !data.name) {
-      setSaveError('Group ID and name are required');
+      setSaveError(
+        t('admin.groups.validation.idAndNameRequired', 'Group ID and name are required')
+      );
       return;
     }
 
@@ -153,7 +155,7 @@ function AdminGroupEditPage() {
   };
 
   if (error) {
-    return <AdminLoadError title="Error" message={error} action={null} />;
+    return <AdminLoadError title={t('common.error', 'Error')} message={error} action={null} />;
   }
 
   return (
@@ -161,9 +163,14 @@ function AdminGroupEditPage() {
       loading={loading}
       outerClassName="min-h-screen bg-gray-50 dark:bg-gray-900"
       breadcrumbs={[
-        { label: 'Admin', href: '/admin' },
-        { label: 'Groups', href: '/admin/groups' },
-        { label: groupId === 'new' ? 'New Group' : (group?.name ?? groupId) }
+        { label: t('documentTitle.admin', 'Admin'), href: '/admin' },
+        { label: t('admin.nav.groups', 'Groups'), href: '/admin/groups' },
+        {
+          label:
+            groupId === 'new'
+              ? t('admin.breadcrumbs.newGroup', 'New Group')
+              : (group?.name ?? groupId)
+        }
       ]}
       blocker={blocker}
     >
@@ -225,7 +232,9 @@ function AdminGroupEditPage() {
               <Icon name="warning" size="md" className="text-red-400" />
             </div>
             <div className="ml-3">
-              <h3 className="text-sm font-medium text-red-800 dark:text-red-200">Error</h3>
+              <h3 className="text-sm font-medium text-red-800 dark:text-red-200">
+                {t('common.error', 'Error')}
+              </h3>
               <div className="mt-2 text-sm text-red-700 dark:text-red-300">{saveError}</div>
             </div>
           </div>
@@ -269,7 +278,11 @@ function AdminGroupEditPage() {
           onCancel={() => navigate('/admin/groups')}
           cancelLabel={t('admin.groups.edit.cancel', 'Cancel')}
           saving={saving}
-          saveLabel={t('admin.groups.edit.save', groupId === 'new' ? 'Create Group' : 'Save Group')}
+          saveLabel={
+            groupId === 'new'
+              ? t('admin.groups.edit.create', 'Create Group')
+              : t('admin.groups.edit.save', 'Save Group')
+          }
           savingLabel={t('admin.groups.edit.saving', 'Saving...')}
         />
       </form>

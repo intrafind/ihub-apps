@@ -84,7 +84,10 @@ export default function TaskEditorPage() {
   const location = useLocation();
   const { taskId } = useParams();
   const editing = Boolean(taskId);
-  const { apps } = useApps();
+  const { apps: allApps } = useApps();
+  // Scheduled tasks run company apps only, never a personal app (design 7.5):
+  // the server refuses one, so the picker does not offer it.
+  const apps = useMemo(() => allApps.filter(a => a.ownership !== 'user'), [allApps]);
   const limits = useScheduledTaskLimits();
 
   const incoming = location.state || {};
