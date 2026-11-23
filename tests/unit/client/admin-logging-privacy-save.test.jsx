@@ -2,13 +2,13 @@
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
 /**
- * OB-B10: "Save Privacy Settings" saves what its label says. It used to send
+ * OB-B10: the privacy block saves what it holds: only `anonymizeIp`. It used to send
  * the whole logging block it held, so a pending, unsaved change of the log
  * level in the card above was written too. It now sends `anonymizeIp` alone;
  * the server merges it into the stored logging block.
  */
 import '@testing-library/jest-dom';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 
 const mockAdminCall = jest.fn();
 jest.mock('../../../client/src/api/adminApi', () => ({
@@ -31,6 +31,10 @@ const AdminLoggingPage =
   require('../../../client/src/features/admin/pages/AdminLoggingPage').default;
 
 beforeEach(() => {
+  global.ResizeObserver = class {
+    observe() {}
+    disconnect() {}
+  };
   mockAdminCall.mockReset();
   mockAdminCall.mockImplementation(async (url, options = {}) => {
     if (options.method && options.method !== 'GET') return { data: {} };
@@ -45,21 +49,30 @@ beforeEach(() => {
 test('the privacy card sends only anonymizeIp, not a pending log-level change', async () => {
   render(<AdminLoggingPage />);
   const privacySelect = await screen.findByLabelText('Anonymize IP in structured logs');
+  // The page captures its saved baseline a moment after the load; an edit before that would
+  // count as loaded.
+  await act(async () => {
+    await new Promise(resolve => setTimeout(resolve, 50));
+  });
 
   // A pending, unsaved change in the logging card above.
   fireEvent.click(screen.getByRole('button', { name: /^debug/i }));
   fireEvent.change(privacySelect, { target: { value: 'mask' } });
 
-  fireEvent.click(screen.getByRole('button', { name: 'Save Privacy Settings' }));
+  fireEvent.click(
+    within(screen.getByRole('region', { name: /save changes/i })).getByRole('button', {
+      name: 'Save Changes'
+    })
+  );
 
-  await waitFor(() =>
-    expect(mockAdminCall).toHaveBeenCalledWith(
-      '/admin/logging/config',
-      expect.objectContaining({ method: 'PUT' })
-    )
-  );
-  const [, options] = mockAdminCall.mock.calls.find(
-    ([url, o]) => url === '/admin/logging/config' && o?.method === 'PUT'
-  );
-  expect(options.body).toEqual({ anonymizeIp: 'mask' });
+  const puts = () =>
+    mockAdminCall.mock.calls.filter(
+      ([url, o]) => url === '/admin/logging/config' && o?.method === 'PUT'
+    );
+  await waitFor(() => expect(puts()).toHaveLength(2));
+  // One Save, two blocks, in page order: the logging block first (it carries the level), then
+  // the privacy block, which sends `anonymizeIp` alone and is therefore the last word on it.
+  const [[, logging], [, privacy]] = puts();
+  expect(logging.body.level).toBe('debug');
+  expect(privacy.body).toEqual({ anonymizeIp: 'mask' });
 });

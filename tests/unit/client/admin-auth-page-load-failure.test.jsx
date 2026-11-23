@@ -102,6 +102,13 @@ const flush = async () => {
 
 const writes = () => makeAdminApiCall.mock.calls.filter(([, options]) => options?.method);
 
+// The bottom save bar: shown only while there are unsaved changes; its last button saves.
+const saveBar = () => screen.queryByRole('region', { name: 'Save changes' });
+const clickSave = () => {
+  const buttons = within(saveBar()).getAllByRole('button');
+  fireEvent.click(buttons[buttons.length - 1]);
+};
+
 function LeaveButton() {
   const navigate = useNavigate();
   return (
@@ -182,7 +189,9 @@ describe('AdminAuthPage after a failed load', () => {
 
     expect(platformCalls).toBe(2);
     expect(screen.queryByText("Couldn't load authentication settings")).not.toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Save Configuration' })).toBeEnabled();
+    // The form is shown with the stored values; nothing to save yet, so no bar.
+    expect(screen.getByDisplayValue('480')).toBeInTheDocument();
+    expect(saveBar()).not.toBeInTheDocument();
     expect(writes()).toHaveLength(0);
   });
 
@@ -196,7 +205,7 @@ describe('AdminAuthPage after a failed load', () => {
     await flush();
 
     expect(screen.queryByText(/Couldn't load/)).not.toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Save Configuration' })).toBeEnabled();
+    expect(screen.getByDisplayValue('480')).toBeInTheDocument();
   });
 
   it('saves exactly what was loaded (no built-in defaults merged in)', async () => {
@@ -208,15 +217,22 @@ describe('AdminAuthPage after a failed load', () => {
     renderPage();
     await flush();
 
+    // One edit makes the bar appear; the rest of what was loaded is sent as it is.
+    fireEvent.change(screen.getByDisplayValue('480'), { target: { value: '60' } });
     await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: 'Save Configuration' }));
+      clickSave();
     });
     await flush();
 
     expect(writes()).toHaveLength(1);
     const [url, options] = writes()[0];
     expect(url).toBe('/admin/configs/platform');
-    expect(options.body).toEqual(PLATFORM);
+    expect(options.body).toEqual({
+      ...PLATFORM,
+      localAuth: { ...PLATFORM.localAuth, sessionTimeoutMinutes: 60 }
+    });
+    // Saved: nothing left to save, the bar is gone.
+    expect(saveBar()).not.toBeInTheDocument();
   });
 });
 
@@ -273,7 +289,7 @@ describe('AdminAuthPage turning on a method whose block is missing (R1)', () => 
 
     fireEvent.click(methodCheckbox('NTLM Authentication'));
     await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: 'Save Configuration' }));
+      clickSave();
     });
     await flush();
 
@@ -301,7 +317,7 @@ describe('AdminAuthPage turning on a method whose block is missing (R1)', () => 
 
     fireEvent.click(methodCheckbox('NTLM Authentication'));
     await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: 'Save Configuration' }));
+      clickSave();
     });
     await flush();
 
@@ -330,11 +346,12 @@ describe('AdminAuthPage edits made while saving (R3)', () => {
     renderPage();
     await flush();
 
+    fireEvent.change(screen.getByDisplayValue('480'), { target: { value: '60' } });
     await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: 'Save Configuration' }));
+      clickSave();
     });
     // The form stays editable while the request runs.
-    fireEvent.change(screen.getByDisplayValue('480'), { target: { value: '60' } });
+    fireEvent.change(screen.getByDisplayValue('60'), { target: { value: '90' } });
     await act(async () => {
       finishSave();
     });
@@ -354,14 +371,15 @@ describe('AdminAuthPage edits made while saving (R3)', () => {
     renderPage();
     await flush();
 
+    fireEvent.change(screen.getByDisplayValue('480'), { target: { value: '60' } });
     await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: 'Save Configuration' }));
+      clickSave();
     });
     await flush();
     expect(writes()).toHaveLength(1);
 
     // One edit after the save, then straight to another page.
-    fireEvent.change(screen.getByDisplayValue('480'), { target: { value: '60' } });
+    fireEvent.change(screen.getByDisplayValue('60'), { target: { value: '90' } });
     fireEvent.click(screen.getByRole('button', { name: 'Go to users' }));
 
     expect(screen.queryByRole('heading', { name: 'Users page' })).not.toBeInTheDocument();

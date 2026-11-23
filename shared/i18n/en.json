@@ -4278,7 +4278,8 @@
         "magicPromptInstructionsPlaceholder": "Enter instructions for the magic prompt feature…"
       },
       "reorder": "Reorder",
-      "reorderHelp": "Drag a row or use the arrows to set the order apps appear in for users — in the apps browser, on the start page and in the sidebar. Every app is listed, so search and filters do not apply here. Nothing is saved until you choose \"Save order\".",
+      "reorderHelp": "Drag a row or use the arrows to set the order apps appear in for users — in the apps browser, on the start page and in the sidebar. Every app is listed, so search and filters do not apply here. Nothing is saved until you save the new order at the bottom of the page.",
+      "doneReordering": "Done",
       "saveOrder": "Save order",
       "savingOrder": "Saving order...",
       "openApp": "Open app",
@@ -5866,7 +5867,8 @@
         "label": "Save changes",
         "saving": "Saving…",
         "unsaved": "You have unsaved changes",
-        "discard": "Discard"
+        "discard": "Discard",
+        "create": "Create"
       },
       "saved": "UI configuration saved successfully",
       "backedUp": "Configuration backed up to: {{path}}",
@@ -7576,7 +7578,8 @@
         "allowCatalog": "The project catalog",
         "allowCatalogHelp": "Owners and editors publish a project; every user can browse the catalog and add it to their projects. Turning this off hides published projects again.",
         "permissionHint": "Users also need the \"projectSharing\" permission of their group.",
-        "saved": "Saved"
+        "saved": "Saved",
+        "invalidInput": "Fix the highlighted fields first (a number in the allowed range, or empty)."
       },
       "panel": {
         "details": "Name and description",
@@ -9278,7 +9281,8 @@
         "choose": "Choose…",
         "noInstallations": "No connected system is installed.",
         "noActions": "No functions",
-        "unblock": "Switch on again"
+        "unblock": "Switch on again",
+        "invalidMaxApps": "Enter a whole number for the limit of apps per user (0 means no limit)."
       },
       "groups": {
         "userApps": "Personal apps",

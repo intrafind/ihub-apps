@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
-import { act, fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import AdminAgentEditPage from '../../../client/src/features/admin/pages/AdminAgentEditPage';
@@ -49,7 +49,12 @@ jest.mock('@monaco-editor/react', () => ({
 }));
 
 jest.mock('../../../client/src/features/admin/hooks/useUnsavedChanges', () => ({
-  useUnsavedChanges: () => ({ blocker: { state: 'unblocked' }, markSaved: jest.fn() })
+  // Always dirty: the page's save bar is shown only for unsaved changes.
+  useUnsavedChanges: () => ({
+    isDirty: true,
+    blocker: { state: 'unblocked' },
+    markSaved: jest.fn()
+  })
 }));
 
 jest.mock('../../../client/src/features/admin/components/AdminBreadcrumb', () => ({
@@ -158,8 +163,15 @@ async function renderEditor() {
   await flush();
 }
 
+/** The save bar's primary button (its last button; Discard comes first). */
+function saveBarButton() {
+  const bar = screen.getByRole('region', { name: 'Save changes' });
+  const buttons = within(bar).getAllByRole('button');
+  return buttons[buttons.length - 1];
+}
+
 async function save() {
-  fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+  fireEvent.click(saveBarButton());
   await flush();
   expect(updateAgentProfile).toHaveBeenCalledTimes(1);
   return updateAgentProfile.mock.calls[0][1];
@@ -220,14 +232,24 @@ test('JSON mode holds back Save and Form while the text does not parse (no Monac
   // The stand-in editor never publishes markers, so only the text itself can
   // tell the page that it is invalid.
   fireEvent.change(editor, { target: { value: text.replace(/\n}\s*$/, ',\n  "x"\n}') } });
-  expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled();
   expect(screen.getByRole('button', { name: 'Form' })).toBeDisabled();
   expect(screen.getByRole('alert')).toHaveTextContent('The JSON is not valid');
+  // The bar says why, and its Save saves nothing while the text does not parse.
+  expect(
+    within(screen.getByRole('region', { name: 'Save changes' })).getByRole('status')
+  ).toHaveTextContent('The JSON is not valid');
+  fireEvent.click(saveBarButton());
+  await flush();
+  expect(updateAgentProfile).not.toHaveBeenCalled();
 
   fireEvent.change(screen.getByLabelText('JSON'), { target: { value: text } });
-  expect(screen.getByRole('button', { name: 'Save' })).toBeEnabled();
   expect(screen.getByRole('button', { name: 'Form' })).toBeEnabled();
   expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  expect(
+    within(screen.getByRole('region', { name: 'Save changes' })).getByRole('status')
+  ).not.toHaveTextContent('The JSON is not valid');
+  const payload = await save();
+  expect(payload.id).toBe(STORED_PROFILE.id);
 });
 
 test('a comma separates names in the approver and service-account group fields', async () => {

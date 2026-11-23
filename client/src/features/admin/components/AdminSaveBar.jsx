@@ -31,8 +31,18 @@ const ACTION_CLASS =
  *   changes" and announced with it.
  * @param {{label: string, onClick: () => void}} [props.action] - A link-like button after
  *   the message.
+ * @param {string} [props.saveLabel] - The Save button's text; "Create" on the page of a new
+ *   resource. Defaults to "Save Changes".
  */
-export default function AdminSaveBar({ dirty, saving, onSave, onDiscard, message, action }) {
+export default function AdminSaveBar({
+  dirty,
+  saving,
+  onSave,
+  onDiscard,
+  message,
+  action,
+  saveLabel
+}) {
   const { t } = useTranslation();
   const barRef = useRef(null);
   const shown = Boolean(dirty || saving);
@@ -81,7 +91,9 @@ export default function AdminSaveBar({ dirty, saving, onSave, onDiscard, message
             </button>
           )}
           <button type="button" onClick={onSave} disabled={saving} className={PRIMARY_BUTTON_CLASS}>
-            {saving ? t('admin.ui.saveBar.saving', 'Saving…') : t('admin.ui.save', 'Save Changes')}
+            {saving
+              ? t('admin.ui.saveBar.saving', 'Saving…')
+              : (saveLabel ?? t('admin.ui.save', 'Save Changes'))}
           </button>
         </div>
       </div>

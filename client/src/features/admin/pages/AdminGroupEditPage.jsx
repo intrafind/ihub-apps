@@ -15,6 +15,7 @@ import UsageLimitsEditor, { normalizeUsageLimits } from '../components/UsageLimi
 import { useAdminResourceEditor } from '../hooks/useAdminResourceEditor';
 import AdminEditPageShell from '../../../shared/components/AdminEditPageShell';
 import AdminSaveBar from '../components/AdminSaveBar';
+import ImplicitSubmit from '../../../shared/components/ImplicitSubmit';
 import useSaveAttempts from '../hooks/useSaveAttempts';
 import { FIELD_KEYS } from '../utils/fieldErrors';
 
@@ -287,8 +288,10 @@ function AdminGroupEditPage() {
 
       {/* noValidate: the form's own messages come first (see handleSave). */}
       <form onSubmit={handleFormSubmit} noValidate className="space-y-8">
+        <ImplicitSubmit disabled={saving} />
         <DualModeEditor
           value={group}
+          savedValue={initialData}
           onChange={handleDataChange}
           formComponent={GroupFormEditor}
           onValidationChange={setFormValidation}

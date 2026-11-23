@@ -10,6 +10,7 @@ import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
 
 import { getAdminApiErrorMessage } from '../../../api/adminApi';
 import AdminLoadError from '../components/AdminLoadError';
+import AdminSaveBar from '../components/AdminSaveBar';
 import UnsavedChangesDialog from '../components/UnsavedChangesDialog';
 // Parse a checklist-style markdown body into structured items so the form
 // editor can manipulate them. Lines that don't match the checkbox shape are
@@ -74,8 +75,17 @@ export default function AdminAgentInboxEditPage() {
   const [error, setError] = useState(null);
   const [view, setView] = useState('form'); // 'form' | 'raw'
   const [rawBody, setRawBody] = useState('');
+  // The raw text as stored. The Raw view saves it as typed, and the parsed form drops what
+  // it cannot read (other bullets, blank lines, notes between items), so the page compares
+  // this text too or such an edit would show no bar and could not be saved.
+  const [savedRawBody, setSavedRawBody] = useState('');
 
-  const { blocker, markSaved } = useUnsavedChanges(initialData, parsed);
+  // Raw text counts for the guard too: an edit of the layout alone parses to the same items.
+  const rawEdited = view === 'raw' && rawBody !== savedRawBody;
+  const { isDirty, blocker, markSaved } = useUnsavedChanges(
+    initialData && { parsed: initialData, raw: savedRawBody },
+    { parsed, raw: rawEdited ? rawBody : savedRawBody }
+  );
 
   const [newText, setNewText] = useState('');
   const [newPriority, setNewPriority] = useState('p2');
@@ -90,6 +100,7 @@ export default function AdminAgentInboxEditPage() {
         setParsed(parsedBody);
         setInitialData(parsedBody);
         setRawBody(body);
+        setSavedRawBody(body);
         setVersion(data.version || 0);
       } catch (err) {
         setError(getAdminApiErrorMessage(err));
@@ -156,6 +167,7 @@ export default function AdminAgentInboxEditPage() {
       setParsed(reparsed);
       setInitialData(reparsed);
       setRawBody(body);
+      setSavedRawBody(body);
       markSaved();
     } catch (err) {
       const code = err?.response?.data?.code;
@@ -170,6 +182,15 @@ export default function AdminAgentInboxEditPage() {
     } finally {
       setSaving(false);
     }
+  }
+
+  // Back to the last saved state, in both views.
+  function handleDiscard() {
+    // Without a loaded inbox (the load failed) the saved text is the only baseline.
+    setParsed(initialData ?? parseBody(savedRawBody));
+    // The stored text itself, not a re-serialization that would rewrite its layout.
+    setRawBody(savedRawBody);
+    setError(null);
   }
 
   if (loading) {
@@ -214,13 +235,6 @@ export default function AdminAgentInboxEditPage() {
               {view === 'form'
                 ? t('admin.common.viewRaw', 'Raw')
                 : t('admin.common.viewForm', 'Form')}
-            </button>
-            <button
-              onClick={handleSave}
-              disabled={saving}
-              className="px-4 py-2 text-sm bg-indigo-600 text-white rounded-sm disabled:opacity-50"
-            >
-              {saving ? t('common.saving', 'Saving…') : t('common.save', 'Save')}
             </button>
             <button
               onClick={() => navigate('/admin/agents/inboxes')}
@@ -378,6 +392,13 @@ export default function AdminAgentInboxEditPage() {
           </>
         )}
       </div>
+
+      <AdminSaveBar
+        dirty={isDirty}
+        saving={saving}
+        onSave={() => void handleSave()}
+        onDiscard={handleDiscard}
+      />
 
       <UnsavedChangesDialog blocker={blocker} />
     </div>

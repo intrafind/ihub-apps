@@ -8,7 +8,7 @@
  */
 
 import '@testing-library/jest-dom';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 
 const mockT = (key, options) => {
   if (typeof options === 'string') return options;
@@ -31,10 +31,6 @@ const mockRefreshConfig = jest.fn();
 jest.mock('../../../client/src/shared/contexts/PlatformConfigContext', () => ({
   __esModule: true,
   usePlatformConfig: () => ({ refreshConfig: mockRefreshConfig })
-}));
-jest.mock('../../../client/src/features/admin/hooks/useUnsavedChanges', () => ({
-  __esModule: true,
-  useUnsavedChanges: () => ({ blocker: null })
 }));
 jest.mock('../../../client/src/features/admin/components/UnsavedChangesDialog', () => ({
   __esModule: true,
@@ -188,7 +184,13 @@ describe('Admin → Features saves the draft model', () => {
     fireEvent.change(select, { target: { value: 'big' } });
     fireEvent.click(screen.getByRole('button', { name: 'Save Changes' }));
 
-    await screen.findByText('Failed to save features');
+    // The failure shows in the page's banner and next to the save bar.
+    expect(await screen.findByRole('alert')).toHaveTextContent('Failed to save features');
+    expect(
+      within(screen.getByRole('region', { name: 'Save changes' })).getByText(
+        'Failed to save features'
+      )
+    ).toBeInTheDocument();
     expect(mockAdminApi).toHaveBeenCalledWith('/admin/features', {
       method: 'PUT',
       body: { appGenerator: false }

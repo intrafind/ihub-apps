@@ -6,7 +6,10 @@ import { useTranslation } from 'react-i18next';
 import Icon from '../../../../../shared/components/Icon';
 import ConfigFieldInput from '../ConfigFieldInput';
 import { HELP_CLASS, LABEL_CLASS, MONO_INPUT_CLASS } from '../../formStyles';
-import useInstallationEditor, { useInstallationEditorDirty } from './useInstallationEditor';
+import useInstallationEditor, {
+  useInstallationEditorDirty,
+  useInstallationEditorSave
+} from './useInstallationEditor';
 import {
   AccessSection,
   ActionsSection,
@@ -71,16 +74,19 @@ function IAssistantEditor({ instance, definition, onSaved, onCancel }) {
   );
   const setValue = (key, value) => setValues(prev => ({ ...prev, [key]: value }));
 
-  const submit = event => {
-    event.preventDefault();
+  const save = async () => {
     if (!String(values.connection || '').trim()) {
-      editor.reject(
+      return editor.reject(
         'connection',
         t(`${K}.connectionRequired`, 'Pick the iFinder installation iAssistant runs on.')
       );
-      return;
     }
-    void editor.save(values);
+    return editor.save(values);
+  };
+  useInstallationEditorSave(editor, save);
+  const submit = event => {
+    event.preventDefault();
+    void save();
   };
 
   const definitionField = key =>

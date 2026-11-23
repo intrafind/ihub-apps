@@ -17,7 +17,7 @@
  * send only their own fields.
  */
 import '@testing-library/jest-dom';
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 
 const mockRequest = jest.fn();
 jest.mock('../../../client/src/api/client', () => ({
@@ -52,9 +52,20 @@ jest.mock('../../../client/src/features/admin/components/AdminDemoAccountsAlert'
   __esModule: true,
   default: () => null
 }));
+// A stand-in editor with one button that edits the value: enough to make a page dirty, so its
+// bottom save bar offers Save.
 jest.mock('../../../client/src/shared/components/DualModeEditor', () => ({
   __esModule: true,
-  default: () => null
+  default: ({ value, onChange }) =>
+    value && onChange ? (
+      <button
+        type="button"
+        data-testid="mock-edit"
+        onClick={() => onChange({ ...value, edited: true })}
+      >
+        edit
+      </button>
+    ) : null
 }));
 jest.mock('../../../client/src/features/admin/components/PlatformFormEditor', () => ({
   __esModule: true,
@@ -79,6 +90,10 @@ const AdminAdvancedPage =
   require('../../../client/src/features/admin/pages/AdminAdvancedPage').default;
 const CookieSettingsConfig =
   require('../../../client/src/features/admin/components/CookieSettingsConfig').default;
+const {
+  SaveSectionsBar,
+  SaveSectionsProvider
+} = require('../../../client/src/features/admin/components/SaveSections');
 const AdminAuthPage = require('../../../client/src/features/admin/pages/AdminAuthPage').default;
 
 const ok = (data, etag) => ({ status: 200, data, headers: etag ? { etag } : {} });
@@ -444,7 +459,10 @@ describe('a full-config form saves against the revision it loaded', () => {
         <AdminConfigConflictNotice onReload={jest.fn()} />
       </>
     );
-    const save = await screen.findByRole('button', { name: 'Save Configuration' });
+    // One edit of the loaded form; the bottom bar then offers Save.
+    fireEvent.click(await screen.findByTestId('mock-edit'));
+    const bar = await screen.findByRole('region', { name: 'Save changes' });
+    const save = within(bar).getAllByRole('button').at(-1);
     expect(platformReads).toBe(1);
 
     await act(async () => {
@@ -489,9 +507,18 @@ describe('scoped saves send only their own fields', () => {
         ? ok({ cookieSettings: { disableSecure: true } }, '"rev-3"')
         : ok({ cookieSettings: { disableSecure: false } }, '"rev-1"')
     );
-    render(<CookieSettingsConfig />);
+    render(
+      <SaveSectionsProvider>
+        <CookieSettingsConfig />
+        <SaveSectionsBar />
+      </SaveSectionsProvider>
+    );
     fireEvent.click(await screen.findByRole('checkbox'));
-    fireEvent.click(screen.getByRole('button', { name: 'admin.system.cookieSettings.saveConfig' }));
+    fireEvent.click(
+      within(screen.getByRole('region', { name: /saveBar|Save changes/i }))
+        .getAllByRole('button')
+        .at(-1)
+    );
 
     await waitFor(() =>
       expect(mockRequest.mock.calls.some(([config]) => config.method === 'PATCH')).toBe(true)

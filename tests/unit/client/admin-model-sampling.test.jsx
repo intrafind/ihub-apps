@@ -9,7 +9,7 @@
  * (form/JSON) wrapper is replaced by a thin stand-in that renders the form.
  */
 import '@testing-library/jest-dom';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 
 const mockApi = {
@@ -57,7 +57,12 @@ jest.mock('../../../client/src/utils/schemaService', () => ({
   fetchJsonSchema: jest.fn(async () => null)
 }));
 jest.mock('../../../client/src/features/admin/hooks/useUnsavedChanges', () => ({
-  useUnsavedChanges: () => ({ blocker: { state: 'unblocked' }, markSaved: () => {} })
+  // Always dirty: the page's save bar is shown only for unsaved changes.
+  useUnsavedChanges: () => ({
+    blocker: { state: 'unblocked' },
+    markSaved: () => {},
+    isDirty: true
+  })
 }));
 
 const AdminModelEditPage =
@@ -85,7 +90,11 @@ const renderPage = () =>
   );
 
 const field = name => screen.getByLabelText(name);
-const saveButton = () => screen.getByRole('button', { name: 'admin.models.edit.saveChanges' });
+// The save bar's primary button is its last one (Discard comes first).
+const saveButton = () => {
+  const buttons = within(screen.getByRole('region')).getAllByRole('button');
+  return buttons[buttons.length - 1];
+};
 
 /** The body of the PUT the page sent when saved. */
 const savedBody = async () => {
