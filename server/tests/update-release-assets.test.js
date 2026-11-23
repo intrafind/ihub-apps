@@ -4,7 +4,8 @@
 /**
  * The release workflow and the updater agree on what the archives are called
  * (the updater used to look for `-windows.tar.gz`; the workflow publishes
- * `-win.zip`), the workflow publishes and signs what the updater verifies,
+ * `-win.zip`, and `-windows.tar.gz` as well for installations that still run
+ * the old updater), the workflow publishes and signs what the updater verifies,
  * and the launcher build-sea.cjs generates still compiles and applies
  * pending updates.
  *
@@ -19,6 +20,7 @@ import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import {
   detectArchiveFormat,
+  getLegacyUpdaterArchiveName,
   getUpdateArchiveName,
   parseUpdateArchiveName
 } from '../update/archiveNames.js';
@@ -48,6 +50,37 @@ describe('release archive names', () => {
       assert.ok(detectArchiveFormat(name));
       assert.ok(parseUpdateArchiveName(name));
     }
+  });
+
+  it('publishes the archive the updater before 5.6.2 looks for on Windows', () => {
+    // That updater asks for `ihub-apps-${tag}-${platform}.tar.gz` with platform `windows`.
+    assert.equal(
+      getLegacyUpdaterArchiveName('v5.7.4', 'windows'),
+      'ihub-apps-v5.7.4-windows.tar.gz'
+    );
+    assert.equal(getLegacyUpdaterArchiveName('5.7.4', 'win'), 'ihub-apps-v5.7.4-windows.tar.gz');
+    // Linux and macOS already have the name that updater finds.
+    assert.equal(getLegacyUpdaterArchiveName('v5.7.4', 'linux'), null);
+    assert.equal(getLegacyUpdaterArchiveName('v5.7.4', 'macos'), null);
+    assert.throws(() => getLegacyUpdaterArchiveName('v5.7.4', 'amiga'), /Unknown platform/);
+
+    // The current updater still reads it as a Windows archive and lists it in the checksums.
+    const name = getLegacyUpdaterArchiveName('v5.7.4', 'windows');
+    assert.deepEqual(parseUpdateArchiveName(name), { version: '5.7.4', platform: 'windows' });
+    assert.deepEqual(detectArchiveFormat(name), { format: 'tar.gz', base64: false });
+
+    const run = (...args) =>
+      execFileSync(process.execPath, [path.join(repo, 'scripts/update-archive-name.js'), ...args], {
+        encoding: 'utf8'
+      }).trim();
+    assert.equal(run('v5.7.4', 'win', '--legacy'), name);
+    assert.equal(run('v5.7.4', 'linux', '--legacy'), '');
+    assert.equal(run('v5.7.4', 'win'), 'ihub-apps-v5.7.4-win.zip');
+
+    // The workflow builds it from the same files as the zip and ships it with the other archives.
+    assert.match(workflow, /update-archive-name\.js "\$VERSION" "\$MATRIX_PLATFORM" --legacy/);
+    assert.match(workflow, /tar -czf "\.\.\/\$LEGACY_ARCHIVE_FILE" \./);
+    assert.match(workflow, /^\s+ihub-apps-\*-windows\.tar\.gz$/m);
   });
 
   it('publishes and signs checksums.sha256 and the update manifest', () => {

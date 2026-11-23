@@ -4,9 +4,10 @@
 /**
  * Release archive names, shared by the release workflow
  * (`.github/workflows/build-binaries.yml` runs `scripts/update-archive-name.js`)
- * and the updater. The updater used to look for `-windows.tar.gz`, which the
- * workflow never published (it publishes `-win.zip`), so a Windows install
- * could not find its own update.
+ * and the updater. The updater before 5.6.2 looked for `-windows.tar.gz`, which
+ * the workflow did not publish (it publishes `-win.zip`), so a Windows install
+ * could not find its own update. {@link getLegacyUpdaterArchiveName} names that
+ * archive, which the workflow still publishes for those installations.
  *
  * @module update/archiveNames
  */
@@ -19,6 +20,19 @@ export const RELEASE_ARCHIVES = Object.freeze({
   linux: Object.freeze({ suffix: 'linux', extension: '.tar.gz' }),
   macos: Object.freeze({ suffix: 'macos', extension: '.tar.gz' }),
   windows: Object.freeze({ suffix: 'win', extension: '.zip' })
+});
+
+/**
+ * Archives published for installations whose updater predates 5.6.2. That
+ * updater only looks for `ihub-apps-<tag>-<platform>.tar.gz`, with the updater's
+ * own platform name, so a platform whose current archive is named differently
+ * needs a second archive with the same files. Linux and macOS already match.
+ *
+ * Remove an entry once no supported installation updates from a version older
+ * than 5.6.2 any more.
+ */
+const LEGACY_UPDATER_ARCHIVES = Object.freeze({
+  windows: Object.freeze({ suffix: 'windows', extension: '.tar.gz' })
 });
 
 /** The workflow's matrix value (`win`) → the updater's platform (`windows`). */
@@ -60,6 +74,25 @@ export function getUpdateArchiveName(tagOrVersion, platform) {
   }
   const { suffix, extension } = RELEASE_ARCHIVES[resolved];
   return `ihub-apps-${toReleaseTag(tagOrVersion)}-${suffix}${extension}`;
+}
+
+/**
+ * Name of the extra archive the release publishes for installations that
+ * update with the updater of a version before 5.6.2, or `null` when the
+ * platform's regular archive is already one that updater finds.
+ *
+ * @param {string} tagOrVersion - `v5.6.0` or `5.6.0`
+ * @param {string} platform - Updater platform or the workflow's matrix suffix
+ * @returns {string|null} e.g. `ihub-apps-v5.6.0-windows.tar.gz`
+ */
+export function getLegacyUpdaterArchiveName(tagOrVersion, platform) {
+  const resolved = RELEASE_ARCHIVES[platform] ? platform : PLATFORM_BY_SUFFIX[platform];
+  if (!resolved) {
+    throw new Error(`Unknown platform: ${platform}`);
+  }
+  const legacy = LEGACY_UPDATER_ARCHIVES[resolved];
+  if (!legacy) return null;
+  return `ihub-apps-${toReleaseTag(tagOrVersion)}-${legacy.suffix}${legacy.extension}`;
 }
 
 /**
