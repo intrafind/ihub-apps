@@ -80,7 +80,7 @@ async function budgetsFor(persistence) {
       prep: PREP,
       chatId,
       streaming: false,
-      user: { id: 'user-1' },
+      user: { id: 'user-1', permissions: {} },
       persistence
     });
   } finally {

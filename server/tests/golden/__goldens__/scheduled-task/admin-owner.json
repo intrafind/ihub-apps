@@ -128,15 +128,12 @@
             "segment": "seg-<id:6>",
             "startedAt": "<ts>",
             "status": "ok",
-            "step": 1,
-            "tools": [
-              "<sha256>"
-            ]
+            "step": 1
           }
         ],
         "chatId": "<id:1>",
         "content": {
-          "<sha256>": 6
+          "<sha256>": 5
         },
         "endedAt": "<ts>",
         "ihubVersion": "<version>",
@@ -283,36 +280,8 @@
         "requestId": "req-<id:7>",
         "segment": "seg-<id:6>",
         "step": 1,
-        "toolExecution": "server",
-        "toolSchemas": [
-          {
-            "approval": "never",
-            "approvalSource": "default",
-            "dataFlow": "internal",
-            "description": "Checks the installation and reports what it found",
-            "id": "workflow_installation-check",
-            "isWorkflowTool": true,
-            "name": "Installation check",
-            "parameters": {
-              "properties": {
-                "input": {
-                  "description": "The user message or primary input for the workflow",
-                  "type": "string"
-                }
-              },
-              "required": [
-                "input"
-              ],
-              "type": "object"
-            },
-            "passthrough": true,
-            "script": "workflowRunner.js",
-            "sideEffect": "unknown",
-            "sideEffectSource": "default",
-            "workflowId": "installation-check"
-          }
-        ],
-        "toolSchemasHash": "480cd853c2cfa4cfd5e002e737fc4dc722f4a4c687953e5e01bdbb8df8afc1d6"
+        "toolExecution": "none",
+        "toolSchemasHash": null
       },
       "runId": "chat-<id:3>",
       "type": "request/header"
@@ -419,18 +388,11 @@
         "user"
       ],
       "systemPromptHash": "baa47fc65fd5b8d7e568d5d970c19adc50ef82aa316dcbfa2182c2c619612e64",
-      "tools": [
-        {
-          "name": "workflow_installation-check",
-          "schema": "ecea27116f16"
-        }
-      ]
+      "tools": []
     }
   ],
   "offeredToolIds": [
-    [
-      "workflow_installation-check"
-    ]
+    []
   ],
   "result": {
     "executions": [
@@ -664,22 +626,9 @@
     ]
   },
   "surface": "scheduled-task",
-  "title": "The run of a task whose owner is an admin: the model is offered a workflow of the app that no group of the owner grants, because the owner is an administrator. The run the row \"unattended-admin-rights\" of the difference list is about.",
+  "title": "The run of a task whose owner is an admin: nobody is there, so the run has the rights of the groups of the owner and none of an administrator, and the model is not offered the workflow of the app that no group of the owner grants. The run the row \"unattended-admin-rights\" of the difference list is about.",
   "toolCalls": [],
-  "toolSchemas": {
-    "ecea27116f16": {
-      "properties": {
-        "input": {
-          "description": "The user message or primary input for the workflow",
-          "type": "string"
-        }
-      },
-      "required": [
-        "input"
-      ],
-      "type": "object"
-    }
-  },
+  "toolSchemas": {},
   "usageRecords": [
     {
       "app": "operations",

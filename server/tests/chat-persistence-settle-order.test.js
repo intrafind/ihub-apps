@@ -113,7 +113,7 @@ async function settleOrder({ crash = false, modelError = false } = {}) {
       chatId,
       emitter,
       streaming: false,
-      user: { id: 'user-1' },
+      user: { id: 'user-1', permissions: {} },
       persistence: { repository, ownerId: 'user-1', content: 'hi' }
     });
   } catch {

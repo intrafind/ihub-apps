@@ -6,12 +6,21 @@
  * routes (`/v1/chat/completions`, `/v1/responses`), all through
  * `ChatService.runTurn`.
  *
- * `runTurn` runs one turn on the shared agent loop and projects it onto SSE v2
- * frames via `chatChannel` / `chatSeams` (one run per turn, `run/started` …
+ * `runTurn` runs one turn and projects it onto SSE v2 frames via
+ * `chatChannel` / `chatSeams` (one run per turn, `run/started` …
  * `run/ended`): it continues or starts the ledger run, stores the question
- * (`settleUserTurn`) and the answer (`materializeAssistantTurn`), schedules the
- * title and keeps a pending approval or connect with the chat. The helpers it
- * needs stay on the `ChatService` it gets as its collaborator (`svc`).
+ * (`settleUserTurn`), hands the model part to the run service
+ * (`services/run/RunService.js`: frozen run context, seams from the profile of
+ * who can answer, the grant re-checked on every tool call), stores the answer
+ * (`materializeAssistantTurn`), schedules the title and keeps a pending
+ * approval or connect with the chat. The helpers it needs stay on the
+ * `ChatService` it gets as its collaborator (`svc`).
+ *
+ * The internal kill switch `platform.runs.chatOnRunService: false` (server
+ * restart) runs the model part on the agent loop directly, with the seams the
+ * turn wired before it moved onto the run service, and the callers keep the
+ * principal of the request as it is (a scheduled run keeps the owner's admin
+ * rights). It is removed one release later.
  *
  * @module services/run/hosts/ChatHost
  */
@@ -77,6 +86,9 @@ import {
   chatToolPolicies,
   wireUsage
 } from '../../chat/chatTurnPolicies.js';
+import { RunService, chatOnRunService, turnLoopSpec } from '../RunService.js';
+import { createRunContext, isRunContext } from '../RunContext.js';
+import { resolveRequestPrincipal } from '../principalResolver.js';
 
 const NO_STREAM = { emit: () => null, runId: null };
 
@@ -112,6 +124,210 @@ async function claimLost(repository, chatId, runId) {
   return current?.activeRunId !== runId || hasActiveChatRequest(chatId);
 }
 
+/**
+ * Who can answer the interactions of the turn (`seamProfiles.js`): the owner
+ * of a scheduled run (it brings its approval seam), nobody for a headless turn,
+ * else the person in the chat.
+ *
+ * @param {{approvalGate: Object|null, headless: boolean}} turn
+ * @returns {'owner'|'none'|'person'}
+ */
+function interactionsOf({ approvalGate, headless }) {
+  if (approvalGate) return 'owner';
+  return headless ? 'none' : 'person';
+}
+
+/** Who answers an approval of a turn, by who can answer its interactions. */
+const APPROVAL_ROUTE_OF = Object.freeze({ owner: 'owner', none: 'deny', person: 'person' });
+
+/**
+ * The run context of a turn on the run service: the caller's (`spec.context`),
+ * else one for the request's principal, a person's request. Null when none can
+ * be built (a principal without resolved permissions): the run service then
+ * refuses the run.
+ *
+ * @param {Object|null} spec
+ * @param {Object} user
+ * @param {'owner'|'none'|'person'} interactions
+ * @returns {Readonly<Object>|null}
+ */
+function turnContextOf(spec, user, interactions) {
+  if (isRunContext(spec?.context)) return spec.context;
+  const resolved = resolveRequestPrincipal(user, { origin: 'person' });
+  if (!resolved.ok) return null;
+  return createRunContext({
+    principal: resolved.principal,
+    principalType: resolved.principalType,
+    origin: 'person',
+    approvalRoute: APPROVAL_ROUTE_OF[interactions]
+  });
+}
+
+/**
+ * The summary of a turn refused before it started, with nothing stored.
+ *
+ * @param {string} runId
+ * @param {Object} refusal
+ * @returns {Object}
+ */
+function refusedTurn(runId, refusal) {
+  return {
+    runId,
+    status: 'error',
+    content: '',
+    finishReason: 'error',
+    errorInfo: refusal,
+    refusal,
+    knowledgeSources: []
+  };
+}
+
+/**
+ * The turn's SSE v2 emitter (chat stream id = chatId, run id = this turn).
+ * A caller with its own consumer (the inference API turning frames into
+ * OpenAI-shaped events) injects one; the chat UI gets the default one,
+ * delivered through the SSE layer.
+ *
+ * A stored turn without a stream (an integration posting with no SSE
+ * client) still emits its frames into an emitter that delivers nowhere:
+ * they are what records what the turn did for the stored answer
+ * (`runActivity.js`). It is not bound to the chat's stream, so nothing
+ * that looks for the turn producing on that stream mistakes it for one.
+ *
+ * @returns {{stream: Object, bound: boolean}}
+ */
+function streamOf({ emitter, streaming, chatId, persistence, runId }) {
+  if (emitter) return { stream: emitter, bound: true };
+  if (streaming && chatId) {
+    return { stream: new RunStreamEmitter({ streamId: chatId, runId }), bound: true };
+  }
+  if (chatId && persistence?.repository) {
+    return {
+      stream: new RunStreamEmitter({ streamId: chatId, runId, deliver: () => false }),
+      bound: false
+    };
+  }
+  return { stream: NO_STREAM, bound: false };
+}
+
+/**
+ * The budgets of the turn's loop. The wall-clock ceiling is only for a turn
+ * that can outlive its client; see {@link DURABLE_TURN_WALL_CLOCK_MS}.
+ *
+ * @param {boolean} durable
+ * @param {number|null} maxWallClockMs
+ * @returns {Object}
+ */
+function turnBudgets(durable, maxWallClockMs) {
+  if (!durable) return { maxToolRounds: CHAT_MAX_TOOL_ROUNDS };
+  return {
+    maxToolRounds: CHAT_MAX_TOOL_ROUNDS,
+    maxWallClockMs:
+      Number.isFinite(maxWallClockMs) && maxWallClockMs > 0
+        ? Math.min(maxWallClockMs, DURABLE_TURN_WALL_CLOCK_MS)
+        : DURABLE_TURN_WALL_CLOCK_MS
+  };
+}
+
+/**
+ * Where the turn's loop starts: a continuation of a turn that paused on an
+ * approval puts the stored part of that turn in place of the decision message
+ * (an approved call is run by the loop itself, `resume`, with the arguments
+ * that were approved; a rejected or expired one gets its refusal as the tool
+ * result), a resume after a connect (#3752) puts the stored step back (it
+ * replaces nothing: it has no decision message) and runs the calls that failed
+ * again through the seams, with no approval carried over.
+ *
+ * @returns {{messages: Array, resume: Object|null, startMessage: Object}}
+ */
+function loopStartOf({ llmMessages, toolApproval, connectResume, stream }) {
+  const resume = toolApproval?.resume || null;
+  let messages = llmMessages;
+  let loopResume = null;
+  if (resume?.call?.id && Array.isArray(resume.transcript) && resume.transcript.length) {
+    messages = continuationMessages(llmMessages, resume.transcript, {
+      question: resume.question
+    });
+    const toolName = String(resume.call.name || resume.call.toolId || 'tool');
+    if (resume.outcome === 'approved') {
+      loopResume = {
+        toolCall: {
+          id: resume.call.id,
+          type: 'function',
+          function: { name: resume.call.name, arguments: JSON.stringify(resume.args || {}) }
+        },
+        args: resume.args || {}
+      };
+    } else {
+      const payload = approvalRefusalPayload(resume.outcome, toolName);
+      replaceToolResult(messages, resume.call.id, payload);
+      stream.emit(SSE_V2_EVENTS.TOOL_COMPLETED, {
+        step: 0,
+        callId: String(resume.call.id),
+        toolId: String(resume.call.toolId || toolName),
+        name: toolName,
+        resultPreview: payload,
+        error: { code: payload.code, message: payload.message }
+      });
+    }
+  }
+  let continuation = resume;
+  if (connectResume?.calls?.length && Array.isArray(connectResume.transcript)) {
+    messages = connectResumeMessages(llmMessages, connectResume.transcript, {
+      question: connectResume.question
+    });
+    loopResume = loopResumeOf(connectResume.calls);
+    continuation = connectResume;
+  }
+  // The last message before what this turn's loop adds (a continuation
+  // starts after the stored transcript's predecessor), found by identity.
+  const startMessage =
+    messages === llmMessages
+      ? llmMessages[llmMessages.length - 1]
+      : messages[messages.length - continuation.transcript.length - 1];
+  return { messages, resume: loopResume, startMessage };
+}
+
+/**
+ * A stream that holds the terminal frames (`stream/error`, `run/ended`) back
+ * until {@link flush}: the answer is stored first, and then they are sent in
+ * the order they were made (the client stops reading at either of them).
+ *
+ * @param {Object} stream
+ * @returns {{stream: {emit: Function}, flush: () => void}}
+ */
+function holdTerminalFrames(stream) {
+  const held = [];
+  return {
+    stream: {
+      emit: (type, data) => {
+        if (type === SSE_V2_EVENTS.STREAM_ERROR || type === SSE_V2_EVENTS.RUN_ENDED) {
+          held.push([type, data]);
+          return null;
+        }
+        return stream.emit(type, data);
+      }
+    },
+    flush: () => {
+      for (const [type, data] of held) stream.emit(type, data);
+    }
+  };
+}
+
+/**
+ * The loop result of a run the run service refused before the model was
+ * called: the turn ends as a failed turn, with the refusal's code.
+ *
+ * @param {{code?: string, message?: string}} error
+ * @returns {Object}
+ */
+function refusedRunResult(error) {
+  const refusal = Object.assign(new Error(error?.message || 'The run was refused'), {
+    code: error?.code || 'RUN_REFUSED'
+  });
+  return { status: 'error', finishReason: 'error', content: '', error: refusal };
+}
+
 /** The host of a chat turn: one host serves one turn of one `ChatService`. */
 export class ChatHost {
   /**
@@ -135,6 +351,9 @@ export class ChatHost {
    * `NO_USER_AVAILABLE` result instead of pausing.
    *
    * @param {Object} params
+   * @param {Object} [params.spec] - the run spec the caller built (`RunService.turnRunSpec`):
+   *   the run context and the assembled request. Its `prep` stands for `params.prep`. Without
+   *   one the turn runs with a context for `user`, a person's request.
    * @param {Object} params.prep - `prepareChatRequest().data`
    * @param {string} params.chatId
    * @param {string} [params.messageId] - client exchange id of the assistant placeholder
@@ -145,7 +364,7 @@ export class ChatHost {
    * @param {number} [params.timeoutMs] - hard timeout per model call
    * @param {Function} [params.getLocalizedError] - `(key, params, language) => Promise<string>`
    * @param {string} [params.language='en']
-   * @param {Object} [params.user]
+   * @param {Object} [params.user] - the principal the turn runs as; with a spec, its context's
    * @param {string} [params.runId] - run id to use (default: minted)
    * @param {{interactionId?: string}} [params.continueRun] - `runId` names a paused run of this
    *   chat whose interaction this turn answers: the turn continues that run (same id, one
@@ -220,38 +439,142 @@ export class ChatHost {
    * @returns {Promise<Object>} `{ runId, status, content, finishReason, usage, messages, knowledgeSources,
    *   pendingInteraction?, toolName?, error?, errorInfo?, structuredOutput?, refusal?, leftover? }`
    */
-  async runTurn({
-    prep,
-    chatId,
-    messageId,
-    activatedSkills = [],
-    streaming = true,
-    buildLogData,
-    timeoutMs,
-    getLocalizedError,
-    language = 'en',
-    user,
-    runId: givenRunId,
-    continueRun = null,
-    persistence = null,
-    emitter = null,
-    headless = !streaming,
-    structuredOutput = null,
-    extraSeams = [],
-    approvalGate = null,
-    toolApproval = null,
-    connectResume = null,
-    canApproveTools = !headless,
-    trigger = null,
-    maxWallClockMs = null,
-    clientTimezone = null,
-    outputId = undefined,
-    priorContext = null,
-    promptResent = false,
-    startsLeftover = false,
-    claimed = false
-  }) {
+  async runTurn(params) {
     const svc = this.svc;
+    const turn = this._turnOf(params);
+
+    // A turn whose project fields no longer hold (a racing first turn opened
+    // the chat in another project) is refused before it supersedes anything:
+    // otherwise the conflicting request would cancel the accepted turn that
+    // is generating, then fail itself. Checked again under the chat lock when
+    // the question is stored.
+    const refusal = await this._admitProjects(turn);
+    if (refusal) return refusedTurn(turn.runId, refusal);
+
+    // A turn the chat was claimed for already never supersedes a newer one: a
+    // message the person sent while it was being prepared wins. Checked right
+    // before the turn registers, with nothing awaited in between, so a newer
+    // turn on this worker either registered first (this one yields) or comes
+    // after and supersedes this one.
+    if (turn.claimed && (await claimLost(turn.persist?.repository, turn.chatId, turn.runId))) {
+      return svc._yieldedTurn(turn.chatId, turn.runId);
+    }
+
+    this._register(turn);
+    await this._continuePausedRun(turn);
+    const { stream, bound } = streamOf({ ...turn, persistence: turn.persist });
+    turn.stream = stream;
+    turn.streamBound = bound;
+    if (bound && stream !== NO_STREAM) bindStreamRun(turn.chatId, turn.runId, stream);
+
+    logger.debug('Chat turn started', {
+      component: COMPONENT,
+      chatId: turn.chatId,
+      runId: turn.runId,
+      appId: turn.app?.id,
+      modelId: turn.model?.id,
+      toolCount: turn.loopTools.length,
+      toolNames: turn.loopTools.map(t => t.id).join(', '),
+      streaming: turn.streaming,
+      hasUserFileData: !!turn.userFileData
+    });
+
+    if (!turn.continued) {
+      await svc._startLedgerRun({
+        runId: turn.runId,
+        kind: 'chat',
+        user: turn.user,
+        refs: turn.refs,
+        model: turn.model,
+        language: turn.language,
+        trigger: turn.trigger
+      });
+    }
+
+    // Scheduling tools resolve "tomorrow at nine" against the user's clock, so
+    // the model has to be told what that clock says.
+    appendSchedulingContextNote(turn.llmMessages, turn.loopTools, {
+      timezone: turn.clientTimezone
+    });
+
+    const stopped = await this._storeQuestion(turn);
+    if (stopped) return stopped;
+
+    this._announce(turn);
+    const parts = this._turnParts(turn);
+    const start = loopStartOf({ ...turn, stream });
+
+    // From here the answered approval is used: a caller must not put it back.
+    if (turn.toolApproval && typeof turn.toolApproval === 'object')
+      turn.toolApproval.started = true;
+    if (turn.connectResume && typeof turn.connectResume === 'object') {
+      turn.connectResume.started = true;
+    }
+
+    // Until this turn's wrap-up is done (answer stored, chat released, stream
+    // unbound — the `finally` below), a continuation of its run waits: a
+    // pause shows its card before that, and a quick answer must not race it.
+    const releaseRunHold =
+      typeof svc.runLog.hold === 'function' ? svc.runLog.hold(turn.runId) : () => {};
+    try {
+      const result = await this._runModel(turn, parts, start);
+      await this._keepPending(turn, result, parts, start);
+      return await this._closeTurn(turn, result, parts);
+    } catch (error) {
+      await this._crashed(turn, error);
+      throw error;
+    } finally {
+      // Whatever the turn did not settle above is dropped: a run that no
+      // longer held its chat was replaced by a newer message.
+      turn.leftover.finish(turn.persist ? 'superseded' : 'run_ended');
+      if (stream !== NO_STREAM) unbindStreamRun(turn.chatId, turn.runId);
+      if (turn.trackRequest && activeRequests.get(turn.chatId) === turn.controller) {
+        activeRequests.delete(turn.chatId);
+      }
+      releaseRunHold();
+    }
+  }
+
+  /**
+   * The turn's parameters with their defaults, and the state the turn builds
+   * up as it runs.
+   *
+   * @private
+   */
+  _turnOf(params) {
+    const {
+      spec = null,
+      prep: givenPrep,
+      chatId,
+      messageId,
+      activatedSkills = [],
+      streaming = true,
+      buildLogData,
+      timeoutMs,
+      getLocalizedError,
+      language = 'en',
+      user,
+      runId: givenRunId,
+      continueRun = null,
+      persistence = null,
+      emitter = null,
+      structuredOutput = null,
+      extraSeams = [],
+      approvalGate = null,
+      toolApproval = null,
+      connectResume = null,
+      trigger = null,
+      maxWallClockMs = null,
+      clientTimezone = null,
+      outputId = undefined,
+      priorContext = null,
+      promptResent = false,
+      startsLeftover = false,
+      claimed = false
+    } = params;
+    const headless = params.headless ?? !streaming;
+    const canApproveTools = params.canApproveTools ?? !headless;
+    const prep = spec?.prep ?? givenPrep;
     const {
       app,
       model,
@@ -267,258 +590,274 @@ export class ChatHost {
       knowledgeScope = null,
       integrationScopes = {}
     } = prep;
-    const log = typeof buildLogData === 'function' ? buildLogData : () => ({});
-    const loopTools = markInteractiveTools(tools);
-    const startedAt = Date.now();
-    let runId = givenRunId && isValidRunId(givenRunId) ? givenRunId : newRunId('chat');
-    const refs = { chatId, appId: app?.id, ...(messageId ? { messageId } : {}) };
+    const persist = persistence?.repository ? persistence : null;
+    return {
+      spec,
+      prep,
+      chatId,
+      messageId,
+      activatedSkills,
+      streaming,
+      log: typeof buildLogData === 'function' ? buildLogData : () => ({}),
+      timeoutMs,
+      getLocalizedError,
+      language,
+      user,
+      givenRunId,
+      continueRun,
+      persistence,
+      persist,
+      emitter,
+      headless,
+      structuredOutput,
+      extraSeams,
+      approvalGate,
+      toolApproval,
+      connectResume,
+      canApproveTools,
+      trigger,
+      maxWallClockMs,
+      clientTimezone,
+      outputId,
+      priorContext,
+      promptResent,
+      startsLeftover,
+      claimed,
+      app,
+      model,
+      llmMessages,
+      tools,
+      toolSearch,
+      maxTokens,
+      responseFormat,
+      responseSchema,
+      llmOptions,
+      userFileData,
+      promptSources,
+      knowledgeScope,
+      integrationScopes,
+      loopTools: markInteractiveTools(tools),
+      startedAt: Date.now(),
+      runId: givenRunId && isValidRunId(givenRunId) ? givenRunId : newRunId('chat'),
+      refs: { chatId, appId: app?.id, ...(messageId ? { messageId } : {}) },
+      interactions: interactionsOf({ approvalGate, headless }),
+      // Whether the chat is in the store: only then does a generated file go
+      // there as soon as its tool finishes (the card links to it).
+      chatStored: false
+    };
+  }
 
-    // One in-flight request per chat: a new turn supersedes the previous one
-    // and the stop endpoint / client disconnect abort through this controller.
-    //
-    // A durable turn is tracked even without a stream. It was started by a
-    // caller with no SSE connection — an integration, or a client whose stream
-    // has not come up — and it keeps running after any client goes away, so
-    // leaving it out of `activeRequests` would make it the one turn Stop can
-    // never reach: the endpoint would answer "stopped" while the model ran to
-    // completion and billed the tokens.
-    // A turn whose project fields no longer hold (a racing first turn opened
-    // the chat in another project) is refused before it supersedes anything:
-    // otherwise the conflicting request would cancel the accepted turn that
-    // is generating, then fail itself. Checked again under the chat lock when
-    // the question is stored.
-    if (persistence?.repository) {
-      const refusal = await admitTurnProjects({
-        repository: persistence.repository,
-        chatId,
-        projects: persistence.projects || null,
-        projectId: persistence.projectId
+  /**
+   * The refusal of a turn whose project fields no longer hold, or null.
+   *
+   * @private
+   */
+  async _admitProjects(turn) {
+    if (!turn.persist) return null;
+    return admitTurnProjects({
+      repository: turn.persist.repository,
+      chatId: turn.chatId,
+      projects: turn.persist.projects || null,
+      projectId: turn.persist.projectId
+    });
+  }
+
+  /**
+   * One in-flight request per chat: a new turn supersedes the previous one
+   * and the stop endpoint / client disconnect abort through this controller.
+   *
+   * A durable turn is tracked even without a stream. It was started by a
+   * caller with no SSE connection — an integration, or a client whose stream
+   * has not come up — and it keeps running after any client goes away, so
+   * leaving it out of `activeRequests` would make it the one turn Stop can
+   * never reach: the endpoint would answer "stopped" while the model ran to
+   * completion and billed the tokens.
+   *
+   * @private
+   */
+  _register(turn) {
+    const { chatId, runId } = turn;
+    turn.controller = new AbortController();
+    turn.trackRequest = !!chatId && (turn.streaming || !!turn.persist);
+    if (!turn.trackRequest) return;
+    // The turn in flight may be on another worker: the follow-up no longer
+    // stops it from the browser, so the server has to.
+    if (hasActiveChatRequest(chatId)) {
+      const cause = abortCause('superseded', {
+        via: 'ChatService.runTurn',
+        related: { runId }
       });
-      if (refusal) {
-        return {
-          runId,
-          status: 'error',
-          content: '',
-          finishReason: 'error',
-          errorInfo: refusal,
-          refusal,
-          knowledgeSources: []
-        };
-      }
+      logger.info('Chat turn supersedes the one in flight', {
+        component: COMPONENT,
+        chatId,
+        ...describeCause(cause)
+      });
+      if (activeRequests.has(chatId)) activeRequests.get(chatId).abort(abortReason(cause));
+      else abortChatRequest(chatId, cause, { before: Date.now() });
     }
+    turn.controller.startedAt = Date.now();
+    activeRequests.set(chatId, turn.controller);
+  }
 
-    // A turn the chat was claimed for already never supersedes a newer one: a
-    // message the person sent while it was being prepared wins. Checked right
-    // before the turn registers, with nothing awaited in between, so a newer
-    // turn on this worker either registered first (this one yields) or comes
-    // after and supersedes this one.
-    if (claimed && (await claimLost(persistence?.repository, chatId, runId))) {
-      return svc._yieldedTurn(chatId, runId);
-    }
-
-    const controller = new AbortController();
-    const trackRequest = !!chatId && (streaming || !!persistence?.repository);
-    if (trackRequest) {
-      // The turn in flight may be on another worker: the follow-up no longer
-      // stops it from the browser, so the server has to.
-      if (hasActiveChatRequest(chatId)) {
-        const cause = abortCause('superseded', {
-          via: 'ChatService.runTurn',
-          related: { runId }
-        });
-        logger.info('Chat turn supersedes the one in flight', {
-          component: COMPONENT,
-          chatId,
-          ...describeCause(cause)
-        });
-        if (activeRequests.has(chatId)) activeRequests.get(chatId).abort(abortReason(cause));
-        else abortChatRequest(chatId, cause, { before: Date.now() });
-      }
-      controller.startedAt = Date.now();
-      activeRequests.set(chatId, controller);
-    }
-
-    // A turn that answers a paused one continues its run, so the journal of
-    // that one run holds the whole turn — what happened before the pause, the
-    // answer, and the rest — and the answer's evidence record covers it all.
-    // When the run cannot be continued this turn runs under a new id, as
-    // every turn did before; the paused run keeps its `run/end` (`paused`).
-    let continued = null;
-    if (continueRun && runId === givenRunId) {
-      if (persistence?.repository) {
-        continued = await svc._continueLedgerRun({
-          runId,
+  /**
+   * A turn that answers a paused one continues its run, so the journal of
+   * that one run holds the whole turn — what happened before the pause, the
+   * answer, and the rest — and the answer's evidence record covers it all.
+   * When the run cannot be continued this turn runs under a new id, as
+   * every turn did before; the paused run keeps its `run/end` (`paused`).
+   *
+   * @private
+   */
+  async _continuePausedRun(turn) {
+    const { continueRun, givenRunId } = turn;
+    turn.continued = null;
+    if (continueRun && turn.runId === givenRunId) {
+      if (turn.persist) {
+        turn.continued = await this.svc._continueLedgerRun({
+          runId: turn.runId,
           interactionId: continueRun.interactionId,
-          chatId,
-          appId: app?.id,
-          modelId: model?.id
+          chatId: turn.chatId,
+          appId: turn.app?.id,
+          modelId: turn.model?.id
         });
       }
       // Never a second `run/start` in the paused run's journal.
-      if (!continued) runId = newRunId('chat');
+      if (!turn.continued) turn.runId = newRunId('chat');
     }
     // A turn that could not continue its paused run still reaches the results
     // that run condensed (#3819): its journal is kept while it is paused.
-    const archiveRunIds =
-      continueRun && !continued && givenRunId !== runId && isValidRunId(givenRunId)
+    turn.archiveRunIds =
+      continueRun && !turn.continued && givenRunId !== turn.runId && isValidRunId(givenRunId)
         ? [givenRunId]
         : [];
     // What the run used before the pause: its end counts the whole turn.
-    const carriedUsage = continued?.paused?.data?.usage || null;
+    turn.carriedUsage = turn.continued?.paused?.data?.usage || null;
     // The messages the person sent into this answer that it did not read: they
     // become the next turn, or are dropped, when the turn lets go of the chat.
-    const leftover = createLeftover({
-      runId,
-      startsNextTurn: startsLeftover === true && Boolean(persistence?.repository)
+    turn.leftover = createLeftover({
+      runId: turn.runId,
+      startsNextTurn: turn.startsLeftover === true && Boolean(turn.persist)
     });
+  }
 
-    // The turn's SSE v2 emitter (chat stream id = chatId, run id = this turn).
-    // A caller with its own consumer (the inference API turning frames into
-    // OpenAI-shaped events) injects one; the chat UI gets the default one,
-    // delivered through the SSE layer.
-    //
-    // A stored turn without a stream (an integration posting with no SSE
-    // client) still emits its frames into an emitter that delivers nowhere:
-    // they are what records what the turn did for the stored answer
-    // (`runActivity.js`). It is not bound to the chat's stream, so nothing
-    // that looks for the turn producing on that stream mistakes it for one.
-    const recordOnly = !emitter && !streaming && !!chatId && !!persistence?.repository;
-    const stream =
-      emitter ||
-      (streaming && chatId
-        ? new RunStreamEmitter({ streamId: chatId, runId })
-        : recordOnly
-          ? new RunStreamEmitter({ streamId: chatId, runId, deliver: () => false })
-          : NO_STREAM);
-    if (stream !== NO_STREAM && !recordOnly) bindStreamRun(chatId, runId, stream);
-
-    logger.debug('Chat turn started', {
-      component: COMPONENT,
-      chatId,
-      runId,
-      appId: app?.id,
-      modelId: model?.id,
-      toolCount: loopTools.length,
-      toolNames: loopTools.map(t => t.id).join(', '),
-      streaming,
-      hasUserFileData: !!userFileData
-    });
-
-    if (!continued) {
-      await svc._startLedgerRun({ runId, kind: 'chat', user, refs, model, language, trigger });
-    }
-
-    // Scheduling tools resolve "tomorrow at nine" against the user's clock, so
-    // the model has to be told what that clock says.
-    appendSchedulingContextNote(llmMessages, loopTools, { timezone: clientTimezone });
-
-    // A durable turn records the human half twice: on the ledger, so the run
-    // can be replayed as a conversation, and in the chat store, which is what
-    // the history UI reads back. Both happen before the first client frame so
-    // the chat document exists by the time anything can ask for it.
-    const persist = persistence?.repository ? persistence : null;
-    // Whether the chat is in the store: only then does a generated file go
-    // there as soon as its tool finishes (the card links to it).
-    let chatStored = false;
-    if (persist) {
-      // What the turn does — its searches, tool calls, workflow steps — is
-      // stored with the answer; folding starts before the first frame.
-      recordRunActivity(runId);
-      const attachments = normalizeAttachments(persist.attachments);
-      // A resume after a connect has no user message: the person sent nothing.
-      if (!persist.silent) {
-        svc._appendUserMessageEvent({ runId, messageId, content: persist.content, attachments });
-      }
-      const settled = await settleUserTurn({
-        silent: persist.silent === true,
-        repository: persist.repository,
-        chatId,
-        ownerId: persist.ownerId,
-        identityMode: persist.identityMode,
-        appId: app?.id,
-        modelId: model?.id,
-        settings: persist.settings,
-        variables: persist.variables,
+  /**
+   * A durable turn records the human half twice: on the ledger, so the run
+   * can be replayed as a conversation, and in the chat store, which is what
+   * the history UI reads back. Both happen before the first client frame so
+   * the chat document exists by the time anything can ask for it.
+   *
+   * Returns the summary of a turn that ends here (superseded, or refused
+   * because the chat's container changed under it), or null.
+   *
+   * @private
+   */
+  async _storeQuestion(turn) {
+    const svc = this.svc;
+    const { persist, runId, chatId, stream } = turn;
+    if (!persist) return null;
+    // What the turn does — its searches, tool calls, workflow steps — is
+    // stored with the answer; folding starts before the first frame.
+    recordRunActivity(runId);
+    const attachments = normalizeAttachments(persist.attachments);
+    // A resume after a connect has no user message: the person sent nothing.
+    if (!persist.silent) {
+      svc._appendUserMessageEvent({
         runId,
+        messageId: turn.messageId,
         content: persist.content,
-        // The only client id on the wire is the exchange id of the assistant
-        // placeholder, which the client also puts on the message it sends.
-        clientMessageId: persist.clientMessageId ?? messageId ?? null,
-        attachments,
-        replaceFromMessageId: persist.replaceFromMessageId,
-        message: persist.message,
-        chat: persist.chat,
-        projects: persist.projects,
-        projectId: persist.projectId,
-        origin: persist.origin,
-        temporary: persist.temporary === true,
-        onlyWhileClaimed: claimed === true
+        attachments
       });
-      const { refusal } = settled;
-      chatStored = settled.chatStored === true;
-      // Claimed for this turn before it started, and taken by a newer turn on
-      // another worker since: nothing of it was stored, and nothing was told
-      // (`run/started` comes after this), so the newer turn's stream stays its own.
-      if (settled.superseded) {
-        discardRunActivity(runId);
-        svc._endLedgerRun(runId, {
-          status: 'aborted',
-          finishReason: 'aborted',
-          usage: carriedUsage,
-          cause: abortCause('superseded', { via: 'ChatService.runTurn' }),
-          startedAt
-        });
-        if (stream !== NO_STREAM) unbindStreamRun(chatId, runId);
-        if (activeRequests.get(chatId) === controller) activeRequests.delete(chatId);
-        return svc._yieldedTurn(chatId, runId);
-      }
-      // The chat's container changed under this turn (a first turn that
-      // raced it opened the chat in another project): nothing of it was
-      // stored, and it ends here, before the model is called.
-      if (refusal) {
-        discardRunActivity(runId);
-        stream.emit(SSE_V2_EVENTS.STREAM_ERROR, refusal);
-        stream.emit(SSE_V2_EVENTS.RUN_ENDED, {
-          status: 'error',
-          finishReason: 'error',
-          error: refusal
-        });
-        svc._endLedgerRun(runId, {
-          status: 'error',
-          finishReason: 'error',
-          error: refusal,
-          usage: carriedUsage,
-          startedAt
-        });
-        if (stream !== NO_STREAM) unbindStreamRun(chatId, runId);
-        if (trackRequest && activeRequests.get(chatId) === controller) {
-          activeRequests.delete(chatId);
-        }
-        return {
-          runId,
-          status: 'error',
-          content: '',
-          finishReason: 'error',
-          errorInfo: refusal,
-          refusal,
-          knowledgeSources: []
-        };
-      }
     }
+    const settled = await settleUserTurn({
+      silent: persist.silent === true,
+      repository: persist.repository,
+      chatId,
+      ownerId: persist.ownerId,
+      identityMode: persist.identityMode,
+      appId: turn.app?.id,
+      modelId: turn.model?.id,
+      settings: persist.settings,
+      variables: persist.variables,
+      runId,
+      content: persist.content,
+      // The only client id on the wire is the exchange id of the assistant
+      // placeholder, which the client also puts on the message it sends.
+      clientMessageId: persist.clientMessageId ?? turn.messageId ?? null,
+      attachments,
+      replaceFromMessageId: persist.replaceFromMessageId,
+      message: persist.message,
+      chat: persist.chat,
+      projects: persist.projects,
+      projectId: persist.projectId,
+      origin: persist.origin,
+      temporary: persist.temporary === true,
+      onlyWhileClaimed: turn.claimed === true
+    });
+    turn.chatStored = settled.chatStored === true;
+    // Claimed for this turn before it started, and taken by a newer turn on
+    // another worker since: nothing of it was stored, and nothing was told
+    // (`run/started` comes after this), so the newer turn's stream stays its own.
+    if (settled.superseded) {
+      discardRunActivity(runId);
+      svc._endLedgerRun(runId, {
+        status: 'aborted',
+        finishReason: 'aborted',
+        usage: turn.carriedUsage,
+        cause: abortCause('superseded', { via: 'ChatService.runTurn' }),
+        startedAt: turn.startedAt
+      });
+      if (stream !== NO_STREAM) unbindStreamRun(chatId, runId);
+      if (activeRequests.get(chatId) === turn.controller) activeRequests.delete(chatId);
+      return svc._yieldedTurn(chatId, runId);
+    }
+    // The chat's container changed under this turn (a first turn that
+    // raced it opened the chat in another project): nothing of it was
+    // stored, and it ends here, before the model is called.
+    if (settled.refusal) {
+      const { refusal } = settled;
+      discardRunActivity(runId);
+      stream.emit(SSE_V2_EVENTS.STREAM_ERROR, refusal);
+      stream.emit(SSE_V2_EVENTS.RUN_ENDED, {
+        status: 'error',
+        finishReason: 'error',
+        error: refusal
+      });
+      svc._endLedgerRun(runId, {
+        status: 'error',
+        finishReason: 'error',
+        error: refusal,
+        usage: turn.carriedUsage,
+        startedAt: turn.startedAt
+      });
+      if (stream !== NO_STREAM) unbindStreamRun(chatId, runId);
+      if (turn.trackRequest && activeRequests.get(chatId) === turn.controller) {
+        activeRequests.delete(chatId);
+      }
+      return refusedTurn(runId, refusal);
+    }
+    return null;
+  }
 
+  /**
+   * `run/started`, the knowledge scope and the skills the turn activates up front.
+   *
+   * @private
+   */
+  _announce(turn) {
+    const { stream, knowledgeScope } = turn;
     stream.emit(SSE_V2_EVENTS.RUN_STARTED, {
       kind: 'chat',
-      ...(model?.id ? { model: model.id } : {}),
-      refs
+      ...(turn.model?.id ? { model: turn.model.id } : {}),
+      refs: turn.refs
     });
     // Which projects this turn reached, and whether each was loaded in full
     // or left to the knowledge tools (#1036): on the stream for the badge and
     // on the ledger so a re-sync and the stored answer carry it too.
     if (knowledgeScope?.projects?.length) {
       stream.emit(SSE_V2_EVENTS.KNOWLEDGE_SCOPE, knowledgeScope);
-      svc.runLog.append(runId, RUN_LOG_EVENTS.KNOWLEDGE_SCOPE, knowledgeScope);
+      this.svc.runLog.append(turn.runId, RUN_LOG_EVENTS.KNOWLEDGE_SCOPE, knowledgeScope);
     }
-    for (const skill of activatedSkills || []) {
+    for (const skill of turn.activatedSkills || []) {
       if (!skill?.skillName) continue;
       stream.emit(SSE_V2_EVENTS.TOOL_PROGRESS, {
         phase: 'skill.activation',
@@ -531,85 +870,65 @@ export class ChatHost {
         }
       });
     }
+  }
 
+  /**
+   * What the turn collects for its answer and the seams that collect it: the
+   * pieces both ways of running the model part put in the same order
+   * (approval, projection, question, passthrough, image lift, output contract,
+   * turn and steering).
+   *
+   * @private
+   */
+  _turnParts(turn) {
+    const svc = this.svc;
+    const { chatId, runId, stream, streaming, persist, log } = turn;
     const channel = streaming ? createChatChannel({ chatId, runId, stream }) : null;
-    // MCP App views this turn rendered, stored with the answer so reopening
-    // the chat draws them again.
-    const mcpAppViews = [];
-    // Per-user OAuth MCP servers the turn's tools asked the user to connect,
-    // stored with the answer so the Connect card survives the sign-in redirect.
-    const authPrompts = [];
-    // The calls that returned `INTEGRATION_AUTH_REQUIRED`, kept with the chat
-    // so the connect can resume them (#3752).
-    const connectCalls = [];
-    // Scheduled-task proposals the scheduling tools made, stored with the
-    // answer so the confirmation card is still there when the chat reopens.
-    const scheduledTaskProposals = [];
-    // Files the turn's tools generated (a PDF from `create_pdf`), with their
-    // bytes, stored with the answer as `document` artifacts of the chat so the
-    // download card is still there when the chat reopens.
-    const generatedFiles = [];
-    // Pictures the turn's tools returned (an MCP server's `image` block); they
-    // join the pictures the model generated.
-    const generatedImages = [];
+    const collected = {
+      // MCP App views this turn rendered, stored with the answer so reopening
+      // the chat draws them again.
+      mcpAppViews: [],
+      // Per-user OAuth MCP servers the turn's tools asked the user to connect,
+      // stored with the answer so the Connect card survives the sign-in redirect.
+      authPrompts: [],
+      // The calls that returned `INTEGRATION_AUTH_REQUIRED`, kept with the chat
+      // so the connect can resume them (#3752).
+      connectCalls: [],
+      // Scheduled-task proposals the scheduling tools made, stored with the
+      // answer so the confirmation card is still there when the chat reopens.
+      scheduledTaskProposals: [],
+      // Files the turn's tools generated (a PDF from `create_pdf`), with their
+      // bytes, stored with the answer as `document` artifacts of the chat so the
+      // download card is still there when the chat reopens.
+      generatedFiles: [],
+      // Pictures the turn's tools returned (an MCP server's `image` block); they
+      // join the pictures the model generated.
+      generatedImages: []
+    };
     // How full the model's context window is, reported live and with the end of the run.
     // It starts from the context stored with the previous answer, unless the
     // turn continues a stored transcript (an approval or a connect), which that
     // context does not describe.
     // A continued transcript's first count holds the tool calls and results of
     // before the pause, which no later turn resends: no next turn starts from it.
-    const continuesTranscript = Boolean(toolApproval?.resume || connectResume);
-    const contextTracker = createContextTracker(model, {
-      prior: continuesTranscript ? null : priorContext,
-      resent: promptResent && !continuesTranscript
+    const continuesTranscript = Boolean(turn.toolApproval?.resume || turn.connectResume);
+    const contextTracker = createContextTracker(turn.model, {
+      prior: continuesTranscript ? null : turn.priorContext,
+      resent: turn.promptResent && !continuesTranscript
     });
-    const turnSeam = chatTurnSeam({
-      chatId,
-      buildLogData: log,
-      streaming,
-      telemetry: svc.telemetry,
-      contextTracker
-    });
+    const structured = turn.structuredOutput;
     const outputSeam =
-      typeof structuredOutput?.validate === 'function'
+      typeof structured?.validate === 'function'
         ? structuredOutputSeam({
-            validate: structuredOutput.validate,
-            maxRetries: Number.isInteger(structuredOutput.maxRetries)
-              ? structuredOutput.maxRetries
-              : 1,
-            onAttemptRejected: structuredOutput.onAttemptRejected
+            validate: structured.validate,
+            maxRetries: Number.isInteger(structured.maxRetries) ? structured.maxRetries : 1,
+            onAttemptRejected: structured.onAttemptRejected
           })
         : null;
-    // The approval gate (#2945) takes a call over before anything announces
-    // or runs it: a gated call never shows as started. A scheduled run brings
-    // its own (it pauses for the task owner); a chat turn asks the person in
-    // the chat, or — headless, or a client that cannot draw the card — refuses
-    // the call with APPROVAL_REQUIRED_NO_USER.
-    const resume = toolApproval?.resume || null;
-    const gate =
-      approvalGate ||
-      approvalSeam(
-        chatApprovalOptions({
-          chatId,
-          app,
-          platform: configCache.getPlatform?.() || null,
-          // A turn that is not stored cannot be continued after the answer.
-          headless: headless || canApproveTools === false || !persist,
-          grants: toolApproval?.grants || [],
-          approvedCall:
-            resume?.outcome === 'approved' && resume.call?.id
-              ? { callId: resume.call.id, args: resume.args }
-              : null,
-          buildLogData: log,
-          logInteraction: svc.logInteraction,
-          interactionService: svc.interactionService,
-          runLog: svc.runLog
-        })
-      );
+    const resume = turn.toolApproval?.resume || null;
     // knowledgeSourceSeam runs before chatToolSeam so its `outcome.knowledgeSource`
     // is on the outcome when chatToolSeam projects the tool result to `tool/completed`.
-    const seams = [
-      gate,
+    const projection = [
       knowledgeSourceSeam,
       chatToolSeam({
         chatId,
@@ -617,435 +936,510 @@ export class ChatHost {
         logInteraction: svc.logInteraction,
         // Live progress is for a client that watches the stream.
         streamProgress: Boolean(streaming),
-        mcpAppViews,
-        authPrompts,
-        connectCalls,
-        scheduledTaskProposals,
-        generatedFiles,
-        generatedImages,
+        ...collected,
         // A stored chat keeps a generated file as an artifact when the tool
         // finishes: the client is sent the card, never the bytes.
         // A chat that could not be stored keeps the bytes on the card instead.
-        artifactStore: chatStored ? (persist.repository.artifactStore?.() ?? null) : null
+        artifactStore: turn.chatStored ? (persist.repository.artifactStore?.() ?? null) : null
       }),
-      ...(Array.isArray(extraSeams) ? extraSeams.filter(Boolean) : []),
+      ...(Array.isArray(turn.extraSeams) ? turn.extraSeams.filter(Boolean) : [])
+    ];
+    const trailing = [
+      chatTurnSeam({
+        chatId,
+        buildLogData: log,
+        streaming,
+        telemetry: svc.telemetry,
+        contextTracker
+      }),
+      // A message the person sent into the answer, read at a step: told and stored.
+      chatSteerSeam({
+        chatId,
+        runId,
+        stream,
+        repository: turn.chatStored ? persist.repository : null
+      })
+    ];
+    return {
+      channel,
+      collected,
+      contextTracker,
+      outputSeam,
+      projection,
+      trailing,
+      resume,
+      // The approval gate (#2945) takes a call over before anything announces
+      // or runs it: a gated call never shows as started. A scheduled run brings
+      // its own (it pauses for the task owner); a chat turn asks the person in
+      // the chat, or — headless, or a client that cannot draw the card — refuses
+      // the call with APPROVAL_REQUIRED_NO_USER.
+      approval: {
+        // A turn that is not stored cannot be continued after the answer.
+        headless: turn.headless || turn.canApproveTools === false || !persist,
+        grants: turn.toolApproval?.grants || [],
+        approvedCall:
+          resume?.outcome === 'approved' && resume.call?.id
+            ? { callId: resume.call.id, args: resume.args }
+            : null,
+        interactionService: svc.interactionService,
+        runLog: svc.runLog
+      },
+      question: {
+        getCount: () => svc.getClarificationCount(chatId),
+        incrementCount: () => svc.incrementClarificationCount(chatId),
+        interactionService: svc.interactionService
+      },
+      pageReads: createPageReadGate(resolveMaxPageReads(turn.app)),
+      // The skills the model loads in this turn: a tool whose skill carries rules
+      // (`create_dashboard`) checks that it did (`activate_skill` writes to it).
+      turnSkills: createTurnSkillLog()
+    };
+  }
+
+  /**
+   * What a tool call of the turn vouches for. The tool runner
+   * (`services/run/ToolRunner.js`) builds the tool's parameters: `language`
+   * is a default the model's arguments may override, while the chat, the
+   * user, the app and the scopes the user picked for the chat
+   * (`integrationScopes`, #3050) never can. Page reads are capped per turn by
+   * the gate (`websearch.maxPageReads`).
+   *
+   * An MCP tool of a server with MCP Apps enabled hands back its raw result on
+   * the shared `info` object, where `chatToolSeam` builds the view from it
+   * (declared, or embedded in the result).
+   *
+   * @private
+   */
+  _toolContext(turn, parts, info) {
+    return {
+      origin: 'chat',
+      // The approval seam is the first seam of the turn.
+      approval: 'seam',
+      principal: turn.user,
+      chatId: turn.chatId,
+      appConfig: turn.app,
+      language: turn.language,
+      integrationScopes: turn.integrationScopes,
+      turnSkills: parts.turnSkills,
+      clientTimezone: turn.clientTimezone,
+      chatStored: Boolean(turn.persist),
+      pageReads: parts.pageReads,
+      onMcpAppResult: result => {
+        if (info) info.mcpAppResult = result;
+      }
+    };
+  }
+
+  /**
+   * The turn's inputs of the loop that do not depend on how it runs.
+   *
+   * @private
+   */
+  _loopInputs(turn, start) {
+    return {
+      runId: turn.runId,
+      chatId: turn.chatId,
+      language: turn.language,
+      messages: start.messages,
+      tools: turn.loopTools,
+      resume: start.resume,
+      archiveRunIds: turn.archiveRunIds,
+      budgets: turnBudgets(Boolean(turn.persist), turn.maxWallClockMs),
+      signal: turn.controller.signal,
+      timeoutMs: turn.timeoutMs,
+      refs: { ...turn.refs, userId: turn.user?.id }
+    };
+  }
+
+  /**
+   * The model part of the turn: on the run service, or — with the kill switch
+   * off — on the agent loop directly.
+   *
+   * @private
+   */
+  async _runModel(turn, parts, start) {
+    if (!chatOnRunService()) return this._runOnLoop(turn, parts, start);
+    return this._runOnService(turn, parts, start);
+  }
+
+  /**
+   * The model part on the run service: a frozen run context, the seams from
+   * the profile of who can answer, and every tool call checked against the
+   * run's grant (`RunService.run`). A run the service refuses ends as a failed
+   * turn, with the refusal audited.
+   *
+   * @private
+   */
+  async _runOnService(turn, parts, start) {
+    const svc = this.svc;
+    const context = turnContextOf(turn.spec, turn.user, turn.interactions);
+    const spec = turnLoopSpec(
+      {
+        kind: 'turn',
+        context,
+        prep: turn.prep,
+        appId: turn.app?.id ?? null,
+        caller: turn.spec?.caller ?? 'chat'
+      },
+      this._loopInputs(turn, start)
+    );
+    const host = {
+      kind: 'chat',
+      interactions: turn.interactions,
+      principal: turn.user,
+      buildLogData: turn.log,
+      interactionBindings: {
+        approval: parts.approval,
+        ...(turn.approvalGate ? { approvalGate: turn.approvalGate } : {}),
+        question: parts.question,
+        passthrough: { chatStored: Boolean(turn.persist), streaming: turn.streaming }
+      },
+      structuredOutput: parts.outputSeam,
+      projectionSeams: () => parts.projection,
+      seams: () => parts.trailing,
+      meta: { stream: turn.stream },
+      channel: parts.channel,
+      toolContext: info => this._toolContext(turn, parts, info),
+      completed: ({ result }) => result,
+      failed: ({ error }) => refusedRunResult(error)
+    };
+    return new RunService({ chatService: svc }).run(spec, host);
+  }
+
+  /**
+   * The model part on the agent loop, with the seams the turn wired before it
+   * moved onto the run service (the kill switch `platform.runs.chatOnRunService`
+   * set to false).
+   *
+   * @private
+   */
+  async _runOnLoop(turn, parts, start) {
+    const svc = this.svc;
+    const { chatId, app, model, user, log } = turn;
+    const gate =
+      turn.approvalGate ||
+      approvalSeam(
+        chatApprovalOptions({
+          chatId,
+          app,
+          platform: configCache.getPlatform?.() || null,
+          headless: parts.approval.headless,
+          grants: parts.approval.grants,
+          approvedCall: parts.approval.approvedCall,
+          buildLogData: log,
+          logInteraction: svc.logInteraction,
+          interactionService: svc.interactionService,
+          runLog: svc.runLog
+        })
+      );
+    const seams = [
+      gate,
+      ...parts.projection,
       questionSeam(
         chatQuestionOptions({
           chatId,
           appId: app?.id,
           buildLogData: log,
           logInteraction: svc.logInteraction,
-          headless,
-          getCount: () => svc.getClarificationCount(chatId),
-          incrementCount: () => svc.incrementClarificationCount(chatId),
-          interactionService: svc.interactionService
+          headless: turn.headless,
+          ...parts.question
         })
       ),
       passthroughSeam(
         chatPassthroughOptions({
           chatId,
-          chatStored: Boolean(persist),
+          chatStored: Boolean(turn.persist),
           user,
           app,
-          integrationScopes,
-          userFileData,
-          streaming,
+          integrationScopes: turn.integrationScopes,
+          userFileData: turn.userFileData,
+          streaming: turn.streaming,
           buildLogData: log,
           logInteraction: svc.logInteraction,
           toolRunner: svc.toolRunner
         })
       ),
       imageLiftSeam,
-      ...(outputSeam ? [outputSeam] : []),
-      turnSeam,
-      // A message the person sent into the answer, read at a step: told and stored.
-      chatSteerSeam({
-        chatId,
-        runId,
-        stream,
-        repository: chatStored ? persist.repository : null
-      })
+      ...(parts.outputSeam ? [parts.outputSeam] : []),
+      ...parts.trailing
     ];
+    const inputs = this._loopInputs(turn, start);
+    return svc.agentLoop.run({
+      runId: inputs.runId,
+      kind: 'chat',
+      model,
+      messages: inputs.messages,
+      ...(inputs.resume ? { resume: inputs.resume } : {}),
+      tools: inputs.tools,
+      toolSearch: turn.toolSearch,
+      toolExecution: 'server',
+      policies: {
+        budgets: inputs.budgets,
+        // Chat tools have side effects — one call at a time, except the
+        // trusted reads of a step when the feature is on (`chatToolPolicies`).
+        tools: chatToolPolicies({ app, model }),
+        context: chatContextPolicies(model)
+      },
+      summaryModel: chatCompactionModel({ model, user }),
+      ...(inputs.archiveRunIds.length ? { archiveRunIds: inputs.archiveRunIds } : {}),
+      options: {
+        maxTokens: turn.maxTokens,
+        responseFormat: turn.responseFormat,
+        responseSchema: turn.responseSchema,
+        ...turn.llmOptions
+      },
+      language: inputs.language,
+      signal: inputs.signal,
+      timeoutMs: inputs.timeoutMs,
+      refs: inputs.refs,
+      meta: { stream: turn.stream },
+      seams,
+      channel: parts.channel,
+      executeTool: (call, { toolId, toolDef, args, info, signal }) =>
+        svc.toolRunner.execute(call, {
+          toolId,
+          toolDef,
+          args,
+          signal,
+          toolContext: this._toolContext(turn, parts, info)
+        })
+    });
+  }
 
-    const pageReads = createPageReadGate(resolveMaxPageReads(app));
-    // The skills the model loads in this turn: a tool whose skill carries rules
-    // (`create_dashboard`) checks that it did (`activate_skill` writes to it).
-    const turnSkills = createTurnSkillLog();
-
-    // A continuation of a turn that paused on an approval: the stored part of
-    // that turn replaces the decision message. An approved call is run by the
-    // loop itself (`resume`), with the arguments that were approved; a
-    // rejected or expired one gets its refusal as the tool result.
-    let loopMessages = llmMessages;
-    let loopResume = null;
-    if (resume?.call?.id && Array.isArray(resume.transcript) && resume.transcript.length) {
-      loopMessages = continuationMessages(llmMessages, resume.transcript, {
-        question: resume.question
-      });
-      const toolName = String(resume.call.name || resume.call.toolId || 'tool');
-      if (resume.outcome === 'approved') {
-        loopResume = {
-          toolCall: {
-            id: resume.call.id,
-            type: 'function',
-            function: { name: resume.call.name, arguments: JSON.stringify(resume.args || {}) }
-          },
-          args: resume.args || {}
-        };
-      } else {
-        const payload = approvalRefusalPayload(resume.outcome, toolName);
-        replaceToolResult(loopMessages, resume.call.id, payload);
-        stream.emit(SSE_V2_EVENTS.TOOL_COMPLETED, {
-          step: 0,
-          callId: String(resume.call.id),
-          toolId: String(resume.call.toolId || toolName),
-          name: toolName,
-          resultPreview: payload,
-          error: { code: payload.code, message: payload.message }
-        });
-      }
-    }
-    // A resume after a connect (#3752): the stored step replaces nothing in
-    // the history (it has no decision message); the calls that failed run
-    // again through the seams, with no approval carried over.
-    let continuation = resume;
-    if (connectResume?.calls?.length && Array.isArray(connectResume.transcript)) {
-      loopMessages = connectResumeMessages(llmMessages, connectResume.transcript, {
-        question: connectResume.question
-      });
-      loopResume = loopResumeOf(connectResume.calls);
-      continuation = connectResume;
-    }
-    // The last message before what this turn's loop adds (a continuation
-    // starts after the stored transcript's predecessor), found by identity.
-    const turnStartMessage =
-      loopMessages === llmMessages
-        ? llmMessages[llmMessages.length - 1]
-        : loopMessages[loopMessages.length - continuation.transcript.length - 1];
-
-    // From here the answered approval is used: a caller must not put it back.
-    if (toolApproval && typeof toolApproval === 'object') toolApproval.started = true;
-    if (connectResume && typeof connectResume === 'object') connectResume.started = true;
-
-    // Until this turn's wrap-up is done (answer stored, chat released, stream
-    // unbound — the `finally` below), a continuation of its run waits: a
-    // pause shows its card before that, and a quick answer must not race it.
-    const releaseRunHold =
-      typeof svc.runLog.hold === 'function' ? svc.runLog.hold(runId) : () => {};
-    let outcome;
-    try {
-      const result = await svc.agentLoop.run({
-        runId,
-        kind: 'chat',
-        model,
-        messages: loopMessages,
-        ...(loopResume ? { resume: loopResume } : {}),
-        tools: loopTools,
-        toolSearch,
-        toolExecution: 'server',
-        policies: {
-          budgets: {
-            maxToolRounds: CHAT_MAX_TOOL_ROUNDS,
-            // Only for a turn that can outlive its client; see the constant.
-            ...(persist
-              ? {
-                  maxWallClockMs:
-                    Number.isFinite(maxWallClockMs) && maxWallClockMs > 0
-                      ? Math.min(maxWallClockMs, DURABLE_TURN_WALL_CLOCK_MS)
-                      : DURABLE_TURN_WALL_CLOCK_MS
-                }
-              : {})
-          },
-          // Chat tools have side effects — one call at a time, except the
-          // trusted reads of a step when the feature is on (`chatToolPolicies`).
-          tools: chatToolPolicies({ app, model }),
-          context: chatContextPolicies(model)
-        },
-        summaryModel: chatCompactionModel({ model, user }),
-        ...(archiveRunIds.length ? { archiveRunIds } : {}),
-        options: { maxTokens, responseFormat, responseSchema, ...llmOptions },
-        language,
-        signal: controller.signal,
-        timeoutMs,
-        refs: { ...refs, userId: user?.id },
-        meta: { stream },
-        seams,
-        channel,
-        // The tool runner (`services/run/ToolRunner.js`) builds the tool's
-        // parameters: `language` is a default the model's arguments may
-        // override, while the chat, the user, the app and the scopes the user
-        // picked for the chat (`integrationScopes`, #3050) never can. Page
-        // reads are capped per turn by the gate (`websearch.maxPageReads`).
-        //
-        // An MCP tool of a server with MCP Apps enabled hands back its raw
-        // result on the shared `info` object, where `chatToolSeam` builds the
-        // view from it (declared, or embedded in the result).
-        executeTool: (call, { toolId, toolDef, args, info, signal }) =>
-          svc.toolRunner.execute(call, {
-            toolId,
-            toolDef,
-            args,
-            signal,
-            toolContext: {
-              origin: 'chat',
-              // The approval seam is the first seam of the turn.
-              approval: 'seam',
-              principal: user,
-              chatId,
-              appConfig: app,
-              language,
-              integrationScopes,
-              turnSkills,
-              clientTimezone,
-              chatStored: Boolean(persist),
-              pageReads,
-              onMcpAppResult: result => {
-                if (info) info.mcpAppResult = result;
-              }
-            }
-          })
-      });
-      // Paused on a chat approval: keep what the continuation needs with the
-      // chat, and only then show the card (`interaction/raised`), so even an
-      // immediate answer finds it. One that could not be kept is cancelled
-      // and never shown as answerable.
-      if (
-        !approvalGate &&
-        persist &&
-        result.status === 'paused' &&
-        result.pendingInteraction?.kind === 'approval'
-      ) {
-        const stored = await svc._storePendingApproval({
-          repository: persist.repository,
-          chatId,
-          runId,
-          grants: toolApproval?.grants || [],
-          interaction: result.pendingInteraction,
-          messages: result.messages,
-          startMessage: turnStartMessage,
-          // What this turn found so far: the answer after the approval rests on it too.
-          basis: carriedBasis({ prior: resume?.basis || connectResume?.basis, result })
-        });
-        if (stored) {
-          stream.emit(SSE_V2_EVENTS.INTERACTION_RAISED, { interaction: result.pendingInteraction });
-        } else {
-          const toolCallId = result.pendingInteraction.source?.toolCallId;
-          stream.emit(SSE_V2_EVENTS.TOOL_COMPLETED, {
-            step: result.pendingInteraction.step || 0,
-            callId: String(toolCallId || '0'),
-            toolId: String(result.pendingInteraction.source?.toolId || 'tool'),
-            name: String(result.pendingInteraction.source?.toolId || 'tool'),
-            resultPreview: {
-              error: true,
-              code: 'APPROVAL_NOT_STORED',
-              message: 'The approval could not be kept with the chat; the call was not run.'
-            },
-            error: {
-              code: 'APPROVAL_NOT_STORED',
-              message: 'The approval could not be kept with the chat; the call was not run.'
-            }
-          });
-        }
-      }
-      // The calls that stopped on a missing connection stay with the chat, so
-      // the connect can run them once (#3752). Before the answer is stored:
-      // a client that reopens the chat at once finds the record.
-      // Not for a headless turn (the inference API, a scheduled run) nor a
-      // temporary chat: nobody can come back to continue them.
-      if (
-        !approvalGate &&
-        !headless &&
-        persist &&
-        persist.temporary !== true &&
-        result.status === 'completed' &&
-        connectCalls.length > 0
-      ) {
-        await svc._storePendingConnect({
-          repository: persist.repository,
-          chatId,
-          runId,
-          user,
-          calls: connectCalls,
-          messages: result.messages,
-          startMessage: turnStartMessage,
-          continues: connectResume?.answerRunIds || [],
-          basis: carriedBasis({ prior: resume?.basis || connectResume?.basis, result })
-        });
-      }
-      // The terminal frames (`stream/error`, `run/ended`) are held back until
-      // the answer is stored (below), and then sent in the order they were
-      // made: the client stops reading at either of them.
-      const terminalFrames = [];
-      const finishStream = {
-        emit: (type, data) => {
-          if (type === SSE_V2_EVENTS.STREAM_ERROR || type === SSE_V2_EVENTS.RUN_ENDED) {
-            terminalFrames.push([type, data]);
-            return null;
-          }
-          return stream.emit(type, data);
-        }
-      };
-      outcome = await this._finishTurn({
-        result,
-        outputId,
-        user,
-        runId,
+  /**
+   * Keep what a paused or interrupted turn needs with the chat.
+   *
+   * Paused on a chat approval: keep what the continuation needs with the
+   * chat, and only then show the card (`interaction/raised`), so even an
+   * immediate answer finds it. One that could not be kept is cancelled
+   * and never shown as answerable.
+   *
+   * The calls that stopped on a missing connection stay with the chat, so
+   * the connect can run them once (#3752). Before the answer is stored:
+   * a client that reopens the chat at once finds the record.
+   * Not for a headless turn (the inference API, a scheduled run) nor a
+   * temporary chat: nobody can come back to continue them.
+   *
+   * @private
+   */
+  async _keepPending(turn, result, parts, start) {
+    const svc = this.svc;
+    const { persist, approvalGate, chatId, runId, stream } = turn;
+    if (approvalGate || !persist) return;
+    const prior = turn.toolApproval?.resume?.basis || turn.connectResume?.basis;
+    if (result.status === 'paused' && result.pendingInteraction?.kind === 'approval') {
+      const stored = await svc._storePendingApproval({
+        repository: persist.repository,
         chatId,
-        streaming,
-        stream: finishStream,
-        buildLogData: log,
-        model,
-        timeoutMs,
-        getLocalizedError,
-        language,
-        channel,
-        mcpAppViews,
-        authPrompts,
-        scheduledTaskProposals,
-        generatedFiles,
-        generatedImages,
-        promptSources,
-        knowledgeScope,
-        // What the turn this one continues had used (an approval paused it).
-        priorBasis: resume?.basis || connectResume?.basis || null,
-        contextTracker,
-        signal: controller.signal,
-        structured: outputSeam
-          ? {
-              validate: structuredOutput.validate,
-              attempts: () => outputSeam.attempts(),
-              verdictFor: answer => outputSeam.verdictFor(answer)
-            }
-          : null
+        runId,
+        grants: turn.toolApproval?.grants || [],
+        interaction: result.pendingInteraction,
+        messages: result.messages,
+        startMessage: start.startMessage,
+        // What this turn found so far: the answer after the approval rests on it too.
+        basis: carriedBasis({ prior, result })
       });
-      // The ledger's terminal frame first, then the chat document.
-      //
-      // A client reopening a chat asks the document whether a turn is running
-      // and, if it is, replays the run's ledger to catch up. Materializing
-      // first opens a window between the answer being appended and the run
-      // being released — `materializeAssistantTurn` takes the chat lock for
-      // each separately — in which the document still says `running` and the
-      // ledger holds no `run/ended`. A client reopening inside it attaches to
-      // a run that is already over: nothing further arrives, so the placeholder
-      // spins and the composer stays behind a Stop button until the user
-      // presses it. Ending the ledger first means the replay always carries the
-      // terminal frame, and the reattach settles instead of latching.
-      //
-      // The reverse window — a released document while the ledger has not
-      // ended — costs nothing: a document that is not `running` is never
-      // reattached to in the first place.
-      svc._endLedgerRun(runId, {
-        status: outcome.status,
-        finishReason: outcome.finishReason,
-        // A continued run's end counts what it used before the pause too.
-        usage: carriedUsage ? addUsage(carriedUsage, outcome.usage) : outcome.usage,
-        error: outcome.error || (outcome.errorInfo ? outcome.errorInfo : undefined),
-        knowledgeSources: outcome.knowledgeSources,
-        answerBasis: outcome.answerBasis,
-        limitReachedIn: outcome.limitReachedIn,
-        provenance: outcome.provenance,
-        cause: outcome.abortCause,
-        startedAt
-      });
-      // The single choke point: every terminal shape `_finishTurn` produces —
-      // normal, aborted, error, passthrough answer, malformed response —
-      // passes through here with the same summary.
-      //
-      // The answer is stored BEFORE the client is told the turn is over. A
-      // client that has seen `run/ended` re-reads the stored chat (a reattached
-      // turn does at once, `useAppChat`'s `rereadStoredChat`; a user reloads):
-      // told first, it can read the chat in the window before the append and
-      // replace the answer on screen with a transcript that lacks it. The
-      // stored activity does not need the frame: the materializer settles a
-      // run that is still open in its recording (`runActivity.js`).
-      try {
-        if (persist) {
-          await materializeAssistantTurn({
-            repository: persist.repository,
-            chatId,
-            runId,
-            summary: outcome,
-            clientConnected: clientConnectedOf(persist, chatId),
-            message: persist.assistant,
-            runLog: svc.runLog,
-            takeLeftover: leftover.takerFor(outcome.status, outcome.abortCause?.kind)
-          });
-        }
-      } finally {
-        for (const [type, data] of terminalFrames) stream.emit(type, data);
+      if (stored) {
+        stream.emit(SSE_V2_EVENTS.INTERACTION_RAISED, { interaction: result.pendingInteraction });
+      } else {
+        const notStored = {
+          code: 'APPROVAL_NOT_STORED',
+          message: 'The approval could not be kept with the chat; the call was not run.'
+        };
+        const source = result.pendingInteraction.source;
+        stream.emit(SSE_V2_EVENTS.TOOL_COMPLETED, {
+          step: result.pendingInteraction.step || 0,
+          callId: String(source?.toolCallId || '0'),
+          toolId: String(source?.toolId || 'tool'),
+          name: String(source?.toolId || 'tool'),
+          resultPreview: { error: true, ...notStored },
+          error: notStored
+        });
       }
+    }
+    const connectCalls = parts.collected.connectCalls;
+    if (
+      !turn.headless &&
+      persist.temporary !== true &&
+      result.status === 'completed' &&
+      connectCalls.length > 0
+    ) {
+      await svc._storePendingConnect({
+        repository: persist.repository,
+        chatId,
+        runId,
+        user: turn.user,
+        calls: connectCalls,
+        messages: result.messages,
+        startMessage: start.startMessage,
+        continues: turn.connectResume?.answerRunIds || [],
+        basis: carriedBasis({ prior, result })
+      });
+    }
+  }
+
+  /**
+   * End the turn: project the result onto its terminal frames (held back), end
+   * the ledger run, store the answer, then send the held frames, and schedule
+   * the title.
+   *
+   * @private
+   */
+  async _closeTurn(turn, result, parts) {
+    const svc = this.svc;
+    const { persist, chatId, runId, model } = turn;
+    const held = holdTerminalFrames(turn.stream);
+    const prior = turn.toolApproval?.resume?.basis || turn.connectResume?.basis || null;
+    const outcome = await this._finishTurn({
+      result,
+      outputId: turn.outputId,
+      user: turn.user,
+      runId,
+      chatId,
+      streaming: turn.streaming,
+      stream: held.stream,
+      buildLogData: turn.log,
+      model,
+      timeoutMs: turn.timeoutMs,
+      getLocalizedError: turn.getLocalizedError,
+      language: turn.language,
+      channel: parts.channel,
+      ...parts.collected,
+      promptSources: turn.promptSources,
+      knowledgeScope: turn.knowledgeScope,
+      // What the turn this one continues had used (an approval paused it).
+      priorBasis: prior,
+      contextTracker: parts.contextTracker,
+      signal: turn.controller.signal,
+      structured: parts.outputSeam
+        ? {
+            validate: turn.structuredOutput.validate,
+            attempts: () => parts.outputSeam.attempts(),
+            verdictFor: answer => parts.outputSeam.verdictFor(answer)
+          }
+        : null
+    });
+    // The ledger's terminal frame first, then the chat document.
+    //
+    // A client reopening a chat asks the document whether a turn is running
+    // and, if it is, replays the run's ledger to catch up. Materializing
+    // first opens a window between the answer being appended and the run
+    // being released — `materializeAssistantTurn` takes the chat lock for
+    // each separately — in which the document still says `running` and the
+    // ledger holds no `run/ended`. A client reopening inside it attaches to
+    // a run that is already over: nothing further arrives, so the placeholder
+    // spins and the composer stays behind a Stop button until the user
+    // presses it. Ending the ledger first means the replay always carries the
+    // terminal frame, and the reattach settles instead of latching.
+    //
+    // The reverse window — a released document while the ledger has not
+    // ended — costs nothing: a document that is not `running` is never
+    // reattached to in the first place.
+    svc._endLedgerRun(runId, {
+      status: outcome.status,
+      finishReason: outcome.finishReason,
+      // A continued run's end counts what it used before the pause too.
+      usage: turn.carriedUsage ? addUsage(turn.carriedUsage, outcome.usage) : outcome.usage,
+      error: outcome.error || (outcome.errorInfo ? outcome.errorInfo : undefined),
+      knowledgeSources: outcome.knowledgeSources,
+      answerBasis: outcome.answerBasis,
+      limitReachedIn: outcome.limitReachedIn,
+      provenance: outcome.provenance,
+      cause: outcome.abortCause,
+      startedAt: turn.startedAt
+    });
+    // The single choke point: every terminal shape `_finishTurn` produces —
+    // normal, aborted, error, passthrough answer, malformed response —
+    // passes through here with the same summary.
+    //
+    // The answer is stored BEFORE the client is told the turn is over. A
+    // client that has seen `run/ended` re-reads the stored chat (a reattached
+    // turn does at once, `useAppChat`'s `rereadStoredChat`; a user reloads):
+    // told first, it can read the chat in the window before the append and
+    // replace the answer on screen with a transcript that lacks it. The
+    // stored activity does not need the frame: the materializer settles a
+    // run that is still open in its recording (`runActivity.js`).
+    try {
       if (persist) {
-        // A named chat is easier to find again. After the answer is stored and
-        // not awaited: the title never delays the turn, and it works the same
-        // when the client has long gone, because the user is a closure value.
-        if (outcome.status === 'completed' && !outcome.error) {
-          scheduleChatTitle({
-            repository: persist.repository,
-            chatId,
-            user,
-            chatModel: model,
-            appId: app?.id,
-            language,
-            firstAnswerOnly: true
-          });
-        }
+        await materializeAssistantTurn({
+          repository: persist.repository,
+          chatId,
+          runId,
+          summary: outcome,
+          clientConnected: clientConnectedOf(persist, chatId),
+          message: persist.assistant,
+          runLog: svc.runLog,
+          takeLeftover: turn.leftover.takerFor(outcome.status, outcome.abortCause?.kind)
+        });
       }
-      // A leftover the caller starts as the next turn (`chatTurnStart.js`).
-      const next = leftover.finish(persist ? 'superseded' : 'run_ended');
-      if (next) outcome.leftover = next;
-      return outcome;
-    } catch (error) {
-      // The loop never throws for model or tool failures; this is a bug path.
-      logger.error('Chat turn crashed', { component: COMPONENT, chatId, runId, error });
-      // Ledger first here too, for the reason above; `stream/error` and
-      // `run/ended` after the chat is settled, as on the ordinary path.
-      svc._endLedgerRun(runId, {
+    } finally {
+      held.flush();
+    }
+    // A named chat is easier to find again. After the answer is stored and
+    // not awaited: the title never delays the turn, and it works the same
+    // when the client has long gone, because the user is a closure value.
+    if (persist && outcome.status === 'completed' && !outcome.error) {
+      scheduleChatTitle({
+        repository: persist.repository,
+        chatId,
+        user: turn.user,
+        chatModel: model,
+        appId: turn.app?.id,
+        language: turn.language,
+        firstAnswerOnly: true
+      });
+    }
+    // A leftover the caller starts as the next turn (`chatTurnStart.js`).
+    const next = turn.leftover.finish(persist ? 'superseded' : 'run_ended');
+    if (next) outcome.leftover = next;
+    return outcome;
+  }
+
+  /**
+   * The bug path: the loop never throws for model or tool failures.
+   *
+   * @private
+   */
+  async _crashed(turn, error) {
+    const svc = this.svc;
+    const { persist, chatId, runId, stream } = turn;
+    logger.error('Chat turn crashed', { component: COMPONENT, chatId, runId, error });
+    // Ledger first here too, for the reason above; `stream/error` and
+    // `run/ended` after the chat is settled, as on the ordinary path.
+    svc._endLedgerRun(runId, {
+      status: 'error',
+      finishReason: 'error',
+      error,
+      usage: turn.carriedUsage,
+      startedAt: turn.startedAt
+    });
+    const internal = { code: 'INTERNAL_ERROR', message: error.message || 'Internal error' };
+    // `_finishTurn` never ran, so nothing else releases the chat: without
+    // this it stays `running` with a live `activeRunId` forever.
+    try {
+      if (persist) {
+        await materializeAssistantTurn({
+          repository: persist.repository,
+          chatId,
+          runId,
+          summary: {
+            status: 'error',
+            content: '',
+            finishReason: 'error',
+            errorInfo: internal
+          },
+          clientConnected: clientConnectedOf(persist, chatId),
+          runLog: svc.runLog,
+          takeLeftover: turn.leftover.takerFor('error')
+        });
+      }
+    } finally {
+      stream.emit(SSE_V2_EVENTS.STREAM_ERROR, internal);
+      stream.emit(SSE_V2_EVENTS.RUN_ENDED, {
         status: 'error',
         finishReason: 'error',
-        error,
-        usage: carriedUsage,
-        startedAt
+        error: internal
       });
-      // `_finishTurn` never ran, so nothing else releases the chat: without
-      // this it stays `running` with a live `activeRunId` forever.
-      try {
-        if (persist) {
-          await materializeAssistantTurn({
-            repository: persist.repository,
-            chatId,
-            runId,
-            summary: {
-              status: 'error',
-              content: '',
-              finishReason: 'error',
-              errorInfo: { code: 'INTERNAL_ERROR', message: error.message || 'Internal error' }
-            },
-            clientConnected: clientConnectedOf(persist, chatId),
-            runLog: svc.runLog,
-            takeLeftover: leftover.takerFor('error')
-          });
-        }
-      } finally {
-        stream.emit(SSE_V2_EVENTS.STREAM_ERROR, {
-          code: 'INTERNAL_ERROR',
-          message: error.message || 'Internal error'
-        });
-        stream.emit(SSE_V2_EVENTS.RUN_ENDED, {
-          status: 'error',
-          finishReason: 'error',
-          error: { code: 'INTERNAL_ERROR', message: error.message || 'Internal error' }
-        });
-      }
-      throw error;
-    } finally {
-      // Whatever the turn did not settle above is dropped: a run that no
-      // longer held its chat was replaced by a newer message.
-      leftover.finish(persist ? 'superseded' : 'run_ended');
-      if (stream !== NO_STREAM) unbindStreamRun(chatId, runId);
-      if (trackRequest && activeRequests.get(chatId) === controller) {
-        activeRequests.delete(chatId);
-      }
-      releaseRunHold();
     }
   }
 
@@ -1054,17 +1448,37 @@ export class ChatHost {
    * `run/paused`, `run/ended`) and the interaction log.
    * @private
    */
-  async _finishTurn({
+  async _finishTurn(params) {
+    const finish = this._finishContext(params);
+    const { result } = params;
+    if (result.status === 'aborted') return this._finishAborted(finish, params);
+    if (result.status === 'error') return this._finishError(finish, params);
+    if (result.status === 'paused') return this._finishPaused(finish, params);
+    if (result.finishReason === 'tool_passthrough_complete') {
+      return this._finishPassthrough(finish, params);
+    }
+    // Degenerate completion: a failure finish reason (e.g. Gemini's
+    // MALFORMED_FUNCTION_CALL) with no answer output would reach the client as
+    // a clean end with an empty bubble — surface an error instead.
+    if (!finish.producedOutput && isFailureFinishReason(result.finishReason)) {
+      return this._finishMalformed(finish, params);
+    }
+    return this._finishCompleted(finish, params);
+  }
+
+  /**
+   * What every terminal branch of `_finishTurn` shares: the summary, the end
+   * frame, the provenance, the basis and the settled scope.
+   *
+   * @private
+   */
+  _finishContext({
     result,
     outputId,
     user = null,
     runId,
-    chatId,
-    streaming,
     stream,
-    buildLogData,
     model,
-    timeoutMs,
     getLocalizedError,
     language,
     channel,
@@ -1073,12 +1487,9 @@ export class ChatHost {
     scheduledTaskProposals = [],
     generatedFiles = [],
     generatedImages = [],
-    promptSources = [],
     knowledgeScope = null,
     priorBasis = null,
-    contextTracker = null,
-    structured = null,
-    signal = null
+    contextTracker = null
   }) {
     const svc = this.svc;
     // A continuation after an approval starts a new loop run: what the turn used
@@ -1116,14 +1527,6 @@ export class ChatHost {
       // sources on `run/ended` — the ledger records the summary's list, so it
       // must be exactly what the stream reported.
     };
-    const translate = async (key, params) => {
-      if (typeof getLocalizedError !== 'function') return null;
-      try {
-        return await getLocalizedError(key, params || {}, language);
-      } catch {
-        return null;
-      }
-    };
     // The window as the turn left it (tool results included), sent with the
     // end of the run and stored with the answer, so a reopened chat shows it.
     // What the next turn sends: the prompt this turn started from plus its
@@ -1131,340 +1534,409 @@ export class ChatHost {
     // from the stored messages), so they are in the live frames only.
     const context = contextTracker?.replay(content) || contextTracker?.last() || undefined;
     if (context) summary.context = context;
-    // `runTurn` passes a stream that holds the terminal frames back until the
-    // answer is stored, so the client is told the turn is over only then.
-    const endRun = data => {
-      stream.emit(SSE_V2_EVENTS.RUN_ENDED, {
-        ...(usage ? { usage } : {}),
-        ...(context ? { context } : {}),
-        ...data
-      });
+    return {
+      loopSources,
+      content,
+      summary,
+      emit: (type, data) => stream.emit(type, data),
+      translate: async (key, params) => {
+        if (typeof getLocalizedError !== 'function') return null;
+        try {
+          return await getLocalizedError(key, params || {}, language);
+        } catch {
+          return null;
+        }
+      },
+      // `runTurn` passes a stream that holds the terminal frames back until the
+      // answer is stored, so the client is told the turn is over only then.
+      endRun: data => {
+        stream.emit(SSE_V2_EVENTS.RUN_ENDED, {
+          ...(usage ? { usage } : {}),
+          ...(context ? { context } : {}),
+          ...data
+        });
+      },
+      // The provenance object of the answer (EU AI Act Art. 50(2)): hashed from
+      // the text the caller receives, so it runs after structured-output
+      // validation and before citation markers. A store failure never fails the
+      // turn. Set on the summary so every terminal branch below carries it onto
+      // the stored message, and on `run/ended` so a ledger replay keeps it.
+      attachProvenance: async () => {
+        const provenance = await recordTextOutput({
+          outputId,
+          text: summary.content,
+          finalText: result.answerText,
+          model: { id: model?.id },
+          modelConfig: model,
+          marking: result.marking?.text,
+          user
+        });
+        if (provenance) summary.provenance = provenance;
+        return provenance;
+      },
+      provenanceOf: () => (summary.provenance ? { provenance: summary.provenance } : {}),
+      // What the answer is based on, from the sources the turn used and the
+      // connected systems that informed it: the kinds the footer's chip shows.
+      answerBasisFor: (sources, { byModel = true } = {}) => {
+        const basis = answerBasisOf({ knowledgeSources: sources, integrations, byModel });
+        // Counted once per answer: how many kinds it names, and whether the sources
+        // name an origin the basis leaves out.
+        recordAnswerOriginMetrics(basis, result?.sources);
+        return basis;
+      },
+      // The knowledge scope is reported when the turn starts, with what went into
+      // the prompt. A project a search of the turn then returned contributed too:
+      // said again, with that settled, just before the turn ends.
+      reportSettledScope: () => {
+        const settled = settleKnowledgeScope(
+          knowledgeScope,
+          result.sources,
+          priorBasis?.projectsRead
+        );
+        if (!settled || settled === knowledgeScope) return;
+        stream.emit(SSE_V2_EVENTS.KNOWLEDGE_SCOPE, settled);
+        svc.runLog.append(runId, RUN_LOG_EVENTS.KNOWLEDGE_SCOPE, settled);
+      },
+      // Whether the turn wrote any answer — text or a picture — the user sees.
+      producedOutput: channel
+        ? channel.state.answerOutput
+        : content.length > 0 || (result.images?.length ?? 0) > 0,
+      // Set by `_checkStructuredOutput` on a valid answer.
+      structuredOutput: undefined
     };
-    // The provenance object of the answer (EU AI Act Art. 50(2)): hashed from
-    // the text the caller receives, so it runs after structured-output
-    // validation and before citation markers. A store failure never fails the
-    // turn. Set on the summary so every terminal branch below carries it onto
-    // the stored message, and on `run/ended` so a ledger replay keeps it.
-    const attachProvenance = async () => {
-      const provenance = await recordTextOutput({
-        outputId,
-        text: summary.content,
-        finalText: result.answerText,
-        model: { id: model?.id },
-        modelConfig: model,
-        marking: result.marking?.text,
-        user
-      });
-      if (provenance) summary.provenance = provenance;
-      return provenance;
-    };
-    const provenanceOf = () => (summary.provenance ? { provenance: summary.provenance } : {});
-    // What the answer is based on, from the sources the turn used and the
-    // connected systems that informed it: the kinds the footer's chip shows.
-    const answerBasisFor = (sources, { byModel = true } = {}) => {
-      const basis = answerBasisOf({ knowledgeSources: sources, integrations, byModel });
-      // Counted once per answer: how many kinds it names, and whether the sources
-      // name an origin the basis leaves out.
-      recordAnswerOriginMetrics(basis, result?.sources);
-      return basis;
-    };
-    // The knowledge scope is reported when the turn starts, with what went into
-    // the prompt. A project a search of the turn then returned contributed too:
-    // said again, with that settled, just before the turn ends.
-    const reportSettledScope = () => {
-      const settled = settleKnowledgeScope(
-        knowledgeScope,
-        result.sources,
-        priorBasis?.projectsRead
-      );
-      if (!settled || settled === knowledgeScope) return;
-      stream.emit(SSE_V2_EVENTS.KNOWLEDGE_SCOPE, settled);
-      svc.runLog.append(runId, RUN_LOG_EVENTS.KNOWLEDGE_SCOPE, settled);
-    };
-    // Whether the turn wrote any answer — text or a picture — the user sees.
-    const producedOutput = channel
-      ? channel.state.answerOutput
-      : content.length > 0 || (result.images?.length ?? 0) > 0;
+  }
 
-    if (result.status === 'aborted') {
-      // Stop button, client disconnect or a superseding turn: no error bubble.
-      await svc.telemetry.recordChatCallEnd({
-        baseLog: buildLogData(streaming),
-        model,
-        outcome: 'aborted'
-      });
-      // A stopped turn keeps what it had already written, and that answer is
-      // based on what the turn used until then. One that wrote nothing has no
-      // answer to name a source for.
-      const knowledgeSources = producedOutput
-        ? svc.resolveAnswerSources(loopSources, promptSources)
-        : undefined;
-      const answerBasis = knowledgeSources ? answerBasisFor(knowledgeSources) : undefined;
-      // Who stopped it: the reason the turn's controller was aborted with.
-      const cause = causeOfSignal(signal);
-      // What was generated and shown is recorded; no text, no record.
-      await attachProvenance();
-      if (answerBasis) reportSettledScope();
-      endRun({
-        status: 'aborted',
-        finishReason: 'connection_closed',
-        cause,
-        ...(knowledgeSources ? { knowledgeSources } : {}),
-        ...(answerBasis ? { answerBasis } : {}),
-        ...provenanceOf()
-      });
-      return {
-        ...summary,
-        status: 'aborted',
-        finishReason: 'connection_closed',
-        abortCause: cause,
-        ...(knowledgeSources ? { knowledgeSources } : {}),
-        ...(answerBasis ? { answerBasis } : {})
-      };
+  /**
+   * Stop button, client disconnect or a superseding turn: no error bubble.
+   *
+   * @private
+   */
+  async _finishAborted(finish, { buildLogData, streaming, model, promptSources = [], signal }) {
+    const svc = this.svc;
+    await svc.telemetry.recordChatCallEnd({
+      baseLog: buildLogData(streaming),
+      model,
+      outcome: 'aborted'
+    });
+    // A stopped turn keeps what it had already written, and that answer is
+    // based on what the turn used until then. One that wrote nothing has no
+    // answer to name a source for.
+    const knowledgeSources = finish.producedOutput
+      ? svc.resolveAnswerSources(finish.loopSources, promptSources)
+      : undefined;
+    const answerBasis = knowledgeSources ? finish.answerBasisFor(knowledgeSources) : undefined;
+    // Who stopped it: the reason the turn's controller was aborted with.
+    const cause = causeOfSignal(signal);
+    // What was generated and shown is recorded; no text, no record.
+    await finish.attachProvenance();
+    if (answerBasis) finish.reportSettledScope();
+    finish.endRun({
+      status: 'aborted',
+      finishReason: 'connection_closed',
+      cause,
+      ...(knowledgeSources ? { knowledgeSources } : {}),
+      ...(answerBasis ? { answerBasis } : {}),
+      ...finish.provenanceOf()
+    });
+    return {
+      ...finish.summary,
+      status: 'aborted',
+      finishReason: 'connection_closed',
+      abortCause: cause,
+      ...(knowledgeSources ? { knowledgeSources } : {}),
+      ...(answerBasis ? { answerBasis } : {})
+    };
+  }
+
+  /**
+   * A failed model call or tool round.
+   *
+   * @private
+   */
+  async _finishError(
+    finish,
+    {
+      result,
+      chatId,
+      runId,
+      model,
+      language,
+      getLocalizedError,
+      timeoutMs,
+      buildLogData,
+      streaming
     }
-
-    if (result.status === 'error') {
-      const err = result.error;
-      const errorInfo = await describeChatError(err, {
-        model,
-        language,
-        getLocalizedError,
-        timeoutMs
-      });
-      await svc.telemetry.recordChatCallEnd({
-        baseLog: buildLogData(streaming),
-        model,
-        outcome: 'error',
-        error: err
-      });
-      logger.error('Chat turn failed', {
+  ) {
+    const svc = this.svc;
+    const err = result.error;
+    const errorInfo = await describeChatError(err, {
+      model,
+      language,
+      getLocalizedError,
+      timeoutMs
+    });
+    await svc.telemetry.recordChatCallEnd({
+      baseLog: buildLogData(streaming),
+      model,
+      outcome: 'error',
+      error: err
+    });
+    logger.error('Chat turn failed', {
+      component: COMPONENT,
+      chatId,
+      runId,
+      modelId: model?.id,
+      provider: model?.provider,
+      code: errorInfo.code,
+      error: err?.message
+    });
+    if (errorInfo.isContextWindowError) {
+      logger.warn('Context window exceeded', {
         component: COMPONENT,
         chatId,
-        runId,
         modelId: model?.id,
-        provider: model?.provider,
-        code: errorInfo.code,
-        error: err?.message
+        contextWindow: model?.contextWindow
       });
-      if (errorInfo.isContextWindowError) {
-        logger.warn('Context window exceeded', {
-          component: COMPONENT,
-          chatId,
-          modelId: model?.id,
-          contextWindow: model?.contextWindow
-        });
-      }
-      await svc.logInteraction(
-        'chat_error',
-        buildLogData(streaming, {
-          responseType: 'error',
-          error: {
-            message: errorInfo.message,
-            code: errorInfo.code,
-            details: errorInfo.details,
-            isContextWindowError: errorInfo.isContextWindowError
-          },
-          response: content
-        })
-      );
-      stream.emit(SSE_V2_EVENTS.STREAM_ERROR, {
-        code: String(errorInfo.code || 'ERROR'),
-        message: errorInfo.message,
-        ...(errorInfo.details !== undefined ? { details: errorInfo.details } : {}),
-        retryable: false,
-        isContextWindowError: !!errorInfo.isContextWindowError
-      });
-      endRun({
-        status: 'error',
-        finishReason: 'error',
-        error: { code: String(errorInfo.code || 'ERROR'), message: errorInfo.message }
-      });
-      return { ...summary, status: 'error', finishReason: 'error', error: err, errorInfo };
     }
+    await svc.logInteraction(
+      'chat_error',
+      buildLogData(streaming, {
+        responseType: 'error',
+        error: {
+          message: errorInfo.message,
+          code: errorInfo.code,
+          details: errorInfo.details,
+          isContextWindowError: errorInfo.isContextWindowError
+        },
+        response: finish.content
+      })
+    );
+    finish.emit(SSE_V2_EVENTS.STREAM_ERROR, {
+      code: String(errorInfo.code || 'ERROR'),
+      message: errorInfo.message,
+      ...(errorInfo.details !== undefined ? { details: errorInfo.details } : {}),
+      retryable: false,
+      isContextWindowError: !!errorInfo.isContextWindowError
+    });
+    finish.endRun({
+      status: 'error',
+      finishReason: 'error',
+      error: { code: String(errorInfo.code || 'ERROR'), message: errorInfo.message }
+    });
+    return { ...finish.summary, status: 'error', finishReason: 'error', error: err, errorInfo };
+  }
 
-    if (result.status === 'paused') {
-      // The turn pauses for the user's answer: the question or approval seam
-      // already sent `interaction/raised`; no badge.
-      const pendingInteraction = result.pendingInteraction;
-      stream.emit(SSE_V2_EVENTS.RUN_PAUSED, {
-        reason: 'interaction',
-        ...(pendingInteraction?.id ? { interactionId: String(pendingInteraction.id) } : {})
-      });
-      return {
-        ...summary,
-        finishReason: result.finishReason === 'approval' ? 'approval' : 'clarification',
-        pendingInteraction
-      };
+  /**
+   * The turn pauses for the user's answer: the question or approval seam
+   * already sent `interaction/raised`; no badge.
+   *
+   * @private
+   */
+  _finishPaused(finish, { result }) {
+    const pendingInteraction = result.pendingInteraction;
+    finish.emit(SSE_V2_EVENTS.RUN_PAUSED, {
+      reason: 'interaction',
+      ...(pendingInteraction?.id ? { interactionId: String(pendingInteraction.id) } : {})
+    });
+    return {
+      ...finish.summary,
+      finishReason: result.finishReason === 'approval' ? 'approval' : 'clarification',
+      pendingInteraction
+    };
+  }
+
+  /**
+   * The output contract, checked on the answer the run ended with. A
+   * passthrough answer never went through the seam, so this is its only
+   * check; a model answer the seam already judged keeps that verdict (a
+   * second run of the time-bounded pattern checks could disagree), and one
+   * it never saw is checked here. Either way it is the answer alone that is
+   * checked — the final step's text, or the passthrough tool's output — not
+   * prose written before a tool call. Returns the terminal summary of a
+   * failed check, or null.
+   *
+   * @private
+   */
+  async _checkStructuredOutput(
+    finish,
+    { result, structured, chatId, runId, model, buildLogData, streaming },
+    { passthrough = false } = {}
+  ) {
+    if (!structured) return null;
+    const { content } = finish;
+    let answer = content;
+    if (passthrough && typeof result.terminate?.content === 'string') {
+      answer = result.terminate.content;
+    } else if (typeof result.answerText === 'string') {
+      answer = result.answerText;
     }
-
-    // The output contract, checked on the answer the run ended with. A
-    // passthrough answer never went through the seam, so this is its only
-    // check; a model answer the seam already judged keeps that verdict (a
-    // second run of the time-bounded pattern checks could disagree), and one
-    // it never saw is checked here. Either way it is the answer alone that is
-    // checked — the final step's text, or the passthrough tool's output — not
-    // prose written before a tool call. Returns the terminal summary of a
-    // failed check, or null.
-    let structuredOutput;
-    const checkStructuredOutput = async ({ passthrough = false } = {}) => {
-      if (!structured) return null;
-      const answer =
-        passthrough && typeof result.terminate?.content === 'string'
-          ? result.terminate.content
-          : typeof result.answerText === 'string'
-            ? result.answerText
-            : content;
-      let verdict = passthrough ? null : structured.verdictFor?.(answer) || null;
-      if (!verdict) {
-        try {
-          verdict = structured.validate(answer);
-        } catch (error) {
-          verdict = { valid: false, errors: [{ path: '', message: error.message }] };
-        }
+    let verdict = passthrough ? null : structured.verdictFor?.(answer) || null;
+    if (!verdict) {
+      try {
+        verdict = structured.validate(answer);
+      } catch (error) {
+        verdict = { valid: false, errors: [{ path: '', message: error.message }] };
       }
-      const attempts = Math.max(1, structured.attempts?.() || 0);
-      if (!verdict.valid) {
-        const errors = Array.isArray(verdict.errors) ? verdict.errors : [];
-        const message =
-          (await translate('outputValidationFailed')) ||
-          `The answer did not match the output schema after ${attempts} attempt${
-            attempts === 1 ? '' : 's'
-          }.`;
-        logger.warn('Structured output failed validation', {
-          component: COMPONENT,
-          chatId,
-          runId,
-          modelId: model?.id,
-          attempts,
-          errorCount: errors.length
-        });
-        await svc.logInteraction(
-          'chat_error',
-          buildLogData(streaming, {
-            responseType: 'error',
-            error: { message, code: 'OUTPUT_VALIDATION_FAILED', details: errors },
-            response: content
-          })
-        );
-        stream.emit(SSE_V2_EVENTS.STREAM_ERROR, {
-          code: 'OUTPUT_VALIDATION_FAILED',
-          message,
-          details: errors,
-          retryable: true
-        });
-        endRun({
-          status: 'error',
-          finishReason: 'error',
-          error: { code: 'OUTPUT_VALIDATION_FAILED', message }
-        });
-        return {
-          ...summary,
-          status: 'error',
-          finishReason: 'error',
-          errorInfo: { message, code: 'OUTPUT_VALIDATION_FAILED', details: errors },
-          structuredOutput: { valid: false, errors, attempts }
-        };
-      }
-      structuredOutput = { valid: true, value: verdict.value, attempts };
+    }
+    const attempts = Math.max(1, structured.attempts?.() || 0);
+    if (verdict.valid) {
+      finish.structuredOutput = { valid: true, value: verdict.value, attempts };
       // What the caller and the stored history get is the validated JSON,
       // without the fences or prose a model may have wrapped it in.
-      if (typeof verdict.text === 'string') summary.content = verdict.text;
+      if (typeof verdict.text === 'string') finish.summary.content = verdict.text;
       return null;
+    }
+    const errors = Array.isArray(verdict.errors) ? verdict.errors : [];
+    const message =
+      (await finish.translate('outputValidationFailed')) ||
+      `The answer did not match the output schema after ${attempts} attempt${
+        attempts === 1 ? '' : 's'
+      }.`;
+    logger.warn('Structured output failed validation', {
+      component: COMPONENT,
+      chatId,
+      runId,
+      modelId: model?.id,
+      attempts,
+      errorCount: errors.length
+    });
+    await this.svc.logInteraction(
+      'chat_error',
+      buildLogData(streaming, {
+        responseType: 'error',
+        error: { message, code: 'OUTPUT_VALIDATION_FAILED', details: errors },
+        response: content
+      })
+    );
+    finish.emit(SSE_V2_EVENTS.STREAM_ERROR, {
+      code: 'OUTPUT_VALIDATION_FAILED',
+      message,
+      details: errors,
+      retryable: true
+    });
+    finish.endRun({
+      status: 'error',
+      finishReason: 'error',
+      error: { code: 'OUTPUT_VALIDATION_FAILED', message }
+    });
+    return {
+      ...finish.summary,
+      status: 'error',
+      finishReason: 'error',
+      errorInfo: { message, code: 'OUTPUT_VALIDATION_FAILED', details: errors },
+      structuredOutput: { valid: false, errors, attempts }
     };
+  }
 
-    if (result.finishReason === 'tool_passthrough_complete') {
-      const rejected = await checkStructuredOutput({ passthrough: true });
-      if (rejected) return rejected;
-      const toolName = result.terminate?.toolName;
-      await svc.logInteraction(
-        'chat_response',
-        buildLogData(streaming, {
-          responseType: 'success',
-          response: content.substring(0, 1000),
-          source: 'passthrough_tool',
-          toolName
-        })
-      );
-      const knowledgeSources = svc.resolveAnswerSources(loopSources, promptSources, {
-        byModel: false
-      });
-      // The tool's output has a basis only when it used something.
-      const passthroughBasis = answerBasisFor(knowledgeSources, { byModel: false });
-      const answerBasis = passthroughBasis.length > 0 ? passthroughBasis : undefined;
-      // A passthrough answer is tool output, but the user sees it as the AI
-      // app's answer, so it is recorded with the turn's model.
-      await attachProvenance();
-      reportSettledScope();
-      endRun({
-        status: 'completed',
-        finishReason: 'tool_passthrough_complete',
-        ...(toolName ? { toolName: String(toolName) } : {}),
-        knowledgeSources,
-        ...(answerBasis ? { answerBasis } : {}),
-        ...provenanceOf()
-      });
-      return {
-        ...summary,
-        status: 'completed',
-        toolName,
-        knowledgeSources,
-        ...(answerBasis ? { answerBasis } : {}),
-        ...(structuredOutput ? { structuredOutput } : {})
-      };
-    }
-
-    // Degenerate completion: a failure finish reason (e.g. Gemini's
-    // MALFORMED_FUNCTION_CALL) with no answer output would reach the client as
-    // a clean end with an empty bubble — surface an error instead.
-    if (!producedOutput && isFailureFinishReason(result.finishReason)) {
-      const message =
-        (await translate('malformedModelResponse')) ||
-        'The model returned a malformed response. Please try again.';
-      logger.warn('Model completed with failure finish reason and no output', {
-        component: COMPONENT,
-        chatId,
-        runId,
-        provider: model?.provider,
-        modelId: model?.id,
-        finishReason: result.finishReason
-      });
-      await svc.logInteraction(
-        'chat_error',
-        buildLogData(streaming, {
-          responseType: 'error',
-          error: {
-            message,
-            code: 'MALFORMED_RESPONSE',
-            details: { finishReason: result.finishReason }
-          },
-          response: content
-        })
-      );
-      stream.emit(SSE_V2_EVENTS.STREAM_ERROR, {
-        code: 'MALFORMED_RESPONSE',
-        message,
-        details: { finishReason: result.finishReason },
-        retryable: true
-      });
-      endRun({
-        status: 'error',
-        finishReason: 'error',
-        error: { code: 'MALFORMED_RESPONSE', message }
-      });
-      return {
-        ...summary,
-        status: 'error',
-        finishReason: 'error',
-        errorInfo: { message, code: 'MALFORMED_RESPONSE' }
-      };
-    }
-
-    const rejected = await checkStructuredOutput();
+  /**
+   * A passthrough tool's output is the answer.
+   *
+   * @private
+   */
+  async _finishPassthrough(finish, params) {
+    const svc = this.svc;
+    const { result, buildLogData, streaming, promptSources = [] } = params;
+    const rejected = await this._checkStructuredOutput(finish, params, { passthrough: true });
     if (rejected) return rejected;
+    const toolName = result.terminate?.toolName;
+    await svc.logInteraction(
+      'chat_response',
+      buildLogData(streaming, {
+        responseType: 'success',
+        response: finish.content.substring(0, 1000),
+        source: 'passthrough_tool',
+        toolName
+      })
+    );
+    const knowledgeSources = svc.resolveAnswerSources(finish.loopSources, promptSources, {
+      byModel: false
+    });
+    // The tool's output has a basis only when it used something.
+    const passthroughBasis = finish.answerBasisFor(knowledgeSources, { byModel: false });
+    const answerBasis = passthroughBasis.length > 0 ? passthroughBasis : undefined;
+    // A passthrough answer is tool output, but the user sees it as the AI
+    // app's answer, so it is recorded with the turn's model.
+    await finish.attachProvenance();
+    finish.reportSettledScope();
+    finish.endRun({
+      status: 'completed',
+      finishReason: 'tool_passthrough_complete',
+      ...(toolName ? { toolName: String(toolName) } : {}),
+      knowledgeSources,
+      ...(answerBasis ? { answerBasis } : {}),
+      ...finish.provenanceOf()
+    });
+    return {
+      ...finish.summary,
+      status: 'completed',
+      toolName,
+      knowledgeSources,
+      ...(answerBasis ? { answerBasis } : {}),
+      ...(finish.structuredOutput ? { structuredOutput: finish.structuredOutput } : {})
+    };
+  }
 
+  /**
+   * A failure finish reason with no answer output.
+   *
+   * @private
+   */
+  async _finishMalformed(finish, { result, chatId, runId, model, buildLogData, streaming }) {
+    const message =
+      (await finish.translate('malformedModelResponse')) ||
+      'The model returned a malformed response. Please try again.';
+    logger.warn('Model completed with failure finish reason and no output', {
+      component: COMPONENT,
+      chatId,
+      runId,
+      provider: model?.provider,
+      modelId: model?.id,
+      finishReason: result.finishReason
+    });
+    await this.svc.logInteraction(
+      'chat_error',
+      buildLogData(streaming, {
+        responseType: 'error',
+        error: {
+          message,
+          code: 'MALFORMED_RESPONSE',
+          details: { finishReason: result.finishReason }
+        },
+        response: finish.content
+      })
+    );
+    finish.emit(SSE_V2_EVENTS.STREAM_ERROR, {
+      code: 'MALFORMED_RESPONSE',
+      message,
+      details: { finishReason: result.finishReason },
+      retryable: true
+    });
+    finish.endRun({
+      status: 'error',
+      finishReason: 'error',
+      error: { code: 'MALFORMED_RESPONSE', message }
+    });
+    return {
+      ...finish.summary,
+      status: 'error',
+      finishReason: 'error',
+      errorInfo: { message, code: 'MALFORMED_RESPONSE' }
+    };
+  }
+
+  /**
+   * The model's answer.
+   *
+   * @private
+   */
+  async _finishCompleted(finish, params) {
+    const svc = this.svc;
+    const { result, buildLogData, streaming, promptSources = [] } = params;
+    const rejected = await this._checkStructuredOutput(finish, params);
+    if (rejected) return rejected;
     const finishReason = result.finishReason || 'stop';
-    const knowledgeSources = svc.resolveAnswerSources(loopSources, promptSources);
-    const answerBasis = answerBasisFor(knowledgeSources);
+    const knowledgeSources = svc.resolveAnswerSources(finish.loopSources, promptSources);
+    const answerBasis = finish.answerBasisFor(knowledgeSources);
     // Hit the output limit: thinking it all away reads differently from an
     // answer cut off mid-sentence (see outputLimit.js).
     const limitReached = limitReachedIn({
@@ -1472,30 +1944,30 @@ export class ChatHost {
       answerText: result.answerText,
       stepUsage: result.stepUsage
     });
-    if (limitReached) summary.limitReachedIn = limitReached;
-    await attachProvenance();
-    reportSettledScope();
-    endRun({
+    if (limitReached) finish.summary.limitReachedIn = limitReached;
+    await finish.attachProvenance();
+    finish.reportSettledScope();
+    finish.endRun({
       status: result.status || 'completed',
       finishReason,
       ...(limitReached ? { limitReachedIn: limitReached } : {}),
       knowledgeSources,
       answerBasis,
-      ...provenanceOf()
+      ...finish.provenanceOf()
     });
     await svc.logInteraction(
       'chat_response',
       buildLogData(streaming, {
         responseType: 'success',
-        response: summary.content.substring(0, 1000)
+        response: finish.summary.content.substring(0, 1000)
       })
     );
     return {
-      ...summary,
+      ...finish.summary,
       finishReason,
       knowledgeSources,
       answerBasis,
-      ...(structuredOutput ? { structuredOutput } : {})
+      ...(finish.structuredOutput ? { structuredOutput: finish.structuredOutput } : {})
     };
   }
 }

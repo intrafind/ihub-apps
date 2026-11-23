@@ -23,12 +23,13 @@
       "id": "unattended-admin-rights",
       "title": "An unattended run of an admin no longer carries admin rights",
       "state": "proposed",
-      "decision": "Proposed: unify to \"admin rights only while a person is present\". A scheduled task, a follow-up or a wake of an owner who is an admin runs with the rights of the groups of the owner and without the admin flags. No option to keep them: an unattended run must not act as an administrator. In the golden the flag shows in one place: the model is offered the tool workflow_installation-check, a workflow of the app that no group of the owner grants and that is offered because an admin may run every workflow (workflowAccess.js). After the change the run offers no tool. The app itself is granted by the group and stays.",
+      "decision": "Proposed: unify to \"admin rights only while a person is present\". A scheduled task, a follow-up or a wake of an owner who is an admin runs with the rights of the groups of the owner and without the admin flags (isAdmin, isContentAdmin, adminAccess, contentAdmin). No option to keep them: an unattended run must not act as an administrator. Since chat-on-run-service a scheduled run runs on the run service with the origin schedule (principalResolver.scheduledRunContext), and its request is built for that principal. In the golden the flag showed in one place: the model was offered the tool workflow_installation-check, a workflow of the app that no group of the owner grants and that was offered because an admin may run every workflow (workflowAccess.js). After the change the run offers no tool: the model request carries no tools and toolExecution none, the offered tool ids and tool schemas are empty, and the evidence record and the ledger lose the tool hash of the step. The app itself is granted by the group and stays, and the answer is the same. The internal kill switch platform.runs.chatOnRunService: false (server restart) brings the admin flags back for one release.",
       "goldens": ["scheduled-task/admin-owner.json"],
-      "parts": ["evidence", "ledger", "modelRequests", "offeredToolIds", "toolSchemas"],
+      "parts": ["evidence", "ledger", "modelRequests", "offeredToolIds", "title", "toolSchemas"],
       "pr": "chat-on-run-service",
       "signedBy": null,
-      "signedOn": null
+      "signedOn": null,
+      "notes": "Re-recorded in chat-on-run-service (UPDATE_GOLDENS=1 for scheduled-task/admin-owner only); the parts listed are exactly what changed; the title of the case says what the run now does. Release entry: breaking-changes.md, 'Unattended Runs Never Use Admin Rights'. What else an admin owner loses in a scheduled run is listed there."
     },
     {
       "id": "tool-result-truncation",

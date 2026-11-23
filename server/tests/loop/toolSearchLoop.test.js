@@ -19,7 +19,7 @@
  *   starts with it left out again;
  * - a tool that was not found cannot be called: it is not in the request.
  */
-import test from 'node:test';
+import test, { mock } from 'node:test';
 import assert from 'node:assert/strict';
 import crypto from 'node:crypto';
 import fs from 'node:fs/promises';
@@ -37,6 +37,15 @@ import { makeClient, sseResponse, MODELS } from './helpers/llmFixtures.js';
 import { FilesystemStorageProvider } from '../../storage/providers/filesystem/index.js';
 import { ChatRepository } from '../../services/chat/ChatRepository.js';
 import { createToolSearch, toolSearchToolDefinition } from '../../services/tools/toolSearch.js';
+import installedIntegrationService from '../../services/integrations/InstalledIntegrationService.js';
+
+// The installations the actions below belong to: a turn on the run service
+// re-checks each call against them (`ToolRunner`, integration grant).
+const INSTALLED = new Set(['jira', 'wiki']);
+const installedOf = installedIntegrationService.get.bind(installedIntegrationService);
+mock.method(installedIntegrationService, 'get', id =>
+  INSTALLED.has(id) ? { id, enabled: true } : installedOf(id)
+);
 
 const { INTERACTION_RAISED, TOOL_STARTED, TOOL_COMPLETED } = SSE_V2_EVENTS;
 
@@ -177,7 +186,8 @@ function turn(service, { chatId, prepData, ...rest }) {
     streaming: true,
     buildLogData: () => ({}),
     language: 'en',
-    user: { id: 'u1', groups: ['users'] },
+    // A resolved principal that may use both installations.
+    user: { id: 'u1', groups: ['users'], permissions: { integrations: ['*'] } },
     getLocalizedError: async () => null,
     ...rest
   });

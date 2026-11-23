@@ -15,7 +15,7 @@
  * - another user, an expired record, a missing connection and any other
  *   message are handled before anything runs.
  */
-import test from 'node:test';
+import test, { mock } from 'node:test';
 import assert from 'node:assert/strict';
 import crypto from 'node:crypto';
 import fs from 'node:fs/promises';
@@ -44,6 +44,14 @@ import { publicChatView } from '../../services/chat/chatToolApproval.js';
 import { makeClient, sseResponse, MODELS } from './helpers/llmFixtures.js';
 import { FilesystemStorageProvider } from '../../storage/providers/filesystem/index.js';
 import { ChatRepository } from '../../services/chat/ChatRepository.js';
+import installedIntegrationService from '../../services/integrations/InstalledIntegrationService.js';
+// The installations the tools below belong to: a turn on the run service
+// re-checks each call against them (`ToolRunner`, integration grant).
+const INSTALLED = new Set(['jira']);
+const installedOf = installedIntegrationService.get.bind(installedIntegrationService);
+mock.method(installedIntegrationService, 'get', id =>
+  INSTALLED.has(id) ? { id, enabled: true } : installedOf(id)
+);
 
 const sinks = new Map();
 test.before(() => {
@@ -177,7 +185,7 @@ function turn(service, { chatId, prepData, ...rest }) {
     streaming: true,
     buildLogData: () => ({}),
     language: 'en',
-    user: { id: 'u1', groups: ['users'] },
+    user: { id: 'u1', groups: ['users'], permissions: { integrations: ['*'] } },
     getLocalizedError: async () => null,
     ...rest
   });
@@ -354,7 +362,7 @@ test('an anonymous user, or a turn that is not stored, leaves no record', async 
     chatId,
     prepData: prep(),
     persistence: persistenceFor(repository),
-    user: { id: 'anonymous', groups: ['anonymous'] }
+    user: { id: 'anonymous', groups: ['anonymous'], permissions: { integrations: ['*'] } }
   });
   assert.ok(!(await repository.getChat(chatId)).pendingConnect);
 
@@ -424,7 +432,7 @@ test('the record is single use: of two requests exactly one runs the call', asyn
   const request = () =>
     prepareConnectResume({
       chatId: setup.chatId,
-      user: { id: 'u1' },
+      user: { id: 'u1', permissions: { integrations: ['*'] } },
       appId: 'app1',
       chat,
       ownerId: 'u1',
@@ -446,7 +454,7 @@ test('a turn refused before its loop started puts the record back; after that it
   const chat = await setup.repository.getChat(setup.chatId);
   const prepared = await prepareConnectResume({
     chatId: setup.chatId,
-    user: { id: 'u1' },
+    user: { id: 'u1', permissions: { integrations: ['*'] } },
     appId: 'app1',
     chat,
     ownerId: 'u1',
@@ -761,7 +769,7 @@ test('a resume is audited once, with ids and tool names and never the arguments'
   const request = () =>
     prepareConnectResume({
       chatId: setup.chatId,
-      user: { id: 'u1' },
+      user: { id: 'u1', permissions: { integrations: ['*'] } },
       appId: 'app1',
       chat,
       ownerId: 'u1',
@@ -798,7 +806,7 @@ test('a refused resume (not connected, expired, another user) is not audited', a
   };
   await prepareConnectResume({
     ...base,
-    user: { id: 'u1' },
+    user: { id: 'u1', permissions: { integrations: ['*'] } },
     ownerId: 'u1',
     isConnected: async () => false
   });
@@ -810,7 +818,7 @@ test('a refused resume (not connected, expired, another user) is not audited', a
   });
   await prepareConnectResume({
     ...base,
-    user: { id: 'u1' },
+    user: { id: 'u1', permissions: { integrations: ['*'] } },
     ownerId: 'u1',
     isConnected: connected,
     now: new Date(Date.now() + CONNECT_RESUME_TTL_MS + 1000)

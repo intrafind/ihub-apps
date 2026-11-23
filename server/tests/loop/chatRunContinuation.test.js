@@ -35,7 +35,7 @@ import { makeClient, sseResponse, MODELS } from './helpers/llmFixtures.js';
 import { RUN_LOG_EVENTS, SSE_V2_EVENTS } from '../../../shared/runEvents.js';
 
 const silentLogger = { debug() {}, info() {}, warn() {}, error() {} };
-const user = { id: 'u1', groups: ['users'] };
+const user = { id: 'u1', groups: ['users'], permissions: {} };
 
 function textTurn(content) {
   return [
@@ -503,7 +503,7 @@ test('on another worker: the worker that paused the run hands its sequence over'
   const other = worker(2);
   const { runId } = await pausing.startRun({
     kind: 'chat',
-    user: { id: 'u1' },
+    user: { id: 'u1', permissions: {} },
     refs: { chatId: 'c1', appId: 'app1' },
     model: 'oa'
   });

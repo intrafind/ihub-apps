@@ -821,6 +821,18 @@ export const platformConfigSchema = z
       })
       .passthrough()
       .prefault({}),
+    // Runs (#3772). `chatOnRunService` is an internal kill switch, not in
+    // Admin → Features: false runs chat turns, scheduled runs and the app
+    // turns of the inference API on the agent loop directly, as before they
+    // moved onto the run service (and a scheduled run of an admin keeps the
+    // admin rights). Absent means true. Needs a server restart; removed one
+    // release after it shipped.
+    runs: z
+      .object({
+        chatOnRunService: z.boolean().prefault(true)
+      })
+      .passthrough()
+      .prefault({}),
     // Scheduled tasks: prompts users save to run by themselves, gated by
     // features.scheduledTasks (and durable chats, since every run is a chat).
     // Zero turns off `maxTasksPerUser`, `maxConsecutiveFailures`,
