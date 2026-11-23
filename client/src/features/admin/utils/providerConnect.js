@@ -559,7 +559,10 @@ export function buildProviderWrite(tile, form, target, discovery) {
   if (baseUrl) body.baseUrl = baseUrl;
   if (apiKey) body.apiKey = apiKey;
   if (tile.gateway) body.gateway = tile.gateway;
-  if (tile.selfHosted && !apiKey) body.requiresApiKey = false;
+  // No key, yet the connection test passed (or a self-hosted server, which
+  // usually runs without one): the endpoint is open, so the provider is keyless.
+  // Without the flag its models would fail with a missing-key error.
+  if (!apiKey && (tile.selfHosted || discovery)) body.requiresApiKey = false;
   return { method: 'POST', path: '/admin/providers', body };
 }
 

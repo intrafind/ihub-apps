@@ -309,6 +309,24 @@ describe('save', () => {
     expect(buildProviderWrite(openai.tile, openai.form, openai.target, discovery)).toBeNull();
   });
 
+  it('marks a gateway that passed the test without a key as keyless, and one with a key not', () => {
+    const open = formFor('openai-compatible', SHIPPED, {
+      name: 'LiteLLM',
+      url: 'https://litellm.example/v1'
+    });
+    expect(buildProviderWrite(open.tile, open.form, open.target, discovery).body).toMatchObject({
+      requiresApiKey: false
+    });
+    const keyed = formFor('openai-compatible', SHIPPED, {
+      name: 'Hub',
+      url: 'https://hub.example/v1',
+      apiKey: 'secret'
+    });
+    expect(
+      buildProviderWrite(keyed.tile, keyed.form, keyed.target, discovery).body
+    ).not.toHaveProperty('requiresApiKey');
+  });
+
   it('keeps the stored key (masked placeholder) when only enabling a provider', () => {
     const providers = [{ ...SHIPPED[0], enabled: false }];
     const { tile, form, target } = formFor('openai', providers);
