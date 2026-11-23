@@ -147,6 +147,11 @@ The editor of a personal app is a page of its own, at `/apps/<id>/edit`. It has 
 - If someone else saved the app while you were editing, the save bar says "Someone else changed
   this app. Reload to see the changes." Your entries stay in the form until you click
   **Reload**.
+- **Improve with AI** on the instructions and the **Conversation** view (preview feature **Change
+  apps in a conversation**) work as in the admin editor; see [Build your first app](app-quickstart.md#change-the-app-in-a-conversation-preview).
+  They are shown to the owner and to people who may change the app. A change applied in the
+  conversation reaches everyone you share the app with; the card says how many people that is.
+  The builder never changes what the app may use.
 
 ### What a personal app can contain
 

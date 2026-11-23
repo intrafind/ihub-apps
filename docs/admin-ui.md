@@ -480,6 +480,12 @@ use it; everyone else gets the automatic choice among the models they may use. A
 was later disabled or deleted is marked **(not available)**, and drafts use the automatic choice
 until you pick another one. The setting is saved with **Save Changes**.
 
+The same model answers **Improve with AI** on the instructions and, with the preview switch
+**Change apps in a conversation** on, the conversation view of the app editor (see
+[Build your first app](app-quickstart.md#change-the-app-in-a-conversation-preview)). Each request is
+a model call counted against the usage limit of the person who asked; a person can send 60 such
+requests per hour, apart from the 30 drafts.
+
 ![Platform features with preview toggles](assets/screenshots/admin-features.png)
 
 ---

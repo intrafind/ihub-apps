@@ -51,6 +51,36 @@ Admins can now choose which AI model prepares app drafts, for admin apps and per
   available, and drafts use the automatic choice until another model is picked.
 - The **New app** page names the model the description is sent to, as before.
 
+## Apps: Change an App in a Conversation (Preview), and Improve Instructions with AI
+
+People who edit an app can now tell an AI model in their own words what to change, instead of
+editing the form. This works in the admin app editor and in the editor of personal apps.
+
+- **Conversation (preview):** under **Edit with**, choose **Conversation**. The test chat opens
+  beside it. The builder asks a question when it needs to, or proposes one change at a time as a
+  card that shows every added and removed line and who gets the change. **Apply** saves it and
+  restarts the test chat; **Undo** saves the earlier version again. The builder changes texts,
+  input fields, conversation starters and the look only: never who can use the app, the AI
+  model, web search, connected systems or the status. After an app is created from a description,
+  the editor opens with the conversation. Switch it on under **Admin → Platform → Features →
+  Change apps in a conversation**; it is off by default and needs **App Drafts with AI**.
+- **Improve with AI:** the **Instructions** field has a button that rewrites the instructions on
+  request (shorter, more formal, clearer steps, what to do if unsure). **Use this text** changes
+  the form only; save to keep it. It is available wherever **App Drafts with AI** is on.
+- Each request is a model call that counts against the usage limit of the person who asked. A
+  person can send 60 per hour.
+- How well the builder works depends on the model; it has not yet been measured with real
+  models. Read each change before you apply it.
+
+## App Editor: Saves No Longer Overwrite Another Admin's Changes
+
+When two administrators edited the same app, the later save replaced the earlier one without a
+word. The admin app editor now saves only if the app has not changed since it was opened.
+Otherwise it says **Changed by someone else**, saves nothing and keeps your edits; **Reload**
+loads the current version. For scripts: `GET /api/admin/apps/{appId}` returns an `ETag`; send it
+as `If-Match` with `PUT /api/admin/apps/{appId}` to get `412` instead of overwriting a newer
+change. Without `If-Match` the save works as before.
+
 ## Models: Connect a Provider in One Guided Flow
 
 **Add provider**, the **Set up your models** strip and the empty Models list now open a guided
