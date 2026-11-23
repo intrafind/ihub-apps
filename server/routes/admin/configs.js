@@ -66,7 +66,8 @@ export const PATCHABLE_PLATFORM_SECTIONS = Object.freeze([
   'speech',
   'globalPromptVariables',
   'cookieSettings',
-  'toolApproval'
+  'toolApproval',
+  'appGenerator'
 ]);
 
 /**
@@ -303,6 +304,20 @@ function validatePlatformSections(newConfig) {
     }
   }
 
+  // The draft model is read at run time; a number where an ID belongs would
+  // silently mean "automatic", so the block is checked before it is stored.
+  if (newConfig.appGenerator !== undefined) {
+    const checked = platformConfigSchema.shape.appGenerator.safeParse(newConfig.appGenerator);
+    if (!checked.success) {
+      throw new ServiceError(
+        'BAD_REQUEST',
+        `appGenerator is invalid: ${checked.error.issues
+          .map(issue => `${issue.path.join('.')} ${issue.message}`)
+          .join('; ')}`
+      );
+    }
+  }
+
   // The shared secret header is removed from every request, so it must not
   // be one that sign-in or request handling reads.
   const secretHeaderProblem = newConfig.proxyAuth && sharedSecretHeaderProblem(newConfig.proxyAuth);
@@ -417,7 +432,10 @@ function mergePlatformSections(existingConfig, newConfig, { mode = 'replace' } =
         : existingConfig.cookieSettings,
     // Admin → Security → Tool approval (#2945).
     toolApproval:
-      newConfig.toolApproval !== undefined ? newConfig.toolApproval : existingConfig.toolApproval
+      newConfig.toolApproval !== undefined ? newConfig.toolApproval : existingConfig.toolApproval,
+    // Admin → Features → "App Drafts with AI": the model that prepares a draft.
+    appGenerator:
+      newConfig.appGenerator !== undefined ? newConfig.appGenerator : existingConfig.appGenerator
   };
   if (mode === 'merge' && newConfig.features !== undefined) {
     // Only a PATCH writes `features`, and only the switches it may change
@@ -782,7 +800,8 @@ export default function registerAdminConfigRoutes(app) {
    *       Replaces each section the body names (from a fixed list: auth blocks,
    *       defaultLanguage, setup, aiDisclosure, aiAcknowledgement, provenance,
    *       oauth, mcpServer, telemetry, speech, globalPromptVariables,
-   *       cookieSettings, toolApproval); every other key keeps its stored value.
+   *       cookieSettings, toolApproval, appGenerator); every other key keeps its
+   *       stored value.
    *       Redacted secrets (`***REDACTED***`, masked JWKS URLs) and omitted
    *       secret fields keep the stored value; `null` on a secret clears it. A
    *       value that is still a redaction marker is refused.

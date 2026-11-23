@@ -28,32 +28,10 @@ import {
   USER_APP_ORIGINS
 } from '../../shared/userAppContent.js';
 import { SAFE_ID_PATTERN } from '../utils/pathSecurity.js';
+import { stripHiddenCharacters } from '../../shared/visibleText.js';
 
-/**
- * Characters a reader cannot see: control characters (category Cc) other
- * than newline and tab, format characters (category Cf: zero-width and
- * bidirectional marks, the soft hyphen), every default-ignorable code point
- * (variation selectors, the combining grapheme joiner, the Hangul fillers),
- * the tag block U+E0000 to U+E007F, private-use characters (Co), the line
- * and paragraph separators U+2028 and U+2029, and the Braille blank U+2800.
- * A variation selector can carry one byte each, so a payload in them would
- * hide behind a harmless sentence.
- */
-const HIDDEN_CHARACTERS =
-  /(?![\n\t])[\p{Cc}\p{Cf}\p{Default_Ignorable_Code_Point}\p{Co}\p{Zl}\p{Zp}\u2800\u{E0000}-\u{E007F}]/gu;
-
-/**
- * A text without the characters a reader cannot see.
- *
- * @param {string} text
- * @returns {string}
- *
- * @example
- * stripHiddenCharacters('Be\u200B brief\u202E.'); // → 'Be brief.'
- */
-export function stripHiddenCharacters(text) {
-  return typeof text === 'string' ? text.replace(HIDDEN_CHARACTERS, '') : text;
-}
+/** A text without the characters a reader cannot see; it lives in `shared/visibleText.js`. */
+export { stripHiddenCharacters };
 
 /** The installation that owns `ask_user` and the scheduling tools: never bound by a personal app. */
 export const FORBIDDEN_INSTALLATION_ID = 'ihub';

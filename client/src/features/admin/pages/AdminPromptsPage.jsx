@@ -9,7 +9,9 @@ import Icon from '../../../shared/components/Icon';
 import PromptDetailsPopup from '../../prompts/components/PromptDetailsPopup';
 import GlobalPromptVariablesEditor from '../components/GlobalPromptVariablesEditor';
 import AdminUserPromptsTab from '../components/AdminUserPromptsTab';
+import { SaveSectionsBar, SaveSectionsProvider } from '../components/SaveSections';
 import {
+  fetchAdminApps,
   fetchAdminPrompts,
   getAdminApiErrorMessage,
   makeAdminApiCall,
@@ -21,10 +23,59 @@ import { useFilterState } from '../hooks/useFilterState';
 import { DataTable, SearchInput, FilterSelect } from '../components/data-table';
 import UploadConfigButton from '../components/UploadConfigButton';
 import AdminLoadError from '../components/AdminLoadError';
+import AdminSaveBar from '../components/AdminSaveBar';
+import UnsavedChangesDialog from '../components/UnsavedChangesDialog';
+import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
 import ConfirmDialog from '../../../shared/components/ConfirmDialog';
 import { useConfirmAction } from '../hooks/useConfirmAction';
 import { buildBulkToggleConfirm } from '../utils/bulkToggleConfirm';
 import { deleteConfirmText } from '../utils/confirmText';
+import { copyId } from '../utils/copyId';
+import DocsLink from '../components/DocsLink';
+import AdminTabs from '../components/AdminTabs';
+import {
+  PROMPT_FALLBACK_CATEGORY,
+  categoryChips,
+  categoryDisplay,
+  effectiveCategory
+} from '../utils/listCategories';
+
+/**
+ * The app a prompt is linked to (`appId`): its name, or a warning when no app
+ * with that ID exists, so a dangling link does not pass for a working one.
+ *
+ * @param {object} props
+ * @param {string} [props.appId] - The linked app's ID; empty when not linked.
+ * @param {Map<string, object>|null} props.appsById - The apps by ID; `null` while unknown.
+ * @param {string} props.currentLanguage - For the app's name.
+ * @param {function} props.t - The translation function.
+ * @returns {JSX.Element}
+ */
+function LinkedAppCell({ appId, appsById, currentLanguage, t }) {
+  if (!appId) return <span className="text-gray-500 dark:text-gray-400">—</span>;
+  if (!appsById) return <span className="text-sm text-gray-700 dark:text-gray-300">{appId}</span>;
+  const app = appsById.get(appId);
+  if (!app) {
+    return (
+      <span
+        className="inline-flex items-center gap-1 text-sm text-amber-800 dark:text-amber-300"
+        data-testid="prompt-app-missing"
+      >
+        <Icon name="exclamation-triangle" className="h-4 w-4 shrink-0" />
+        {t('admin.prompts.table.appMissing', {
+          defaultValue: 'Missing app: {{id}}',
+          id: appId
+        })}
+      </span>
+    );
+  }
+  return (
+    <span className="inline-flex items-center gap-1 text-sm text-gray-700 dark:text-gray-300">
+      <Icon name="check" className="h-4 w-4 shrink-0 text-green-700 dark:text-green-400" />
+      {getLocalizedContent(app.name, currentLanguage) || appId}
+    </span>
+  );
+}
 
 function PromptNameCell({ prompt, currentLanguage }) {
   return (
@@ -59,10 +110,21 @@ function AdminPromptsPage() {
   const promptsLibraryEnabled = featureFlags.isEnabled('promptsLibrary', true);
   const defaultTab = promptsLibraryEnabled ? 'prompts' : 'variables';
   const [activeTab, setActiveTab] = useState(searchParams.get('tab') || defaultTab);
+  // The variables tab shows its content when it is the active one, and also as the fallback
+  // for an unknown tab, but never behind the hidden user tab.
+  const showVariables = activeTab !== 'prompts' && !(activeTab === 'user' && promptsLibraryEnabled);
+  // The user-prompts tab stays mounted (hidden) once opened: its unsaved settings, and the page's
+  // save bar and leave-guard that carry them, survive a switch to another tab.
+  const [userOpened, setUserOpened] = useState(
+    activeTab === 'user' && featureFlags.isEnabled('promptsLibrary', true)
+  );
 
   const [prompts, setPrompts] = useState([]);
   const [loading, setLoading] = useState(true);
+  // `error`: a failed action (toggle, download, upload). `loadError`: the list could not be
+  // loaded; the table then shows it with Retry instead of the empty state.
   const [error, setError] = useState(null);
+  const [loadError, setLoadError] = useState(null);
   const [searchTerm, setSearchTerm] = useFilterState('q', '');
   const [filterEnabled, setFilterEnabled] = useFilterState('enabled', 'all');
   const [selectedCategory, setSelectedCategory] = useFilterState('category', 'all');
@@ -70,10 +132,15 @@ function AdminPromptsPage() {
   const [showPromptDetails, setShowPromptDetails] = useState(false);
   const [uiConfig, setUiConfig] = useState(null);
   const [uploading, setUploading] = useState(false);
+  // The apps by ID, so a prompt linked to an app that no longer exists says so;
+  // `null` while unknown (not loaded yet, or the load failed).
+  const [appsById, setAppsById] = useState(null);
 
   useEffect(() => {
-    if (promptsLibraryEnabled) void loadPrompts();
-    else setLoading(false);
+    if (promptsLibraryEnabled) {
+      void loadPrompts();
+      void loadApps();
+    } else setLoading(false);
     void loadUIConfig();
   }, [promptsLibraryEnabled]);
 
@@ -98,15 +165,26 @@ function AdminPromptsPage() {
     }
   };
 
+  const loadApps = async () => {
+    try {
+      const apps = await fetchAdminApps();
+      setAppsById(new Map((Array.isArray(apps) ? apps : []).map(app => [app.id, app])));
+    } catch (err) {
+      // Without the apps the column shows the linked ID without judging it.
+      console.error('Failed to load apps:', err);
+    }
+  };
+
   const loadPrompts = async () => {
     try {
       setLoading(true);
       setError(null);
       const data = await fetchAdminPrompts();
       setPrompts(Array.isArray(data) ? data : []);
+      setLoadError(null);
     } catch (err) {
-      setError(getAdminApiErrorMessage(err));
-      setPrompts([]);
+      // The prompts loaded before (if any) stay listed below the error.
+      setLoadError(getAdminApiErrorMessage(err));
     } finally {
       setLoading(false);
     }
@@ -163,8 +241,13 @@ function AdminPromptsPage() {
     });
   };
 
+  // The clone opens as a new prompt with the ID `<id>-copy` (or the next free one) proposed.
   const handleClonePrompt = prompt => {
-    navigate('/admin/prompts/new', { state: { templatePrompt: prompt } });
+    const cloneId = copyId(
+      prompt.id,
+      prompts.map(p => p.id)
+    );
+    navigate('/admin/prompts/new', { state: { templatePrompt: prompt, cloneId } });
   };
 
   const downloadPromptConfig = async promptId => {
@@ -238,16 +321,20 @@ function AdminPromptsPage() {
       (filterEnabled === 'disabled' && prompt.enabled === false);
 
     const matchesCategory =
-      selectedCategory === 'all' || (prompt.category || 'creative') === selectedCategory;
+      selectedCategory === 'all' ||
+      effectiveCategory(prompt, PROMPT_FALLBACK_CATEGORY) === selectedCategory;
 
     return matchesSearch && matchesFilter && matchesCategory;
   });
 
-  const getCategoryLabel = prompt => {
-    if (!prompt.category) return null;
-    const found = uiConfig?.promptsList?.categories?.list?.find(cat => cat.id === prompt.category);
-    return found ? getLocalizedContent(found.name, currentLanguage) : prompt.category;
-  };
+  /** The category the prompt is listed under; its own or the end-user list's fallback. */
+  const getCategory = prompt =>
+    categoryDisplay(
+      prompt,
+      uiConfig?.promptsList?.categories?.list,
+      PROMPT_FALLBACK_CATEGORY,
+      name => getLocalizedContent(name, currentLanguage)
+    );
 
   const columns = [
     {
@@ -261,16 +348,24 @@ function AdminPromptsPage() {
       key: 'category',
       header: t('admin.prompts.table.category', 'Category'),
       sortable: true,
-      sortAccessor: prompt => prompt.category || '',
+      sortAccessor: prompt => getCategory(prompt).label,
       hideBelow: 'md',
       render: prompt => {
-        const label = getCategoryLabel(prompt);
-        return label ? (
-          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-purple-100 dark:bg-purple-900/50 text-purple-800 dark:text-purple-300">
-            {label}
+        const category = getCategory(prompt);
+        return category.isFallback ? (
+          <span
+            className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200"
+            title={t('admin.prompts.table.categoryFallback', {
+              defaultValue: 'No category set: listed under {{category}}',
+              category: category.label
+            })}
+          >
+            {category.label}
           </span>
         ) : (
-          <span className="text-gray-500 text-sm">{t('common.notAvailable', 'N/A')}</span>
+          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-purple-100 dark:bg-purple-900/50 text-purple-800 dark:text-purple-300">
+            {category.label}
+          </span>
         );
       }
     },
@@ -292,15 +387,16 @@ function AdminPromptsPage() {
     },
     {
       key: 'appConnected',
-      header: t('admin.prompts.table.appConnected', 'App Connected'),
+      header: t('admin.prompts.table.linkedApp', 'App'),
       hideBelow: 'xl',
-      align: 'center',
-      render: prompt =>
-        prompt.appId ? (
-          <Icon name="check" className="h-5 w-5 text-green-700" />
-        ) : (
-          <span className="text-gray-500">-</span>
-        )
+      render: prompt => (
+        <LinkedAppCell
+          appId={prompt.appId}
+          appsById={appsById}
+          currentLanguage={currentLanguage}
+          t={t}
+        />
+      )
     },
     {
       key: 'status',
@@ -359,236 +455,249 @@ function AdminPromptsPage() {
     }
   ];
 
-  if (error) {
-    return (
-      <AdminLoadError
-        title={t('admin.prompts.loadError', 'Error loading prompts')}
-        message={error}
-      />
-    );
-  }
+  // Icons only from `sm` up: at phone width the three labels need the room, or
+  // the last tab is cut off.
+  const tabIcon = name => <Icon name={name} className="hidden sm:inline-block h-5 w-5" />;
+  const promptTabs = [
+    ...(promptsLibraryEnabled
+      ? [
+          {
+            id: 'prompts',
+            label: t('admin.prompts.tabs.prompts', 'Prompts'),
+            icon: tabIcon('clipboard')
+          },
+          {
+            id: 'user',
+            label: t('admin.prompts.tabs.userPrompts', 'User prompts'),
+            icon: tabIcon('users')
+          }
+        ]
+      : []),
+    {
+      id: 'variables',
+      label: t('admin.prompts.tabs.variables', 'Variables'),
+      icon: tabIcon('sliders')
+    }
+  ];
 
+  // A failed load keeps the tabs and the actions (and any prompts loaded before); the table
+  // shows the error with Retry instead of "No prompts found" (AI-B11).
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="sm:flex sm:items-center">
-          <div className="sm:flex-auto">
-            <h1
-              ref={headingRef}
-              tabIndex={-1}
-              className="text-2xl font-semibold text-gray-900 dark:text-gray-100 focus:outline-hidden"
-            >
-              {activeTab === 'variables'
-                ? t('admin.promptVariables.title', 'Global Prompt Variables')
-                : activeTab === 'user'
-                  ? t('admin.prompts.userPrompts.title', 'User Prompts')
-                  : t('admin.prompts.title', 'Prompt Management')}
-            </h1>
-            <p className="mt-2 text-sm text-gray-700 dark:text-gray-300">
-              {activeTab === 'variables'
-                ? t(
-                    'admin.promptVariables.subtitle',
-                    'Manage custom variables for use across all apps and prompts'
-                  )
-                : activeTab === 'user'
+    <SaveSectionsProvider>
+      <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+          <div className="sm:flex sm:items-center">
+            <div className="sm:flex-auto">
+              <div className="flex items-center gap-2">
+                <h1
+                  ref={headingRef}
+                  tabIndex={-1}
+                  className="text-2xl font-semibold text-gray-900 dark:text-gray-100 focus:outline-hidden"
+                >
+                  {activeTab === 'variables'
+                    ? t('admin.promptVariables.title', 'Global Prompt Variables')
+                    : activeTab === 'user'
+                      ? t('admin.prompts.userPrompts.title', 'User Prompts')
+                      : t('admin.prompts.title', 'Prompt Management')}
+                </h1>
+                <DocsLink topic="prompts" />
+              </div>
+              <p className="mt-2 text-sm text-gray-700 dark:text-gray-300">
+                {activeTab === 'variables'
                   ? t(
-                      'admin.prompts.userPrompts.subtitle',
-                      'Prompts your users wrote and shared with groups or everyone'
+                      'admin.promptVariables.subtitle',
+                      'Manage custom variables for use across all apps and prompts'
                     )
-                  : t(
-                      'admin.prompts.subtitle',
-                      'Create, edit, and manage prompts for your iHub Apps'
-                    )}
-            </p>
-          </div>
-          {activeTab === 'prompts' && (
-            <div className="mt-4 sm:mt-0 sm:ml-16 sm:flex-none">
-              <div className="flex flex-wrap gap-2">
-                <button
-                  onClick={() => navigate('/admin/prompts/new')}
-                  className="inline-flex items-center justify-center rounded-md border border-transparent bg-indigo-600 px-4 py-2 text-sm font-medium text-white shadow-xs hover:bg-indigo-700 focus:outline-hidden focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 sm:w-auto"
-                >
-                  <Icon name="plus" className="h-4 w-4 mr-2" />
-                  {t('admin.prompts.createNew', 'Create New Prompt')}
-                </button>
-                <UploadConfigButton
-                  onChange={handleUploadConfig}
-                  uploading={uploading}
-                  title={t('admin.prompts.uploadConfigTitle', 'Upload Prompt Config')}
-                  uploadingLabel={t('admin.prompts.uploading', 'Uploading...')}
-                  label={t('admin.prompts.uploadConfig', 'Upload Config')}
-                />
-                <button
-                  type="button"
-                  className="inline-flex items-center justify-center rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2 text-sm font-medium text-gray-700 dark:text-gray-200 shadow-xs hover:bg-gray-50 dark:hover:bg-gray-600"
-                  onClick={() => confirmToggleAll(true)}
-                >
-                  {t('admin.common.enableAll', 'Enable All')}
-                </button>
-                <button
-                  type="button"
-                  className="inline-flex items-center justify-center rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2 text-sm font-medium text-gray-700 dark:text-gray-200 shadow-xs hover:bg-gray-50 dark:hover:bg-gray-600"
-                  onClick={() => confirmToggleAll(false)}
-                >
-                  {t('admin.common.disableAll', 'Disable All')}
-                </button>
-              </div>
+                  : activeTab === 'user'
+                    ? t(
+                        'admin.prompts.userPrompts.subtitle',
+                        'Prompts your users wrote and shared with groups or everyone'
+                      )
+                    : t(
+                        'admin.prompts.subtitle',
+                        'Create, edit, and manage prompts for your iHub Apps'
+                      )}
+              </p>
             </div>
-          )}
-        </div>
-
-        <div className="mt-6 border-b border-gray-200 dark:border-gray-700">
-          <nav className="-mb-px flex space-x-8">
-            {promptsLibraryEnabled && (
-              <button
-                onClick={() => setActiveTab('prompts')}
-                className={`whitespace-nowrap pb-4 px-1 border-b-2 font-medium text-sm ${
-                  activeTab === 'prompts'
-                    ? 'border-indigo-500 text-indigo-600 dark:text-indigo-400'
-                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-400 dark:hover:text-gray-300'
-                }`}
-              >
-                <Icon name="clipboard" className="inline-block h-5 w-5 mr-2" />
-                {t('admin.prompts.tabs.prompts', 'Prompts')}
-              </button>
-            )}
-            {promptsLibraryEnabled && (
-              <button
-                onClick={() => setActiveTab('user')}
-                className={`whitespace-nowrap pb-4 px-1 border-b-2 font-medium text-sm ${
-                  activeTab === 'user'
-                    ? 'border-indigo-500 text-indigo-600 dark:text-indigo-400'
-                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-400 dark:hover:text-gray-300'
-                }`}
-              >
-                <Icon name="users" className="inline-block h-5 w-5 mr-2" />
-                {t('admin.prompts.tabs.userPrompts', 'User prompts')}
-              </button>
-            )}
-            <button
-              onClick={() => setActiveTab('variables')}
-              className={`whitespace-nowrap pb-4 px-1 border-b-2 font-medium text-sm ${
-                activeTab === 'variables'
-                  ? 'border-indigo-500 text-indigo-600 dark:text-indigo-400'
-                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-400 dark:hover:text-gray-300'
-              }`}
-            >
-              <Icon name="sliders" className="inline-block h-5 w-5 mr-2" />
-              {t('admin.prompts.tabs.variables', 'Variables')}
-            </button>
-          </nav>
-        </div>
-
-        {activeTab === 'prompts' ? (
-          <>
-            <div className="mt-6 flex flex-wrap items-center gap-3">
-              <SearchInput
-                value={searchTerm}
-                onChange={setSearchTerm}
-                placeholder={t('admin.prompts.searchPlaceholder', 'Search prompts...')}
-              />
-              <FilterSelect
-                label={t('admin.prompts.statusLabel', 'Status')}
-                value={filterEnabled}
-                onChange={setFilterEnabled}
-                options={[
-                  { value: 'all', label: t('admin.prompts.filterAll', 'All Prompts') },
-                  { value: 'enabled', label: t('admin.prompts.filterEnabled', 'Enabled Only') },
-                  { value: 'disabled', label: t('admin.prompts.filterDisabled', 'Disabled Only') }
-                ]}
-              />
-            </div>
-
-            {uiConfig?.promptsList?.categories?.enabled && (
-              <div className="mt-4 flex flex-wrap gap-2">
-                <button
-                  onClick={() => setSelectedCategory('all')}
-                  className={`px-3 py-1.5 rounded-full text-sm font-medium transition-all ${
-                    selectedCategory === 'all'
-                      ? 'bg-gray-900 text-white dark:bg-gray-100 dark:text-gray-900'
-                      : 'text-gray-600 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600'
-                  }`}
-                >
-                  {t('admin.prompts.allCategories', 'All Categories')}
-                </button>
-                {uiConfig.promptsList.categories.list.map(category => (
+            {activeTab === 'prompts' && (
+              <div className="mt-4 sm:mt-0 sm:ml-16 sm:flex-none">
+                <div className="flex flex-wrap gap-2">
                   <button
-                    key={category.id}
-                    onClick={() => setSelectedCategory(category.id)}
-                    className={`px-3 py-1.5 rounded-full text-sm font-medium transition-all ${
-                      selectedCategory === category.id
-                        ? 'text-white shadow-sm'
-                        : 'text-gray-600 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600'
-                    }`}
-                    style={{
-                      backgroundColor: selectedCategory === category.id ? category.color : undefined
-                    }}
+                    onClick={() => navigate('/admin/prompts/new')}
+                    className="inline-flex items-center justify-center rounded-md border border-transparent bg-indigo-600 px-4 py-2 text-sm font-medium text-white shadow-xs hover:bg-indigo-700 focus:outline-hidden focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 sm:w-auto"
                   >
-                    {getLocalizedContent(category.name, currentLanguage)}
+                    <Icon name="plus" className="h-4 w-4 mr-2" />
+                    {t('admin.prompts.createNew', 'Create New Prompt')}
                   </button>
-                ))}
+                  <UploadConfigButton
+                    onChange={handleUploadConfig}
+                    uploading={uploading}
+                    title={t('admin.prompts.uploadConfigTitle', 'Upload Prompt Config')}
+                    uploadingLabel={t('admin.prompts.uploading', 'Uploading...')}
+                    label={t('admin.prompts.uploadConfig', 'Upload Config')}
+                  />
+                  <button
+                    type="button"
+                    className="inline-flex items-center justify-center rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2 text-sm font-medium text-gray-700 dark:text-gray-200 shadow-xs hover:bg-gray-50 dark:hover:bg-gray-600"
+                    onClick={() => confirmToggleAll(true)}
+                  >
+                    {t('admin.common.enableAll', 'Enable All')}
+                  </button>
+                  <button
+                    type="button"
+                    className="inline-flex items-center justify-center rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2 text-sm font-medium text-gray-700 dark:text-gray-200 shadow-xs hover:bg-gray-50 dark:hover:bg-gray-600"
+                    onClick={() => confirmToggleAll(false)}
+                  >
+                    {t('admin.common.disableAll', 'Disable All')}
+                  </button>
+                </div>
               </div>
             )}
+          </div>
 
-            <div className="mt-6">
-              <DataTable
-                columns={columns}
-                data={filteredPrompts}
-                getRowId={p => p.id}
-                actions={actions}
-                loading={loading}
-                onRowClick={prompt => {
-                  setSelectedPrompt(prompt);
-                  setShowPromptDetails(true);
-                }}
-                empty={{
-                  icon: 'document-text',
-                  title: t('admin.prompts.noPrompts', 'No prompts found'),
-                  description: t(
-                    'admin.prompts.noPromptsDesc',
-                    'Get started by creating a new prompt.'
-                  ),
-                  action: (
-                    <button
-                      onClick={() => navigate('/admin/prompts/new')}
-                      className="inline-flex items-center px-4 py-2 border border-transparent shadow-xs text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-                    >
-                      <Icon name="plus" className="h-4 w-4 mr-2" />
-                      {t('admin.prompts.createNew', 'Create New Prompt')}
-                    </button>
-                  )
-                }}
-              />
-            </div>
-
-            <PromptDetailsPopup
-              prompt={selectedPrompt}
-              isOpen={showPromptDetails}
-              onClose={() => setShowPromptDetails(false)}
+          <div className="mt-6">
+            <AdminTabs
+              tabs={promptTabs}
+              activeId={activeTab}
+              onChange={id => {
+                if (id === 'user') setUserOpened(true);
+                setActiveTab(id);
+              }}
+              ariaLabel={t('admin.prompts.tabs.aria', 'Prompt sections')}
             />
-          </>
-        ) : activeTab === 'user' && promptsLibraryEnabled ? (
-          <AdminUserPromptsTab />
-        ) : (
-          <VariablesTabContent />
-        )}
+          </div>
+
+          <div role="tabpanel" id={`tabpanel-${activeTab}`} aria-labelledby={`tab-${activeTab}`}>
+            {userOpened && promptsLibraryEnabled && (
+              <div hidden={activeTab !== 'user'}>
+                <AdminUserPromptsTab />
+              </div>
+            )}
+            {activeTab === 'prompts' && (
+              <>
+                {error && (
+                  <AdminLoadError message={error} framed={false} className="mt-6" action={null} />
+                )}
+                <div className="mt-6 flex flex-wrap items-center gap-3">
+                  <SearchInput
+                    value={searchTerm}
+                    onChange={setSearchTerm}
+                    placeholder={t('admin.prompts.searchPlaceholder', 'Search prompts...')}
+                  />
+                  <FilterSelect
+                    label={t('admin.prompts.statusLabel', 'Status')}
+                    value={filterEnabled}
+                    onChange={setFilterEnabled}
+                    options={[
+                      { value: 'all', label: t('admin.prompts.filterAll', 'All Prompts') },
+                      { value: 'enabled', label: t('admin.prompts.filterEnabled', 'Enabled Only') },
+                      {
+                        value: 'disabled',
+                        label: t('admin.prompts.filterDisabled', 'Disabled Only')
+                      }
+                    ]}
+                  />
+                </div>
+
+                {uiConfig?.promptsList?.categories?.enabled && (
+                  <div className="mt-4 flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      aria-pressed={selectedCategory === 'all'}
+                      onClick={() => setSelectedCategory('all')}
+                      className={`px-3 py-1.5 rounded-full text-sm font-medium transition-all ${
+                        selectedCategory === 'all'
+                          ? 'bg-gray-900 text-white dark:bg-gray-100 dark:text-gray-900'
+                          : 'text-gray-600 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600'
+                      }`}
+                    >
+                      {t('admin.prompts.allCategories', 'All Categories')}
+                    </button>
+                    {categoryChips(uiConfig.promptsList.categories.list).map(category => (
+                      <button
+                        key={category.id}
+                        type="button"
+                        aria-pressed={selectedCategory === category.id}
+                        onClick={() => setSelectedCategory(category.id)}
+                        className={`px-3 py-1.5 rounded-full text-sm font-medium transition-all ${
+                          selectedCategory === category.id
+                            ? 'text-white shadow-sm'
+                            : 'text-gray-600 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600'
+                        }`}
+                        style={{
+                          backgroundColor:
+                            selectedCategory === category.id ? category.color : undefined
+                        }}
+                      >
+                        {getLocalizedContent(category.name, currentLanguage)}
+                      </button>
+                    ))}
+                  </div>
+                )}
+
+                <div className="mt-6">
+                  <DataTable
+                    columns={columns}
+                    data={filteredPrompts}
+                    getRowId={p => p.id}
+                    actions={actions}
+                    loading={loading}
+                    error={loadError}
+                    onRetry={loadPrompts}
+                    errorTitle={t('admin.prompts.loadError', 'Error loading prompts')}
+                    onRowClick={prompt => {
+                      setSelectedPrompt(prompt);
+                      setShowPromptDetails(true);
+                    }}
+                    empty={{
+                      icon: 'document-text',
+                      title: t('admin.prompts.noPrompts', 'No prompts found'),
+                      description: t(
+                        'admin.prompts.noPromptsDesc',
+                        'Get started by creating a new prompt.'
+                      ),
+                      action: (
+                        <button
+                          onClick={() => navigate('/admin/prompts/new')}
+                          className="inline-flex items-center px-4 py-2 border border-transparent shadow-xs text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                        >
+                          <Icon name="plus" className="h-4 w-4 mr-2" />
+                          {t('admin.prompts.createNew', 'Create New Prompt')}
+                        </button>
+                      )
+                    }}
+                  />
+                </div>
+
+                <PromptDetailsPopup
+                  prompt={selectedPrompt}
+                  isOpen={showPromptDetails}
+                  onClose={() => setShowPromptDetails(false)}
+                />
+              </>
+            )}
+            {showVariables && <VariablesTabContent />}
+          </div>
+        </div>
+        <ConfirmDialog {...confirmDialogProps} />
+        <SaveSectionsBar leaveGuard />
       </div>
-      <ConfirmDialog {...confirmDialogProps} />
-    </div>
+    </SaveSectionsProvider>
   );
 }
 
 function VariablesTabContent() {
   const { t } = useTranslation();
-  const [platformConfig, setPlatformConfig] = useState(null);
   const [globalPromptVariables, setGlobalPromptVariables] = useState(null);
+  // What the server has (loaded, or last saved): the bar shows while the form differs from it.
+  const [savedVariables, setSavedVariables] = useState(null);
   // The revision of the configuration this form loaded (or last saved): its
   // save sends exactly this as If-Match, whatever other reads in the tab saw.
   const revisionRef = useRef(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
-  const [hasChanges, setHasChanges] = useState(false);
+  const { blocker, markSaved, isDirty } = useUnsavedChanges(savedVariables, globalPromptVariables);
 
   useEffect(() => {
     void loadPlatformConfig();
@@ -601,21 +710,15 @@ function VariablesTabContent() {
       const response = await makeAdminApiCall('/admin/configs/platform', {
         revision: revisionRef
       });
-      setPlatformConfig(response.data);
-      setGlobalPromptVariables(
-        response.data.globalPromptVariables || { context: '', variables: {} }
-      );
+      const loaded = response.data.globalPromptVariables || { context: '', variables: {} };
+      setSavedVariables(loaded);
+      setGlobalPromptVariables(loaded);
     } catch (err) {
       console.error('Error loading platform config:', err);
       setError(getAdminApiErrorMessage(err));
     } finally {
       setLoading(false);
     }
-  };
-
-  const handleVariablesChange = updatedVariables => {
-    setGlobalPromptVariables(updatedVariables);
-    setHasChanges(true);
   };
 
   const handleSave = async () => {
@@ -630,8 +733,8 @@ function VariablesTabContent() {
         body: { globalPromptVariables },
         revision: revisionRef
       });
-      setPlatformConfig(previous => ({ ...previous, globalPromptVariables }));
-      setHasChanges(false);
+      markSaved();
+      setSavedVariables(globalPromptVariables);
     } catch (err) {
       console.error('Error saving platform config:', err);
       // Shown in the page's error callout; no native alert on top of it.
@@ -641,13 +744,9 @@ function VariablesTabContent() {
     }
   };
 
-  const handleCancel = () => {
-    if (platformConfig) {
-      setGlobalPromptVariables(
-        platformConfig.globalPromptVariables || { context: '', variables: {} }
-      );
-      setHasChanges(false);
-    }
+  const handleDiscard = () => {
+    setGlobalPromptVariables(savedVariables);
+    setError(null);
   };
 
   if (loading) {
@@ -682,25 +781,19 @@ function VariablesTabContent() {
         />
       )}
 
-      <GlobalPromptVariablesEditor value={globalPromptVariables} onChange={handleVariablesChange} />
+      <GlobalPromptVariablesEditor
+        value={globalPromptVariables}
+        onChange={setGlobalPromptVariables}
+      />
 
-      <div className="mt-6 flex justify-end gap-3">
-        <button
-          onClick={handleCancel}
-          disabled={!hasChanges || saving}
-          className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-xs text-sm font-medium text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed"
-        >
-          {t('common.cancel', 'Cancel')}
-        </button>
-        <button
-          onClick={handleSave}
-          disabled={!hasChanges || saving}
-          className="px-4 py-2 border border-transparent rounded-md shadow-xs text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center"
-        >
-          {saving && <Icon name="refresh" className="animate-spin h-4 w-4 mr-2" />}
-          {t('common.save', 'Save Changes')}
-        </button>
-      </div>
+      <AdminSaveBar
+        dirty={isDirty}
+        saving={saving}
+        message={error || undefined}
+        onSave={handleSave}
+        onDiscard={handleDiscard}
+      />
+      <UnsavedChangesDialog blocker={blocker} />
     </div>
   );
 }

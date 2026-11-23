@@ -48,13 +48,31 @@ export const streamConnectedData = z.object({
   durable: z.boolean().optional()
 });
 
+/**
+ * The cause of a failed model call, decided on the server
+ * (`services/chat/chatErrors.js`) with the keys of the admin model test
+ * (`certificateUntrusted`, `serverError`, `apiKeyRequired`, …). The client
+ * translates `failureCause`; it never infers one. `host` and `errorCode` are
+ * sent to an administrator only.
+ */
+export const failureCauseFields = {
+  failureCause: z.string().max(64).optional(),
+  /** HTTP status the model endpoint answered with. */
+  upstreamStatus: z.number().int().optional(),
+  /** Host (and port) that was called; administrators only. */
+  host: z.string().max(255).optional(),
+  /** Socket or certificate code (e.g. `SELF_SIGNED_CERT_IN_CHAIN`); administrators only. */
+  errorCode: z.string().max(64).optional()
+};
+
 export const streamErrorData = z.object({
   code: z.string(),
   message: z.string(),
   details: z.any().optional(),
   /** True when the client may retry the whole turn. */
   retryable: z.boolean().prefault(false),
-  isContextWindowError: z.boolean().optional()
+  isContextWindowError: z.boolean().optional(),
+  ...failureCauseFields
 });
 
 export const runStartedData = z.object({
@@ -183,7 +201,9 @@ export const runEndedData = z.object({
   output: z.any().optional(),
   /** Set when the run was aborted: who stopped it, from where and when. */
   cause: abortCauseSchema.optional(),
-  error: z.object({ code: z.string().optional(), message: z.string() }).optional()
+  error: z
+    .object({ code: z.string().optional(), message: z.string(), ...failureCauseFields })
+    .optional()
 });
 
 export const runPausedData = z.object({

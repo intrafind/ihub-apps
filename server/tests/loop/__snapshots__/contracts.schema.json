@@ -4572,6 +4572,23 @@
               },
               "isContextWindowError": {
                 "type": "boolean"
+              },
+              "failureCause": {
+                "type": "string",
+                "maxLength": 64
+              },
+              "upstreamStatus": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              "host": {
+                "type": "string",
+                "maxLength": 255
+              },
+              "errorCode": {
+                "type": "string",
+                "maxLength": 64
               }
             },
             "required": ["code", "message", "retryable"],
@@ -4887,6 +4904,23 @@
                   },
                   "message": {
                     "type": "string"
+                  },
+                  "failureCause": {
+                    "type": "string",
+                    "maxLength": 64
+                  },
+                  "upstreamStatus": {
+                    "type": "integer",
+                    "minimum": -9007199254740991,
+                    "maximum": 9007199254740991
+                  },
+                  "host": {
+                    "type": "string",
+                    "maxLength": 255
+                  },
+                  "errorCode": {
+                    "type": "string",
+                    "maxLength": 64
                   }
                 },
                 "required": ["message"],

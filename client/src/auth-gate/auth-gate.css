@@ -184,6 +184,17 @@
   line-height: 1.4;
 }
 
+.ag-info {
+  background: var(--ag-primary-light);
+  border: 1px solid var(--ag-primary);
+  color: var(--ag-text);
+  padding: 10px 14px;
+  border-radius: var(--ag-radius);
+  font-size: 13px;
+  margin-bottom: 16px;
+  line-height: 1.4;
+}
+
 /* Form elements */
 .ag-form-group {
   margin-bottom: 16px;

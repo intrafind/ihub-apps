@@ -36,6 +36,7 @@ import {
   ModelDiscoveryError,
   stripTrailingSlashes
 } from '../../services/ModelEndpointDiscovery.js';
+import { isValidBedrockRegion } from '../../../shared/bedrockRegions.js';
 import { computeGatewayDrift } from '../../services/gatewayDrift.js';
 import { applyGatewayDrift } from '../../services/gatewaySyncApply.js';
 import { logAudit } from '../../services/AuditLogService.js';
@@ -65,6 +66,40 @@ function normalizeProviderTimeouts(provider) {
       return `${key} must be a whole number of milliseconds between 0 and ${LLM_TIMEOUT_MAX_MS}`;
     }
   }
+  return null;
+}
+
+/**
+ * Validate the AWS region of the Bedrock provider (`config.region`), in place.
+ * The adapter and the model listing build the AWS host name from it, so only
+ * an AWS region code or `global` is stored. An empty value removes the key:
+ * the region then comes from `AWS_REGION` / `AWS_DEFAULT_REGION` or the
+ * default (see BedrockAdapter.resolveRegion). Other providers' `config` is
+ * left as it is.
+ *
+ * @param {Object} provider - Provider entry from the request body
+ * @returns {string|null} Error message, or null when the region is valid
+ */
+function normalizeBedrockRegion(provider) {
+  if (provider.id !== 'bedrock') return null;
+  if (provider.config === undefined || provider.config === null) {
+    delete provider.config;
+    return null;
+  }
+  if (typeof provider.config !== 'object' || Array.isArray(provider.config)) {
+    return 'Provider config must be an object';
+  }
+  const { region, ...rest } = provider.config;
+  if (region === undefined || region === null || region === '') {
+    if (Object.keys(rest).length === 0) delete provider.config;
+    else provider.config = rest;
+    return null;
+  }
+  const trimmed = typeof region === 'string' ? region.trim() : region;
+  if (!isValidBedrockRegion(trimmed)) {
+    return 'Region must be an AWS region code such as eu-central-1, or global';
+  }
+  provider.config = { ...rest, region: trimmed };
   return null;
 }
 
@@ -107,6 +142,9 @@ function normalizeProviderFields(provider) {
 
   const timeoutError = normalizeProviderTimeouts(provider);
   if (timeoutError) return timeoutError;
+
+  const regionError = normalizeBedrockRegion(provider);
+  if (regionError) return regionError;
 
   if (BUILT_IN_LLM_PROVIDERS.includes(provider.id)) {
     delete provider.apiType;
@@ -169,6 +207,94 @@ async function syncLinkedModelsApiType(provider) {
     await configCache.refreshModelsCache();
   }
   return updated;
+}
+
+/**
+ * A model URL moved from one provider base URL to another, or `null` when the
+ * URL does not sit under the old base.
+ *
+ * The old base must be a whole prefix that ends at a path boundary: with the
+ * old base `https://hub.example.com/v1`, `https://hub.example.com/v1/chat/completions`
+ * moves but `https://hub.example.com/v10/chat/completions` does not.
+ *
+ * @param {string} url - The model's API URL
+ * @param {string} oldBase - The provider's previous base URL, without trailing slashes
+ * @param {string} newBase - The provider's new base URL, without trailing slashes
+ * @returns {string|null} The URL under the new base, or `null`
+ * @example
+ * rebaseModelUrl('https://a.example/v1/chat/completions', 'https://a.example/v1', 'https://b.example/v2')
+ * // => 'https://b.example/v2/chat/completions'
+ */
+export function rebaseModelUrl(url, oldBase, newBase) {
+  if (typeof url !== 'string' || !oldBase || !url.startsWith(oldBase)) return null;
+  const rest = url.slice(oldBase.length);
+  if (rest !== '' && !['/', '?', '#'].includes(rest[0])) return null;
+  return `${newBase}${rest}`;
+}
+
+/**
+ * Point the models linked to a provider at its new base URL: every linked
+ * model whose `url` starts with the old base gets that prefix replaced by the
+ * new one. A model whose URL points elsewhere (an admin set it by hand) is left
+ * as it is and reported, so the admin can check it.
+ *
+ * Each model is changed on its stored file under the same lock a model save
+ * takes (`configStore.updateJson`), so an edit made to it meanwhile is kept,
+ * and gets a history snapshot and an audit entry like any other model update.
+ *
+ * @param {Object} params
+ * @param {string} params.providerId - The provider whose base URL changed
+ * @param {string} params.oldBase - Its previous base URL
+ * @param {string} params.newBase - Its new base URL
+ * @param {import('express').Request} params.req - The admin request, for the audit log
+ * @returns {Promise<{ updated: string[], skipped: Array<{ id: string, url: string }> }>}
+ *   Ids of the models moved, and the linked models left alone with their URL
+ */
+async function rebaseLinkedModelUrls({ providerId, oldBase, newBase, req }) {
+  const result = { updated: [], skipped: [] };
+  const { data: models = [] } = configCache.getModels(true);
+  const admin = req.user?.username ?? req.user?.name ?? req.user?.id ?? 'unknown';
+  for (const model of getLinkedModels(providerId, models)) {
+    if (typeof model.url !== 'string' || !model.url) continue;
+    const modelPath = await configStore.resolveIdToPath('models', model.id);
+    if (!modelPath) continue;
+    let before = null;
+    let after = null;
+    let skippedUrl = null;
+    // Decided on the stored model, not the cached copy, which can lag behind
+    // an edit made to the model meanwhile.
+    await configStore.updateJson(modelPath, stored => {
+      before = null;
+      after = null;
+      skippedUrl = null;
+      if (!stored) return undefined;
+      const url = rebaseModelUrl(stored.url, oldBase, newBase);
+      if (url === null) {
+        skippedUrl = typeof stored.url === 'string' ? stored.url : '';
+        return undefined;
+      }
+      before = stored;
+      after = { ...stored, url };
+      return after;
+    });
+    if (after) {
+      await saveSnapshot({ resource: 'model', id: model.id, before, after, admin });
+      await logAudit({
+        req,
+        action: 'update',
+        resource: 'model',
+        resourceId: model.id,
+        summary: `Moved model ${model.id} to the new base URL of provider ${providerId}`
+      });
+      result.updated.push(model.id);
+    } else if (skippedUrl !== null) {
+      result.skipped.push({ id: model.id, url: skippedUrl });
+    }
+  }
+  if (result.updated.length > 0) {
+    await configCache.refreshModelsCache();
+  }
+  return result;
 }
 
 /** Characters kept per echoed field, so one test cannot return a huge payload. */
@@ -336,6 +462,50 @@ function picksOf(body) {
   }));
 }
 
+/**
+ * The region the Bedrock adapter uses for a model without a region of its
+ * own, as far as the server knows it without a call: the provider's
+ * `config.region`, else `AWS_REGION` / `AWS_DEFAULT_REGION` (the first one
+ * set). Undefined when none is set or the deciding value is not a region (the
+ * adapter refuses that one; see BedrockAdapter.resolveRegion). Sent as the
+ * read-only `effectiveRegion` of the Bedrock entry, so the admin UI can
+ * prefill the region the server would use; it is never stored.
+ *
+ * @param {Object} provider - The provider entry
+ * @returns {string|undefined}
+ */
+function bedrockEffectiveRegion(provider) {
+  const sources = [provider.config?.region, process.env.AWS_REGION, process.env.AWS_DEFAULT_REGION];
+  const value = sources.find(entry => typeof entry === 'string' && entry.trim() !== '');
+  return isValidBedrockRegion(value) ? value : undefined;
+}
+
+/**
+ * A provider entry as the admin API returns it: the API key masked
+ * (`apiKeyMasked`, `apiKeySet`) and, for Bedrock, the `effectiveRegion`.
+ * These helper fields are dropped again on save.
+ *
+ * @param {Object} provider
+ * @returns {Object}
+ */
+function providerForAdmin(provider) {
+  const masked = { ...provider };
+  if (masked.apiKey) {
+    // Show masked value to indicate a key is set
+    masked.apiKeyMasked = '••••••••';
+    masked.apiKeySet = true;
+    // Remove the actual encrypted key from response
+    delete masked.apiKey;
+  } else {
+    masked.apiKeySet = false;
+  }
+  if (provider.id === 'bedrock') {
+    const region = bedrockEffectiveRegion(provider);
+    if (region) masked.effectiveRegion = region;
+  }
+  return masked;
+}
+
 export default function registerAdminProvidersRoutes(app) {
   /**
    * @swagger
@@ -360,19 +530,7 @@ export default function registerAdminProvidersRoutes(app) {
     const { data: providers, etag: providersEtag } = configCache.getProviders(true);
 
     // Mask API keys in the response for security
-    const maskedProviders = providers.map(provider => {
-      const maskedProvider = { ...provider };
-      if (maskedProvider.apiKey) {
-        // Show masked value to indicate a key is set
-        maskedProvider.apiKeyMasked = '••••••••';
-        maskedProvider.apiKeySet = true;
-        // Remove the actual encrypted key from response
-        delete maskedProvider.apiKey;
-      } else {
-        maskedProvider.apiKeySet = false;
-      }
-      return maskedProvider;
-    });
+    const maskedProviders = providers.map(providerForAdmin);
 
     res.setHeader('ETag', responseEtag(providersEtag));
     res.json({ items: maskedProviders });
@@ -627,22 +785,73 @@ export default function registerAdminProvidersRoutes(app) {
       throw new ServiceError('NOT_FOUND', 'Provider not found');
     }
 
-    // Mask API key in the response for security
-    const maskedProvider = { ...provider };
-    if (maskedProvider.apiKey) {
-      // Show masked value to indicate a key is set
-      maskedProvider.apiKeyMasked = '••••••••';
-      maskedProvider.apiKeySet = true;
-      // Remove the actual encrypted key from response
-      delete maskedProvider.apiKey;
-    } else {
-      maskedProvider.apiKeySet = false;
-    }
-
     res.setHeader('ETag', responseEtag(providersEtag));
-    res.json(maskedProvider);
+    res.json(providerForAdmin(provider));
   });
 
+  /**
+   * @swagger
+   * /admin/providers/{providerId}:
+   *   put:
+   *     summary: Update a provider (Admin)
+   *     description: |
+   *       Replaces a provider entry. Changing a custom LLM provider's API type moves its linked
+   *       models to it. Changing an LLM provider's base URL moves every linked model whose API
+   *       URL starts with the old base URL to the new one (the prefix is replaced); each moved
+   *       model gets a history snapshot and an audit entry. A linked model whose URL does not
+   *       start with the old base URL is left as it is and listed in `modelUrls.skipped`.
+   *     tags:
+   *       - Admin - Providers
+   *     security:
+   *       - bearerAuth: []
+   *       - sessionAuth: []
+   *     parameters:
+   *       - in: path
+   *         name: providerId
+   *         required: true
+   *         schema:
+   *           type: string
+   *     responses:
+   *       200:
+   *         description: The saved provider and the linked models the save changed
+   *         content:
+   *           application/json:
+   *             schema:
+   *               type: object
+   *               properties:
+   *                 provider:
+   *                   type: object
+   *                 updatedModels:
+   *                   type: array
+   *                   description: Linked models moved to the provider's new API type
+   *                   items:
+   *                     type: string
+   *                 modelUrls:
+   *                   type: object
+   *                   description: What a change of the base URL did to the linked models
+   *                   properties:
+   *                     updated:
+   *                       type: array
+   *                       description: Linked models whose API URL now starts with the new base URL
+   *                       items:
+   *                         type: string
+   *                     skipped:
+   *                       type: array
+   *                       description: Linked models left as they are, because their API URL does not start with the old base URL
+   *                       items:
+   *                         type: object
+   *                         properties:
+   *                           id:
+   *                             type: string
+   *                           url:
+   *                             type: string
+   *       400:
+   *         description: "`BAD_REQUEST`: invalid provider entry, or the ID in the body differs"
+   *       401:
+   *         description: Admin authentication required
+   *       404:
+   *         description: "`NOT_FOUND`: no such provider"
+   */
   app.put(buildServerPath('/api/admin/providers/:providerId'), adminAuth, async (req, res) => {
     const { providerId } = req.params;
     const updatedProvider = req.body;
@@ -663,6 +872,7 @@ export default function registerAdminProvidersRoutes(app) {
     }
 
     let savedProvider;
+    let previousBaseUrl;
     await updateProviders(providers => {
       // Work on a copy: the body is reused if the step has to run again.
       const next = { ...updatedProvider };
@@ -672,6 +882,7 @@ export default function registerAdminProvidersRoutes(app) {
       if (index === -1) {
         throw new ServiceError('NOT_FOUND', 'Provider not found');
       }
+      previousBaseUrl = providers[index].baseUrl;
 
       if (keepStoredKey) {
         // The stored file, not the cache, holds the apiKey field.
@@ -687,6 +898,7 @@ export default function registerAdminProvidersRoutes(app) {
       // Remove client-side helper fields
       delete next.apiKeySet;
       delete next.apiKeyMasked;
+      delete next.effectiveRegion;
 
       // The category decides which fields an entry has; it is fixed at creation.
       if (providers[index].category !== undefined) {
@@ -723,9 +935,19 @@ export default function registerAdminProvidersRoutes(app) {
     });
     const updatedModels = await syncLinkedModelsApiType(savedProvider);
 
+    // A new base URL moves the linked models that were built from the old one.
+    const oldBase =
+      typeof previousBaseUrl === 'string' ? stripTrailingSlashes(previousBaseUrl.trim()) : '';
+    const newBase = savedProvider.baseUrl || '';
+    const modelUrls =
+      oldBase && newBase && oldBase !== newBase
+        ? await rebaseLinkedModelUrls({ providerId, oldBase, newBase, req })
+        : { updated: [], skipped: [] };
+
     res.json({
       provider: savedProvider,
-      updatedModels
+      updatedModels,
+      modelUrls
     });
   });
 
@@ -791,6 +1013,7 @@ export default function registerAdminProvidersRoutes(app) {
 
     // Remove client-side helper fields
     delete newProvider.apiKeySet;
+    delete newProvider.effectiveRegion;
     delete newProvider.apiKeyMasked;
 
     // Set defaults

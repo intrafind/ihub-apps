@@ -25,6 +25,18 @@ export const APP_GENERATOR_DRAFT_LIMIT = 30;
 export const APP_GENERATOR_DRAFT_WINDOW_MS = 60 * 60 * 1000;
 
 /**
+ * `details.limiter` of the 429 the revise limit answers with
+ * (`POST /api/admin/apps/_revise`, `POST /api/apps/_revise`).
+ */
+export const APP_REVISE_LIMITER = 'appRevise';
+
+/** How many conversation turns one person may ask for per window of the revise limit. */
+export const APP_REVISE_TURN_LIMIT = 60;
+
+/** The window of the revise limit, in milliseconds (one hour). */
+export const APP_REVISE_WINDOW_MS = 60 * 60 * 1000;
+
+/**
  * `details.reason` of `APP_GENERATOR_INVALID_ANSWER`: the answer holds no JSON
  * object, it was cut off, or it lacks what an app needs.
  */
@@ -108,4 +120,20 @@ export function integrationsFromAnswer(picked, installed) {
     bindings[id] = actions.length > 0 ? { actions } : {};
   }
   return Object.keys(bindings).length > 0 ? bindings : undefined;
+}
+
+/**
+ * The app-draft settings of `platform.appGenerator`, read defensively: the
+ * block is optional and a hand-edited file may hold anything. Used by the
+ * server (which model prepares a draft) and by the public platform config.
+ *
+ * @param {object} [platform] - The platform configuration.
+ * @returns {{ modelId: string }} `modelId` empty means the automatic choice.
+ * @example
+ * appGeneratorSettings({ appGenerator: { modelId: ' gpt-4o ' } }); // → { modelId: 'gpt-4o' }
+ * appGeneratorSettings({}); // → { modelId: '' }
+ */
+export function appGeneratorSettings(platform) {
+  const modelId = platform?.appGenerator?.modelId;
+  return { modelId: typeof modelId === 'string' ? modelId.trim() : '' };
 }

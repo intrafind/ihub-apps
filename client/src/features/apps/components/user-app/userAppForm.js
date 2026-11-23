@@ -328,6 +328,28 @@ export function readOnlyReason(app) {
 }
 
 /**
+ * Whether the editor offers changing the app with AI: the conversation
+ * (with the preview feature `appBuilderChat` on) and "Improve with AI".
+ *
+ * Drafting with AI must be on for personal apps (`generatorEnabled` of
+ * `GET /api/apps/_config`) and the caller must be able to change this app
+ * ({@link readOnlyReason} is `null`): the owner, or an editor through
+ * sharing. Create rights are not needed; the editor sends the app's ID with
+ * every turn (`POST /api/apps/_revise`), and the server checks the same.
+ *
+ * @param {Object|null|undefined} config - The `userApps` block of `GET /api/apps/_config`.
+ * @param {Object|null|undefined} app - The answer of `GET /api/apps/{appId}`.
+ * @returns {boolean}
+ *
+ * @example
+ * offersAiChanges({ generatorEnabled: true, canCreate: false }, editorsApp); // → true
+ * offersAiChanges({ generatorEnabled: true }, appSharedForUse); // → false
+ */
+export function offersAiChanges(config, app) {
+  return config?.generatorEnabled === true && Boolean(app) && readOnlyReason(app) === null;
+}
+
+/**
  * The members of an app as the shares of the share dialog.
  *
  * @param {Array<{type: string, id?: string|null, name?: string, role: string}>} members

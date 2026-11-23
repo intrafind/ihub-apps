@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
-import { act, fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import WorkflowEditorPage from '../../../client/src/features/admin/pages/WorkflowEditorPage';
@@ -32,9 +32,10 @@ jest.mock('../../../client/src/shared/components/Icon', () => ({
 }));
 
 // The canvas itself (React Flow) is replaced by a stand-in that reports its
-// nodes like the real editor does and can "move" the first step or save.
+// nodes like the real editor does and can "move" the first step. The page saves
+// through its bar, not through the editor.
 jest.mock('../../../client/src/features/workflows/editor/WorkflowEditor', () => ({
-  WorkflowEditor: ({ initialNodes, initialEdges, onSave, onFlowChange }) => {
+  WorkflowEditor: ({ initialNodes, initialEdges, onFlowChange }) => {
     const { useEffect } = require('react');
     useEffect(() => {
       onFlowChange?.(initialNodes, initialEdges);
@@ -46,9 +47,6 @@ jest.mock('../../../client/src/features/workflows/editor/WorkflowEditor', () => 
       <div data-testid="canvas">
         <button type="button" onClick={() => onFlowChange(moved, initialEdges)}>
           move step
-        </button>
-        <button type="button" onClick={() => onSave(moved, initialEdges)}>
-          save canvas
         </button>
       </div>
     );
@@ -113,8 +111,10 @@ describe('workflow canvas unsaved-changes guard', () => {
     renderEditor();
     await screen.findByTestId('canvas');
     fireEvent.click(screen.getByText('move step'));
+    const bar = screen.getByRole('region', { name: 'Save changes' });
     await act(async () => {
-      fireEvent.click(screen.getByText('save canvas'));
+      const buttons = within(bar).getAllByRole('button');
+      fireEvent.click(buttons[buttons.length - 1]);
     });
     expect(apiClient.put).toHaveBeenCalled();
     fireEvent.click(screen.getByRole('link', { name: 'Chat integration' }));

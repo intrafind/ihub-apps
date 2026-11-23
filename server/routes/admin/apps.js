@@ -7,7 +7,14 @@ import { contentAdminAuth } from '../../middleware/contentAdminAuth.js';
 import { ServiceError } from '../../utils/ServiceError.js';
 import { buildServerPath } from '../../utils/basePath.js';
 import { responseEtag } from '../../utils/etag.js';
+import {
+  assertIfMatch,
+  parseIfMatch,
+  revisionOf,
+  setRevisionHeaders
+} from '../../utils/configRevision.js';
 import { assertValidId, assertValidIds } from '../../utils/pathSecurity.js';
+import { prepareStoredResource } from '../../resourceLoaders.js';
 import logger from '../../utils/logger.js';
 import { removeMarketplaceInstallation } from '../../utils/installationCleanup.js';
 import { logAudit } from '../../services/AuditLogService.js';
@@ -17,6 +24,7 @@ import { describeIssues } from '../../validators/userPromptSchema.js';
 import { getIntegrationStatus } from '../../integrationRegistry.js';
 import { sendCreated, segment } from '../../utils/created.js';
 import { APP_CREATE_ORIGINS } from '../../../shared/appGenerator.js';
+import { findAppDependants } from '../../utils/resourceDependants.js';
 
 /**
  * Validate an app configuration an admin is about to save, and answer 400 when
@@ -48,6 +56,19 @@ function assertValidAppConfig(appConfig) {
       }
     }
   );
+}
+
+/**
+ * The stored body of an app file, for its revision (`ETag`). `null` when the
+ * file cannot be found or read: its revision is then that of a missing file,
+ * which a later `If-Match` save refuses unless the file is still missing.
+ *
+ * @param {string} appId - A valid app ID.
+ * @returns {Promise<object|null>}
+ */
+async function readStoredApp(appId) {
+  const appFilePath = await configStore.resolveIdToPath('apps', appId, { createIfMissing: false });
+  return appFilePath ? configStore.readJson(appFilePath) : null;
 }
 
 /**
@@ -502,20 +523,157 @@ export default function registerAdminAppsRoutes(app) {
     }
   );
 
+  /**
+   * @swagger
+   * /api/admin/apps/{appId}/_dependants:
+   *   get:
+   *     summary: What refers to an app
+   *     description: |
+   *       Read-only. Lists what names the app, so the delete dialog can say what loses its
+   *       reference before the app is deleted. Nothing here blocks a delete: a prompt whose
+   *       app is gone opens without it, an app-as-tool entry naming no app offers no tool, a
+   *       group entry naming no app grants nothing. A delete keeps a copy in the change
+   *       history, from which an administrator can restore the app.
+   *     tags:
+   *       - Admin
+   *       - Applications
+   *     security:
+   *       - adminAuth: []
+   *     parameters:
+   *       - in: path
+   *         name: appId
+   *         required: true
+   *         schema:
+   *           type: string
+   *     responses:
+   *       200:
+   *         description: The references
+   *         content:
+   *           application/json:
+   *             schema:
+   *               type: object
+   *               properties:
+   *                 prompts:
+   *                   type: array
+   *                   description: Prompts that open in the app (`appId`)
+   *                   items:
+   *                     type: object
+   *                     properties:
+   *                       id: { type: string }
+   *                       name: { description: "Localized name object or text" }
+   *                 apps:
+   *                   type: array
+   *                   description: Apps that call it as a tool or inherit from it
+   *                   items:
+   *                     type: object
+   *                     properties:
+   *                       id: { type: string }
+   *                       name: { description: "Localized name object or text" }
+   *                       references:
+   *                         type: array
+   *                         items: { type: string, enum: [tool, parent] }
+   *                 workflows:
+   *                   type: array
+   *                   description: Workflows with a node that calls it as a tool
+   *                   items:
+   *                     type: object
+   *                     properties:
+   *                       id: { type: string }
+   *                       name: { description: "Localized name object or text" }
+   *                 groups:
+   *                   type: array
+   *                   description: Groups whose app permissions list it by id
+   *                   items:
+   *                     type: object
+   *                     properties:
+   *                       id: { type: string }
+   *                       name: { type: string }
+   *       400:
+   *         description: "`BAD_REQUEST`: invalid app id"
+   *       404:
+   *         description: "`NOT_FOUND`: no such app"
+   */
+  app.get(
+    buildServerPath('/api/admin/apps/:appId/_dependants'),
+    contentAdminAuth,
+    async (req, res) => {
+      const { appId } = req.params;
+      assertValidId(appId, 'app');
+      const { data: apps = [] } = configCache.getApps(true);
+      if (!apps.some(candidate => candidate.id === appId)) {
+        throw new ServiceError('NOT_FOUND', 'App not found');
+      }
+      const dependants = findAppDependants(appId, {
+        apps,
+        prompts: configCache.getPrompts(true)?.data ?? [],
+        workflows: configCache.getWorkflows(true)?.data ?? [],
+        // The authored file: the cache's groups carry their parents' permissions as their own.
+        groupsConfig: await configStore.readJson('config/groups.json').catch(() => null)
+      });
+      res.setHeader('Cache-Control', 'no-store');
+      res.json(dependants);
+    }
+  );
+
+  /**
+   * @swagger
+   * /api/admin/apps/{appId}:
+   *   get:
+   *     summary: Get one application
+   *     description: |
+   *       The app as the server runs it: the stored app file with the schema's
+   *       defaults applied. The `ETag` header carries the revision of that same
+   *       stored file; send it as `If-Match` on `PUT /api/admin/apps/{appId}`
+   *       (or on `POST /api/admin/apps/{appId}/_toggle`) to refuse a change over
+   *       one someone else saved in the meantime.
+   *     tags:
+   *       - Admin
+   *       - Applications
+   *     security:
+   *       - adminAuth: []
+   *     parameters:
+   *       - in: path
+   *         name: appId
+   *         required: true
+   *         schema:
+   *           type: string
+   *     responses:
+   *       200:
+   *         description: The app
+   *         headers:
+   *           ETag:
+   *             description: Revision of the stored app file
+   *             schema:
+   *               type: string
+   *         content:
+   *           application/json:
+   *             schema:
+   *               $ref: '#/components/schemas/AdminApplication'
+   *       400:
+   *         description: "`BAD_REQUEST`: invalid app id"
+   *       404:
+   *         description: "`NOT_FOUND`: no such app"
+   */
   app.get(buildServerPath('/api/admin/apps/:appId'), contentAdminAuth, async (req, res) => {
     const { appId } = req.params;
 
     // Validate appId for security
     assertValidId(appId, 'app');
 
-    const { data: apps } = configCache.getApps(true);
-    const app = apps.find(a => a.id === appId);
-
-    if (!app) {
+    // Body and revision come from one read of the stored file. The cache can lag
+    // behind a save (between a PUT's write and the cache refresh, or a save on
+    // another worker): an old cached body sent with the new file's revision would
+    // let the client save its stale copy over the newer change.
+    const stored = await readStoredApp(appId);
+    if (!stored || stored.id !== appId) {
       throw new ServiceError('NOT_FOUND', 'App not found');
     }
 
-    res.json(app);
+    // The revision of the stored file: what `If-Match` on PUT /api/admin/apps/{appId}
+    // is compared against (utils/configRevision.js). The body is that file in the
+    // shape the cache holds it (schema defaults applied), as before.
+    setRevisionHeaders(res, revisionOf(stored));
+    res.json(prepareStoredResource('apps', stored, `apps/${appId}.json`));
   });
 
   /**
@@ -548,6 +706,14 @@ export default function registerAdminAppsRoutes(app) {
    *         schema:
    *           type: string
    *           example: "chat-assistant"
+   *       - in: header
+   *         name: If-Match
+   *         required: false
+   *         schema:
+   *           type: string
+   *         description: |
+   *           The `ETag` of the `GET /api/admin/apps/{appId}` the change is based on.
+   *           Optional; without it the save behaves as before (the last save wins).
    *     requestBody:
    *       required: true
    *       description: Updated application configuration
@@ -569,7 +735,12 @@ export default function registerAdminAppsRoutes(app) {
    *             enabled: true
    *     responses:
    *       200:
-   *         description: Application successfully updated
+   *         description: Application successfully updated. The `ETag` header carries the new revision.
+   *         headers:
+   *           ETag:
+   *             description: Revision of the stored app file after the save
+   *             schema:
+   *               type: string
    *         content:
    *           application/json:
    *             schema:
@@ -600,6 +771,8 @@ export default function registerAdminAppsRoutes(app) {
    *                 value:
    *                   error: "Invalid app configuration: redirectConfig.url: Redirect URL must use http or https"
    *                   details: []
+   *       412:
+   *         description: "`PRECONDITION_FAILED` (`details.resource` `app`): `If-Match` does not name the stored revision; someone saved the app after it was read. Nothing was written."
    *       500:
    *         description: Internal server error
    */
@@ -627,7 +800,17 @@ export default function registerAdminAppsRoutes(app) {
     }
     const { data: currentApps } = configCache.getApps(true);
     const oldApp = currentApps.find(a => a.id === appId);
-    await configStore.writeJson(appFilePath, updatedApp);
+    if (parseIfMatch(req.get('If-Match')) === null) {
+      // Without If-Match: the last save wins, as before.
+      await configStore.writeJson(appFilePath, updatedApp);
+    } else {
+      // The comparison runs under the file's update lock, on the body the write replaces,
+      // so no other save can land in between. A mismatch throws 412 and writes nothing.
+      await configStore.updateJson(appFilePath, stored => {
+        assertIfMatch(req, stored, 'app');
+        return updatedApp;
+      });
+    }
     await configCache.refreshAppsCache();
     if (oldApp) {
       await saveSnapshot({
@@ -645,6 +828,8 @@ export default function registerAdminAppsRoutes(app) {
       resourceId: appId,
       summary: `Updated app ${appId}`
     });
+    // The stored body is the body sent, so its revision is the next save's If-Match.
+    setRevisionHeaders(res, revisionOf(updatedApp));
     res.json(updatedApp);
   });
 
@@ -1021,6 +1206,13 @@ export default function registerAdminAppsRoutes(app) {
    *       - Use comma-separated IDs: "app1,app2,app3"
    *       - Use '*' for all applications
    *       - Only updates apps that need status change (performance optimization)
+   *       - Only the `enabled` flag of each stored app file changes
+   *
+   *       **One app:** for a single app ID the answer carries the app's new
+   *       revision as `ETag`, and an optional `If-Match` (the `ETag` of
+   *       `GET /api/admin/apps/{appId}`) refuses the toggle with 412 when the
+   *       app was saved by someone else since it was read. The app editor uses
+   *       both, so its next save builds on the toggled file.
    *     tags:
    *       - Admin
    *       - Applications
@@ -1035,6 +1227,14 @@ export default function registerAdminAppsRoutes(app) {
    *         schema:
    *           type: string
    *           example: "chat-assistant,code-reviewer,translator"
+   *       - in: header
+   *         name: If-Match
+   *         required: false
+   *         schema:
+   *           type: string
+   *         description: |
+   *           One app only: the `ETag` of the `GET /api/admin/apps/{appId}` the
+   *           toggle is based on. Refused with 400 for several apps or `*`.
    *     requestBody:
    *       required: true
    *       description: Target enabled state for all specified applications
@@ -1053,6 +1253,11 @@ export default function registerAdminAppsRoutes(app) {
    *     responses:
    *       200:
    *         description: Applications successfully toggled
+   *         headers:
+   *           ETag:
+   *             description: For one app, the revision of its stored file after the toggle
+   *             schema:
+   *               type: string
    *         content:
    *           application/json:
    *             schema:
@@ -1071,7 +1276,9 @@ export default function registerAdminAppsRoutes(app) {
    *                   enabled: false
    *                   ids: ["*"]
    *       400:
-   *         description: Bad request - missing enabled flag
+   *         description: "`BAD_REQUEST`: missing enabled flag, or `If-Match` for more than one app"
+   *       412:
+   *         description: "`PRECONDITION_FAILED` (`details.resource` `app`): `If-Match` does not name the stored revision; nothing was written"
    *       500:
    *         description: Internal server error
    */
@@ -1087,24 +1294,33 @@ export default function registerAdminAppsRoutes(app) {
 
       // Validate appIds for security
       const ids = assertValidIds(appIds, 'app');
+      // One named app: the answer carries its new revision, and `If-Match` is honoured.
+      const single = ids.length === 1 && ids[0] !== '*';
+      if (!single && parseIfMatch(req.get('If-Match')) !== null) {
+        throw new ServiceError('BAD_REQUEST', 'If-Match is accepted for one app only');
+      }
 
       const { data: apps } = configCache.getApps(true);
       const resolvedIds = ids.includes('*') ? apps.map(a => a.id) : ids;
+      let stored = null;
       for (const id of resolvedIds) {
-        const app = apps.find(a => a.id === id);
-        if (!app) continue;
-        if (app.enabled !== enabled) {
-          app.enabled = enabled;
-          // Find the actual file for this app ID (may not match ${id}.json)
-          const appFilePath = await configStore.resolveIdToPath('apps', id, {
-            createIfMissing: false
-          });
-          if (!appFilePath) {
-            logger.warn('App file not found', { component: 'AdminApps', id });
-            continue;
-          }
-          await configStore.writeJson(appFilePath, app);
+        if (!single && !apps.some(a => a.id === id)) continue;
+        // Find the actual file for this app ID (may not match ${id}.json)
+        const appFilePath = await configStore.resolveIdToPath('apps', id, {
+          createIfMissing: false
+        });
+        if (!appFilePath) {
+          logger.warn('App file not found', { component: 'AdminApps', id });
+          continue;
         }
+        // Only the flag of the stored file changes, under the file's update lock; with
+        // `If-Match` (one app) the comparison runs on the body the change replaces.
+        const { data } = await configStore.updateJson(appFilePath, current => {
+          if (single) assertIfMatch(req, current, 'app');
+          if (!current || (current.enabled !== false) === enabled) return undefined;
+          return { ...current, enabled };
+        });
+        stored = data;
       }
 
       await configCache.refreshAppsCache();
@@ -1115,6 +1331,9 @@ export default function registerAdminAppsRoutes(app) {
         resourceId: resolvedIds.join(','),
         summary: `Batch ${enabled ? 'enabled' : 'disabled'} ${resolvedIds.length} apps`
       });
+      // The revision of the stored file after the toggle: a form that edits this app
+      // keeps saving with `If-Match` from it.
+      if (single && stored) setRevisionHeaders(res, revisionOf(stored));
       res.json({
         enabled,
         ids: resolvedIds

@@ -23,6 +23,7 @@ export default function AdminAgentsPage() {
   const [profiles, setProfiles] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [loadError, setLoadError] = useState(null);
   const [pendingDeleteId, setPendingDeleteId] = useState(null);
 
   const [q, setQ] = useFilterState('q', '');
@@ -37,8 +38,10 @@ export default function AdminAgentsPage() {
       setLoading(true);
       const data = await fetchAgentProfiles();
       setProfiles(data?.data?.items ?? []);
+      setLoadError(null);
     } catch (err) {
-      setError(err.message || String(err));
+      // Shown by the table with Retry, never as "No agent profiles yet".
+      setLoadError(getAdminApiErrorMessage(err));
     } finally {
       setLoading(false);
     }
@@ -269,6 +272,8 @@ export default function AdminAgentsPage() {
             getRowId={p => p.id}
             actions={actions}
             loading={loading}
+            error={loadError}
+            onRetry={load}
             empty={{
               icon: 'cpu-chip',
               title: t('admin.agents.empty', 'No agent profiles yet'),

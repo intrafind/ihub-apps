@@ -9,6 +9,9 @@ import AdminBreadcrumb from '../components/AdminBreadcrumb';
 import ResourceSelector from '../components/ResourceSelector';
 import LoadingSpinner from '../../../shared/components/LoadingSpinner';
 import { makeAdminApiCall } from '../../../api/adminApi';
+import AdminSaveBar from '../components/AdminSaveBar';
+import UnsavedChangesDialog from '../components/UnsavedChangesDialog';
+import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
 
 /**
  * Admin → OAuth → Clients → a client identified by a metadata document.
@@ -48,6 +51,10 @@ function AdminOAuthCimdClientEditPage() {
     scopes: null,
     tokenExpirationMinutes: null
   });
+  // The policy as stored (null until it loaded, so a failed load is never dirty):
+  // the baseline of the unsaved-changes check and of Discard.
+  const [savedForm, setSavedForm] = useState(null);
+  const { blocker, isDirty } = useUnsavedChanges(savedForm, form);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -55,14 +62,16 @@ function AdminOAuthCimdClientEditPage() {
       const response = await makeAdminApiCall(`/admin/oauth/clients/cimd/${encodedClientId}`);
       const loaded = response.data;
       setClient(loaded);
-      setForm({
+      const loadedForm = {
         allowedGroups: loaded?.policy?.allowedGroups ?? null,
         allowedApps: loaded?.policy?.allowedApps ?? null,
         allowedModels: loaded?.policy?.allowedModels ?? null,
         allowedPrompts: loaded?.policy?.allowedPrompts ?? null,
         scopes: loaded?.policy?.scopes ?? null,
         tokenExpirationMinutes: loaded?.policy?.tokenExpirationMinutes ?? null
-      });
+      };
+      setForm(loadedForm);
+      setSavedForm(loadedForm);
     } catch (error) {
       setMessage({
         type: 'error',
@@ -107,6 +116,12 @@ function AdminOAuthCimdClientEditPage() {
     setField(field, client?.effective?.[field] ?? []);
   };
 
+  /** Drops the unsaved policy edits: the form goes back to the stored policy. */
+  const discard = () => {
+    setForm(savedForm);
+    setMessage(null);
+  };
+
   const save = async () => {
     setSaving(true);
     try {
@@ -116,6 +131,8 @@ function AdminOAuthCimdClientEditPage() {
         body: form
       });
       setClient(response.data?.client || client);
+      // What was just sent is the new stored policy: the page is clean again.
+      setSavedForm(form);
       setMessage({ type: 'success', text: t('admin.auth.oauth.cimd.saved', 'Policy saved') });
     } catch (error) {
       setMessage({
@@ -409,24 +426,16 @@ function AdminOAuthCimdClientEditPage() {
               )}
             </p>
           </div>
-
-          <div className="flex justify-end gap-3 pt-2">
-            <button
-              onClick={() => navigate('/admin/oauth/clients')}
-              className="px-4 py-2 border border-gray-300 dark:border-gray-600 text-sm font-medium rounded-md text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600"
-            >
-              {t('common.cancel', 'Cancel')}
-            </button>
-            <button
-              onClick={save}
-              disabled={saving}
-              className="px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-50"
-            >
-              {saving ? t('common.saving', 'Saving...') : t('common.save', 'Save')}
-            </button>
-          </div>
         </section>
       </div>
+
+      <AdminSaveBar
+        dirty={isDirty}
+        saving={saving}
+        onSave={() => void save()}
+        onDiscard={discard}
+      />
+      <UnsavedChangesDialog blocker={blocker} />
     </div>
   );
 }

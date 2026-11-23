@@ -7,7 +7,154 @@ adminPage: /admin/models
 
 # Models
 
-The models configuration defines the AI models available in the iHub application. These settings are managed through individual JSON files in the `contents/models/` directory.
+A model is an entry users and apps choose to chat with, such as GPT-5, Claude or a model on your
+own vLLM server. A provider is the connection a model uses: its API key and, for your own
+endpoints, its address. You manage both under **Admin → Models**, on the tabs **Models** and
+**Providers**.
+
+The first part of this page shows how to set up models in the admin UI. The rest is the reference
+for every setting. Each model is stored as a JSON file in `contents/models/`, so the reference uses
+the JSON field names.
+
+## Set up models in the admin UI
+
+Users can chat once three things are in place:
+
+1. A provider has an API key, or needs none.
+2. At least one chat model is enabled.
+3. One model is the default model.
+
+Until all three are done, the strip **Set up your models** at the top of **Admin → Models** shows
+which step is still open and links to it. On a new installation the setup wizard does the first
+step for the large cloud providers (see [Getting Started](GETTING_STARTED.md#2-run-the-setup-wizard)).
+This section covers the same steps for any provider, at any time.
+
+The quickest way in is the guided flow: **Admin → Models → Providers → Add provider**, or
+**Connect a model provider** in the **Set up your models** strip. It asks where your models run,
+takes the address and the key, tests the connection, lets you pick the models and the default
+model, and asks who may use them. At the end a one-prompt test shows that the models answer. The
+sections below describe the same steps one by one, for when you prefer to do them by hand.
+
+### Before you start
+
+- **The API key** of the provider. A local server without authentication needs none.
+- **For your own endpoint, its address**, for example `https://llm.example.com/v1`.
+- **Network access.** The iHub server, not your browser, connects to the endpoint. If the server
+  reaches the internet through a proxy, set it up first (see [Proxy Configuration](proxy-configuration.md)).
+- **Certificates from a private certificate authority.** If the endpoint uses a certificate your
+  company issued itself, iHub refuses the connection with "unable to verify the first
+  certificate". Add the certificate authority to the server's certificate store (see
+  [Self-Signed SSL Certificates](ssl-certificates.md)), or add the endpoint's host to
+  **Domain Whitelist** under **Admin → Platform → Security → SSL Certificate Configuration**.
+
+### Connect a provider
+
+iHub ships providers for OpenAI, Anthropic, Google, Mistral, OpenRouter, AWS Bedrock and a local
+server. To use one of them, give it your key:
+
+1. Open **Admin → Models** and select the tab **Providers**.
+2. Click **Configure** in the provider's row.
+3. Enter the key under **API Key** and click **Save Changes**.
+
+The key is stored encrypted. If you leave the field empty, iHub uses the provider's environment
+variable, for example `OPENAI_API_KEY` (see [Environment Variables](environment-variables.md)).
+
+For an endpoint of your own, such as a company gateway, Azure OpenAI or a vLLM server, add a
+provider:
+
+1. On the tab **Providers**, click **Add provider**.
+2. Enter a **Name** and an **ID**. The ID cannot be changed later.
+3. Choose the **API type**. Most gateways, LM Studio and Ollama are **OpenAI-compatible**. For a
+   vLLM server, choose **vLLM / self-hosted (local)**.
+4. Enter the **Base URL**, for example `https://llm.example.com/v1`. iHub reads the list of
+   models from this address when you import them.
+5. Enter the **API Key**, if the endpoint needs one.
+6. Click **Create Provider**.
+
+You can also create the provider while you import its models: choose **+ New provider** in the
+import dialog. [Custom LLM Providers](#custom-llm-providers) describes the fields in detail.
+
+### Add the models
+
+The quickest way is to import the models the endpoint offers:
+
+1. On the tab **Models**, click **Import models**. On a provider's page, **Import models** opens
+   the same dialog with that provider chosen.
+2. Choose the **Provider**. For a built-in provider, the **Endpoint URL** is filled in.
+3. Click **Load models**.
+4. Select the models you want. Keep **Enable imported models** ticked so that users can choose
+   them at once.
+5. Click **Import** (the button names how many models you selected).
+
+The import fills in each model's **API URL**, its limits and what the endpoint reports about
+tools and images. [Importing Models from an Endpoint](#importing-models-from-an-endpoint) has the
+details, including Azure OpenAI.
+
+To add a single model by hand, click **Add New Model** instead. Enter the **API Model ID** (the
+name the endpoint knows the model by, for example `gpt-5`), the full **API URL** of the chat
+endpoint, for example `https://api.openai.com/v1/chat/completions`, and choose the **Provider**.
+
+### Test a model
+
+On the tab **Models**, click **Test** in the model's row. iHub sends a short message and shows
+the answer or the error. On the tab **Providers**, **Test** checks all enabled models of one
+provider, and **Test All** checks every provider. If a test fails, see
+[When a test fails](#when-a-test-fails).
+
+### Choose the default model
+
+Apps without a preferred model use the default model. The first chat model you enable becomes the
+default automatically, and the Models page says so. To choose another one, click **Make default**
+in the model's row, or open the model and tick **Default Model**. Only one
+model can be the default, so ticking it removes the mark from the previous default.
+
+### Decide who can use the models
+
+On a new installation every signed-in user may use every model, and anonymous visitors may use
+only the default model: the group **Anonymous** grants **Default model (whichever is set as
+default)** (`"@default"` in `groups.json`), which follows when you make another model the default.
+To limit a model to some groups, see
+[Who can use apps, models and prompts](access-control.md#limit-a-model-to-some-groups).
+
+The model editor shows **Who can use this model**: every group that may use the model, and why
+(listed by name, or through "all models", and from which group it inherits that). **Restrict
+access…** there takes the model out of the groups that grant all models, and **Why can't someone
+see this?** checks a group or a user.
+
+### Common endpoints
+
+| What you connect | Provider | Endpoint URL for the import |
+| --- | --- | --- |
+| OpenAI, Anthropic, Google, Mistral, OpenRouter | The built-in provider | Filled in |
+| AWS Bedrock | The built-in provider | See [AWS Bedrock](#aws-bedrock) |
+| Azure OpenAI | Add provider, API type **OpenAI-compatible** | The URL you copied in Azure. The dialog then asks for a **Deployment name** per model |
+| Company gateway, for example T-Systems LLM Hub | Add provider, API type **OpenAI-compatible** | The gateway's API base, for example `https://llm-server.llmhub.t-systems.net/v2` |
+| vLLM | The built-in **Local LLM** provider, or Add provider with API type **vLLM / self-hosted (local)** | `http://<host>:8000/v1` |
+| LM Studio | Add provider, API type **OpenAI-compatible** | `http://<host>:1234/v1` |
+| Ollama | Add provider, API type **OpenAI-compatible** | `http://<host>:11434/v1` |
+
+[Local LLM Providers](local-llm-providers.md) describes how to run LM Studio, Jan.ai and vLLM.
+
+### When a test fails
+
+The test result names the problem in its first line. The following table lists the causes.
+
+Under the first line the result names the HTTP status the endpoint answered, its host and, for a
+network or certificate problem, the error code, followed by a line on what to check.
+
+| The test says | Likely cause | What to do |
+| --- | --- | --- |
+| API key not configured | Neither the model nor its provider has a key, and the environment variable is not set. | Enter the key on the provider (see [Connect a provider](#connect-a-provider)). |
+| Authentication failed | The key is wrong or has expired. | Enter the key again. Check it in the provider's console. |
+| Access denied | The key is valid but may not use this model. | Check the key's permissions or project at the provider. |
+| Model not found | The endpoint does not know the **API Model ID**. For Azure OpenAI, the deployment name is wrong. | Correct the **API Model ID**, or import the model again. |
+| Connection refused, Service not found, Connection timeout | The **API URL** is wrong, the server is not running, or a firewall blocks the iHub server. | Check the URL. Check that the iHub server can reach the host. |
+| Certificate not trusted | The endpoint uses a certificate from a private certificate authority, or a self-signed one. | Add the host to the SSL domain whitelist under **Security** (the result links there). See [Before you start](#before-you-start). |
+| The endpoint requires an API key | A provider set up without a key answered that it needs one. | Enter the key on the provider. |
+| Network error | Often a missing proxy setting. | See [Before you start](#before-you-start). |
+| Rate limit exceeded | The provider throttles your key, or its quota is used up. | Wait, or raise the quota at the provider. |
+| Server error | The endpoint itself failed (HTTP 5xx); the configuration in iHub is probably right. | Check the status and logs of the service, or of a proxy in front of it, and try again. |
+| Stored API key cannot be decrypted | The encryption key of the installation changed since the key was saved. | Enter the API key again (see [Encryption Key Management](encryption-key-management.md)). |
 
 ## Basic Model Structure
 
@@ -35,7 +182,7 @@ Each model is defined with the following properties:
 | `name`                         | Object  | -        | **Required.** Localized display name (e.g., `{"en": "GPT-4"}`) shown in the user interface    |
 | `description`                  | Object  | -        | **Required.** Localized short description (e.g., `{"en": "..."}`) of the model's capabilities |
 | `provider`                     | String  | -        | **Required.** Provider identifier. See [Providers](#providers) for valid values                |
-| `providerId`                   | String  | -        | Provider entry (Admin → Providers) the model takes its API key from, when it is not the one named after `provider`. Set for models of a [custom LLM provider](#custom-llm-providers); `provider` is then kept equal to that provider's API type |
+| `providerId`                   | String  | -        | Provider entry (Admin → Models → Providers) the model takes its API key from, when it is not the one named after `provider`. Set for models of a [custom LLM provider](#custom-llm-providers); `provider` is then kept equal to that provider's API type |
 | `modelType`                    | String  | `chat`   | `chat` (routed through the LLM adapter pipeline), `transcription` (speech-to-text, routed through the transcription provider registry) or `tts` (text-to-speech for read aloud). See [Transcription Models](#transcription-models) and [Text-to-Speech Models](#text-to-speech-models) |
 | `url`                          | String  | -        | API endpoint URL for the model. Supports environment variable references like `${MY_URL}`. Transcription models use a `ws://` / `wss://` realtime URL |
 | `contextWindow`                | Number  | -        | Total input+output token capacity of the model's context window (nullable). Used for fitting documents, the [project](projects.md) load-all budget and showing the user how much capacity is left |
@@ -107,7 +254,7 @@ marked still works.
 
 ### Filled in on import
 
-A model imported from a provider that says how it marks its output (**Import from URL**, or **Sync models** on the
+A model imported from a provider that says how it marks its output (**Import models**, or **Sync models** on the
 provider's page) takes over that declaration, so it does not have to be entered model by model. iHub never infers it
 from a provider's name: only the providers and models below get one.
 
@@ -294,15 +441,15 @@ The system currently supports the following providers:
 
 A gateway that serves many models behind one API key — T-Systems AI Foundation Services (LLM Hub),
 a company LLM proxy, a shared vLLM server — is set up as its own provider under **Admin →
-Providers → Create New Provider** (category **LLM Providers**):
+Models → Providers → Add provider**:
 
-![Create a new LLM provider: name, ID, description, API type, base URL and API key](assets/screenshots/admin-provider-new.png)
+![Create a new LLM provider: name, ID, description, API type, base URL, model gateway and API key](assets/screenshots/admin-provider-new.png)
 
 | Field | Description |
 | ----- | ----------- |
 | Name, ID, Description | Plain text. The ID cannot be changed later, and cannot be the name of an API type (`openai`, `openai-responses`, …) |
 | API type | The API the endpoint speaks: `openai` (OpenAI-compatible — LLM Hub, LM Studio, …), `local` (vLLM, through the vLLM adapter), `mistral`, `openai-responses`, `anthropic` or `google` |
-| Base URL | Optional. The API base, used to list the provider's models when importing |
+| Base URL | Optional. The API base the provider's models are listed from when you import them. Chat requests do not use it: they go to each model's own **API URL**, which is built from the base URL when the model is created. Changing the base URL moves the linked models along (see below) |
 | API key | Stored encrypted on the provider and used by all of its models |
 
 Models link to the provider with `providerId`; their `provider` is the provider's API type. The
@@ -326,7 +473,7 @@ the OpenAI API is never sent the OpenAI key.
 
 ## Importing Models from an Endpoint
 
-**Admin → Models → Import from URL** reads the model list of an endpoint and creates the models
+**Admin → Models → Import models** reads the model list of an endpoint and creates the models
 you pick, so they need not be typed in one by one.
 
 ![Import models from URL with the OpenRouter provider and its API key field](assets/screenshots/admin-models-import.png)
@@ -376,10 +523,19 @@ The built-in providers ship with their public API base, so importing from them n
 | Mistral AI | `https://api.mistral.ai/v1`                        |
 | OpenRouter | `https://openrouter.ai/api/v1`                     |
 
-Change a provider's base URL under **Admin → Providers** to point it at a proxy or a regional
-endpoint. **Local LLM** has none: enter your server's address, such as `http://localhost:8080/v1`.
+To list models from a proxy or a regional endpoint, change the provider's base URL under
+**Admin → Models → Providers**. Each model stores its own **API URL**, built from the base URL
+when it was imported or connected. When you save a new base URL, every model linked to the
+provider whose **API URL** starts with the old base URL is moved along: the old base is replaced
+by the new one and the rest of the URL is kept (`https://old.example.com/v1/chat/completions`
+becomes `https://new.example.com/v1/chat/completions`). Each moved model gets an entry in its
+change history and in the audit log. The provider page then says how many linked models now use
+the new address and lists any linked model it left alone because its **API URL** does not start
+with the old base URL (an address set by hand); change those under **Admin → Models** if they
+should move too. Models of other providers are never changed. **Local LLM** has no base URL:
+enter your server's address, such as `http://localhost:8080/v1`.
 
-[OpenRouter](https://openrouter.ai) ships as a provider (ID `openrouter`, OpenAI-compatible, base URL `https://openrouter.ai/api/v1`). Choose **OpenRouter** in the provider list, enter your OpenRouter key and load the models. When a provider has no key stored yet, the dialog asks for one: it is used for the listing and saved encrypted on the provider when you import. Leave it empty to use the provider's environment variable (`OPENROUTER_API_KEY`). The key and base URL can also be set under **Admin → Providers**, for example for a regional endpoint.
+[OpenRouter](https://openrouter.ai) ships as a provider (ID `openrouter`, OpenAI-compatible, base URL `https://openrouter.ai/api/v1`). Choose **OpenRouter** in the provider list, enter your OpenRouter key and load the models. When a provider has no key stored yet, the dialog asks for one: it is used for the listing and saved encrypted on the provider when you import. Leave it empty to use the provider's environment variable (`OPENROUTER_API_KEY`). The key and base URL can also be set under **Admin → Models → Providers**.
 
 Supported listings: OpenAI and every OpenAI-compatible server (vLLM, LM Studio, Ollama, LLM Hub,
 OpenRouter, Together, Groq), Mistral, Anthropic, Google and the iFinder Model Gateway. The call goes through the platform's
@@ -431,14 +587,14 @@ Mistral backend.
 **Keeping the models in line with the provider.** A provider's models change over time: on an iFinder
 Model Gateway deployments are added and retired, a context window is corrected, a model moves to another
 dialect; on Google, Gemini versions are retired and new ones appear; on Anthropic, new Claude models appear. On the provider's page
-(**Admin → Providers →** the gateway, **Google** or **Anthropic → Linked models**), **Sync models** asks the provider what it
+(**Admin → Models → Providers →** the gateway, **Google** or **Anthropic → Linked models**), **Sync models** asks the provider what it
 lists now and compares that with the models imported from it. Nothing changes until you apply your choice. The
 dialog shows three groups. Changes and gone models start ticked, so a plain **Apply** brings the imported models in line. **New models start unticked**: importing one makes it available to users, so a model you left out on purpose is never imported by accident. Tick the ones you want.
 
 | Group                       | What it means                                                                                     | When applied                                                                     |
 | --------------------------- | ------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------- |
 | **Changed at the provider** | An imported model differs from the provider: URL, adapter, context window, image input (gateway only) or, for Google and Anthropic, the EU AI Act marking it does not declare yet | The model is updated to match; the old and new values are shown                  |
-| **New at the provider**     | The provider lists a model nobody imported                                                        | The model is imported, as in **Import from URL**                                 |
+| **New at the provider**     | The provider lists a model nobody imported                                                        | The model is imported, as in **Import models**                                   |
 | **No longer available**     | An enabled imported model the provider no longer lists, or now lists as something iHub cannot run | The model is **disabled**, not deleted: apps may still use it                    |
 
 Models iHub cannot run (embedding, NER) are never offered, a model you disabled yourself is not
@@ -490,9 +646,10 @@ returns the normalized list without storing anything, and then the regular `POST
 A new installation ships only local models, all disabled: **Local vLLM** (chat,
 `http://localhost:8080/v1`), **Voxtral Mini (Transcription)** (self-hosted Voxtral realtime on vLLM,
 `ws://localhost:8080/v1/realtime`) and **iAssistant Conversation**. No cloud model is preconfigured.
-While fewer than five models are configured, **Admin → Models** shows **Import from provider** and
-**Create new model** in the middle of the page; the setup wizard ends with a shortcut to import the
-models of the provider it connected. The first chat model you enable becomes the default model.
+Until a provider has a key, a chat model is enabled and one is the default, **Admin → Models**
+shows the strip **Set up your models** with the next step (see
+[Set up models in the admin UI](#set-up-models-in-the-admin-ui)). The setup wizard ends with a
+shortcut to import the models of the provider it connected. The first chat model you enable becomes the default model.
 
 The cloud model configurations earlier versions shipped (Gemini, Claude, GPT-5, Mistral, Voxtral
 on Mistral's API, and the Gemini transcription and text-to-speech models) are in the **iHub
@@ -518,25 +675,38 @@ and a model is installed from its detail panel rather than straight from the bro
 The adapter uses Bedrock's long-lived API key feature. Mint a key in the AWS console (Bedrock → API keys → Create API key) and configure it via any of:
 
 - **Per-model:** encrypted `apiKey` field on the model JSON (set via Admin → Models → Edit)
-- **Per-provider:** encrypted `apiKey` field on the `bedrock` provider in `providers.json` (set via Admin → Providers)
+- **Per-provider:** encrypted `apiKey` field on the `bedrock` provider in `providers.json` (set via Admin → Models → Providers)
 - **Environment:** `BEDROCK_API_KEY=<key>`
 
 Resolution order matches every other provider: model.apiKey → providers.json → env. Keys configured via the admin UI are encrypted at rest using AES-256-GCM.
 
+The adapter needs no AWS SDK and no access key pair: the API key is sent as `Authorization: Bearer <key>` to `bedrock-runtime.<region>.amazonaws.com`, through the same proxy and SSL whitelist (`ssl.domainWhitelist`) as every other model call.
+
 ### Region configuration
 
-Each model can override the AWS Region via `config.region`. The Admin Model Editor renders a "Region" field with autocomplete suggestions. Supported values:
+The region is set on the **AWS Bedrock provider** (Admin → Models → Providers → AWS Bedrock → **AWS region**, stored as `config.region` in `providers.json`) and can be overridden per model via `config.region` in the Admin Model Editor. Both accept an AWS region code or `global`; anything else is refused when saved (`400`). A value that is set but is not a region (a hand-edited file, the legacy placeholder `apac-northeast-1`, a typo such as `us-east1`, an invalid `AWS_REGION`) is never put into the host name and never replaced by the next source or the default: the model call fails with the error code `INVALID_REQUEST` (provider code `BEDROCK_REGION_INVALID`), and the message names the value and where it is set. Administrators see it in the model test and in the chat; other users see that the model call failed. Values:
 
 | Value | Behavior |
 | --- | --- |
-| `eu-central-1`, `eu-west-1`, `eu-west-3` | Frankfurt / Ireland / Paris. Auto-prepends `eu.` for inference-profile-required models. |
-| `us-east-1`, `us-west-2` | Auto-prepends `us.` for inference-profile-required models. |
-| `apac-northeast-1`, `ap-…` | Auto-prepends `apac.`. |
-| `global` | Auto-prepends `global.` and routes to a supported source region. Supported by the Anthropic Claude Sonnet 4 family. |
+| `eu-central-1`, `eu-west-1`, `eu-west-3`, … | Frankfurt / Ireland / Paris. Auto-prepends `eu.` for inference-profile-required models. |
+| `us-east-1`, `us-west-2`, … | Auto-prepends `us.` for inference-profile-required models. |
+| `ap-northeast-1`, `ap-…` | Auto-prepends `apac.`. |
+| `global` | Auto-prepends `global.` and routes to the source region `eu-central-1`. Supported by the Anthropic Claude 4 family. |
 
-If you write the modelId with an explicit prefix (e.g., `us.anthropic.claude-sonnet-4-6`) the adapter honors it as-is.
+If you write the modelId with an explicit profile prefix (`us.`, `eu.`, `apac.`, `jp.`, `au.`, `ca.`, `us-gov.`, `global.`, e.g. `us.anthropic.claude-sonnet-4-6`) the adapter sends it as-is. Such a model only works while the region belongs to that geography: after changing the provider region from `eu-central-1` to `us-east-1`, re-add models that carry `eu.` ids.
 
-Fallback order: `model.config.region` → `providers.json` `bedrock.config.region` → env `AWS_REGION` / `AWS_DEFAULT_REGION` → default `eu-central-1`.
+Fallback order: `model.config.region` → `providers.json` `bedrock.config.region` → env `AWS_REGION` / `AWS_DEFAULT_REGION` → default `eu-central-1`. Only an empty source is skipped; the first one that is set decides.
+
+### Adding models with "Connect a model provider"
+
+The **AWS Bedrock** tile of the guided flow (Admin → Models → Providers → Add provider) asks for the region (prefilled with the region the server uses today: the provider's, else `AWS_REGION`, which `GET /api/admin/providers` sends as the read-only `effectiveRegion` of the Bedrock entry) and the API key (a key already stored on the provider, or `BEDROCK_API_KEY`, is used when the field is left empty), then lists the region's models:
+
+- `GET https://bedrock.<region>.amazonaws.com/foundation-models` (`ListFoundationModels`) and `GET …/inference-profiles?type=SYSTEM_DEFINED` (`ListInferenceProfiles`), with the same Bearer key. The key's IAM identity needs `bedrock:ListFoundationModels` and `bedrock:ListInferenceProfiles` (both in the `AmazonBedrockLimitedAccess` policy that Bedrock API keys get by default).
+- A model Bedrock serves on demand is offered under its own id; a model it serves only through a cross-region inference profile under the profile id of the region's geography (`eu.anthropic.claude-sonnet-4-…` for `eu-central-1`). With `global`, only models with a `global.` profile can be picked. Embedding and image models, and models without a profile in the region, are listed but cannot be picked; provisioned-throughput-only variants are not listed.
+- If the profile listing is refused, the models are still offered, with the region's prefix in front of models that need a profile.
+- A rejected key, a key without permission and an unknown region are reported as such ("The endpoint rejected the key", "access denied", "host not found" with the region named).
+
+The picked models are created as `provider: "bedrock"` configs without `url` and without a key of their own. Each model stores the region it was listed in as its own `config.region`, because its id is an inference profile of that region's geography. The provider's region is set to it only when the provider has none yet: a second run in another region adds models there and leaves the provider and the models imported before where they are. The **Import models** dialog of the Bedrock provider does the same.
 
 ### Supported models (Converse-compatible families)
 
@@ -562,7 +732,7 @@ Fallback order: `model.config.region` → `providers.json` `bedrock.config.regio
 
 ### Ready-to-import example models
 
-Example configurations for the most common Bedrock models are in the **iHub Official Marketplace**. Open Admin → Marketplace and filter for "bedrock" to browse and one-click install. All examples ship `enabled: false` so you can opt-in selectively.
+Besides the guided flow above, example configurations for the most common Bedrock models are in the **iHub Official Marketplace**. Open Admin → Marketplace and filter for "bedrock" to browse and one-click install. All examples ship `enabled: false` so you can opt-in selectively.
 
 ## Transcription Models
 
@@ -619,7 +789,7 @@ Both Gemini providers reuse the same credential as the Google chat models: a per
 
 Key points:
 
-- **Credentials stay server-side.** The public `GET /api/models` endpoint strips `apiKey` from every model and strips `url` from transcription models, so the vLLM URL and API key never reach the browser. `GET /api/models` returns chat models by default; `GET /api/models?type=transcription` returns permitted transcription models (sanitized). The admin pages (app editor, Voice Input) list models from `GET /api/admin/models` instead, since admin access does not imply model permissions.
+- **Credentials stay server-side.** The public `GET /api/models` endpoint strips `apiKey` from every model and strips `url` from transcription models, so the vLLM URL and API key never reach the browser. `GET /api/models` returns chat models by default; `GET /api/models?type=transcription` returns permitted transcription models (sanitized). The admin pages (app editor, Voice Input) list models from `GET /api/admin/models` instead, since admin access does not imply model permissions: the app editor offers every chat model there, disabled ones marked "(disabled)" and the default marked "(default)", so an app can name a model before it is enabled. A content admin, who may not read the admin model list, sees the models they may use themselves.
 - **Permissions** are enforced the same way as chat models — a user must be permitted to use the transcription model.
 - **Selection.** Transcription models appear in the chat's model selector (an app's `allowedModels` must include them when it restricts models). With one selected, the text box is disabled and the user uploads audio/video or records; the transcript is the answer and is stored in the chat. They are hidden from magic prompt and compare mode.
 - **Dictation.** The microphone button uses a transcription model when Admin → Voice Input → Voice input (`speech.defaultService: "model"`, `speech.dictation.modelId`) or the app (`settings.speechRecognition.service: "model"`, `modelId`) picks one. See [Microphone Feature](microphone-feature.md#transcription-models-server-proxied).
@@ -825,7 +995,7 @@ surface reasoning the same way in the UI (a separate "thinking" stream):
 - **vLLM (`local`):** sends `chat_template_kwargs` to enable/disable reasoning and reads
   reasoning text from the response's `reasoning` (current) or `reasoning_content` (legacy)
   field. Requires the vLLM server to be started with a matching `--reasoning-parser`.
-  See [Local LLM Providers](local-llm-providers.md#reasoning-thinking-output).
+  See [Local LLM Providers](local-llm-providers.md#reasoning--thinking-output).
 
 ## Native Web Search
 
@@ -896,13 +1066,13 @@ The iHub provides a flexible system for selecting which AI model an app uses. Th
 
 1.  **User Selection**: A user can manually select a model from the dropdown in the app's interface. This choice is saved for the session and overrides all other settings.
 
-2.  **App-Specific Preferred Model**: You can set a specific model for an app in its configuration (e.g., in `server/defaults/apps/chat.json`) using the `preferredModel` property. This is the default model for that specific app.
+2.  **App-Specific Preferred Model**: In the app editor, the group **Model** has the field **AI model**. The model chosen there is the default model for that app. In the app's JSON it is the `preferredModel` property.
 
     ```json
     "preferredModel": "gpt-4"
     ```
 
-3.  **System-Wide Default Model**: If an app does not have a `preferredModel` configured, the system will look for a globally defined default model. To configure a system-wide default, add `"default": true` to a model's individual JSON file in `contents/models/`.
+3.  **System-Wide Default Model**: If an app does not have a `preferredModel` configured, the system uses the default model. To choose it, open the model under **Admin → Models** and tick **Default Model**. In the model's JSON file in `contents/models/` this is `"default": true`.
 
     ```json
     {
@@ -925,19 +1095,25 @@ The iHub provides a flexible system for selecting which AI model an app uses. Th
 
 ## Restricting Available Models
 
-Apps can also specify which models are allowed to be used via the `allowedModels` property. This will restrict the models available in the model selection dropdown for that app.
+An app can limit the models users may pick in it. In the app editor, open the group **Model** and
+add the models under **Allowed Models**. Leave the list empty to allow all models. In the app's
+JSON this is the `allowedModels` property:
 
 ```json
 "allowedModels": ["local-vllm", "gemini-1.5-flash"]
 ```
 
+To limit which models a group of users may use at all, change the group's **Models** list. See
+[Who can use apps, models and prompts](access-control.md#limit-a-model-to-some-groups).
+
 ## Adding New Models
 
-To add a new model:
+Add models in the admin UI: import them from the provider's endpoint, or click **Add New Model**
+(see [Add the models](#add-the-models)).
 
-1. Create a new JSON file in `contents/models/` (e.g., `contents/models/my-model.json`)
-2. Ensure the provider adapter in `server/adapters/` supports the provider
-3. Provide required credentials in your environment variables
+A model can also be a file. Create a JSON file in `contents/models/`, for example
+`contents/models/my-model.json`. iHub loads it without a restart. The model uses the API key of its
+provider, or an `apiKey` of its own.
 
 ### Example: Adding GPT-5 with Responses API
 
@@ -966,7 +1142,7 @@ To add a new model:
 **Important Notes for OpenAI Responses API:**
 - Use `provider: "openai-responses"` for GPT-5 and newer models
 - The endpoint URL must be `https://api.openai.com/v1/responses`
-- You still need to set `OPENAI_API_KEY` in your environment
+- The model uses the key of the OpenAI provider (**Admin → Models → Providers**) or the `OPENAI_API_KEY` environment variable
 - The adapter automatically handles the conversion between Chat Completions and Responses API formats
 - Responses are stored by default (`store: true`) for stateful conversations
 - For organizations with Zero Data Retention requirements, the adapter can be configured to use encrypted reasoning items

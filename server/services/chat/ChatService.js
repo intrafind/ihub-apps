@@ -17,7 +17,8 @@
 import { v4 as uuidv4 } from 'uuid';
 import RequestBuilder from './RequestBuilder.js';
 import { processMessageTemplates } from '../../serverHelpers.js';
-import { logInteraction as defaultLogInteraction } from '../../utils.js';
+import { logInteraction as defaultLogInteraction, inspectModelApiKey } from '../../utils.js';
+import { isAdmin } from '../../utils/authorization.js';
 import { runTool as defaultRunTool } from '../tools/runTool.js';
 import configCache from '../../configCache.js';
 import { isFeatureEnabled } from '../../featureRegistry.js';
@@ -89,6 +90,7 @@ import {
 } from './chatToolApproval.js';
 import { buildPendingConnect, connectResumeMessages, loopResumeOf } from './chatConnectResume.js';
 import { describeChatError } from './chatErrors.js';
+import { LLM_ERROR_CODES } from '../loop/contracts/errors.js';
 import { resolveTitleModel, scheduleChatTitle } from './chatTitles.js';
 import { chatCompactionSettings } from './chatPersistence.js';
 import { appendSchedulingContextNote } from '../scheduler/tasks/schedulingContext.js';
@@ -278,7 +280,14 @@ export function withAppPrompt(messages, variables, promptTemplate) {
 function ledgerError(error) {
   if (!error) return {};
   return {
-    error: { code: String(error.code || 'ERROR'), message: String(error.message || error) }
+    // `storedMessage`: a failed model call's sentence without its raw text
+    // (see chatErrors.js); the ledger is replayed to whoever reattaches. The
+    // model call's own `error` event carries no raw text either: LLMClient
+    // records `ledgerErrorMessage` there and logs the raw text on the server.
+    error: {
+      code: String(error.code || 'ERROR'),
+      message: String(error.storedMessage || error.message || error)
+    }
   };
 }
 
@@ -1371,7 +1380,7 @@ class ChatService {
         finishReason: outcome.finishReason,
         // A continued run's end counts what it used before the pause too.
         usage: carriedUsage ? addUsage(carriedUsage, outcome.usage) : outcome.usage,
-        error: outcome.error || (outcome.errorInfo ? outcome.errorInfo : undefined),
+        error: outcome.errorInfo || outcome.error || undefined,
         knowledgeSources: outcome.knowledgeSources,
         answerBasis: outcome.answerBasis,
         limitReachedIn: outcome.limitReachedIn,
@@ -1759,7 +1768,14 @@ class ChatService {
         model,
         language,
         getLocalizedError,
-        timeoutMs
+        timeoutMs,
+        // Only a rejected call raises the question whether a key was sent at all.
+        keyless:
+          err?.code === LLM_ERROR_CODES.AUTH_FAILED &&
+          !!model &&
+          inspectModelApiKey(model, { quiet: true }).state === 'keyless',
+        // The host and the socket code name internals: for an administrator only.
+        revealEndpoint: isAdmin(user)
       });
       await this.telemetry.recordChatCallEnd({
         baseLog: buildLogData(streaming),
@@ -1789,25 +1805,30 @@ class ChatService {
         buildLogData(streaming, {
           responseType: 'error',
           error: {
-            message: errorInfo.message,
+            message: errorInfo.logMessage,
             code: errorInfo.code,
-            details: errorInfo.details,
+            details: errorInfo.logDetails,
             isContextWindowError: errorInfo.isContextWindowError
           },
           response: content
         })
       );
+      // The cause of a failed model call (`failureCause`, `upstreamStatus`, and for an
+      // administrator `host` / `errorCode`), on both frames: `run/ended.error`
+      // replaces what `stream/error` set on the run.
+      const failure = errorInfo.failure || {};
       stream.emit(SSE_V2_EVENTS.STREAM_ERROR, {
         code: String(errorInfo.code || 'ERROR'),
         message: errorInfo.message,
         ...(errorInfo.details !== undefined ? { details: errorInfo.details } : {}),
         retryable: false,
-        isContextWindowError: !!errorInfo.isContextWindowError
+        isContextWindowError: !!errorInfo.isContextWindowError,
+        ...failure
       });
       endRun({
         status: 'error',
         finishReason: 'error',
-        error: { code: String(errorInfo.code || 'ERROR'), message: errorInfo.message }
+        error: { code: String(errorInfo.code || 'ERROR'), message: errorInfo.message, ...failure }
       });
       return { ...summary, status: 'error', finishReason: 'error', error: err, errorInfo };
     }

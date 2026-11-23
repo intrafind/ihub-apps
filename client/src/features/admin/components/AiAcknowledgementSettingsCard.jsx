@@ -10,10 +10,8 @@ import { useAiAcknowledgementAdmin } from '../hooks/useAiAcknowledgementAdmin';
 import EuAiActCard from './euAiAct/EuAiActCard';
 import EuAiActStateNote from './euAiAct/EuAiActStateNote';
 import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
+import { useSaveSection } from './SaveSections';
 import UnsavedChangesDialog from './UnsavedChangesDialog';
-
-const BUTTON =
-  'px-4 py-2 rounded-lg font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-hidden focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-gray-800 disabled:opacity-50 disabled:cursor-not-allowed';
 
 /**
  * Platform side of the AI-use acknowledgement (#3326): on/off, enforcement,
@@ -31,7 +29,7 @@ function AiAcknowledgementSettingsCard({ onSaved, requiredVersion }) {
   const [form, setForm] = useState(null);
   // The form as last loaded or saved; null until it loaded.
   const [savedForm, setSavedForm] = useState(null);
-  const { blocker } = useUnsavedChanges(savedForm, form);
+  const { blocker, isDirty } = useUnsavedChanges(savedForm, form);
   const [loadFailed, setLoadFailed] = useState(false);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState(null);
@@ -62,6 +60,7 @@ function AiAcknowledgementSettingsCard({ onSaved, requiredVersion }) {
     };
   }, []);
 
+  // Saved by the page's save bar; resolves `false` when nothing was saved.
   const save = async () => {
     setSaving(true);
     setMessage(null);
@@ -88,6 +87,7 @@ function AiAcknowledgementSettingsCard({ onSaved, requiredVersion }) {
       });
       void admin.reload();
       onSaved?.();
+      return true;
     } catch (error) {
       setMessage({
         type: 'error',
@@ -95,10 +95,22 @@ function AiAcknowledgementSettingsCard({ onSaved, requiredVersion }) {
           t('admin.aiAcknowledgement.saveError', 'Failed to save the AI acknowledgement') +
           (error.message ? `: ${error.message}` : '')
       });
+      return false;
     } finally {
       setSaving(false);
     }
   };
+
+  useSaveSection('ai-acknowledgement', {
+    dirty: isDirty,
+    saving,
+    error: message?.type === 'error' ? message.text : null,
+    save,
+    discard: () => {
+      setForm(savedForm);
+      setMessage(null);
+    }
+  });
 
   return (
     <EuAiActCard
@@ -196,11 +208,6 @@ function AiAcknowledgementSettingsCard({ onSaved, requiredVersion }) {
               { version: requiredVersion ?? admin.settings?.requiredVersion ?? 1 }
             )}
           </p>
-          <div className="flex flex-wrap gap-3">
-            <button type="button" onClick={save} disabled={saving} className={BUTTON}>
-              {t('common.save', 'Save')}
-            </button>
-          </div>
         </>
       )}
       {message && (

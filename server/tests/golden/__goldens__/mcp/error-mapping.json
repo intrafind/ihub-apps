@@ -186,7 +186,7 @@
     {
       "data": {
         "code": "INVALID_REQUEST",
-        "message": "Invalid request sent to openai API. Please check your input and try again.",
+        "message": "The model call failed (INVALID_REQUEST)",
         "providerCode": "INVALID_REQUEST",
         "recoverable": false,
         "status": 400,

@@ -8,7 +8,8 @@ import { LOG_COMPONENTS } from '../utils/logComponents';
 import { makeAdminApiCall } from '../../../api/adminApi';
 import AdminLoadGate from '../components/AdminLoadGate';
 import { useAdminConfigLoad } from '../hooks/useAdminConfigLoad';
-import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
+import { deepEqual, useUnsavedChanges } from '../hooks/useUnsavedChanges';
+import { SaveSectionsBar, SaveSectionsProvider, useSaveSection } from '../components/SaveSections';
 import UnsavedChangesDialog from '../components/UnsavedChangesDialog';
 import { useSavedBaseline } from '../hooks/useSavedBaseline';
 
@@ -18,10 +19,12 @@ function normalizeAnonymizeIp(value) {
   return value === 'mask' || value === 'drop' ? value : 'off';
 }
 
-function AdminLoggingPage() {
+function LoggingSettings() {
   const { t } = useTranslation();
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState('');
+  // Why the last save of each block failed, shown in the save bar.
+  const [errors, setErrors] = useState({});
   const [loggingConfig, setLoggingConfig] = useState({
     level: 'info',
     format: 'json',
@@ -138,11 +141,16 @@ function AdminLoggingPage() {
     if (ready) captureBaseline();
   }, [ready, captureBaseline]);
 
+  const setError = (block, text) => setErrors(prev => ({ ...prev, [block]: text }));
+
+  // The three blocks are saved by the bar, one after another; a handler resolves `false`
+  // when its block was not saved, so the bar stops and stays.
   const handleSaveLoggingConfig = async () => {
-    if (!ready) return;
+    if (!ready) return false;
     try {
       setSaving(true);
       setMessage('');
+      setError('logging', null);
 
       await makeAdminApiCall('/admin/logging/config', {
         method: 'PUT',
@@ -154,21 +162,24 @@ function AdminLoggingPage() {
         type: 'success',
         text: t('admin.logging.saveSuccess', 'Logging configuration saved successfully')
       });
+      return true;
     } catch (error) {
-      setMessage({
-        type: 'error',
-        text: error.message || t('admin.logging.saveError', 'Failed to save logging configuration')
-      });
+      const text =
+        error.message || t('admin.logging.saveError', 'Failed to save logging configuration');
+      setMessage({ type: 'error', text });
+      setError('logging', text);
+      return false;
     } finally {
       setSaving(false);
     }
   };
 
   const handleSaveAuthDebugConfig = async () => {
-    if (!ready) return;
+    if (!ready) return false;
     try {
       setSaving(true);
       setMessage('');
+      setError('authDebug', null);
 
       // A scoped PATCH of `auth.debug` only (the server reads it there), never
       // a full-config POST: the logging and privacy saves on this page write
@@ -187,23 +198,25 @@ function AdminLoggingPage() {
           'Authentication debug configuration saved successfully'
         )
       });
+      return true;
     } catch (error) {
-      setMessage({
-        type: 'error',
-        text:
-          error.message ||
-          t('admin.logging.authDebugSaveError', 'Failed to save authentication debug configuration')
-      });
+      const text =
+        error.message ||
+        t('admin.logging.authDebugSaveError', 'Failed to save authentication debug configuration');
+      setMessage({ type: 'error', text });
+      setError('authDebug', text);
+      return false;
     } finally {
       setSaving(false);
     }
   };
 
   const handleSavePrivacyConfig = async () => {
-    if (!ready) return;
+    if (!ready) return false;
     try {
       setSaving(true);
       setMessage('');
+      setError('privacy', null);
 
       // logging.anonymizeIp rides the existing logging-config PUT (shallow
       // merge of the body into platform.json's logging block). audit.* goes
@@ -220,15 +233,16 @@ function AdminLoggingPage() {
         body: { anonymizeIp: privacyConfig.auditAnonymizeIp }
       });
 
-      // Reflect the saved values in `loggingConfig` so a subsequent
-      // "Save Logging Configuration" click doesn't drop them again.
+      // Reflect the saved values in `loggingConfig` so a later save of the logging block
+      // doesn't drop them again.
       setLoggingConfig(prev => ({ ...prev, anonymizeIp: privacyConfig.loggingAnonymizeIp }));
-      // The PUT above also stored the rest of the logging block as edited.
+      // Only `anonymizeIp` of the logging block was stored: other unsaved edits of that block
+      // stay unsaved (they must keep the bar and be saved by the logging block's own save).
       setBaseline(prev =>
         prev
           ? {
               ...prev,
-              logging: { ...loggingConfig, anonymizeIp: privacyConfig.loggingAnonymizeIp },
+              logging: { ...prev.logging, anonymizeIp: privacyConfig.loggingAnonymizeIp },
               privacy: privacyConfig
             }
           : prev
@@ -238,16 +252,47 @@ function AdminLoggingPage() {
         type: 'success',
         text: t('admin.logging.privacySaveSuccess', 'Privacy settings saved successfully')
       });
+      return true;
     } catch (error) {
-      setMessage({
-        type: 'error',
-        text:
-          error.message || t('admin.logging.privacySaveError', 'Failed to save privacy settings')
-      });
+      const text =
+        error.message || t('admin.logging.privacySaveError', 'Failed to save privacy settings');
+      setMessage({ type: 'error', text });
+      setError('privacy', text);
+      return false;
     } finally {
       setSaving(false);
     }
   };
+
+  // Each block is dirty on its own; the bar saves the dirty ones in this order (logging first:
+  // the privacy block updates `anonymizeIp` of the logging block).
+  const blockDirty = key => baseline != null && !deepEqual(baseline[key], editedValues[key]);
+  const discardBlock = (key, restore) => {
+    restore(baseline[key]);
+    setMessage('');
+    setError(key, null);
+  };
+  useSaveSection('logging', {
+    dirty: ready && blockDirty('logging'),
+    saving,
+    error: errors.logging,
+    save: handleSaveLoggingConfig,
+    discard: () => discardBlock('logging', setLoggingConfig)
+  });
+  useSaveSection('authDebug', {
+    dirty: ready && blockDirty('authDebug'),
+    saving,
+    error: errors.authDebug,
+    save: handleSaveAuthDebugConfig,
+    discard: () => discardBlock('authDebug', setAuthDebugConfig)
+  });
+  useSaveSection('privacy', {
+    dirty: ready && blockDirty('privacy'),
+    saving,
+    error: errors.privacy,
+    save: handleSavePrivacyConfig,
+    discard: () => discardBlock('privacy', setPrivacyConfig)
+  });
 
   const handleLevelChange = newLevel => {
     setLoggingConfig(prev => ({ ...prev, level: newLevel }));
@@ -596,18 +641,6 @@ function AdminLoggingPage() {
                   </p>
                 </div>
               </div>
-
-              <div className="mt-4">
-                <button
-                  onClick={handleSavePrivacyConfig}
-                  disabled={saving}
-                  className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white rounded-lg transition-colors"
-                >
-                  {saving
-                    ? t('common.saving', 'Saving...')
-                    : t('admin.logging.savePrivacy', 'Save Privacy Settings')}
-                </button>
-              </div>
             </div>
 
             {/* File Logging */}
@@ -812,44 +845,6 @@ function AdminLoggingPage() {
                   </div>
                 )}
               </div>
-
-              <div className="mt-4">
-                <button
-                  onClick={handleSaveAuthDebugConfig}
-                  disabled={saving}
-                  className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white rounded-lg transition-colors"
-                >
-                  {saving
-                    ? t('common.saving', 'Saving...')
-                    : t('admin.logging.saveAuthDebug', 'Save Authentication Debug Settings')}
-                </button>
-              </div>
-            </div>
-
-            {/* Save Button */}
-            <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100">
-                    {t('admin.logging.saveChanges', 'Save Changes')}
-                  </h3>
-                  <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
-                    {t(
-                      'admin.logging.saveDescription',
-                      'Save logging configuration and apply changes immediately'
-                    )}
-                  </p>
-                </div>
-                <button
-                  onClick={handleSaveLoggingConfig}
-                  disabled={saving}
-                  className="px-6 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white rounded-lg transition-colors font-medium"
-                >
-                  {saving
-                    ? t('common.saving', 'Saving...')
-                    : t('admin.logging.save', 'Save Logging Configuration')}
-                </button>
-              </div>
             </div>
 
             {/* Info Box */}
@@ -899,8 +894,18 @@ function AdminLoggingPage() {
           </>
         )}
       </div>
+      <SaveSectionsBar disabled={!ready} />
       <UnsavedChangesDialog blocker={blocker} />
     </div>
+  );
+}
+
+/** One bar saves the three blocks of this page (see SaveSections). */
+function AdminLoggingPage() {
+  return (
+    <SaveSectionsProvider>
+      <LoggingSettings />
+    </SaveSectionsProvider>
   );
 }
 

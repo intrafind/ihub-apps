@@ -8,7 +8,8 @@ import { makeAdminApiCall } from '../../../api/adminApi';
 import AdminLoadGate from './AdminLoadGate';
 import { useAdminConfigLoad } from '../hooks/useAdminConfigLoad';
 import { useDirtyReport } from '../hooks/useDirtyReport';
-import { CHECKBOX_CLASS, PRIMARY_BUTTON_CLASS } from './formStyles';
+import { CHECKBOX_CLASS } from './formStyles';
+import { useSaveSection } from './SaveSections';
 
 /**
  * @param {Object} props
@@ -21,7 +22,7 @@ function CookieSettingsConfig({ onDirtyChange }) {
   });
   // The settings as last loaded or saved; null until they loaded.
   const [savedConfig, setSavedConfig] = useState(null);
-  useDirtyReport(savedConfig, config, onDirtyChange);
+  const isDirty = useDirtyReport(savedConfig, config, onDirtyChange);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState('');
 
@@ -55,8 +56,9 @@ function CookieSettingsConfig({ onDirtyChange }) {
     }));
   };
 
+  /** Saves the section. Resolves false when it did not save, so the page's bar stops and stays. */
   const handleSaveConfig = async () => {
-    if (!ready) return;
+    if (!ready) return false;
     setSaving(true);
     setMessage('');
 
@@ -75,15 +77,29 @@ function CookieSettingsConfig({ onDirtyChange }) {
         type: 'success',
         text: t('admin.system.cookieSettings.configSaved')
       });
+      return true;
     } catch (error) {
       setMessage({
         type: 'error',
         text: error.message || t('admin.system.cookieSettings.configSaveError')
       });
+      return false;
     } finally {
       setSaving(false);
     }
   };
+
+  // The page's bar saves and discards the section.
+  useSaveSection('cookies', {
+    dirty: isDirty,
+    saving,
+    error: message?.type === 'error' ? message.text : null,
+    save: handleSaveConfig,
+    discard: () => {
+      if (savedConfig) setConfig(savedConfig);
+      setMessage('');
+    }
+  });
 
   if (!ready) {
     return (
@@ -171,39 +187,21 @@ function CookieSettingsConfig({ onDirtyChange }) {
         </div>
       </div>
 
-      {/* Save Button */}
-      <div className="flex items-center justify-between border-t border-gray-200 dark:border-gray-700 pt-4">
-        <div className="flex-1">
-          {message && (
-            <div
-              className={`text-sm ${
-                message.type === 'success'
-                  ? 'text-green-700 dark:text-green-400'
-                  : 'text-red-600 dark:text-red-400'
-              }`}
-            >
-              {message.text}
-            </div>
-          )}
+      {/* The result of the last save; the page's bar saves. */}
+      {message && (
+        <div className="border-t border-gray-200 dark:border-gray-700 pt-4">
+          <div
+            role={message.type === 'success' ? 'status' : 'alert'}
+            className={`text-sm ${
+              message.type === 'success'
+                ? 'text-green-700 dark:text-green-400'
+                : 'text-red-600 dark:text-red-400'
+            }`}
+          >
+            {message.text}
+          </div>
         </div>
-        {/* `primary-*` classes do not exist in this theme (the button rendered transparent,
-            PL-B5); the shared admin primary button is solid indigo in both themes. */}
-        <button
-          type="button"
-          onClick={handleSaveConfig}
-          disabled={saving}
-          className={PRIMARY_BUTTON_CLASS}
-        >
-          {saving ? (
-            <>
-              <Icon name="loader" className="h-4 w-4 animate-spin" />
-              {t('admin.system.cookieSettings.savingConfig')}
-            </>
-          ) : (
-            t('admin.system.cookieSettings.saveConfig')
-          )}
-        </button>
-      </div>
+      )}
     </div>
   );
 }

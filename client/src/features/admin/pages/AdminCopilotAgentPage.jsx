@@ -10,6 +10,7 @@ import { useAdminConfigLoad } from '../hooks/useAdminConfigLoad';
 import ConfirmDialog from '../../../shared/components/ConfirmDialog';
 import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
 import UnsavedChangesDialog from '../components/UnsavedChangesDialog';
+import AdminSaveBar from '../components/AdminSaveBar';
 import { useSavedBaseline } from '../hooks/useSavedBaseline';
 
 const TEAMS_DEVELOPER_PORTAL_URL = 'https://dev.teams.microsoft.com/tools';
@@ -87,6 +88,8 @@ function AdminCopilotAgentPage() {
   const [loading, setLoading] = useState(false);
   const [status, setStatus] = useState(null);
   const [message, setMessage] = useState(null);
+  // Why the last save failed, shown next to the save bar (the banner above may be off screen).
+  const [saveError, setSaveError] = useState(null);
   const [toggling, setToggling] = useState(false);
   const [saving, setSaving] = useState(false);
   const [downloading, setDownloading] = useState(false);
@@ -104,8 +107,8 @@ function AdminCopilotAgentPage() {
     () => ({ referenceId, name, description, instructions, starters }),
     [referenceId, name, description, instructions, starters]
   );
-  const { baseline, captureBaseline, setBaseline } = useSavedBaseline(editedValues);
-  const { blocker } = useUnsavedChanges(baseline, editedValues);
+  const { baseline, captureBaseline } = useSavedBaseline(editedValues);
+  const { isDirty, blocker } = useUnsavedChanges(baseline, editedValues);
 
   const limits = status?.limits || {};
 
@@ -222,6 +225,8 @@ function AdminCopilotAgentPage() {
     try {
       setSaving(true);
       setMessage(null);
+      setSaveError(null);
+      // One save for the whole page: the registration ID of step 1 goes with the agent of step 2.
       await makeAdminApiCall('/admin/copilot-agent/config', {
         method: 'PUT',
         body: {
@@ -237,41 +242,26 @@ function AdminCopilotAgentPage() {
       await loadStatus();
       setMessage({ type: 'success', text: t('admin.copilotAgent.saved', 'Settings saved') });
     } catch (err) {
-      setMessage({
-        type: 'error',
-        text:
-          t('admin.copilotAgent.saveError', 'Failed to save the settings: ') +
-          (err?.originalMessage || err?.message || '')
-      });
+      const text =
+        t('admin.copilotAgent.saveError', 'Failed to save the settings: ') +
+        (err?.originalMessage || err?.message || '');
+      setMessage({ type: 'error', text });
+      setSaveError(text);
     } finally {
       setSaving(false);
     }
   };
 
-  // Step 1's own save: the registration ID only, never step 2's unsaved edits.
-  const handleSaveReferenceId = async () => {
-    if (!ready) return;
-    try {
-      setSaving(true);
-      setMessage(null);
-      await makeAdminApiCall('/admin/copilot-agent/config', {
-        method: 'PUT',
-        body: { oauthReferenceId: referenceId }
-      });
-      setBaseline(prev => (prev ? { ...prev, referenceId } : prev));
-      const res = await makeAdminApiCall('/admin/copilot-agent/status', { method: 'GET' });
-      setStatus(res.data);
-      setMessage({ type: 'success', text: t('admin.copilotAgent.saved', 'Settings saved') });
-    } catch (err) {
-      setMessage({
-        type: 'error',
-        text:
-          t('admin.copilotAgent.saveError', 'Failed to save the settings: ') +
-          (err?.originalMessage || err?.message || '')
-      });
-    } finally {
-      setSaving(false);
-    }
+  // Back to the loaded values: the registration ID and every field of the agent.
+  const handleDiscard = () => {
+    if (!baseline) return;
+    setReferenceId(baseline.referenceId);
+    setName(baseline.name);
+    setDescription(baseline.description);
+    setInstructions(baseline.instructions);
+    setStarters(baseline.starters);
+    setMessage(null);
+    setSaveError(null);
   };
 
   const handleDownload = async () => {
@@ -544,14 +534,6 @@ function AdminCopilotAgentPage() {
                         className={`${INPUT} font-mono`}
                         maxLength={limits.referenceId || 512}
                       />
-                      <button
-                        type="button"
-                        onClick={handleSaveReferenceId}
-                        disabled={saving || referenceId.trim() === savedReferenceId}
-                        className={SECONDARY_BUTTON}
-                      >
-                        {t('admin.copilotAgent.save', 'Save')}
-                      </button>
                     </div>
                   </div>
                 </div>
@@ -676,18 +658,6 @@ function AdminCopilotAgentPage() {
                       </button>
                     </div>
                   </div>
-                  <div className="mt-6 flex justify-end">
-                    <button
-                      type="button"
-                      onClick={handleSave}
-                      disabled={saving}
-                      className={PRIMARY_BUTTON}
-                    >
-                      {saving
-                        ? t('admin.copilotAgent.saving', 'Saving…')
-                        : t('admin.copilotAgent.save', 'Save')}
-                    </button>
-                  </div>
                 </div>
 
                 {/* Step 3: Package */}
@@ -734,6 +704,13 @@ function AdminCopilotAgentPage() {
         )}
       </div>
 
+      <AdminSaveBar
+        dirty={ready && !loading && (isDirty || Boolean(saveError))}
+        saving={saving}
+        onSave={() => void handleSave()}
+        onDiscard={handleDiscard}
+        message={saveError}
+      />
       <ConfirmDialog
         isOpen={!!confirmDialog}
         title={confirmDialog?.title ?? ''}

@@ -239,6 +239,27 @@ User prompts, their versions, share markers, and each user's favorites and recen
 
 ## Admin
 
+### Create a global prompt
+
+1. Open **Admin → Prompts** and click **Create New Prompt**.
+2. Enter an **ID**, a **Name** and a **Description**. Users see the name and the description on
+   the prompt's card.
+3. Write the **Prompt**, the text that goes into the chat input. Write a value users fill in as a
+   placeholder in double curly brackets, for example `Translate this text into {{language}}:`.
+4. Optional: under **Variables**, the editor lists each placeholder it detected in the text. Click
+   **Describe** to give one a label, a type or a default value. A placeholder you do not describe
+   is still asked for, as a required text field.
+5. Optional: choose **Opens in app**. When a user picks the prompt in the prompt library, it opens
+   in that app. This does not limit who sees the prompt.
+6. Click **Save Prompt**.
+7. In the card **Group access**, check which groups see the prompt. On a new installation every
+   group that may use all prompts sees it at once. See
+   [Who can use apps, models and prompts](access-control.md).
+
+The prompt is stored as a file in `contents/prompts/`, in the format described above.
+
+### The tabs of the admin page
+
 **Admin → Prompts** has three tabs:
 
 - **Prompts** manages the global prompts, as before. Saving a prompt records `createdBy`, `createdAt`, `updatedBy`, and `updatedAt`. The editor lists the placeholders detected in the text; **Describe** adds an entry for one to `variables`.
@@ -299,13 +320,12 @@ There is one API for both kinds of prompts. Every call except the list and singl
 | `POST /api/admin/prompts/:id/promote` | Admin: promote a user prompt to a global prompt: `{ id?, enabled? }`. |
 | `GET` / `PUT /api/admin/prompts/user-settings` | Admin: the `userPrompts` settings. |
 
-## Adding a New Prompt
+## Adding a New Prompt as a File
+
+The admin UI is the usual way to add a prompt (see [Create a global prompt](#create-a-global-prompt)).
+To add one as a file instead:
 
 1. Create a new file in `contents/prompts/` named `<id>.json`.
 2. Fill in the required fields: `id`, `name`, `description`, `prompt`.
 3. Optionally set `category`, `icon`, `variables`, and other fields.
 4. Save the file. No server restart is needed — the new prompt appears immediately.
-
-## Managing Prompts via Admin UI
-
-Global prompts can also be created and edited in **Admin → Prompts**. Changes made there are written directly to the corresponding file in `contents/prompts/`.

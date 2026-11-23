@@ -32,6 +32,7 @@ const ADMIN = path.join(SRC, 'features/admin');
 const APP_CREATE = path.join(ADMIN, 'components/app-create');
 const APP_EDITOR = path.join(ADMIN, 'components/app-editor');
 const APP_FORM = path.join(ADMIN, 'components/app-form');
+const APP_CONVERSATION = path.join(ADMIN, 'components/app-conversation');
 const CREATE_PAGE = path.join(ADMIN, 'pages/AdminAppCreatePage.jsx');
 
 const LOCALES = { en, de };
@@ -59,6 +60,18 @@ const KEY_MAPS = [
     name: 'NEXT_STEPS',
     file: path.join(APP_EDITOR, 'nextSteps.js'),
     keys: steps => steps.map(step => step.labelKey)
+  },
+  // The conversation of the chat builder (plan 04) and "Improve with AI".
+  { name: 'REVISE_ERROR_KEYS', file: path.join(APP_CONVERSATION, 'reviseErrors.js') },
+  { name: 'REVISE_CLIENT_ERROR_KEYS', file: path.join(APP_CONVERSATION, 'reviseErrors.js') },
+  { name: 'CHANGE_FIELD_KEYS', file: path.join(APP_CONVERSATION, 'conversationState.js') },
+  { name: 'WARNING_KEYS', file: path.join(APP_CONVERSATION, 'conversationState.js') },
+  { name: 'STAKES_KEYS', file: path.join(APP_CONVERSATION, 'conversationState.js') },
+  { name: 'STARTER_CHIP_KEYS', file: path.join(APP_CONVERSATION, 'conversationState.js') },
+  {
+    name: 'IMPROVE_CHIPS',
+    file: path.join(APP_FORM, 'ImproveInstructionsDialog.jsx'),
+    keys: chips => chips.flatMap(chip => [chip.labelKey, chip.requestKey])
   }
 ];
 
@@ -72,6 +85,7 @@ const KEY_SOURCES = [
   path.join(ADMIN, 'components/AppFormEditor.jsx'),
   APP_CREATE,
   APP_EDITOR,
+  APP_CONVERSATION,
   CREATE_PAGE,
   path.join(ADMIN, 'pages/AdminAppEditPage.jsx'),
   path.join(ADMIN, 'pages/AdminAppsPage.jsx'),

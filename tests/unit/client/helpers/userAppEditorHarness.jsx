@@ -133,6 +133,7 @@ const CONFIG = {
   maxApps: 20,
   used: 3,
   generator: true,
+  generatorEnabled: true,
   capabilities: ALLOWED
 };
 
