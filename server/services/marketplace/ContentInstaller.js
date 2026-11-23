@@ -1477,7 +1477,14 @@ class ContentInstaller {
       return;
     }
     if (type === 'skill') {
-      const skillDir = path.join(getContentsDir(), typeConfig.dir, name);
+      const skillsRoot = path.resolve(getContentsDir(), typeConfig.dir);
+      await fs.mkdir(skillsRoot, { recursive: true });
+      // Lexical and symlink-aware boundary check: the skill directory is a
+      // child of the skills root, and a symlink in it cannot lead out.
+      const skillDir = await resolveAndValidatePath(name, skillsRoot);
+      if (!isValidId(name) || !skillDir || skillDir === skillsRoot) {
+        throw new ServiceError('BAD_REQUEST', `Invalid skill name '${name}'`);
+      }
       await fs.mkdir(skillDir, { recursive: true });
 
       if (typeof content === 'object' && content !== null && content.files) {
@@ -1536,7 +1543,13 @@ class ContentInstaller {
       return;
     }
     if (type === 'skill') {
-      const skillDir = path.join(getContentsDir(), typeConfig.dir, name);
+      const skillsRoot = path.resolve(getContentsDir(), typeConfig.dir);
+      const skillDir = path.resolve(skillsRoot, String(name));
+      // A symlinked skill directory is removed as the link itself, so only the
+      // lexical boundary matters here: `name` must stay a child of the skills root.
+      if (!isValidId(name) || !skillDir.startsWith(skillsRoot + path.sep)) {
+        throw new ServiceError('BAD_REQUEST', `Invalid skill name '${name}'`);
+      }
       await fs.rm(skillDir, { recursive: true, force: true });
     } else {
       // A missing file reports false rather than throwing, which is the

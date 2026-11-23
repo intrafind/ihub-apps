@@ -329,7 +329,7 @@ function AdminNextcloudEmbedPage() {
               {status?.enabled && status?.oauthClientId && (
                 <div className="mt-4 pt-4 border-t border-gray-100 dark:border-gray-700 text-sm text-gray-600 dark:text-gray-400">
                   <span className="font-medium text-gray-700 dark:text-gray-300">
-                    OAuth Client ID:
+                    {t('admin.integrationPages.oauthClientId', 'OAuth Client ID:')}
                   </span>{' '}
                   <code className="font-mono text-xs bg-gray-100 dark:bg-gray-700 px-2 py-0.5 rounded-sm">
                     {status.oauthClientId}

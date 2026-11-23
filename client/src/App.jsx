@@ -48,6 +48,7 @@ const AdminAdvancedPage = lazyWithRetry(() => import('./features/admin/pages/Adm
 const AdminUsageReports = lazyWithRetry(() => import('./features/admin/pages/AdminUsageReports'));
 const AdminFeedbackPage = lazyWithRetry(() => import('./features/admin/pages/AdminFeedbackPage'));
 const AdminAppsPage = lazyWithRetry(() => import('./features/admin/pages/AdminAppsPage'));
+const AdminAppCreatePage = lazyWithRetry(() => import('./features/admin/pages/AdminAppCreatePage'));
 const AdminAppEditPage = lazyWithRetry(() => import('./features/admin/pages/AdminAppEditPage'));
 const AdminShortLinks = lazyWithRetry(() => import('./features/admin/pages/AdminShortLinks'));
 const AdminShortLinkEditPage = lazyWithRetry(
@@ -190,7 +191,12 @@ const IntegrationsPage = lazyWithRetry(() => import('./features/settings/pages/I
 const UsagePage = lazyWithRetry(() => import('./features/settings/pages/UsagePage'));
 const OcrPage = lazyWithRetry(() => import('./features/tools/pages/OcrPage'));
 const JobListPage = lazyWithRetry(() => import('./features/tools/pages/JobListPage'));
+// Personal apps: both pages are loaded lazily, so the builder components they
+// share with the admin area do not grow the main bundle.
+const UserAppCreatePage = lazyWithRetry(() => import('./features/apps/pages/UserAppCreatePage'));
+const UserAppEditPage = lazyWithRetry(() => import('./features/apps/pages/UserAppEditPage'));
 import AppProviders from './features/apps/components/AppProviders';
+import UserAppsRoute from './features/apps/components/UserAppsRoute';
 import { withSafeRoute } from './shared/components/SafeRoute';
 import useSessionManagement from './shared/hooks/useSessionManagement';
 import { useUIConfig } from './shared/contexts/UIConfigContext';
@@ -512,14 +518,36 @@ function App() {
               />
             </>
           )}
-          <Route path="apps/:appId" element={<SafeAppRouterWrapper />} />
+          {/* Personal apps. `/apps/new` is the create page for a viewer who may
+              create personal apps and the chat of an app with the ID `new` for
+              everyone else; the element decides (see UserAppsRoute), so the chat
+              keeps its `:appId` and nothing changes while the feature is off. */}
+          <Route
+            path="apps/:appId"
+            element={
+              <UserAppsRoute
+                page="create"
+                component={UserAppCreatePage}
+                fallback={<SafeAppRouterWrapper />}
+              />
+            }
+          />
+          <Route
+            path="apps/:appId/edit"
+            element={<UserAppsRoute page="edit" component={UserAppEditPage} />}
+          />
           {/* Opening a stored chat. Same element and guards as the bare app
               route — AppChat reads `:chatId` and hydrates it from the durable
               chat store instead of the id this tab holds in sessionStorage.
+              It must stay the same tree as the bare route (UserAppsRoute around
+              the chat), or the first message of a chat remounts it mid-turn.
               `apps` is already in both KNOWN_ROUTES lists and only the
               top-level segment matters for base-path detection, so neither
               list changes. */}
-          <Route path="apps/:appId/c/:chatId" element={<SafeAppRouterWrapper />} />
+          <Route
+            path="apps/:appId/c/:chatId"
+            element={<UserAppsRoute page="chat" fallback={<SafeAppRouterWrapper />} />}
+          />
           <Route
             path="apps/:appId/canvas"
             element={
@@ -554,6 +582,10 @@ function App() {
             {/* AI Workspace */}
             {showAdminPage('apps') && (
               <Route path="apps" element={<LazyAdminRoute component={AdminAppsPage} />} />
+            )}
+            {/* Before apps/:appId, so "new" is the create page and never an app ID. */}
+            {showAdminPage('apps') && (
+              <Route path="apps/new" element={<LazyAdminRoute component={AdminAppCreatePage} />} />
             )}
             {showAdminPage('apps') && (
               <Route path="apps/:appId" element={<LazyAdminRoute component={AdminAppEditPage} />} />

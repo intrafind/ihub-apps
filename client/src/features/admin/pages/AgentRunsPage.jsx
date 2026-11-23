@@ -3,6 +3,7 @@
 
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { fetchAgentRuns } from '../../../api/agentsAdminApi';
 import AdminBreadcrumb from '../components/AdminBreadcrumb';
 import { DataTable } from '../components/data-table';
@@ -19,6 +20,7 @@ function formatTimestamp(timestamp) {
 }
 
 export default function AgentRunsPage() {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const { profileId } = useParams();
   const [runs, setRuns] = useState([]);
@@ -57,7 +59,7 @@ export default function AgentRunsPage() {
   const columns = [
     {
       key: 'executionId',
-      header: 'Run ID',
+      header: t('admin.agents.runs.col.runId', 'Run ID'),
       sortable: true,
       render: r => (
         <span className="font-mono text-xs text-gray-700 dark:text-gray-300">{r.executionId}</span>
@@ -65,7 +67,7 @@ export default function AgentRunsPage() {
     },
     {
       key: 'profile',
-      header: 'Profile',
+      header: t('admin.agents.runs.col.profile', 'Profile'),
       sortable: true,
       sortAccessor: r => (r.userId || '').replace(/^agent:/, ''),
       render: r => (
@@ -76,13 +78,13 @@ export default function AgentRunsPage() {
     },
     {
       key: 'status',
-      header: 'Status',
+      header: t('common.status', 'Status'),
       sortable: true,
       render: r => <StatusBadge status={r.status} />
     },
     {
       key: 'startedAt',
-      header: 'Started',
+      header: t('admin.agents.runs.col.started', 'Started'),
       sortable: true,
       sortAccessor: r => r.startedAt || r.createdAt || '',
       render: r => (
@@ -96,7 +98,7 @@ export default function AgentRunsPage() {
   const actions = [
     {
       id: 'view',
-      label: 'View',
+      label: t('common.view', 'View'),
       icon: 'eye',
       onClick: r => navigate(`/admin/agents/runs/${r.executionId}`)
     }
@@ -107,14 +109,16 @@ export default function AgentRunsPage() {
       <div className="max-w-6xl mx-auto py-8 px-4">
         <AdminBreadcrumb
           crumbs={[
-            { label: 'Admin', href: '/admin' },
-            { label: 'Agent Profiles', href: '/admin/agents' },
+            { label: t('documentTitle.admin', 'Admin'), href: '/admin' },
+            { label: t('admin.agents.title', 'Agent Profiles'), href: '/admin/agents' },
             ...(profileId ? [{ label: profileId, href: `/admin/agents/${profileId}` }] : []),
-            { label: 'Runs' }
+            { label: t('admin.agents.runs.title', 'Runs') }
           ]}
         />
         <h1 className="text-2xl font-bold mb-6 text-gray-900 dark:text-gray-100">
-          Agent Runs{profileId ? ` — ${profileId}` : ''}
+          {profileId
+            ? t('admin.agents.runs.pageTitleFor', 'Agent Runs — {{profileId}}', { profileId })
+            : t('admin.agents.runs.pageTitle', 'Agent Runs')}
         </h1>
         {error && <AdminLoadError message={error} framed={false} className="mb-3" action={null} />}
         <DataTable
@@ -126,7 +130,7 @@ export default function AgentRunsPage() {
           defaultSort={{ column: 'startedAt', direction: 'desc' }}
           empty={{
             icon: 'clock',
-            title: 'No runs yet.'
+            title: t('admin.agents.runs.empty', 'No runs yet.')
           }}
         />
       </div>

@@ -1,0 +1,64 @@
+{
+  "id": "plain-language",
+  "name": {
+    "en": "Plain Language",
+    "de": "Einfache Sprache"
+  },
+  "description": {
+    "en": "Rewrites a difficult text in plain language.",
+    "de": "Schreibt einen schwierigen Text in einfacher Sprache neu."
+  },
+  "icon": "academic-cap",
+  "color": "#10B981",
+  "category": "writing",
+  "system": {
+    "en": "You rewrite difficult texts in plain language. Rewrite the text the user sends so that the readers named in the message understand it.\n\nUse short sentences and common words. Explain a technical term where it first appears, or replace it with a common word. Keep every fact, number and deadline. Do not add anything and do not leave out anything important. Write in the language of the text.\n\nThe message names a reading level:\n- general: adults without knowledge of the subject.\n- beginner: readers who are new to the subject and to its terms; explain every term.\n- easy: readers who need very easy language; one statement per sentence, no subordinate clauses, no abbreviations.",
+    "de": "Sie schreiben schwierige Texte in einfacher Sprache neu. Schreiben Sie den Text, den der Benutzer sendet, so um, dass die in der Nachricht genannten Leser ihn verstehen.\n\nVerwenden Sie kurze Sätze und gebräuchliche Wörter. Erklären Sie einen Fachbegriff an der Stelle, an der er zum ersten Mal vorkommt, oder ersetzen Sie ihn durch ein gebräuchliches Wort. Behalten Sie alle Fakten, Zahlen und Fristen bei. Fügen Sie nichts hinzu und lassen Sie nichts Wichtiges weg. Schreiben Sie in der Sprache des Textes.\n\nDie Nachricht nennt ein Leseniveau:\n- general: Erwachsene ohne Fachkenntnisse.\n- beginner: Leser, für die das Thema und seine Begriffe neu sind; erklären Sie jeden Begriff.\n- easy: Leser, die sehr leichte Sprache brauchen; eine Aussage pro Satz, keine Nebensätze, keine Abkürzungen."
+  },
+  "prompt": {
+    "en": "Reading level: {{reading_level}}\n\n{{content}}",
+    "de": "Leseniveau: {{reading_level}}\n\n{{content}}"
+  },
+  "messagePlaceholder": {
+    "en": "Paste the text you want rewritten …",
+    "de": "Fügen Sie hier den Text ein, der umgeschrieben werden soll …"
+  },
+  "variables": [
+    {
+      "name": "reading_level",
+      "label": {
+        "en": "Reading level",
+        "de": "Leseniveau"
+      },
+      "type": "string",
+      "required": true,
+      "defaultValue": {
+        "en": "general",
+        "de": "general"
+      },
+      "predefinedValues": [
+        {
+          "value": "general",
+          "label": {
+            "en": "General readers",
+            "de": "Allgemeine Leser"
+          }
+        },
+        {
+          "value": "beginner",
+          "label": {
+            "en": "New to the subject",
+            "de": "Neu im Thema"
+          }
+        },
+        {
+          "value": "easy",
+          "label": {
+            "en": "Very easy language",
+            "de": "Sehr leichte Sprache"
+          }
+        }
+      ]
+    }
+  ]
+}

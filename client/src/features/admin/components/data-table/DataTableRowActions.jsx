@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
+import { useTranslation } from 'react-i18next';
 import Icon from '../../../../shared/components/Icon';
 import DataTableKebabMenu from './DataTableKebabMenu';
 
@@ -96,6 +97,7 @@ function ActionButton({ action, row }) {
 }
 
 function DataTableRowActions({ actions, row, kebabThreshold = 3, density = 'normal' }) {
+  const { t } = useTranslation();
   const { inline, overflow } = splitActions(actions, row, kebabThreshold);
   const padY = density === 'compact' ? 'py-1.5' : 'py-3';
 
@@ -115,7 +117,13 @@ function DataTableRowActions({ actions, row, kebabThreshold = 3, density = 'norm
         {inline.map(action => (
           <ActionButton key={action.id} action={action} row={row} />
         ))}
-        {overflow.length > 0 && <DataTableKebabMenu items={overflow} row={row} />}
+        {overflow.length > 0 && (
+          <DataTableKebabMenu
+            items={overflow}
+            row={row}
+            label={t('common.moreActions', 'More actions')}
+          />
+        )}
       </div>
     </td>
   );

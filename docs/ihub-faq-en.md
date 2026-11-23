@@ -91,17 +91,21 @@ GPU selection is done case-by-case together with IntraFind, depending on:
 ## Micro-Apps & Prompts
 
 ### How do I create a prompt and a new tile?
-1. **Use existing micro-app as template** (recommended):
-   - Start iHub
-   - Select existing micro-app (e.g., "Compose email")
-   - Settings/Duplicate
-   - Adjust prompt components
-   - The tile appears automatically on the iHub start screen
+You need to be an administrator or a content admin. Both ways start under **Admin → Apps**.
 
-2. **Create your own micro-app**:
-   - GitHub repo contains examples and documentation
-   - See folders `examples` and `docs`, and see the repository agent guide in `CLAUDE.md`
-   - Complete documentation in running iHub under **Admin → Documentation** (`/admin/docs`)
+1. **Create a new micro-app** (recommended):
+   - Click **New app**
+   - Describe in two or three sentences what the app should do and click **Prepare draft**, or pick a template, or choose **Start empty**
+   - Check the name, the short description and the instructions, then click **Create and test**
+   - Try the app in the test chat beside the editor and adjust the instructions
+   - Click **Publish**. The tile then appears on the iHub start screen for the users whose groups may use the app
+
+2. **Copy an existing micro-app**:
+   - In the app list, open the row menu (⋮) of an app (e.g., "Email Composer") and choose **Duplicate**
+   - Adjust the name and the instructions, then click **Create and test**
+   - The copy starts unpublished; click **Publish** when it works
+
+[Build your first app](app-quickstart.md) describes every step. The complete documentation is in the running iHub under **Admin → Documentation** (`/admin/docs`).
 
 ### Are prompt skills required?
 No, iHub is explicitly designed for "no prompt skills needed". The input forms lead to the desired result.
@@ -183,7 +187,7 @@ Yes, iHub is extensible. You can:
 
 ### Best practices for beginners
 - Start with cloud LLMs for the easiest setup
-- Use existing micro-apps as templates
+- Start with **Admin → Apps → New app** and a template, or duplicate an existing micro-app (see [Build your first app](app-quickstart.md))
 - Consult the documentation in the running iHub under **Admin → Documentation** (`/admin/docs`)
 - Begin with simple prompt modifications before creating new apps
 

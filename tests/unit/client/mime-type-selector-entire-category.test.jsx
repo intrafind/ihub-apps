@@ -17,16 +17,22 @@ jest.mock('../../../client/src/api/endpoints/config', () => ({
     mimeTypes: {}
   }))
 }));
+// A text the call carries, else the English text of the key.
+const mockT = (key, fallback) => {
+  if (typeof fallback === 'string') return fallback;
+  const text = key
+    .split('.')
+    .reduce((node, part) => node?.[part], require('../../../shared/i18n/en.json'));
+  return typeof text === 'string' ? text : key;
+};
 jest.mock('react-i18next', () => ({
-  useTranslation: () => ({
-    t: (key, fallback) => (typeof fallback === 'string' ? fallback : key)
-  })
+  useTranslation: () => ({ t: mockT, i18n: { language: 'en' } })
 }));
 
 const UploadConfigSection =
   require('../../../client/src/features/admin/components/app-form/UploadConfigSection').default;
 
-const t = (key, fallback) => (typeof fallback === 'string' ? fallback : key);
+const t = mockT;
 
 function Editor({ initial, onSave }) {
   const [app, setApp] = useState(initial);
@@ -45,7 +51,7 @@ function Editor({ initial, onSave }) {
 
 // The labels are not linked to their checkboxes; the checkbox is the label's previous sibling
 const boxOf = text => screen.getByText(text).previousSibling;
-const categoryBox = () => boxOf(/Use entire/);
+const categoryBox = () => boxOf(/Use the entire/);
 
 describe('entire format category', () => {
   it('is selected when an upload type is turned on, and can be unchecked', async () => {

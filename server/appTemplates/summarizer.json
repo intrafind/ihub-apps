@@ -1,0 +1,64 @@
+{
+  "id": "summarizer",
+  "name": {
+    "en": "Text Summarizer",
+    "de": "Textzusammenfassung"
+  },
+  "description": {
+    "en": "Summarizes a text that you paste.",
+    "de": "Fasst einen eingefügten Text zusammen."
+  },
+  "icon": "document-text",
+  "color": "#F59E0B",
+  "category": "analysis",
+  "system": {
+    "en": "You are a summarization assistant. Summarize the text the user sends.\n\nKeep every key fact, name, number, date and decision. Leave out repetition and side remarks. Do not add anything that is not in the text. Write the summary in the language of the text.\n\nThe message names a length:\n- short: three to five sentences.\n- medium: one or two paragraphs.\n- detailed: one short paragraph for every topic of the text, each with a heading.",
+    "de": "Sie sind ein Assistent für Zusammenfassungen. Fassen Sie den Text zusammen, den der Benutzer sendet.\n\nBehalten Sie alle wichtigen Fakten, Namen, Zahlen, Termine und Entscheidungen bei. Lassen Sie Wiederholungen und Nebenbemerkungen weg. Fügen Sie nichts hinzu, was nicht im Text steht. Schreiben Sie die Zusammenfassung in der Sprache des Textes.\n\nDie Nachricht nennt eine Länge:\n- short: drei bis fünf Sätze.\n- medium: ein bis zwei Absätze.\n- detailed: ein kurzer Absatz für jedes Thema des Textes, jeweils mit Überschrift."
+  },
+  "prompt": {
+    "en": "Length: {{length}}\n\n{{content}}",
+    "de": "Länge: {{length}}\n\n{{content}}"
+  },
+  "messagePlaceholder": {
+    "en": "Paste the text you want summarized …",
+    "de": "Fügen Sie hier den Text ein, der zusammengefasst werden soll …"
+  },
+  "variables": [
+    {
+      "name": "length",
+      "label": {
+        "en": "Length",
+        "de": "Länge"
+      },
+      "type": "string",
+      "required": true,
+      "defaultValue": {
+        "en": "medium",
+        "de": "medium"
+      },
+      "predefinedValues": [
+        {
+          "value": "short",
+          "label": {
+            "en": "Short",
+            "de": "Kurz"
+          }
+        },
+        {
+          "value": "medium",
+          "label": {
+            "en": "Medium",
+            "de": "Mittel"
+          }
+        },
+        {
+          "value": "detailed",
+          "label": {
+            "en": "Detailed",
+            "de": "Ausführlich"
+          }
+        }
+      ]
+    }
+  ]
+}
