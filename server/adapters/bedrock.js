@@ -5,7 +5,8 @@
  * AWS Bedrock Converse API adapter
  *
  * Authenticates with a Bedrock long-lived API key over `Authorization: Bearer …`.
- * No AWS SDK dependency: requests are sent with `fetch`, and the binary
+ * No AWS SDK dependency: requests are sent with `httpFetch` (proxy and SSL
+ * whitelist, server/utils/httpConfig.js) by the LLM client, and the binary
  * `application/vnd.amazon.eventstream` response is parsed by
  * BedrockEventStreamDecoder.
  *
@@ -23,6 +24,15 @@ import { progressEntry, utf8Bytes } from './toolCalling/toolCallProgress.js';
 import { getReadableStream } from '../utils/streamUtils.js';
 import configCache from '../configCache.js';
 import logger from '../utils/logger.js';
+import { LLMError, LLM_ERROR_CODES } from '../services/loop/contracts/errors.js';
+import {
+  BEDROCK_REGION_SUGGESTIONS,
+  DEFAULT_BEDROCK_REGION,
+  bedrockEndpointRegion,
+  bedrockProfilePrefix,
+  hasBedrockProfilePrefix,
+  isValidBedrockRegion
+} from '../../shared/bedrockRegions.js';
 
 /**
  * Provider-specific configuration schema. Consumed by the admin Model Form
@@ -35,16 +45,8 @@ export const providerConfigSchema = {
       key: 'region',
       label: { en: 'AWS Region', de: 'AWS-Region' },
       type: 'string',
-      default: 'eu-central-1',
-      enumHint: [
-        'eu-central-1',
-        'eu-west-1',
-        'eu-west-3',
-        'us-east-1',
-        'us-west-2',
-        'apac-northeast-1',
-        'global'
-      ],
+      default: DEFAULT_BEDROCK_REGION,
+      enumHint: [...BEDROCK_REGION_SUGGESTIONS],
       description: {
         en: 'AWS region for the Bedrock Runtime endpoint, or "global" for cross-region inference profiles (Claude Sonnet 4 family only).',
         de: 'AWS-Region für den Bedrock-Runtime-Endpunkt oder "global" für regionsübergreifende Inferenzprofile (nur Claude Sonnet 4).'
@@ -95,28 +97,8 @@ const REQUIRES_INFERENCE_PROFILE = [
   'amazon.nova-'
 ];
 
-function regionToProfilePrefix(region) {
-  if (!region) return null;
-  if (region === 'global') return 'global.';
-  if (region.startsWith('us-')) return 'us.';
-  if (region.startsWith('eu-')) return 'eu.';
-  if (region.startsWith('apac-') || region.startsWith('ap-')) return 'apac.';
-  return null;
-}
-
-function modelIdHasProfilePrefix(modelId) {
-  return /^(us|eu|apac|global)\./.test(modelId);
-}
-
 function modelRequiresInferenceProfile(modelId) {
   return REQUIRES_INFERENCE_PROFILE.some(prefix => modelId.startsWith(prefix));
-}
-
-function resolveEndpointRegion(region) {
-  // The `global` cross-region profile is invoked through a supported source
-  // region. Default to eu-central-1 to match the iHub default region.
-  if (!region || region === 'global') return 'eu-central-1';
-  return region;
 }
 
 function sanitizeDocumentName(name) {
@@ -154,17 +136,57 @@ function bedrockProgress(index, block) {
 class BedrockAdapterClass extends BaseAdapter {
   /**
    * Resolve the effective region from model → provider → env → default.
+   *
+   * The first source that sets a region decides; only an empty source is
+   * skipped. A set value that is not a region (the legacy `apac-northeast-1`,
+   * a typo such as `us-east1`) is a configuration error, not a reason to fall
+   * through: the next source, or eu-central-1, would send the data to a region
+   * the admin did not choose. It is never put into the URL either, since the
+   * region becomes part of the host name.
+   *
+   * @param {Object} model - Model config (`config.region`)
+   * @returns {string} AWS region code or `global`
+   * @throws {LLMError} `INVALID_REQUEST` with providerCode `BEDROCK_REGION_INVALID`
+   *   when the deciding source holds no valid region; the message names the
+   *   source and how to fix it, for the admin (model test, chat error).
    */
   resolveRegion(model) {
-    if (model?.config?.region) return model.config.region;
+    let providerRegion;
     try {
       const { data: providers = [] } = configCache.getProviders(true) || {};
-      const providerConfig = providers.find(p => p.id === 'bedrock');
-      if (providerConfig?.config?.region) return providerConfig.config.region;
+      providerRegion = providers.find(p => p.id === 'bedrock')?.config?.region;
     } catch {
       /* configCache may be unavailable in tests */
     }
-    return process.env.AWS_REGION || process.env.AWS_DEFAULT_REGION || 'eu-central-1';
+    const candidates = [
+      ['config.region of the model', model?.config?.region],
+      ['config.region of the AWS Bedrock provider', providerRegion],
+      ['environment variable AWS_REGION', process.env.AWS_REGION],
+      ['environment variable AWS_DEFAULT_REGION', process.env.AWS_DEFAULT_REGION]
+    ];
+    for (const [source, value] of candidates) {
+      if (value === undefined || value === null) continue;
+      if (typeof value === 'string' && value.trim() === '') continue;
+      if (isValidBedrockRegion(value)) return value;
+      logger.error('Invalid AWS Bedrock region', {
+        component: 'BedrockAdapter',
+        source,
+        modelId: model?.id
+      });
+      // The value is the admin's own configuration; it names no secret.
+      throw new LLMError(
+        `The AWS Bedrock region "${String(value).slice(0, 40)}" (${source}) is not an AWS ` +
+          'region code. Set a region such as eu-central-1 or ap-northeast-1, or global, ' +
+          'on the model or the AWS Bedrock provider.',
+        {
+          code: LLM_ERROR_CODES.INVALID_REQUEST,
+          providerCode: 'BEDROCK_REGION_INVALID',
+          provider: 'bedrock',
+          modelId: model?.id
+        }
+      );
+    }
+    return DEFAULT_BEDROCK_REGION;
   }
 
   /**
@@ -173,8 +195,8 @@ class BedrockAdapterClass extends BaseAdapter {
    */
   resolveBedrockModelId(model, region) {
     const raw = model.modelId || model.id;
-    if (modelIdHasProfilePrefix(raw)) return raw;
-    const prefix = regionToProfilePrefix(region);
+    if (hasBedrockProfilePrefix(raw)) return raw;
+    const prefix = bedrockProfilePrefix(region);
     if (!prefix) return raw;
     if (region === 'global' || modelRequiresInferenceProfile(raw)) {
       return `${prefix}${raw}`;
@@ -339,7 +361,7 @@ class BedrockAdapterClass extends BaseAdapter {
     const { messages: bedrockMessages, system } = this.formatMessages(messages);
 
     const region = this.resolveRegion(model);
-    const endpointRegion = resolveEndpointRegion(region);
+    const endpointRegion = bedrockEndpointRegion(region);
     const modelId = this.resolveBedrockModelId(model, region);
     const stream = opts.stream;
     const op = stream ? 'converse-stream' : 'converse';

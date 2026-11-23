@@ -456,12 +456,29 @@ export const ADMIN_GUARD_ERROR_CODES = Object.freeze({
   ADMIN_CHECK_FAILED: 503
 });
 
+/**
+ * Codes of the admin access check (`GET /api/admin/access/{type}/{id}/verdict`,
+ * `server/routes/admin/itemAccess.js`).
+ */
+export const ACCESS_CHECK_ERROR_CODES = Object.freeze({
+  /**
+   * A content admin asked for a check outside their scope: a model, a user, or a
+   * group they do not manage (`details: { scope }`, one of `type`, `user`, `group`).
+   */
+  ACCESS_CHECK_OUT_OF_SCOPE: 403
+});
+
 /** Codes of the app draft generator (`POST /api/admin/apps/_generate`, `server/services/appGenerator.js`). */
 export const APP_GENERATOR_ERROR_CODES = Object.freeze({
   /** No chat model the caller may use can write the draft. */
   APP_GENERATOR_NO_MODEL: 503,
   /** The model's answer is not JSON, is cut off, or leaves nothing usable (`details.reason`). */
-  APP_GENERATOR_INVALID_ANSWER: 502
+  APP_GENERATOR_INVALID_ANSWER: 502,
+  /**
+   * The instructions of the app are longer than a conversation turn can revise
+   * (`POST /api/admin/apps/_revise`, `POST /api/apps/_revise`; `details: { field, max }`).
+   */
+  APP_REVISE_TOO_LONG: 400
 });
 
 /**
@@ -483,8 +500,17 @@ export const USER_APP_ERROR_CODES = Object.freeze({
   USER_APP_ACCESS_CHANGED: 403
 });
 
+/** Codes of the sign-in for iHub in a frame of another site (`server/routes/embedAuth.js`). */
+export const EMBED_AUTH_ERROR_CODES = Object.freeze({
+  /** No host origin is allowed in `embedAuth.allowedHostOrigins`, so the feature is off. */
+  EMBED_SIGN_IN_DISABLED: 403,
+  /** The one-time code is unknown, already used, expired, or does not match the verifier. */
+  EMBED_CODE_INVALID: 400
+});
+
 /** Every code, with its default HTTP status. */
 export const API_ERROR_CODES = Object.freeze({
+  ...EMBED_AUTH_ERROR_CODES,
   ...GENERIC_ERROR_CODES,
   ...STORAGE_ERROR_CODES,
   ...LLM_API_ERROR_CODES,
@@ -509,6 +535,7 @@ export const API_ERROR_CODES = Object.freeze({
   ...MISC_ERROR_CODES,
   ...WATERMARK_ERROR_CODES,
   ...ADMIN_GUARD_ERROR_CODES,
+  ...ACCESS_CHECK_ERROR_CODES,
   ...APP_GENERATOR_ERROR_CODES,
   ...USER_APP_ERROR_CODES
 });

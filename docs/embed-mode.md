@@ -112,11 +112,117 @@ else (not while the [EU AI Act features are switched off](ai-act.md#switching-th
 
 ---
 
+## Signing in inside a frame
+
+Identity providers such as Microsoft Entra ID, Google and Okta refuse to be shown in a frame
+(`X-Frame-Options` / `frame-ancestors`). With OpenID Connect, iHub in an iframe therefore cannot
+send people to the provider the usual way. The sign-in form of LDAP and local accounts never leaves
+the frame, but its session cookie is `SameSite=Lax`: a browser keeps it only when the frame is on the
+same site as iHub (for example `ifinder.example.com` and `ihub.example.com`). In a frame of another
+site, use OpenID Connect.
+
+iHub solves this with a popup. The sign-in runs in a window of its own, where the provider is
+allowed to show its page. The frame then gets its own session, and no token reaches a script.
+
+### Set it up
+
+Open **Admin → Integrations → iHub in another site** (the card is in the **Clients** section of the
+Installed tab and on the Inbound tab), switch the sign-in on, and add the origin of every site that
+shows iHub in a frame, for example `https://ifinder.example.com`. Saved settings apply at once, without
+a restart.
+
+The page writes this block to `contents/config/platform.json`, which you can also edit by hand:
+
+```json
+{
+  "embedAuth": {
+    "enabled": true,
+    "allowedHostOrigins": ["https://ifinder.example.com"]
+  }
+}
+```
+
+| Setting                        | Effect                                                                                                                                                   |
+| ------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `embedAuth.enabled`            | The switch. Not `true` (or missing): the feature is off, whatever the list says, and the list is kept.                                                   |
+| `embedAuth.allowedHostOrigins` | Origins (scheme, host, port, no path) of the sites that may show iHub in a frame, at most 50. Empty: the feature is off, as the switch alone does nothing. |
+
+- Use HTTPS on both sites. The session cookie is `Secure`.
+- Register nothing new at the identity provider: the popup uses the redirect address iHub already
+  has.
+- While the list is set, iHub's pages are sent with `Content-Security-Policy: frame-ancestors
+  'self' <your origins>`, so **no other site can show iHub in a frame**. A site that shows iHub
+  and is not on the list, such as a Teams tab, stops working: add it.
+- Reverse proxies must not add their own `X-Frame-Options` or `frame-ancestors` header that
+  contradicts the list.
+
+### What people see
+
+1. The frame shows iHub's sign-in. With one OIDC provider, there is no redirect: they click the
+   provider's button.
+2. A pop-up window opens. If they are signed in at the provider already, it closes by itself;
+   otherwise they sign in there.
+3. The frame continues. If their browser blocks pop-ups, the frame says so and asks them to allow
+   them for the iHub address.
+
+Signing out in the frame ends the frame's session. It does not end the session at the identity
+provider.
+
+### How it works
+
+```mermaid
+sequenceDiagram
+    participant F as Frame (iHub)
+    participant P as Popup (iHub)
+    participant I as Identity provider
+    participant S as iHub server
+
+    F->>F: Make a verifier, keep it in memory, hash it
+    F->>P: Open /embed-auth/complete?challenge=hash
+    P->>I: Sign in (top-level window)
+    I->>S: Callback, session cookie of the popup
+    P->>S: POST /api/auth/embed-codes/_issue (challenge)
+    S-->>P: One-time code (60 s, once)
+    P->>F: postMessage(code), only to iHub's own origin
+    F->>S: POST /api/auth/embed-codes/_redeem (code, verifier)
+    S-->>F: Set-Cookie authTokenEmbed (HttpOnly, Partitioned)
+```
+
+- The code is worth nothing without the verifier, which never left the frame, and works once.
+- The session cookie is `HttpOnly`: no script can read it, and no token is ever in a response
+  body, in `localStorage` or in a URL. Another site cannot make the browser send it.
+- The cookie is `Partitioned`: the browser keeps it per top-level site and sends it only while iHub
+  is shown by the site it was set for. It is `SameSite=None`, which gives up the protection `Lax`
+  gives against forged requests, so iHub honours it only for requests the iHub page itself made
+  (`Sec-Fetch-Site: same-origin`, or an `Origin` that is iHub's own). Anything else is answered as
+  if the cookie were not there.
+- The cookie lasts as long as the session it was made from, and has a name of its own
+  (`authTokenEmbed`), so it never clashes with the `authToken` cookie of a visit to iHub.
+
+### Limits
+
+- This is the way to sign in to a frame of a **different site**. Local and LDAP sign-in keep their
+  session only in a frame on the same site as iHub; in a frame of another site the browser drops
+  that cookie and the person is back at the login.
+- The popup needs a way back to the frame. If an identity provider or a browser policy cuts that
+  link (`Cross-Origin-Opener-Policy`), the popup says it cannot return and the sign-in does not
+  complete. Opening iHub in its own tab always works.
+- A sign-in that names the user on every request (a reverse proxy, an API client) has no session to
+  hand over and needs no cookie.
+- Other flows that send the frame to a provider, such as connecting an integration, still need a
+  tab of their own.
+- Signing out in iHub in its own tab does not end the session of a frame. It ends when it expires
+  or at **Sign out** in the frame.
+
+---
+
 ## Notes for hosts
 
 - Embed mode only controls what iHub renders and stores. Whether a browser lets your site frame
   iHub is decided by the `Content-Security-Policy: frame-ancestors` / `X-Frame-Options` headers that
-  iHub or your reverse proxy sends: allow the host's origin there.
+  iHub or your reverse proxy sends: allow the host's origin there. With
+  [OIDC sign-in in a frame](#signing-in-inside-a-frame), iHub sends that header itself, from
+  `embedAuth.allowedHostOrigins`.
 - The [Nextcloud embed](nextcloud-embed.md) uses the same mode; it switches it on itself and does
   not need the parameter.
 - Deployments under a sub-path work as usual: `https://example.com/ihub/apps/translator?embed=true`.

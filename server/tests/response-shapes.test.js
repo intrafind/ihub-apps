@@ -82,6 +82,17 @@ test('firstId: items, a bare list, a keyed list inside an object', () => {
   assert.equal(firstId({ other: 1 }), null);
 });
 
+test('firstId: a keyed map of records, such as the groups of GET /api/admin/groups', () => {
+  assert.equal(
+    firstId({ groups: { admins: { id: 'admins' }, users: { id: 'users' } }, metadata: {} }),
+    'admins'
+  );
+  // Not a list of records: a settings object, a map whose records do not carry their key.
+  assert.equal(firstId({ metadata: { version: '1' } }), null);
+  assert.equal(firstId({ groups: { admins: { name: 'Admins' } } }), null);
+  assert.equal(firstId({ groups: {} }), null);
+});
+
 test('notRequestedReason: streams, downloads and external specifications are left alone', () => {
   assert.ok(notRequestedReason('/api/runs/:runId/events/stream'));
   assert.ok(notRequestedReason('/api/admin/browser-extension/download.zip'));

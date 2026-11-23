@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
 import AppLanguageField from './AppLanguageField';
+import { SECONDARY_BUTTON_CLASS } from '../formStyles';
 
 /**
  * A text of the app for reading: each language as a block that keeps its line
@@ -56,6 +57,9 @@ function ReadOnlyText({ label, value, name }) {
  *   ("users do not see it") by default. A personal app says who can read it.
  * @param {boolean} [props.readOnly=false] - Show the texts for reading: they stay
  *   focusable and scrollable, where a disabled field is neither.
+ * @param {() => void} [props.onImprove] - Opens "Improve with AI" (slice 2 of the chat
+ *   builder plan). The button is shown only with it, for editable instructions that
+ *   are not empty.
  * @returns {JSX.Element}
  */
 function SystemInstructionsSection({
@@ -64,9 +68,13 @@ function SystemInstructionsSection({
   t,
   validationErrors = {},
   description,
-  readOnly = false
+  readOnly = false,
+  onImprove
 }) {
   const set = (field, value) => onChange({ ...app, [field]: value });
+  const hasInstructions = Object.values(app.system || {}).some(
+    text => typeof text === 'string' && text.trim() !== ''
+  );
 
   return (
     <div className="bg-white dark:bg-gray-800 shadow-sm px-4 py-5 sm:rounded-lg sm:p-6">
@@ -101,10 +109,17 @@ function SystemInstructionsSection({
               onChange={value => set('system', value)}
               required={true}
               type="textarea"
-              className="mb-6"
+              className={onImprove && hasInstructions ? 'mb-2' : 'mb-6'}
               error={validationErrors.system}
               name="system"
             />
+            {onImprove && hasInstructions && (
+              <div className="mb-6">
+                <button type="button" onClick={onImprove} className={SECONDARY_BUTTON_CLASS}>
+                  {t('admin.apps.edit.improve.action')}
+                </button>
+              </div>
+            )}
 
             <AppLanguageField
               label={t('admin.apps.edit.messagePlaceholder')}

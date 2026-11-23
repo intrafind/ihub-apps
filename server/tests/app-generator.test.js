@@ -15,7 +15,9 @@ import assert from 'node:assert/strict';
 import {
   describeInstalledIntegrations,
   integrationsFromAnswer,
-  integrationsBlock
+  integrationsBlock,
+  selectDraftModel,
+  appGeneratorSettings
 } from '../services/appGenerator.js';
 
 const resolved = [
@@ -192,5 +194,74 @@ describe('integrationsFromAnswer', () => {
     assert.equal(integrationsFromAnswer([{ id: 'nope' }], installed), undefined);
     assert.equal(integrationsFromAnswer('x', installed), undefined);
     assert.equal(integrationsFromAnswer([{ id: 'jira' }], undefined), undefined);
+  });
+});
+
+describe('selectDraftModel', () => {
+  const MODELS = [
+    { id: 'image', supportsImageGeneration: true, default: true, enabled: true },
+    { id: 'standard', default: true, enabled: true },
+    { id: 'small', enabled: true },
+    { id: 'conversation', provider: 'iassistant-conversation', enabled: true },
+    { id: 'off', enabled: false }
+  ];
+  const all = () => true;
+
+  it('picks the standard chat model without a configured model', () => {
+    const { model, configured } = selectDraftModel({
+      models: MODELS,
+      configuredId: '',
+      mayUse: all
+    });
+    assert.equal(model.id, 'standard');
+    assert.equal(configured, 'none');
+  });
+
+  it('picks the configured model when the caller may use it', () => {
+    const { model, configured } = selectDraftModel({
+      models: MODELS,
+      configuredId: 'small',
+      mayUse: all
+    });
+    assert.equal(model.id, 'small');
+    assert.equal(configured, 'used');
+  });
+
+  it('falls back to the automatic choice among the caller’s models when it is forbidden', () => {
+    const { model, configured } = selectDraftModel({
+      models: MODELS,
+      configuredId: 'standard',
+      mayUse: candidate => candidate.id === 'small'
+    });
+    assert.equal(model.id, 'small');
+    assert.equal(configured, 'forbidden');
+  });
+
+  for (const configuredId of ['off', 'missing', 'image', 'conversation']) {
+    it(`falls back to the automatic choice for a configured model that cannot draft (${configuredId})`, () => {
+      const { model, configured } = selectDraftModel({ models: MODELS, configuredId, mayUse: all });
+      assert.equal(model.id, 'standard');
+      assert.equal(configured, 'unavailable');
+    });
+  }
+
+  it('answers no model when the caller may use none', () => {
+    const { model } = selectDraftModel({
+      models: MODELS,
+      configuredId: 'small',
+      mayUse: () => false
+    });
+    assert.equal(model, undefined);
+  });
+});
+
+describe('appGeneratorSettings', () => {
+  it('reads a trimmed model ID and treats anything else as the automatic choice', () => {
+    assert.deepEqual(appGeneratorSettings({ appGenerator: { modelId: ' small ' } }), {
+      modelId: 'small'
+    });
+    assert.deepEqual(appGeneratorSettings({}), { modelId: '' });
+    assert.deepEqual(appGeneratorSettings(undefined), { modelId: '' });
+    assert.deepEqual(appGeneratorSettings({ appGenerator: { modelId: 42 } }), { modelId: '' });
   });
 });

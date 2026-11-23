@@ -9,6 +9,7 @@ import { getAdminApiErrorMessage, makeAdminApiCall } from '../../../api/adminApi
 import { apiErrorMessage } from '../../../utils/apiErrorMessage';
 import ConfirmDialog from '../../../shared/components/ConfirmDialog';
 import { DataTable } from '../components/data-table';
+import { copyId } from '../utils/copyId';
 
 const PROTECTED_GROUP_IDS = new Set(['admins', 'users', 'anonymous', 'authenticated']);
 
@@ -173,6 +174,13 @@ function AdminGroupsPage() {
     });
   };
 
+  // Like models and prompts, the clone opens as a new group with the ID `<id>-copy`
+  // (or the next free one) proposed and is only created on save.
+  const handleCloneGroup = group => {
+    const cloneId = copyId(group.id, Object.keys(groups));
+    navigate('/admin/groups/new', { state: { templateGroup: group, cloneId } });
+  };
+
   const groupsArray = Object.values(groups);
 
   const columns = [
@@ -203,6 +211,12 @@ function AdminGroupsPage() {
       icon: 'pencil',
       priority: 'primary',
       onClick: g => navigate(`/admin/groups/${g.id}`)
+    },
+    {
+      id: 'clone',
+      label: t('admin.groups.clone', 'Clone'),
+      icon: 'copy',
+      onClick: g => handleCloneGroup(g)
     },
     {
       id: 'delete',

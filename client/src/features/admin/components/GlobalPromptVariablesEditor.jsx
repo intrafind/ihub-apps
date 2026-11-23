@@ -1,9 +1,17 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
-import { useState } from 'react';
+import { useId, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
+import {
+  HELP_CLASS,
+  INPUT_CLASS,
+  LABEL_CLASS,
+  MONO_INPUT_CLASS,
+  PRIMARY_BUTTON_CLASS,
+  SECONDARY_BUTTON_CLASS
+} from './formStyles';
 
 /**
  * GlobalPromptVariablesEditor - Component for managing global prompt variables
@@ -17,6 +25,14 @@ function GlobalPromptVariablesEditor({ value, onChange }) {
   const [newVariableKey, setNewVariableKey] = useState('');
   const [newVariableValue, setNewVariableValue] = useState('');
   const [error, setError] = useState('');
+  const baseId = useId();
+  const ids = {
+    context: `${baseId}-context`,
+    contextHelp: `${baseId}-context-help`,
+    newKey: `${baseId}-new-key`,
+    newKeyHelp: `${baseId}-new-key-help`,
+    newValue: `${baseId}-new-value`
+  };
 
   const variables = value?.variables || {};
   const context = value?.context || '';
@@ -144,20 +160,22 @@ function GlobalPromptVariablesEditor({ value, onChange }) {
     <div className="space-y-6">
       {/* Global Context */}
       <div>
-        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+        <label htmlFor={ids.context} className={LABEL_CLASS}>
           {t('admin.platform.globalContext', 'Global Context')}
         </label>
-        <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">
+        <p id={ids.contextHelp} className="text-sm text-gray-600 dark:text-gray-400 mb-2">
           {t(
             'admin.platform.globalContextDescription',
             'This context is automatically prepended to all system prompts. You can use variables here by wrapping them in double curly braces, e.g., {{date}} or {{company}}.'
           )}
         </p>
         <textarea
+          id={ids.context}
+          aria-describedby={ids.contextHelp}
           value={context}
           onChange={handleContextChange}
           rows={6}
-          className="w-full px-3 py-2 border border-admin-control-border dark:border-admin-control-border-dark rounded-md shadow-xs focus:outline-hidden focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white font-mono text-sm"
+          className={MONO_INPUT_CLASS}
           placeholder={t(
             'admin.platform.globalContextPlaceholder',
             'e.g., Current date: {{date}}. Company: {{company}}. User: {{user_name}}'
@@ -191,9 +209,11 @@ function GlobalPromptVariablesEditor({ value, onChange }) {
                 </span>
               </div>
               <button
+                type="button"
                 onClick={() => handleCopyToClipboard(`{{${variable.key}}}`)}
-                className="ml-2 p-1 text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"
+                className="ml-2 p-1 rounded-sm text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300 focus:outline-hidden focus-visible:ring-2 focus-visible:ring-admin-accent"
                 title={t('common.copy', 'Copy')}
+                aria-label={`${t('common.copy', 'Copy')} {{${variable.key}}}`}
               >
                 <Icon name="clipboard" className="w-4 h-4" />
               </button>
@@ -204,13 +224,15 @@ function GlobalPromptVariablesEditor({ value, onChange }) {
 
       {/* Custom Variables Section */}
       <div>
-        <div className="flex items-center justify-between mb-3">
+        <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
           <h3 className="text-lg font-medium text-gray-900 dark:text-white">
             {t('admin.platform.customVariables', 'Custom Variables')}
           </h3>
           <button
+            type="button"
             onClick={() => setShowAddVariable(!showAddVariable)}
-            className="px-3 py-1 text-sm bg-blue-600 text-white rounded-sm hover:bg-blue-700 flex items-center gap-2"
+            aria-expanded={showAddVariable}
+            className={SECONDARY_BUTTON_CLASS}
           >
             <Icon name="plus" className="w-4 h-4" />
             {t('admin.platform.addVariable', 'Add Variable')}
@@ -228,10 +250,12 @@ function GlobalPromptVariablesEditor({ value, onChange }) {
           <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4 mb-4">
             <div className="space-y-3">
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                <label htmlFor={ids.newKey} className={LABEL_CLASS}>
                   {t('admin.platform.variableKey', 'Variable Key')}
                 </label>
                 <input
+                  id={ids.newKey}
+                  aria-describedby={ids.newKeyHelp}
                   type="text"
                   value={newVariableKey}
                   onChange={e => setNewVariableKey(e.target.value)}
@@ -239,9 +263,9 @@ function GlobalPromptVariablesEditor({ value, onChange }) {
                     'admin.platform.variableKeyPlaceholder',
                     'e.g., company, department, region'
                   )}
-                  className="w-full px-3 py-2 border border-admin-control-border dark:border-admin-control-border-dark rounded-md focus:outline-hidden focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
+                  className={MONO_INPUT_CLASS}
                 />
-                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                <p id={ids.newKeyHelp} className={HELP_CLASS}>
                   {t(
                     'admin.platform.variableKeyHelp',
                     'Use lowercase letters, numbers, and underscores. Must start with a letter or underscore.'
@@ -249,10 +273,11 @@ function GlobalPromptVariablesEditor({ value, onChange }) {
                 </p>
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                <label htmlFor={ids.newValue} className={LABEL_CLASS}>
                   {t('admin.platform.variableValue', 'Variable Value')}
                 </label>
                 <textarea
+                  id={ids.newValue}
                   value={newVariableValue}
                   onChange={e => setNewVariableValue(e.target.value)}
                   rows={3}
@@ -260,25 +285,27 @@ function GlobalPromptVariablesEditor({ value, onChange }) {
                     'admin.platform.variableValuePlaceholder',
                     'e.g., We are a leading provider of AI solutions…'
                   )}
-                  className="w-full px-3 py-2 border border-admin-control-border dark:border-admin-control-border-dark rounded-md focus:outline-hidden focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
+                  className={INPUT_CLASS}
                 />
               </div>
-              {error && <div className="text-sm text-red-600 dark:text-red-400">{error}</div>}
+              {error && (
+                <div role="alert" className="text-sm text-red-700 dark:text-red-300">
+                  {error}
+                </div>
+              )}
               <div className="flex gap-2">
-                <button
-                  onClick={handleAddVariable}
-                  className="px-4 py-2 bg-blue-600 text-white rounded-sm hover:bg-blue-700"
-                >
+                <button type="button" onClick={handleAddVariable} className={PRIMARY_BUTTON_CLASS}>
                   {t('common.add', 'Add')}
                 </button>
                 <button
+                  type="button"
                   onClick={() => {
                     setShowAddVariable(false);
                     setError('');
                     setNewVariableKey('');
                     setNewVariableValue('');
                   }}
-                  className="px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-sm hover:bg-gray-300 dark:hover:bg-gray-600"
+                  className={SECONDARY_BUTTON_CLASS}
                 >
                   {t('common.cancel', 'Cancel')}
                 </button>
@@ -309,9 +336,11 @@ function GlobalPromptVariablesEditor({ value, onChange }) {
                         {`{{${key}}}`}
                       </code>
                       <button
+                        type="button"
                         onClick={() => handleCopyToClipboard(`{{${key}}}`)}
-                        className="p-1 text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"
+                        className="p-1 rounded-sm text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300 focus:outline-hidden focus-visible:ring-2 focus-visible:ring-admin-accent"
                         title={t('common.copy', 'Copy')}
+                        aria-label={`${t('common.copy', 'Copy')} {{${key}}}`}
                       >
                         <Icon name="clipboard" className="w-4 h-4" />
                       </button>
@@ -320,13 +349,16 @@ function GlobalPromptVariablesEditor({ value, onChange }) {
                       value={value}
                       onChange={e => handleUpdateVariable(key, e.target.value)}
                       rows={3}
-                      className="w-full px-3 py-2 border border-admin-control-border dark:border-admin-control-border-dark rounded-md focus:outline-hidden focus:ring-2 focus:ring-blue-500 dark:bg-gray-600 dark:text-white text-sm"
+                      aria-label={`{{${key}}}`}
+                      className={INPUT_CLASS}
                     />
                   </div>
                   <button
+                    type="button"
                     onClick={() => handleDeleteVariable(key)}
-                    className="ml-3 p-2 text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"
+                    className="ml-3 p-2 rounded-sm text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 focus:outline-hidden focus-visible:ring-2 focus-visible:ring-red-500"
                     title={t('common.delete', 'Delete')}
+                    aria-label={`${t('common.delete', 'Delete')} {{${key}}}`}
                   >
                     <Icon name="trash" className="w-5 h-5" />
                   </button>

@@ -10,6 +10,7 @@ import { makeAdminApiCall } from '../../../api/adminApi';
 import { getLocalizedContent } from '../../../utils/localizeContent';
 import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
 import UnsavedChangesDialog from '../components/UnsavedChangesDialog';
+import AdminSaveBar from '../components/AdminSaveBar';
 
 const inputClass =
   'w-full px-3 py-2 border border-admin-control-border dark:border-admin-control-border-dark rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100';
@@ -19,6 +20,11 @@ const headingClass =
 
 function errorText(error, fallback) {
   return error?.response?.data?.detail || error?.message || fallback;
+}
+
+/** Whether the bar is offered: the settings loaded, and they changed or the last save failed. */
+function offersSave(savedSettings, isDirty, saveFailed) {
+  return savedSettings !== null && (isDirty || saveFailed);
 }
 
 function formatNumber(value) {
@@ -235,7 +241,11 @@ function AdminChatHistoryPage() {
   // The settings as last loaded (or reloaded after a save); null until they
   // loaded, so a page that failed to load never counts as holding unsaved edits.
   const [savedSettings, setSavedSettings] = useState(null);
-  const { blocker } = useUnsavedChanges(savedSettings, settings);
+  const { blocker, isDirty } = useUnsavedChanges(savedSettings, settings);
+  // The last save failed. Whether the server stored the settings is then unknown (a response
+  // can be lost after the write), so the bar stays until a save succeeds or the edits are
+  // discarded, even if the fields were put back to what was loaded.
+  const [saveFailed, setSaveFailed] = useState(false);
   const [confirmDialog, setConfirmDialog] = useState(null);
   const [shares, setShares] = useState({ items: [], truncated: false });
   // Text models an admin can pick as the chat title model. From the admin model
@@ -324,6 +334,7 @@ function AdminChatHistoryPage() {
   const handleSave = async () => {
     try {
       setSaving(true);
+      setSaveFailed(false);
       setMessage(null);
       const response = await makeAdminApiCall('/admin/chat-history/settings', {
         method: 'PUT',
@@ -348,6 +359,7 @@ function AdminChatHistoryPage() {
       });
       await loadOverview();
     } catch (error) {
+      setSaveFailed(true);
       setMessage({
         type: 'error',
         text: errorText(error, t('admin.chatHistory.saveError', 'Failed to save settings'))
@@ -355,6 +367,14 @@ function AdminChatHistoryPage() {
     } finally {
       setSaving(false);
     }
+  };
+
+  // Back to the settings as last loaded or saved; the message of a refused save goes too.
+  const handleDiscard = () => {
+    setSettings(savedSettings);
+    setDirty(false);
+    setSaveFailed(false);
+    setMessage(null);
   };
 
   const runRetention = async target => {
@@ -1572,15 +1592,6 @@ function AdminChatHistoryPage() {
                 : t('admin.chatHistory.retention.run', 'Run retention now')}
             </button>
           </div>
-          <button
-            type="button"
-            onClick={handleSave}
-            disabled={saving || !dirty}
-            className="inline-flex items-center justify-center px-4 py-2 text-sm rounded-md bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50"
-          >
-            <Icon name="save" className="w-4 h-4 mr-2" />
-            {saving ? t('common.saving', 'Saving...') : t('common.save', 'Save')}
-          </button>
         </div>
       </div>
 
@@ -1598,6 +1609,14 @@ function AdminChatHistoryPage() {
             : runRetention(confirmDialog?.target || 'all')
         }
         onDeny={() => setConfirmDialog(null)}
+      />
+      {/* No bar while loading or when the settings could not be loaded. */}
+      <AdminSaveBar
+        dirty={offersSave(savedSettings, isDirty, saveFailed)}
+        saving={saving}
+        onSave={() => void handleSave()}
+        onDiscard={handleDiscard}
+        message={saveFailed && message?.type === 'error' ? message.text : undefined}
       />
       <UnsavedChangesDialog blocker={blocker} />
     </div>

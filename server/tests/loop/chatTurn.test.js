@@ -264,7 +264,7 @@ function baseLogFor(chatId, streaming = true) {
 
 function runTurn(
   service,
-  { chatId, prep, streaming = true, getLocalizedError, messageId, activatedSkills, runId }
+  { chatId, prep, streaming = true, getLocalizedError, messageId, activatedSkills, runId, user }
 ) {
   const buildLogData = (isStreaming, extra = {}) => ({
     ...baseLogFor(chatId, isStreaming),
@@ -279,7 +279,7 @@ function runTurn(
     streaming,
     buildLogData,
     language: 'en',
-    user: USER,
+    user: user || USER,
     getLocalizedError: getLocalizedError || (async () => null)
   });
 }
@@ -1353,7 +1353,18 @@ test('provider HTTP error: exactly one stream/error then run/ended{error}; chat_
   const ended = frame(frames, RUN_ENDED).data;
   assert.equal(ended.status, 'error');
   assert.equal(ended.finishReason, 'error');
-  assert.deepEqual(ended.error, { code: LLM_ERROR_CODES.PROVIDER_ERROR, message: error.message });
+  // The cause of the failed call, as the admin model test names it; a user
+  // gets the key and the upstream status, never the host.
+  assert.equal(error.failureCause, 'serverError');
+  assert.equal(error.upstreamStatus, 500);
+  assert.equal(error.host, undefined);
+  assert.equal(error.errorCode, undefined);
+  assert.deepEqual(ended.error, {
+    code: LLM_ERROR_CODES.PROVIDER_ERROR,
+    message: error.message,
+    failureCause: 'serverError',
+    upstreamStatus: 500
+  });
   assert.equal(ended.knowledgeSources, undefined, 'no badge on a failed turn');
   assert.equal(has(frames, STEP_DELTA), false);
 
@@ -1374,6 +1385,29 @@ test('provider HTTP error: exactly one stream/error then run/ended{error}; chat_
   assert.deepEqual(endOutcomes(telemetry), ['error']);
   assert.equal(telemetry.recordChatCallEnd.calls[0][0].error, summary.error);
   assert.equal(activeRequests.has(chatId), false);
+});
+
+test('provider HTTP error for an administrator: the frames also name the host that was called', async t => {
+  const chatId = newChatId('http-502-admin');
+  const frames = captureFrames(t, chatId);
+  const { service } = makeService([() => textResponse('bad gateway', { status: 502 })], {
+    maxRetries: 0
+  });
+
+  const summary = await runTurn(service, {
+    chatId,
+    prep: makePrep(),
+    user: { id: 'admin', groups: ['admins'], isAdmin: true }
+  });
+
+  assert.equal(summary.status, 'error');
+  const error = frame(frames, STREAM_ERROR).data;
+  assert.equal(error.failureCause, 'serverError');
+  assert.equal(error.upstreamStatus, 502);
+  assert.equal(error.host, 'u');
+  const ended = frame(frames, RUN_ENDED).data;
+  assert.equal(ended.error.failureCause, 'serverError');
+  assert.equal(ended.error.host, 'u');
 });
 
 // ── 9. abort ────────────────────────────────────────────────────────────────

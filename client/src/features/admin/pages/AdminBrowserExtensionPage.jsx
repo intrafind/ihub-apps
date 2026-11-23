@@ -12,6 +12,7 @@ import { useAdminConfigLoad } from '../hooks/useAdminConfigLoad';
 import ConfirmDialog from '../../../shared/components/ConfirmDialog';
 import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
 import UnsavedChangesDialog from '../components/UnsavedChangesDialog';
+import AdminSaveBar from '../components/AdminSaveBar';
 import { useSavedBaseline } from '../hooks/useSavedBaseline';
 
 function AdminBrowserExtensionPage() {
@@ -20,6 +21,8 @@ function AdminBrowserExtensionPage() {
   const [saving, setSaving] = useState(false);
   const [toggling, setToggling] = useState(false);
   const [message, setMessage] = useState(null);
+  // Why the last save failed, shown next to the save bar (the banner above may be off screen).
+  const [saveError, setSaveError] = useState(null);
   const [status, setStatus] = useState(null);
 
   const [displayName, setDisplayName] = useState({});
@@ -37,7 +40,7 @@ function AdminBrowserExtensionPage() {
     [displayName, description, starterPrompts, extensionIds, allowedGroups]
   );
   const { baseline, captureBaseline } = useSavedBaseline(editedValues);
-  const { blocker } = useUnsavedChanges(baseline, editedValues);
+  const { isDirty, blocker } = useUnsavedChanges(baseline, editedValues);
 
   const emptyPrompt = () => ({
     _id: crypto.randomUUID(),
@@ -250,6 +253,7 @@ function AdminBrowserExtensionPage() {
     try {
       setSaving(true);
       setMessage(null);
+      setSaveError(null);
 
       const cleanedPrompts = starterPrompts
         .map(p => ({
@@ -285,13 +289,25 @@ function AdminBrowserExtensionPage() {
       });
       setTimeout(() => setMessage(null), 3000);
     } catch (_err) {
-      setMessage({
-        type: 'error',
-        text: t('admin.browserExtension.saveError', 'Failed to save configuration')
-      });
+      const text = t('admin.browserExtension.saveError', 'Failed to save configuration');
+      setMessage({ type: 'error', text });
+      setSaveError(text);
     } finally {
       setSaving(false);
     }
+  };
+
+  // Back to the loaded values: every field of the form and the extension ID being typed.
+  const handleDiscard = () => {
+    if (!baseline) return;
+    setDisplayName(baseline.displayName);
+    setDescription(baseline.description);
+    setStarterPrompts(baseline.starterPrompts);
+    setExtensionIds(baseline.extensionIds);
+    setAllowedGroups(baseline.allowedGroups);
+    setNewExtensionId('');
+    setMessage(null);
+    setSaveError(null);
   };
 
   const handleAddExtensionId = () => {
@@ -780,17 +796,6 @@ function AdminBrowserExtensionPage() {
                   ))}
                 </div>
               )}
-
-              <div className="mt-6 flex justify-end">
-                <button
-                  type="button"
-                  onClick={handleSaveConfig}
-                  disabled={saving}
-                  className="rounded-lg bg-emerald-700 text-white px-4 py-2 text-sm font-medium hover:bg-emerald-800 disabled:opacity-60"
-                >
-                  {saving ? '…' : t('admin.browserExtension.save', 'Save')}
-                </button>
-              </div>
             </div>
 
             {status?.enabled && (
@@ -829,6 +834,13 @@ function AdminBrowserExtensionPage() {
           </>
         )}
       </div>
+      <AdminSaveBar
+        dirty={ready && !loading && (isDirty || Boolean(saveError))}
+        saving={saving}
+        onSave={() => void handleSaveConfig()}
+        onDiscard={handleDiscard}
+        message={saveError}
+      />
       <ConfirmDialog
         isOpen={!!confirmDialog}
         title={confirmDialog?.title ?? ''}

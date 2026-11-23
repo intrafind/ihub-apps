@@ -5,7 +5,7 @@
  * requests count. The limiters are built at startup, so the section says when
  * the saved limits are not the ones the server is running with.
  */
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import '@testing-library/jest-dom';
 
 const mockMakeAdminApiCall = jest.fn();
@@ -26,6 +26,16 @@ jest.mock('react-i18next', () => ({
 const RateLimitConfigModule = require('../../../client/src/features/admin/components/RateLimitConfig');
 const RateLimitConfig = RateLimitConfigModule.default;
 const { toRequest } = RateLimitConfigModule;
+const {
+  SaveSectionsProvider,
+  SaveSectionsBar
+} = require('../../../client/src/features/admin/components/SaveSections');
+
+/** The page's save bar: its last button saves (Discard comes first). */
+const clickBarSave = () => {
+  const buttons = within(screen.getByRole('region')).getAllByRole('button');
+  fireEvent.click(buttons[buttons.length - 1]);
+};
 
 const LIMITERS = {
   publicApi: { windowMs: 60000, limit: 500, counts: 'successful' },
@@ -46,7 +56,12 @@ function setup({ running = LIMITERS, restartRequired = false } = {}) {
     }
     return { data: { limiters: LIMITERS, running, restartRequired } };
   });
-  render(<RateLimitConfig />);
+  render(
+    <SaveSectionsProvider>
+      <RateLimitConfig />
+      <SaveSectionsBar />
+    </SaveSectionsProvider>
+  );
   return screen.findByTestId('rate-limit-oauthTokenApi');
 }
 
@@ -72,7 +87,7 @@ describe('RateLimitConfig', () => {
     fireEvent.change(document.querySelector('#rate-limit-oauthApi-window'), {
       target: { value: '2' }
     });
-    fireEvent.click(screen.getByRole('button', { name: 'admin.security.rateLimits.save' }));
+    clickBarSave();
 
     await waitFor(() =>
       expect(mockMakeAdminApiCall).toHaveBeenCalledWith(
@@ -106,7 +121,7 @@ describe('RateLimitConfig', () => {
     fireEvent.change(document.querySelector('#rate-limit-authApi-limit'), {
       target: { value: '0' }
     });
-    fireEvent.click(screen.getByRole('button', { name: 'admin.security.rateLimits.save' }));
+    clickBarSave();
 
     expect(await screen.findByRole('alert')).toHaveTextContent('admin.security.rateLimits.invalid');
     expect(mockMakeAdminApiCall.mock.calls.some(([, o]) => o?.method === 'PUT')).toBe(false);

@@ -130,3 +130,20 @@ function loaderFor(name) {
 export function loadResources(name, { includeDisabled = false, verbose = true } = {}) {
   return loaderFor(name).loadAll(includeDisabled, verbose);
 }
+
+/**
+ * One stored item of a resource as {@link loadResources} would hold it in the
+ * config cache: `enabled` defaulted, processed and validated (schema defaults
+ * applied). The stored body is not modified.
+ *
+ * Use it to answer a read from the stored file in the same shape as the cache,
+ * for example when the read's `ETag` is the revision of that file.
+ *
+ * @param {keyof typeof RESOURCE_LOADERS} name - `'apps'`, `'models'`, ...
+ * @param {Object} stored - The parsed stored body
+ * @param {string} [source] - Its path, for log lines
+ * @returns {Object}
+ */
+export function prepareStoredResource(name, stored, source = '') {
+  return loaderFor(name).prepareItem(structuredClone(stored), source);
+}

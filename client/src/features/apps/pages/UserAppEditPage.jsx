@@ -30,6 +30,18 @@ import EditorToast, {
 } from '../../admin/components/app-editor/EditorMessages';
 import { useCreatedArrival } from '../../admin/components/app-editor/useCreatedArrival';
 import { useScreenTitle } from '../../admin/components/app-create/useScreenTitle';
+import ConversationPanel from '../../admin/components/app-conversation/ConversationPanel';
+import EditorViewSwitch from '../../admin/components/app-conversation/EditorViewSwitch';
+import { draftOf } from '../../admin/components/app-conversation/conversationState';
+import { personalStakes } from '../../admin/components/app-conversation/stakes';
+import {
+  CONVERSATION_VIEW,
+  VIEW_PARAM,
+  useAppBuilderFeatures
+} from '../../admin/components/app-conversation/useAppBuilderChat';
+import ImproveInstructionsDialog from '../../admin/components/app-form/ImproveInstructionsDialog';
+import useMediaQuery from '../../../shared/hooks/useMediaQuery';
+import { userAppSource } from '../builder/userAppSource';
 import {
   AppFormLanguageProvider,
   AppFormTranslateProvider
@@ -56,6 +68,7 @@ import {
 } from '../components/user-app/userAppErrors';
 import {
   formFromApp,
+  offersAiChanges,
   patchFor,
   readOnlyReason,
   userAppStateChip,
@@ -89,6 +102,8 @@ const SECTION_EMPTY = {
 };
 
 const NOTHING_LOADED = Object.freeze({ appId: null, status: 'loading', app: null, error: null });
+/** From here up the test panel sits beside the editor; below it is a full-screen dialog. */
+const WIDE_QUERY = '(min-width: 1024px)';
 const GROUPS_OPEN = Object.freeze({ basics: true, instructions: true, extras: true });
 
 /**
@@ -116,6 +131,9 @@ function UserAppEditPage() {
   const location = useLocation();
   const uiLanguage = String(i18n.language || '').split('-')[0] || 'en';
   const { config } = useUserAppsConfig();
+  const features = useAppBuilderFeatures();
+  const wide = useMediaQuery(WIDE_QUERY);
+  const [improveOpen, setImproveOpen] = useState(false);
 
   const [loaded, setLoaded] = useState(NOTHING_LOADED);
   const current = loaded.appId === appId ? loaded : NOTHING_LOADED;
@@ -267,8 +285,9 @@ function UserAppEditPage() {
   const arrival = useCreatedArrival({
     appId,
     ready: status === 'ready' && Boolean(form),
-    onArrive: () => {
-      setTestOpen(true);
+    onArrive: ({ conversation: toConversation } = {}) => {
+      // Into the conversation on a small screen, the test would cover it: it stays a button away.
+      if (!toConversation || wide) setTestOpen(true);
       showToast(t('userApps.create.created', { name }));
     }
   });
@@ -339,6 +358,84 @@ function UserAppEditPage() {
       setSaving(false);
     }
   };
+
+  /**
+   * The conversation's Apply and Undo: puts `next` into the form and saves it
+   * with the page's own save (`PATCH /api/apps/{appId}` with `If-Match`). On a
+   * conflict (409 `ETAG_MISMATCH`) or any other refusal nothing is written,
+   * and the form shows what it held before.
+   *
+   * @param {object} next - The form with the change merged over it.
+   * @returns {Promise<{status: 'saved'|'conflict'|'failed', value?: object, message?: string|null}>}
+   *   `value` is the form as the server stored it.
+   */
+  const persistFromConversation = async next => {
+    if (!app || !form || saving) return { status: 'failed', message: null };
+    const before = form;
+    const patch = patchFor(forms.saved, next);
+    if (!patch) {
+      // Nothing a personal app stores differs from what is saved.
+      setForm(next);
+      return { status: 'saved', value: next };
+    }
+    setForm(next);
+    setSaving(true);
+    setSaveError(null);
+    try {
+      const stored = await updateUserApp(appId, patch, { revision: app.revision });
+      adopt(stored, { sentForm: next });
+      invalidateAppsCache();
+      setConflict(false);
+      setTestRun(run => run + 1);
+      if (!wide) showToast(t('admin.apps.conversation.toast'));
+      return { status: 'saved', value: formFromApp(stored) };
+    } catch (error) {
+      setForm(held => (held === next ? before : held));
+      if (userAppErrorCode(error) === 'ETAG_MISMATCH') {
+        setConflict(true);
+        return { status: 'conflict' };
+      }
+      return { status: 'failed', message: userAppErrorMessage(error, t) };
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // The conversation and "Improve with AI" need drafts for personal apps and an author who may
+  // edit this app; create rights are not needed (owner decision of 2026-11-23).
+  const aiOffered = offersAiChanges(config, app);
+  // Every turn names the app: the server answers an editor without create rights by it.
+  const refine = useCallback(request => userAppSource.refineDraft({ ...request, appId }), [appId]);
+  // The conversation (`?view=conversation`) also needs the preview feature.
+  const conversationOffered = features.chat && aiOffered && status === 'ready' && Boolean(form);
+  const conversationView =
+    conversationOffered &&
+    new URLSearchParams(location.search).get(VIEW_PARAM) === CONVERSATION_VIEW;
+  const setView = next => {
+    const params = new URLSearchParams(location.search);
+    if (next === CONVERSATION_VIEW) params.set(VIEW_PARAM, CONVERSATION_VIEW);
+    else params.delete(VIEW_PARAM);
+    const search = params.toString();
+    navigate({ search: search ? `?${search}` : '', hash: location.hash }, { replace: true });
+  };
+  const testable = permissions.canUse === true;
+  useEffect(() => {
+    // The view comes from the URL: this is the one place it opens the test beside it.
+    // eslint-disable-next-line @eslint-react/set-state-in-effect
+    if (conversationView && wide && testable) setTestOpen(true);
+  }, [conversationView, wide, testable]);
+
+  const stakes = useMemo(() => {
+    const labels = new Map(
+      (allowed?.integrations || []).map(system => [system.id, system.label || system.id])
+    );
+    return personalStakes({
+      sharedWith: app?.sharedWith,
+      integrationNames: (forms.saved?.capabilities?.integrations || []).map(
+        binding => labels.get(binding.id) || binding.id
+      )
+    });
+  }, [allowed, app?.sharedWith, forms.saved]);
 
   /** Runs an action of the page that is not the save, with one error line for all of them. */
   const run = async action => {
@@ -516,6 +613,14 @@ function UserAppEditPage() {
             unsaved={isDirty}
             headingRef={headingRef}
           />
+          {conversationOffered && (
+            <div className="mt-4 flex justify-end">
+              <EditorViewSwitch
+                view={conversationView ? CONVERSATION_VIEW : 'form'}
+                onChange={setView}
+              />
+            </div>
+          )}
 
           <EditorSaveError message={saveError || actionError} />
           {shareRefused && (
@@ -537,7 +642,7 @@ function UserAppEditPage() {
             />
           )}
 
-          {arrival.stepsShown && !formDisabled && (
+          {arrival.stepsShown && !formDisabled && !conversationView && (
             <UserAppNextSteps
               onTest={showTest}
               onInputFields={showInputs}
@@ -551,7 +656,40 @@ function UserAppEditPage() {
             />
           )}
 
-          {form && (
+          {form && conversationView && (
+            // The conversation edits the same form; "Form" above is one click away.
+            <div className="mt-6 space-y-4">
+              {/* Apply put the form back after a conflict, so the save bar is gone: Reload is here. */}
+              {conflict && !isDirty && (
+                <div role="alert" className={CALLOUT_CLASS.warning}>
+                  <p>{t('userApps.edit.conflict')}</p>
+                  <button
+                    type="button"
+                    onClick={() => void load()}
+                    className={`mt-2 ${SECONDARY_BUTTON_CLASS}`}
+                  >
+                    {t('userApps.edit.reload')}
+                  </button>
+                </div>
+              )}
+              <ConversationPanel
+                appId={appId}
+                target="personal"
+                form={form}
+                language={contentLanguage}
+                refine={refine}
+                persist={persistFromConversation}
+                stakes={stakes}
+                testOpen={testOpen && wide}
+                // Apply and Undo save the whole form: other unsaved edits go with them, and each
+                // change card says so. A personal app's Save has no client-side check; the
+                // server checks the whole app.
+                saved={forms.saved}
+              />
+            </div>
+          )}
+
+          {form && !conversationView && (
             <AppFormLanguageProvider value={contentLanguage}>
               {/* The machine translation is an admin route. */}
               <AppFormTranslateProvider value={false}>
@@ -571,7 +709,6 @@ function UserAppEditPage() {
                   buttonRef={inputsRef}
                   disabled={formDisabled}
                 >
-                  {/* No `onImprove`: a personal app has no route that rewrites instructions. */}
                   <SystemInstructionsSection
                     app={form}
                     onChange={applySections}
@@ -579,6 +716,8 @@ function UserAppEditPage() {
                     // Every member can read the instructions (design 6.4).
                     description={t('userApps.edit.instructionsDesc')}
                     readOnly={formDisabled}
+                    // "Improve with AI" over `POST /api/apps/_revise`, with drafts for personal apps.
+                    onImprove={aiOffered ? () => setImproveOpen(true) : undefined}
                   />
                   <VariablesSection app={form} onChange={applySections} showStartOptions={false} />
                   <StarterPromptsSection app={form} onChange={applySections} showAutoSend={false} />
@@ -638,6 +777,17 @@ function UserAppEditPage() {
 
       <EditorToast message={toast} />
       <UnsavedChangesDialog blocker={blocker} />
+      {form && (
+        <ImproveInstructionsDialog
+          isOpen={improveOpen}
+          onClose={() => setImproveOpen(false)}
+          refine={refine}
+          draft={draftOf(form, 'personal')}
+          language={contentLanguage}
+          // Into the form only: Save keeps it, Discard takes it back.
+          onUse={system => setForm(held => ({ ...held, system }))}
+        />
+      )}
 
       {dialog === 'share' && (
         <UserAppShareDialog

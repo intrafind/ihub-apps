@@ -222,9 +222,22 @@ function abortedError(cause) {
   };
 }
 
+/**
+ * A failed turn's stored error. A failed model call keeps its cause key and
+ * upstream status (see `chatErrors.js`), so a reopened chat explains it the
+ * way the live one did; the host and the socket code an administrator saw are
+ * never stored, since a stored chat outlives who looked at it.
+ */
 function failedError(info) {
   if (!info) return { code: 'ERROR', message: 'Turn failed.' };
-  return { code: String(info.code || 'ERROR'), message: String(info.message || info) };
+  const failure = info.failure;
+  return {
+    code: String(info.code || 'ERROR'),
+    // `storedMessage`: the sentence without the raw failure text (see chatErrors.js).
+    message: String(info.storedMessage || info.message || info),
+    ...(typeof failure?.failureCause === 'string' ? { failureCause: failure.failureCause } : {}),
+    ...(Number.isInteger(failure?.upstreamStatus) ? { upstreamStatus: failure.upstreamStatus } : {})
+  };
 }
 
 /**

@@ -8,39 +8,76 @@ import { makeAdminApiCall } from '../../../api/adminApi';
 import { createConfigRevision } from '../../../api/adminConfigRevision';
 import AdminLoadGate from '../components/AdminLoadGate';
 import { useAdminConfigLoad } from '../hooks/useAdminConfigLoad';
-import LoadingSpinner from '../../../shared/components/LoadingSpinner';
 import Switch from '../../../shared/components/Switch';
 import { usePlatformConfig } from '../../../shared/contexts/PlatformConfigContext';
 import { getBasePath } from '../../../utils/runtimeBasePath.js';
 import OAuthTabsHeader from '../components/OAuthTabsHeader';
+import AdminSaveBar from '../components/AdminSaveBar';
+import UnsavedChangesDialog from '../components/UnsavedChangesDialog';
+import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
+
+/** The settings the Save of this page writes, before anything stored has loaded. */
+const DEFAULT_OAUTH_CONFIG = {
+  issuer: '',
+  defaultTokenExpirationMinutes: 60,
+  maxTokenExpirationMinutes: 1440,
+  authorizationCodeEnabled: false,
+  authorizationCodeExpirationSeconds: 600,
+  refreshTokenEnabled: false,
+  refreshTokenExpirationDays: 30,
+  consentRequired: true,
+  consentMemoryDays: 90,
+  personalKeys: {
+    enabled: false,
+    allowedGroups: [],
+    maxKeysPerUser: 5,
+    defaultExpirationDays: 90,
+    maxExpirationDays: 365,
+    allowClientCredentials: true
+  }
+};
+
+/**
+ * The form's settings for what is stored under `oauth` in platform.json: every field the
+ * Save writes, with its default where nothing is stored. The same value becomes the form
+ * and the saved baseline, so the page counts as changed exactly while they differ.
+ *
+ * @param {Object} [oauth] - `platform.oauth`
+ * @returns {Object} A new settings object (nothing is shared with the defaults)
+ */
+function toFormOauthConfig(oauth) {
+  return {
+    issuer: oauth?.issuer || '',
+    defaultTokenExpirationMinutes: oauth?.defaultTokenExpirationMinutes ?? 60,
+    maxTokenExpirationMinutes: oauth?.maxTokenExpirationMinutes ?? 1440,
+    authorizationCodeEnabled: oauth?.authorizationCodeEnabled ?? false,
+    authorizationCodeExpirationSeconds: oauth?.authorizationCodeExpirationSeconds ?? 600,
+    refreshTokenEnabled: oauth?.refreshTokenEnabled ?? false,
+    refreshTokenExpirationDays: oauth?.refreshTokenExpirationDays ?? 30,
+    consentRequired: oauth?.consentRequired ?? true,
+    consentMemoryDays: oauth?.consentMemoryDays ?? 90,
+    personalKeys: {
+      ...DEFAULT_OAUTH_CONFIG.personalKeys,
+      allowedGroups: [...DEFAULT_OAUTH_CONFIG.personalKeys.allowedGroups],
+      ...oauth?.personalKeys
+    }
+  };
+}
 
 function AdminOAuthServerPage() {
   const { t } = useTranslation();
   const { refreshConfig } = usePlatformConfig();
   const [message, setMessage] = useState('');
   const [oauthEnabled, setOAuthEnabled] = useState(false);
-  const [oauthConfig, setOauthConfig] = useState({
-    issuer: '',
-    defaultTokenExpirationMinutes: 60,
-    maxTokenExpirationMinutes: 1440,
-    authorizationCodeEnabled: false,
-    authorizationCodeExpirationSeconds: 600,
-    refreshTokenEnabled: false,
-    refreshTokenExpirationDays: 30,
-    consentRequired: true,
-    consentMemoryDays: 90,
-    personalKeys: {
-      enabled: false,
-      allowedGroups: [],
-      maxKeysPerUser: 5,
-      defaultExpirationDays: 90,
-      maxExpirationDays: 365,
-      allowClientCredentials: true
-    }
-  });
+  const [oauthConfig, setOauthConfig] = useState(() => toFormOauthConfig());
+  // The settings as last loaded or saved; null until they loaded.
+  const [savedOauthConfig, setSavedOauthConfig] = useState(null);
   const [clientsEnabled, setClientsEnabled] = useState(false);
   const [jwtAlgorithm, setJwtAlgorithm] = useState('RS256');
   const [savingConfig, setSavingConfig] = useState(false);
+  // A failed save keeps the bar (to retry or discard) even when the form is back at its saved
+  // state: the write may have gone through and only its answer been lost.
+  const [saveFailed, setSaveFailed] = useState(false);
   // The revision of platform.json this page was loaded from (then: last saved).
   // Its saves send exactly this as If-Match; a 412 leaves it as it is, so the
   // next save is refused again until the page reloads or the admin chooses
@@ -61,25 +98,11 @@ function AdminOAuthServerPage() {
         onLoad: ({ data, revision }) => {
           revisionRef.current = revision;
           setOAuthEnabled(data?.oauth?.enabled?.authz || false);
-          if (data?.oauth) {
-            setOauthConfig(prev => ({
-              ...prev,
-              issuer: data.oauth.issuer || '',
-              defaultTokenExpirationMinutes: data.oauth.defaultTokenExpirationMinutes ?? 60,
-              maxTokenExpirationMinutes: data.oauth.maxTokenExpirationMinutes ?? 1440,
-              authorizationCodeEnabled: data.oauth.authorizationCodeEnabled ?? false,
-              authorizationCodeExpirationSeconds:
-                data.oauth.authorizationCodeExpirationSeconds ?? 600,
-              refreshTokenEnabled: data.oauth.refreshTokenEnabled ?? false,
-              refreshTokenExpirationDays: data.oauth.refreshTokenExpirationDays ?? 30,
-              consentRequired: data.oauth.consentRequired ?? true,
-              consentMemoryDays: data.oauth.consentMemoryDays ?? 90,
-              personalKeys: {
-                ...prev.personalKeys,
-                ...data.oauth.personalKeys
-              }
-            }));
-          }
+          // The stored settings become the form and the saved baseline alike: a reload that
+          // takes the stored values ("Reload and discard my changes" after a save conflict) ends the edits too.
+          const loaded = toFormOauthConfig(data?.oauth);
+          setOauthConfig(loaded);
+          setSavedOauthConfig(loaded);
           setClientsEnabled(data?.oauth?.enabled?.clients || false);
           setJwtAlgorithm(data?.jwt?.algorithm || 'RS256');
         }
@@ -87,6 +110,8 @@ function AdminOAuthServerPage() {
     }
   });
   const ready = load.status === 'ready';
+  // Leaving with edits asks first. Not before the settings loaded: nothing to lose yet.
+  const { blocker, isDirty } = useUnsavedChanges(ready ? savedOauthConfig : null, oauthConfig);
 
   const updatePersonalKeys = useCallback((field, value) => {
     setOauthConfig(prev => ({
@@ -174,6 +199,7 @@ function AdminOAuthServerPage() {
   const handleSaveOAuthConfig = async () => {
     if (!ready) return;
     setSavingConfig(true);
+    setSaveFailed(false);
     setMessage('');
 
     try {
@@ -208,6 +234,7 @@ function AdminOAuthServerPage() {
         body: updatedConfig,
         revision: revisionRef
       });
+      setSavedOauthConfig(oauthConfig);
 
       setMessage({
         type: 'success',
@@ -215,6 +242,7 @@ function AdminOAuthServerPage() {
       });
       await refreshConfig();
     } catch (error) {
+      setSaveFailed(true);
       setMessage({
         type: 'error',
         text: `${t('admin.auth.oauth.configSaveError', 'Failed to save authorization server settings')}: ${error.message}`
@@ -222,6 +250,13 @@ function AdminOAuthServerPage() {
     } finally {
       setSavingConfig(false);
     }
+  };
+
+  // Back to the settings as loaded or last saved, with the banner of a refused save gone.
+  const handleDiscard = () => {
+    setOauthConfig(savedOauthConfig);
+    setSaveFailed(false);
+    setMessage('');
   };
 
   if (!ready) {
@@ -856,29 +891,19 @@ function AdminOAuthServerPage() {
                     {jwtAlgorithm}
                   </span>
                 </div>
-
-                {/* Save Button */}
-                <div className="flex justify-end pt-4 border-t border-gray-200 dark:border-gray-700">
-                  <button
-                    onClick={handleSaveOAuthConfig}
-                    disabled={savingConfig}
-                    className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-xs text-white bg-blue-600 hover:bg-blue-700 focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    {savingConfig ? (
-                      <>
-                        <LoadingSpinner size="sm" className="mr-2" />
-                        {t('admin.auth.oauth.savingSettings', 'Saving...')}
-                      </>
-                    ) : (
-                      t('admin.auth.oauth.saveSettings', 'Save Settings')
-                    )}
-                  </button>
-                </div>
               </div>
             </div>
           </>
         )}
       </div>
+      <AdminSaveBar
+        dirty={isDirty || saveFailed}
+        saving={savingConfig}
+        onSave={() => void handleSaveOAuthConfig()}
+        onDiscard={handleDiscard}
+        message={message?.type === 'error' ? message.text : undefined}
+      />
+      <UnsavedChangesDialog blocker={blocker} />
     </div>
   );
 }

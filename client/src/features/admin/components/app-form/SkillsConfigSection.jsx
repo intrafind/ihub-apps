@@ -4,7 +4,7 @@
 import { useTranslation } from 'react-i18next';
 import SkillsSelector from '../../../../shared/components/SkillsSelector';
 import { ALL_SKILLS, assignsAllSkills } from '../../../../../../shared/appWildcards.js';
-import { RADIO_CLASS } from '../formStyles';
+import { CHECKBOX_CLASS, RADIO_CLASS } from '../formStyles';
 
 function CheckboxField({ id, checked, onChange, label, help }) {
   return (
@@ -15,7 +15,7 @@ function CheckboxField({ id, checked, onChange, label, help }) {
           type="checkbox"
           checked={checked}
           onChange={e => onChange(e.target.checked)}
-          className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 dark:border-gray-600 rounded-sm"
+          className={CHECKBOX_CLASS}
         />
         <label htmlFor={id} className="ml-2 block text-sm text-gray-900 dark:text-gray-100">
           {label}

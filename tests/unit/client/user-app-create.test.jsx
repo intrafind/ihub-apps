@@ -596,8 +596,9 @@ describe('the Essentials screen of a personal app', () => {
     expect(screen.getByRole('button', { name: CREATE.submit })).toBeInTheDocument();
   });
 
-  it('has no "Change the draft" control: the source has no refineDraft', async () => {
-    expect(userAppSource).not.toHaveProperty('refineDraft');
+  it('has no "Change the draft" control on the create screens (slice 3 of the chat builder)', async () => {
+    // The source has `refineDraft` for the editor's conversation; the create screens do not use it yet.
+    expect(typeof userAppSource.refineDraft).toBe('function');
     await draftFromDescription();
     expect(heading()).toHaveTextContent(CREATE.essentials.heading.draft);
     // The one draft control is "Prepare a new draft"; nothing refines the draft in place.
@@ -1196,8 +1197,13 @@ describe('the source contract', () => {
     expect(adminAppSource.showAppId).toBe(true);
     expect(adminAppSource.showCategory).toBe(true);
     expect(adminAppSource.copy.limits).toBeNull();
-    expect(adminAppSource).not.toHaveProperty('refineDraft');
-    for (const member of ['fetchTemplates', 'generateDraft', 'fetchModels', 'createApp']) {
+    for (const member of [
+      'fetchTemplates',
+      'generateDraft',
+      'refineDraft',
+      'fetchModels',
+      'createApp'
+    ]) {
       expect(typeof adminAppSource[member]).toBe('function');
       expect(typeof userAppSource[member]).toBe('function');
     }

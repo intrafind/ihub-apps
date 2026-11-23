@@ -66,7 +66,8 @@ function LanguageInput({
   ariaLabel,
   maxLength,
   inputId,
-  describedBy
+  describedBy,
+  errorId
 }) {
   const inputClass = `block w-full rounded-lg border px-3 py-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-admin-accent focus:border-admin-accent ${
     hasError
@@ -84,9 +85,7 @@ function LanguageInput({
     required,
     maxLength,
     'aria-invalid': hasError || undefined,
-    'aria-describedby':
-      [describedBy, hasError && name ? `${name}-error` : null].filter(Boolean).join(' ') ||
-      undefined
+    'aria-describedby': [describedBy, errorId].filter(Boolean).join(' ') || undefined
   };
   return type === 'textarea' ? (
     <textarea rows={rows} {...commonProps} />
@@ -118,7 +117,12 @@ const DynamicLanguageEditor = ({
   // The "Translate" button calls an admin route; a form for people without
   // admin rights passes false.
   translate = true,
-  help = undefined // Optional help line under the label
+  help = undefined, // Optional help line under the label
+  // The `error` line is linked to the inputs (`aria-describedby`) and not
+  // announced by itself: a form with an error summary lets the focused summary
+  // speak, so a failed save is not read out as several alerts at once. A form
+  // without a summary passes true to have the line announced (`role="alert"`).
+  announceError = false
 }) => {
   const { t, i18n } = useTranslation();
   const uiLanguage = i18n?.language;
@@ -396,6 +400,8 @@ const DynamicLanguageEditor = ({
     lang => isValidLanguageCode(lang) && !shownLanguages.includes(lang)
   );
   const singleInputId = name ? `${name}.${shownLanguages[0]}` : `${labelId}-input`;
+  // The id of the `error` line, when there is one.
+  const errorId = error ? (name ? `${name}-error` : `${labelId}-error`) : undefined;
   const hasLanguageError = lang =>
     !!(
       error ||
@@ -498,6 +504,7 @@ const DynamicLanguageEditor = ({
           lang={shownLanguages[0]}
           inputId={singleInputId}
           describedBy={helpId}
+          errorId={errorId}
           name={name}
           type={type}
           rows={rows}
@@ -526,6 +533,7 @@ const DynamicLanguageEditor = ({
                       : lang.toUpperCase()
                   }
                   describedBy={helpId}
+                  errorId={errorId}
                   name={name}
                   type={type}
                   rows={rows}
@@ -576,8 +584,8 @@ const DynamicLanguageEditor = ({
 
       {error && (
         <div
-          id={name ? `${name}-error` : undefined}
-          role="alert"
+          id={errorId}
+          role={announceError ? 'alert' : undefined}
           className="mt-1 text-sm text-red-600 dark:text-red-400"
         >
           {error}

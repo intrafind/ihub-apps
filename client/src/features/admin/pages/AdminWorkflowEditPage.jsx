@@ -27,6 +27,7 @@ import { appsUsingWorkflow, withCleanToolDescription } from '../../workflows/uti
 import AdminLoadError from '../components/AdminLoadError';
 import ConfirmDialog from '../../../shared/components/ConfirmDialog';
 import UnsavedChangesDialog from '../components/UnsavedChangesDialog';
+import AdminSaveBar from '../components/AdminSaveBar';
 import { useConfirmAction } from '../hooks/useConfirmAction';
 import { deleteConfirmText } from '../utils/confirmText';
 import { getLocalizedContent } from '../../../utils/localizeContent';
@@ -64,7 +65,7 @@ function AdminWorkflowEditPage() {
   // does not warn about assignments.
   const [apps, setApps] = useState(null);
 
-  const { blocker, markSaved } = useUnsavedChanges(initialData, workflowData);
+  const { blocker, markSaved, isDirty } = useUnsavedChanges(initialData, workflowData);
 
   useEffect(() => {
     let cancelled = false;
@@ -165,9 +166,11 @@ function AdminWorkflowEditPage() {
       if (isUnsafeKey(segment)) {
         return;
       }
-      if (!Object.hasOwn(target, segment) || target[segment] == null) {
-        target[segment] = {};
-      }
+      // Copy each level on the way down: the nested objects are shared with the saved
+      // baseline, and writing into them would change the baseline with the edit, so the
+      // page would not see anything to save.
+      target[segment] =
+        Object.hasOwn(target, segment) && target[segment] != null ? { ...target[segment] } : {};
       target = target[segment];
     }
 
@@ -265,6 +268,17 @@ function AdminWorkflowEditPage() {
     } finally {
       setSaving(false);
     }
+  };
+
+  /**
+   * Drops the unsaved edits: the form fields and the JSON editor go back to the
+   * saved workflow, and the error of a refused save is cleared.
+   */
+  const handleDiscard = () => {
+    setWorkflowData(initialData);
+    setJsonText(JSON.stringify(initialData, null, 2));
+    setJsonError(null);
+    setError(null);
   };
 
   /**
@@ -548,36 +562,21 @@ function AdminWorkflowEditPage() {
             {!isNewWorkflow && (
               <ContentAccessSection resourceType="workflows" resourceId={id} className="mb-6" />
             )}
-
-            {/* Action Buttons */}
-            <div className="flex justify-end space-x-3">
-              <button
-                onClick={() => navigate('/admin/workflows')}
-                className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-xs text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-              >
-                {t('common.cancel', 'Cancel')}
-              </button>
-              <button
-                onClick={handleSave}
-                disabled={saving || !!jsonError}
-                className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-xs text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50"
-              >
-                {saving ? (
-                  <>
-                    <Icon name="refresh" className="animate-spin h-4 w-4 mr-2" />
-                    {t('common.saving', 'Saving...')}
-                  </>
-                ) : (
-                  <>
-                    <Icon name="check" className="h-4 w-4 mr-2" />
-                    {t('common.save', 'Save')}
-                  </>
-                )}
-              </button>
-            </div>
           </>
         )}
       </div>
+
+      {/*
+        Text the JSON editor cannot parse yet is a change too, although the form data
+        keeps its last valid state: the bar shows, and Save names the JSON error.
+      */}
+      <AdminSaveBar
+        dirty={isDirty || Boolean(jsonError)}
+        saving={saving}
+        saveLabel={isNewWorkflow ? t('admin.ui.saveBar.create', 'Create') : undefined}
+        onSave={() => void handleSave()}
+        onDiscard={handleDiscard}
+      />
 
       <UnsavedChangesDialog blocker={blocker} />
       <ConfirmDialog {...confirmDialogProps} />

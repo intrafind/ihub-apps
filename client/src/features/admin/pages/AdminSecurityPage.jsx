@@ -12,9 +12,16 @@ import CookieSettingsConfig from '../components/CookieSettingsConfig';
 import RateLimitConfig from '../components/RateLimitConfig';
 import ToolApprovalConfig from '../components/ToolApprovalConfig';
 import AdminSettingsPage from '../components/AdminSettingsPage';
+import { SaveSectionsBar, SaveSectionsProvider } from '../components/SaveSections';
 import { makeAdminApiCall } from '../../../api/adminApi';
 
-function AdminSecurityPage() {
+/**
+ * The sections load, edit and save on their own and register with the page's save bar
+ * (`useSaveSection`): one bar shows while any of them has unsaved edits and saves them in the
+ * order of the page. The frame is given no `onSave`, so it draws no bar of its own; it still
+ * marks the dirty sections in its nav and guards leaving the page.
+ */
+function SecurityPageContent() {
   const { t } = useTranslation();
   const [encryptValue, setEncryptValue] = useState('');
   const [encryptedResult, setEncryptedResult] = useState('');
@@ -272,62 +279,73 @@ function AdminSecurityPage() {
   );
 
   return (
-    <AdminSettingsPage
-      title={t('admin.nav.security', 'Security')}
-      description={t(
-        'admin.security.description',
-        'SSL, CORS, cookie settings, rate limits, outbound proxy, and encryption configuration'
-      )}
-      sections={[
-        {
-          id: 'ssl',
-          label: t('admin.security.sections.ssl', 'SSL / TLS'),
-          dirty: dirtySections.ssl,
-          children: <SSLConfig onDirtyChange={reportDirty('ssl')} />
-        },
-        {
-          id: 'cookies',
-          label: t('admin.security.sections.cookies', 'Cookies'),
-          dirty: dirtySections.cookies,
-          children: <CookieSettingsConfig onDirtyChange={reportDirty('cookies')} />
-        },
-        {
-          id: 'cors',
-          label: t('admin.security.sections.cors', 'CORS'),
-          dirty: dirtySections.cors,
-          children: <CorsConfig onDirtyChange={reportDirty('cors')} />
-        },
-        {
-          id: 'rateLimits',
-          label: t('admin.security.sections.rateLimits', 'Rate Limits'),
-          dirty: dirtySections.rateLimits,
-          children: <RateLimitConfig onDirtyChange={reportDirty('rateLimits')} />
-        },
-        {
-          id: 'ssrf',
-          label: t('admin.security.sections.ssrf', 'SSRF Allowlist'),
-          dirty: dirtySections.ssrf,
-          children: <SsrfConfig onDirtyChange={reportDirty('ssrf')} />
-        },
-        {
-          id: 'toolApproval',
-          label: t('admin.security.sections.toolApproval', 'Tool approval'),
-          dirty: dirtySections.toolApproval,
-          children: <ToolApprovalConfig onDirtyChange={reportDirty('toolApproval')} />
-        },
-        {
-          id: 'proxy',
-          label: t('admin.security.sections.proxy', 'Outbound Proxy'),
-          dirty: dirtySections.proxy,
-          children: <ProxyConfig onDirtyChange={reportDirty('proxy')} />
-        },
-        {
-          id: 'encryption',
-          label: t('admin.security.sections.encryption', 'Value Encryption'),
-          children: encryptionSection
-        }
-      ]}
-    />
+    <>
+      <AdminSettingsPage
+        title={t('admin.nav.security', 'Security')}
+        description={t(
+          'admin.security.description',
+          'SSL, CORS, cookie settings, rate limits, outbound proxy, and encryption configuration'
+        )}
+        sections={[
+          {
+            id: 'ssl',
+            label: t('admin.security.sections.ssl', 'SSL / TLS'),
+            dirty: dirtySections.ssl,
+            children: <SSLConfig onDirtyChange={reportDirty('ssl')} />
+          },
+          {
+            id: 'cookies',
+            label: t('admin.security.sections.cookies', 'Cookies'),
+            dirty: dirtySections.cookies,
+            children: <CookieSettingsConfig onDirtyChange={reportDirty('cookies')} />
+          },
+          {
+            id: 'cors',
+            label: t('admin.security.sections.cors', 'CORS'),
+            dirty: dirtySections.cors,
+            children: <CorsConfig onDirtyChange={reportDirty('cors')} />
+          },
+          {
+            id: 'rateLimits',
+            label: t('admin.security.sections.rateLimits', 'Rate Limits'),
+            dirty: dirtySections.rateLimits,
+            children: <RateLimitConfig onDirtyChange={reportDirty('rateLimits')} />
+          },
+          {
+            id: 'ssrf',
+            label: t('admin.security.sections.ssrf', 'SSRF Allowlist'),
+            dirty: dirtySections.ssrf,
+            children: <SsrfConfig onDirtyChange={reportDirty('ssrf')} />
+          },
+          {
+            id: 'toolApproval',
+            label: t('admin.security.sections.toolApproval', 'Tool approval'),
+            dirty: dirtySections.toolApproval,
+            children: <ToolApprovalConfig onDirtyChange={reportDirty('toolApproval')} />
+          },
+          {
+            id: 'proxy',
+            label: t('admin.security.sections.proxy', 'Outbound Proxy'),
+            dirty: dirtySections.proxy,
+            children: <ProxyConfig onDirtyChange={reportDirty('proxy')} />
+          },
+          {
+            id: 'encryption',
+            label: t('admin.security.sections.encryption', 'Value Encryption'),
+            children: encryptionSection
+          }
+        ]}
+      />
+      <SaveSectionsBar />
+    </>
+  );
+}
+
+function AdminSecurityPage() {
+  return (
+    <SaveSectionsProvider>
+      <SecurityPageContent />
+    </SaveSectionsProvider>
   );
 }
 

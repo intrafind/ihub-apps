@@ -21,6 +21,7 @@ function MicrophoneFields({ app, onInputChange: handleInputChange, t }) {
     <div>
       <div className="flex items-center mb-2">
         <input
+          id="app-enable-microphone"
           type="checkbox"
           checked={app.inputMode?.microphone?.enabled !== false}
           onChange={e =>
@@ -34,7 +35,10 @@ function MicrophoneFields({ app, onInputChange: handleInputChange, t }) {
           }
           className={CHECKBOX_CLASS}
         />
-        <label className="ml-2 block text-sm font-medium text-gray-900 dark:text-gray-100">
+        <label
+          htmlFor="app-enable-microphone"
+          className="ml-2 block text-sm font-medium text-gray-900 dark:text-gray-100"
+        >
           {t('admin.apps.edit.enableMicrophone', 'Enable Microphone')}
         </label>
       </div>
@@ -42,10 +46,14 @@ function MicrophoneFields({ app, onInputChange: handleInputChange, t }) {
       {app.inputMode?.microphone?.enabled && (
         <div className="space-y-3 pl-6">
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+            <label
+              htmlFor="app-microphone-mode"
+              className="block text-sm font-medium text-gray-700 dark:text-gray-300"
+            >
               {t('admin.apps.edit.microphoneMode', 'Microphone Mode')}
             </label>
             <select
+              id="app-microphone-mode"
               value={app.inputMode?.microphone?.mode || 'manual'}
               onChange={e =>
                 handleInputChange('inputMode', {
@@ -66,6 +74,7 @@ function MicrophoneFields({ app, onInputChange: handleInputChange, t }) {
 
           <div className="flex items-center">
             <input
+              id="app-show-transcript"
               type="checkbox"
               checked={app.inputMode?.microphone?.showTranscript !== false}
               onChange={e =>
@@ -79,7 +88,10 @@ function MicrophoneFields({ app, onInputChange: handleInputChange, t }) {
               }
               className={CHECKBOX_CLASS}
             />
-            <label className="ml-2 block text-sm text-gray-900 dark:text-gray-100">
+            <label
+              htmlFor="app-show-transcript"
+              className="ml-2 block text-sm text-gray-900 dark:text-gray-100"
+            >
               {t('admin.apps.edit.showTranscript', 'Show Transcript')}
             </label>
           </div>
@@ -207,10 +219,14 @@ function SpeechServiceField({
 
   return (
     <div>
-      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+      <label
+        htmlFor="app-speech-recognition-service"
+        className="block text-sm font-medium text-gray-700 dark:text-gray-300"
+      >
         {t('admin.apps.edit.speechRecognitionService', 'Speech Recognition Service')}
       </label>
       <select
+        id="app-speech-recognition-service"
         value={pickerValue(speechService, selectedModelId)}
         onChange={e => handleServiceChange(e.target.value)}
         className={`${INPUT_CLASS} mt-1 block`}
@@ -270,7 +286,7 @@ function TextareaRowsField({ app, onInputChange: handleInputChange, t }) {
             rows: parseNumberOrUndefined(e.target.value, Number.parseInt)
           })
         }
-        className="mt-1 block w-20 rounded-md border border-admin-control-border dark:border-admin-control-border-dark shadow-xs focus:border-admin-accent focus:ring-admin-accent sm:text-sm"
+        className={`${INPUT_CLASS} mt-1 max-w-28`}
       />
       <p id={`${fieldId}-hint`} className="mt-1 text-xs text-gray-500 dark:text-gray-400">
         {t(
@@ -288,10 +304,14 @@ function ServiceHostField({ app, onInputChange: handleInputChange, t }) {
   if (recognition?.service !== 'custom' && recognition?.service !== 'azure') return null;
   return (
     <div className="pl-6">
-      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+      <label
+        htmlFor="app-custom-service-host"
+        className="block text-sm font-medium text-gray-700 dark:text-gray-300"
+      >
         {t('admin.apps.edit.customServiceHost', 'Custom Service Host')}
       </label>
       <input
+        id="app-custom-service-host"
         type="url"
         value={recognition.host || ''}
         onChange={e =>
@@ -594,10 +614,14 @@ function InputModeSection({
         <div className="mt-5 md:form-cols:col-span-2 md:form-cols:mt-0">
           <div className="space-y-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+              <label
+                htmlFor="app-input-type"
+                className="block text-sm font-medium text-gray-700 dark:text-gray-300"
+              >
                 {t('admin.apps.edit.inputType', 'Input Type')}
               </label>
               <select
+                id="app-input-type"
                 value={app.inputMode?.type || 'multiline'}
                 onChange={e =>
                   handleInputChange('inputMode', { ...app.inputMode, type: e.target.value })

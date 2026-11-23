@@ -73,6 +73,9 @@ function ensurePrincipal(req) {
  * @param {Object} [options]
  * @param {boolean} [options.existing=false] - The route exists without
  *   personal apps: every refusal is the 404 of an unknown ID.
+ * @param {(req: import('express').Request) => unknown} [options.appIdOf] - Where
+ *   the ID comes from; `req.params.appId` by default. A route that names the
+ *   app in its body (`POST /api/apps/_revise`) reads it from there.
  * @returns {import('express').RequestHandler}
  *
  * @example
@@ -82,14 +85,17 @@ function ensurePrincipal(req) {
  *   actor, authorize: req.userAppContext.authorize('edit')
  * });
  */
-export function userAppAccessRequired(level, { existing = false } = {}) {
+export function userAppAccessRequired(
+  level,
+  { existing = false, appIdOf = req => req.params.appId } = {}
+) {
   if (!USER_APP_ACCESS_LEVELS.includes(level)) {
     throw new TypeError(`Unknown personal app access level: ${level}`);
   }
   return async function userAppAccess(req, res, next) {
     try {
       ensurePrincipal(req);
-      const state = await inspectUserApp(req.params.appId, req.user, { req });
+      const state = await inspectUserApp(appIdOf(req), req.user, { req });
       if (state.status !== 'ok') {
         if (!existing && state.status === 'disabled') {
           throw new ServiceError('USER_APPS_DISABLED', 'Personal apps are switched off');

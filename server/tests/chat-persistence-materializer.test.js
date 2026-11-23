@@ -425,6 +425,34 @@ describe('chatMaterializer: turns that did not go well', () => {
     });
   });
 
+  it('keeps the cause of a failed model call, never the host an admin saw', async () => {
+    await withRepository(async ({ repository }) => {
+      await userTurn(repository);
+      const answer = await assistantTurn(repository, {
+        status: 'error',
+        content: '',
+        finishReason: 'error',
+        errorInfo: {
+          code: 'NETWORK',
+          message: 'Network error',
+          failure: {
+            failureCause: 'certificateUntrusted',
+            upstreamStatus: 502,
+            host: 'llm.corp.local',
+            errorCode: 'SELF_SIGNED_CERT_IN_CHAIN'
+          }
+        }
+      });
+
+      assert.deepEqual(answer.error, {
+        code: 'NETWORK',
+        message: 'Network error',
+        failureCause: 'certificateUntrusted',
+        upstreamStatus: 502
+      });
+    });
+  });
+
   it('records a failure that arrives on summary.error instead', async () => {
     await withRepository(async ({ repository }) => {
       await userTurn(repository);
