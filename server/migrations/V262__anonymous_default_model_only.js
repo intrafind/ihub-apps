@@ -65,9 +65,10 @@ function anonymousModels(config) {
  */
 export function isShippedAnonymousModelList(models) {
   if (!Array.isArray(models)) return false;
-  const sorted = [...models].map(String).sort();
+  const byId = (a, b) => a.localeCompare(b);
+  const sorted = [...models].map(String).sort(byId);
   return SHIPPED_ANONYMOUS_MODEL_LISTS.some(shipped => {
-    const expected = [...shipped].sort();
+    const expected = [...shipped].sort(byId);
     return expected.length === sorted.length && expected.every((id, index) => id === sorted[index]);
   });
 }
