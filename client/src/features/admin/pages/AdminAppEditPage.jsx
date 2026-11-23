@@ -499,6 +499,7 @@ function AdminAppEditPage() {
           modelSetupHref={isFullAdmin ? MODELS_PATH : null}
           onOpenAccess={() => openGroup('access')}
           focusToken={testFocus}
+          focusChatOnOpen={!conversationView}
         />
       )}
 
