@@ -34,7 +34,7 @@ import defaultLlmClient from './loop/LLMClient.js';
 import installedIntegrationService from './integrations/InstalledIntegrationService.js';
 import { mayUseIntegration } from './integrations/integrationAccess.js';
 import { buildGeneratorMessages } from './appGeneratorBrief.js';
-import { integrationsFromAnswer } from '../../shared/appGenerator.js';
+import { appGeneratorSettings, integrationsFromAnswer } from '../../shared/appGenerator.js';
 import {
   DEFAULT_APP_CATEGORY,
   DEFAULT_APP_COLOR,
@@ -54,7 +54,7 @@ import { USER_APP_ICON_PATTERN, USER_APP_LIMITS } from '../../shared/userAppCont
 import { isFeatureEnabled } from '../featureRegistry.js';
 import { isWebSearchAvailableTo } from './tools/webSearchResolver.js';
 
-export { integrationsFromAnswer } from '../../shared/appGenerator.js';
+export { appGeneratorSettings, integrationsFromAnswer } from '../../shared/appGenerator.js';
 
 const COMPONENT = 'AppGenerator';
 
@@ -768,13 +768,53 @@ function searchFor(user) {
 }
 
 /**
+ * The model that prepares a draft for one caller.
+ *
+ * - Without a configured model: the automatic choice of {@link selectGuideModel},
+ *   the standard chat model among the models the caller may use.
+ * - With one: that model when it is enabled, is a chat model that can answer a
+ *   one-off request (no image model, no iAssistant conversation) and the
+ *   caller's groups may use it. Otherwise the automatic choice, so that a
+ *   person who may not use the configured model can still prepare a draft
+ *   with a model they may use. The configured model never widens what the
+ *   caller may use.
+ *
+ * @param {object} params
+ * @param {object[]} params.models - The enabled models (`configCache.getModels().data`).
+ * @param {string} [params.configuredId] - `platform.appGenerator.modelId`.
+ * @param {(model: object) => boolean} params.mayUse - Whether the caller may use a model.
+ * @returns {{ model: object|undefined, configured: 'none'|'used'|'unavailable'|'forbidden' }}
+ *   `configured` says what became of the configured model: none set, used,
+ *   not usable on the installation (missing, disabled or no chat model), or
+ *   not allowed for this caller.
+ * @example
+ * selectDraftModel({ models, configuredId: 'gpt-4o-mini', mayUse: () => true });
+ * // → { model: { id: 'gpt-4o-mini', … }, configured: 'used' }
+ */
+export function selectDraftModel({ models, configuredId, mayUse }) {
+  const list = Array.isArray(models) ? models : [];
+  const automatic = () => selectGuideModel(list, mayUse);
+  if (!configuredId) return { model: automatic(), configured: 'none' };
+
+  const configured = selectGuideModel(
+    list.filter(model => model?.id === configuredId && model.enabled !== false),
+    () => true
+  );
+  if (!configured) return { model: automatic(), configured: 'unavailable' };
+  if (!mayUse(configured)) return { model: automatic(), configured: 'forbidden' };
+  return { model: configured, configured: 'used' };
+}
+
+/**
  * Have a chat model the caller may use prepare the draft of an app. Nothing
  * is stored.
  *
- * The caller decides nothing about the model call: the model is the standard
- * chat model among those the caller may use (the rule of the usage-guide
- * generator), and messages, token limit and answer format are fixed here. The
- * call counts against the caller's usage limit.
+ * The caller decides nothing about the model call: the model is the one an
+ * administrator set (`platform.appGenerator.modelId`) when the caller may use
+ * it, else the standard chat model among those the caller may use (the rule of
+ * the usage-guide generator; see {@link selectDraftModel}). Messages, token
+ * limit and answer format are fixed here. The call counts against the caller's
+ * usage limit.
  *
  * @param {object} params
  * @param {string} params.description - What the author wrote (1 to 2,000 characters).
@@ -807,9 +847,33 @@ export async function generateAppDraft({
   record = {},
   personal = null
 }) {
-  const model = selectGuideModel(configCache.getModels().data, candidate =>
-    canUserAccessResource(user, 'models', candidate.id)
-  );
+  const { modelId: configuredId } = appGeneratorSettings(configCache.getPlatform());
+  const { model, configured } = selectDraftModel({
+    models: configCache.getModels().data,
+    configuredId,
+    mayUse: candidate => canUserAccessResource(user, 'models', candidate.id)
+  });
+  if (configured === 'unavailable') {
+    // A setting that names no usable model is the installation's problem, not the caller's.
+    logger.warn(
+      'The configured app-draft model is not an enabled chat model; using the automatic choice',
+      {
+        component: COMPONENT,
+        configuredModelId: configuredId,
+        modelId: model?.id ?? null
+      }
+    );
+  } else if (configured === 'forbidden') {
+    // Expected for callers outside the groups of that model; not an error.
+    logger.info(
+      'The caller may not use the configured app-draft model; using the automatic choice',
+      {
+        component: COMPONENT,
+        configuredModelId: configuredId,
+        modelId: model?.id ?? null
+      }
+    );
+  }
   if (!model) {
     throw new ServiceError(
       'APP_GENERATOR_NO_MODEL',

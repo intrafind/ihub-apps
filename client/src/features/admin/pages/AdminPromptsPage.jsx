@@ -25,6 +25,7 @@ import ConfirmDialog from '../../../shared/components/ConfirmDialog';
 import { useConfirmAction } from '../hooks/useConfirmAction';
 import { buildBulkToggleConfirm } from '../utils/bulkToggleConfirm';
 import { deleteConfirmText } from '../utils/confirmText';
+import { copyId } from '../utils/copyId';
 
 function PromptNameCell({ prompt, currentLanguage }) {
   return (
@@ -163,8 +164,13 @@ function AdminPromptsPage() {
     });
   };
 
+  // The clone opens as a new prompt with the ID `<id>-copy` (or the next free one) proposed.
   const handleClonePrompt = prompt => {
-    navigate('/admin/prompts/new', { state: { templatePrompt: prompt } });
+    const cloneId = copyId(
+      prompt.id,
+      prompts.map(p => p.id)
+    );
+    navigate('/admin/prompts/new', { state: { templatePrompt: prompt, cloneId } });
   };
 
   const downloadPromptConfig = async promptId => {

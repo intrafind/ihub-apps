@@ -3367,6 +3367,7 @@
           "aiAcknowledgement": "object",
           "aiDisclosure": "object",
           "anonymousAuth": "object",
+          "appGenerator": "object",
           "artifacts": "object",
           "audit": "object",
           "auth": "object",

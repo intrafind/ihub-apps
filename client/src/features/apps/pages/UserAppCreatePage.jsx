@@ -291,6 +291,7 @@ function UserAppCreatePage({ source = userAppSource }) {
               // The server's answer where there is one; else nothing is known, and the request answers.
               enabled={config ? config.generator === true : true}
               models={resources.models}
+              configuredModelId={platformConfig?.appGenerator?.modelId || ''}
               language={language}
               description={state.description}
               onDescriptionChange={describe}

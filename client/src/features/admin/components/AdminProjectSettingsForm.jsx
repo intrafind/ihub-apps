@@ -212,6 +212,8 @@ function AdminProjectSettingsForm({
           onChange={value => onFieldChange('name', value)}
           placeholder={t('admin.projects.fields.namePlaceholder', 'Project name')}
           error={nameError}
+          // No error summary here: the line announces itself.
+          announceError
         />
       </div>
 

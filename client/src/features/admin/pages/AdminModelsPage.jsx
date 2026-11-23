@@ -26,6 +26,7 @@ import ConfirmDialog from '../../../shared/components/ConfirmDialog';
 import { useConfirmAction } from '../hooks/useConfirmAction';
 import { buildBulkToggleConfirm } from '../utils/bulkToggleConfirm';
 import { deleteConfirmText } from '../utils/confirmText';
+import { copyId } from '../utils/copyId';
 
 function ModelNameCell({ model, currentLanguage }) {
   return (
@@ -279,8 +280,13 @@ function AdminModelsPage() {
     }
   };
 
+  // The clone opens as a new model with the ID `<id>-copy` (or the next free one) proposed.
   const handleCloneModel = model => {
-    navigate('/admin/models/new', { state: { templateModel: model } });
+    const cloneId = copyId(
+      model.id,
+      models.map(m => m.id)
+    );
+    navigate('/admin/models/new', { state: { templateModel: model, cloneId } });
   };
 
   const handleDeleteModel = model => {

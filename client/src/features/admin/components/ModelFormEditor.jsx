@@ -2,21 +2,26 @@
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
 import { useState, useEffect, useMemo } from 'react';
+import { withoutDroppedParts } from '../utils/modelPayload';
 import { useTranslation } from 'react-i18next';
 import { DEFAULT_LANGUAGE, getLocalizedContent } from '../../../utils/localizeContent';
 import DynamicLanguageEditor from '../../../shared/components/DynamicLanguageEditor';
+import { isFieldRequired } from '../../../utils/schemaValidation';
 import {
-  validateWithSchema,
-  errorsToFieldErrors,
-  isFieldRequired
-} from '../../../utils/schemaValidation';
+  FIELD_KEYS,
+  fieldErrorAttributes,
+  fieldErrorId,
+  isBlank,
+  schemaFieldErrors
+} from '../utils/fieldErrors';
+import useAdminFormErrors from '../hooks/useAdminFormErrors';
 import Icon from '../../../shared/components/Icon';
 import { getAdminApiErrorMessage, makeAdminApiCall } from '../../../api/adminApi';
-import AdminFormErrorSummary from './AdminFormErrorSummary';
+import AdminFormErrorFrame from './AdminFormErrorFrame';
+import RequiredMark from './RequiredMark';
 import ApiKeyStatusBadge from './ApiKeyStatusBadge';
 import useApiKeyStatus from '../hooks/useApiKeyStatus';
 import TtsVoicesPanel, { TTS_LANGUAGES, languageName } from './tts/TtsVoicesPanel';
-import { FormValidationProvider } from '../../../shared/contexts/formValidationContext';
 import {
   isPromptCachingEnabled,
   supportsPromptCaching
@@ -251,13 +256,70 @@ function SamplingField({ id, label, value, error, placeholder, onChange, bounds 
   );
 }
 
+const NO_IDS = Object.freeze([]);
+
+/** The model fields with texts of their own, by schema rule (`fieldErrors.js`). */
+const MODEL_FIELD_RULES = Object.freeze({
+  id: { empty: FIELD_KEYS.idRequired, pattern: FIELD_KEYS.idFormat },
+  modelId: { empty: FIELD_KEYS.modelIdRequired },
+  name: { empty: FIELD_KEYS.nameRequired },
+  description: { empty: FIELD_KEYS.descriptionRequired },
+  provider: { empty: FIELD_KEYS.providerRequired },
+  url: { empty: FIELD_KEYS.urlRequired }
+});
+
+/**
+ * Every problem of a model, in the admin's language, by field path.
+ *
+ * Besides the schema: the API URL is required wherever the form shows it
+ * (every provider but Bedrock, which builds its own endpoint), and the ID of a
+ * new model must not be taken.
+ *
+ * @param {Object} model - The model as the form holds it.
+ * @param {Object|null} schema - The model JSON schema; without it only the ID,
+ *   name and URL are checked.
+ * @param {function} t - The translation function.
+ * @param {Object} options
+ * @param {boolean} options.isNewModel
+ * @param {string[]} options.takenIds - IDs of the existing models.
+ * @returns {Object<string, string>}
+ */
+export function modelFieldErrors(formModel, schema, t, { isNewModel, takenIds }) {
+  // What the save sends: parts it drops (empty hint languages, voices without
+  // an ID, a leftover tts block) do not block it.
+  const model = withoutDroppedParts(formModel);
+  const errors = schema
+    ? schemaFieldErrors(model, schema, t, {
+        rules: MODEL_FIELD_RULES,
+        localizedFields: ['name', 'description']
+      })
+    : {};
+  if (!schema) {
+    if (isBlank(model.id)) errors.id = t(FIELD_KEYS.idRequired);
+    if (!Object.values(model.name || {}).some(text => !isBlank(text))) {
+      errors.name = t(FIELD_KEYS.nameRequired);
+    }
+  }
+  if (!errors.url && model.provider !== 'bedrock' && isBlank(model.url)) {
+    errors.url = t(FIELD_KEYS.urlRequired);
+  }
+  if (isNewModel && !errors.id && takenIds.includes(model.id)) {
+    errors.id = t(FIELD_KEYS.idTaken);
+  }
+  return errors;
+}
+
 /**
  * Form-based editor for model configuration
  * @param {Object} props
  * @param {Object} props.value - Model configuration data
  * @param {Function} props.onChange - Callback when data changes
- * @param {Object} props.errors - Validation errors object
+ * @param {Object} [props.errors] - Messages by field from outside the form; always shown
  * @param {boolean} props.isNewModel - Whether this is a new model
+ * @param {boolean} [props.showAllErrors] - Show every problem, not only those of touched fields
+ *   (after a save attempt)
+ * @param {string[]} [props.takenIds] - IDs of the existing models; a new model must not reuse one
+ * @param {number} [props.summaryFocusKey] - A new value moves the focus to the error summary
  * @param {boolean} [props.isDirty] - Unsaved edits: the model Sync (which writes the saved model) waits for a save
  * @param {() => Promise<void>} [props.onSynced] - Reloads the saved model after a sync
  * @param {boolean} [props.autoOpenSync] - Open the model Sync when the page opens (link from the EU AI Act page)
@@ -266,63 +328,33 @@ function ModelFormEditor({
   value: data,
   onChange,
   onValidationChange,
-  errors = {},
+  errors: serverErrors = {},
   isNewModel = false,
   jsonSchema,
   isDirty = false,
   onSynced,
-  autoOpenSync = false
+  autoOpenSync = false,
+  showAllErrors = false,
+  takenIds = NO_IDS,
+  summaryFocusKey = 0
 }) {
   const { t, i18n } = useTranslation();
-  const [validationErrors, setValidationErrors] = useState({});
   const { statuses: keyStatuses } = useApiKeyStatus('models');
   // What the server says about the saved key; a model not saved yet has none.
   const keyStatus = isNewModel ? undefined : keyStatuses[data.id];
 
-  // Validation function
-  const validateModel = modelData => {
-    let errors = {};
-
-    // Use schema validation if available
-    if (jsonSchema) {
-      const validation = validateWithSchema(modelData, jsonSchema);
-      if (!validation.isValid) {
-        errors = errorsToFieldErrors(validation.errors);
-      }
-    } else {
-      // Fallback to basic validation if no schema
-      if (!modelData.id) {
-        errors.id = 'Model ID is required';
-      }
-      if (!modelData.name) {
-        errors.name = 'Model name is required';
-      }
-    }
-
-    setValidationErrors(errors);
-
-    const isValid = Object.keys(errors).length === 0;
-    if (onValidationChange) {
-      onValidationChange({
-        isValid,
-        errors: Object.entries(errors).map(([field, message]) => ({
-          field,
-          message,
-          severity: 'error'
-        }))
-      });
-    }
-
-    return isValid;
-  };
-
-  // Validate on data changes
-  useEffect(() => {
-    if (data) {
-      validateModel(data);
-    }
-    // eslint-disable-next-line @eslint-react/exhaustive-deps
-  }, [data, jsonSchema]);
+  // Every problem of the model, in the admin's language. Shown only for the
+  // fields the admin has touched, and all of them after a save attempt.
+  const allErrors = useMemo(
+    () => modelFieldErrors(data, jsonSchema, t, { isNewModel, takenIds }),
+    [data, jsonSchema, t, isNewModel, takenIds]
+  );
+  // What the fields show: the visible problems, and what the page passes in.
+  const { errors, controlHandlers } = useAdminFormErrors(allErrors, {
+    showAll: showAllErrors,
+    extraErrors: serverErrors,
+    onValidationChange
+  });
 
   // Adapter-declared provider config schema (e.g. AWS Bedrock region).
   // Drives dynamic field rendering in the Configuration section.
@@ -599,7 +631,6 @@ function ModelFormEditor({
     );
   }, [data.id, data.provider, data.providerId, t]);
 
-  const mergedErrors = { ...errors, ...validationErrors };
   const errorLabels = {
     id: t('admin.models.fields.id', 'Model ID'),
     name: t('admin.models.fields.name', 'Name'),
@@ -631,13 +662,16 @@ function ModelFormEditor({
   ];
 
   return (
-    <FormValidationProvider errors={mergedErrors}>
-      <div className="space-y-6">
-        <AdminFormErrorSummary
-          errors={mergedErrors}
-          labels={errorLabels}
-          title={t('admin.models.edit.fixErrors', 'Please fix the following errors')}
-        />
+    <>
+      <AdminFormErrorFrame
+        className="space-y-6"
+        errors={errors}
+        controlHandlers={controlHandlers}
+        showSummary={showAllErrors}
+        labels={errorLabels}
+        title={t('admin.models.edit.fixErrors', 'Please fix the following errors')}
+        focusKey={summaryFocusKey}
+      >
         {/* Basic Information */}
         <div className="bg-white dark:bg-gray-800 shadow-sm px-4 py-5 sm:rounded-lg sm:p-6">
           <div className="md:grid md:grid-cols-3 md:gap-6">
@@ -657,7 +691,7 @@ function ModelFormEditor({
                     className="block text-sm font-medium text-gray-700 dark:text-gray-300"
                   >
                     {t('admin.models.fields.id')}
-                    {isFieldRequired('id', jsonSchema) && <span className="text-red-500"> *</span>}
+                    <RequiredMark />
                   </label>
                   <input
                     type="text"
@@ -667,15 +701,17 @@ function ModelFormEditor({
                     onChange={handleInputChange}
                     disabled={!isNewModel}
                     className={`${INPUT_CLASS} mt-1 block ${
-                      validationErrors.id || errors.id
+                      errors.id
                         ? 'border-red-500 dark:border-red-400 text-red-900 placeholder-red-300'
                         : ''
                     }`}
-                    required={isFieldRequired('id', jsonSchema)}
+                    required
+                    aria-invalid={errors.id ? true : undefined}
+                    aria-describedby={errors.id ? 'id-error' : undefined}
                   />
-                  {(validationErrors.id || errors.id) && (
-                    <p className="mt-2 text-sm text-red-600 dark:text-red-400">
-                      {validationErrors.id || errors.id}
+                  {errors.id && (
+                    <p id="id-error" className="mt-2 text-sm text-red-600 dark:text-red-400">
+                      {errors.id}
                     </p>
                   )}
                   <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
@@ -685,7 +721,8 @@ function ModelFormEditor({
 
                 <div className="col-span-6 sm:col-span-3">
                   <DynamicLanguageEditor
-                    label={`${t('admin.models.fields.name')} *`}
+                    label={t('admin.models.fields.name')}
+                    name="name"
                     value={data.name || { [DEFAULT_LANGUAGE]: '' }}
                     onChange={value => handleChange('name', value)}
                     required={true}
@@ -695,7 +732,8 @@ function ModelFormEditor({
 
                 <div className="col-span-6">
                   <DynamicLanguageEditor
-                    label={`${t('admin.models.fields.description')} *`}
+                    label={t('admin.models.fields.description')}
+                    name="description"
                     value={data.description || { [DEFAULT_LANGUAGE]: '' }}
                     onChange={value => handleChange('description', value)}
                     required={true}
@@ -737,10 +775,12 @@ function ModelFormEditor({
                     htmlFor="provider"
                     className="block text-sm font-medium text-gray-700 dark:text-gray-300"
                   >
-                    {t('admin.models.fields.provider')} <span className="text-red-500">*</span>
+                    {t('admin.models.fields.provider')}
+                    <RequiredMark />
                   </label>
                   <select
                     id="provider"
+                    {...fieldErrorAttributes('provider', errors.provider)}
                     name="provider"
                     value={data.providerId || data.provider || ''}
                     onChange={handleProviderSelect}
@@ -771,7 +811,12 @@ function ModelFormEditor({
                     )}
                   </select>
                   {errors.provider && (
-                    <p className="mt-2 text-sm text-red-600 dark:text-red-400">{errors.provider}</p>
+                    <p
+                      id={fieldErrorId('provider')}
+                      className="mt-2 text-sm text-red-600 dark:text-red-400"
+                    >
+                      {errors.provider}
+                    </p>
                   )}
                   {data.providerId && (
                     <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
@@ -818,11 +863,15 @@ function ModelFormEditor({
                     className="block text-sm font-medium text-gray-700 dark:text-gray-300"
                   >
                     {t('admin.models.fields.modelId')}
+                    <RequiredMark />
                   </label>
                   <input
                     type="text"
                     name="modelId"
                     id="modelId"
+                    // Required by the form's own check (the save is held until it is filled).
+                    aria-required="true"
+                    {...fieldErrorAttributes('modelId', errors.modelId)}
                     value={data.modelId || ''}
                     onChange={handleInputChange}
                     placeholder={t('admin.models.placeholders.apiModelId')}
@@ -833,7 +882,12 @@ function ModelFormEditor({
                     }`}
                   />
                   {errors.modelId && (
-                    <p className="mt-2 text-sm text-red-600 dark:text-red-400">{errors.modelId}</p>
+                    <p
+                      id={fieldErrorId('modelId')}
+                      className="mt-2 text-sm text-red-600 dark:text-red-400"
+                    >
+                      {errors.modelId}
+                    </p>
                   )}
                   <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
                     {t('admin.models.hints.apiModelId')}
@@ -850,12 +904,14 @@ function ModelFormEditor({
                       htmlFor="url"
                       className="block text-sm font-medium text-gray-700 dark:text-gray-300"
                     >
-                      {t('admin.models.fields.url')} <span className="text-red-500">*</span>
+                      {t('admin.models.fields.url')}
+                      <RequiredMark />
                     </label>
                     <input
                       type={isTranscription ? 'text' : 'url'}
                       name="url"
                       id="url"
+                      {...fieldErrorAttributes('url', errors.url)}
                       value={data.url || ''}
                       onChange={handleInputChange}
                       placeholder={
@@ -898,7 +954,12 @@ function ModelFormEditor({
                       </p>
                     )}
                     {errors.url && (
-                      <p className="mt-2 text-sm text-red-600 dark:text-red-400">{errors.url}</p>
+                      <p
+                        id={fieldErrorId('url')}
+                        className="mt-2 text-sm text-red-600 dark:text-red-400"
+                      >
+                        {errors.url}
+                      </p>
                     )}
                   </div>
                 )}
@@ -1131,6 +1192,7 @@ function ModelFormEditor({
                         type="number"
                         name="contextWindow"
                         id="contextWindow"
+                        {...fieldErrorAttributes('contextWindow', errors.contextWindow)}
                         value={data.contextWindow || ''}
                         onChange={handleInputChange}
                         min="1"
@@ -1142,7 +1204,10 @@ function ModelFormEditor({
                         required={isFieldRequired('contextWindow', jsonSchema)}
                       />
                       {errors.contextWindow && (
-                        <p className="mt-2 text-sm text-red-600 dark:text-red-400">
+                        <p
+                          id={fieldErrorId('contextWindow')}
+                          className="mt-2 text-sm text-red-600 dark:text-red-400"
+                        >
                           {errors.contextWindow}
                         </p>
                       )}
@@ -1161,6 +1226,7 @@ function ModelFormEditor({
                         type="number"
                         name="maxOutputTokens"
                         id="maxOutputTokens"
+                        {...fieldErrorAttributes('maxOutputTokens', errors.maxOutputTokens)}
                         value={data.maxOutputTokens || ''}
                         onChange={handleInputChange}
                         min="1"
@@ -1183,7 +1249,10 @@ function ModelFormEditor({
                         })}
                       </p>
                       {errors.maxOutputTokens && (
-                        <p className="mt-2 text-sm text-red-600 dark:text-red-400">
+                        <p
+                          id={fieldErrorId('maxOutputTokens')}
+                          className="mt-2 text-sm text-red-600 dark:text-red-400"
+                        >
                           {errors.maxOutputTokens}
                         </p>
                       )}
@@ -1202,6 +1271,7 @@ function ModelFormEditor({
                     type="number"
                     name="concurrency"
                     id="concurrency"
+                    {...fieldErrorAttributes('concurrency', errors.concurrency)}
                     value={data.concurrency || ''}
                     onChange={handleInputChange}
                     min="1"
@@ -1210,7 +1280,10 @@ function ModelFormEditor({
                     }`}
                   />
                   {errors.concurrency && (
-                    <p className="mt-2 text-sm text-red-600 dark:text-red-400">
+                    <p
+                      id={fieldErrorId('concurrency')}
+                      className="mt-2 text-sm text-red-600 dark:text-red-400"
+                    >
                       {errors.concurrency}
                     </p>
                   )}
@@ -1227,6 +1300,7 @@ function ModelFormEditor({
                     type="number"
                     name="requestDelayMs"
                     id="requestDelayMs"
+                    {...fieldErrorAttributes('requestDelayMs', errors.requestDelayMs)}
                     value={data.requestDelayMs || ''}
                     onChange={handleInputChange}
                     min="0"
@@ -1235,7 +1309,10 @@ function ModelFormEditor({
                     }`}
                   />
                   {errors.requestDelayMs && (
-                    <p className="mt-2 text-sm text-red-600 dark:text-red-400">
+                    <p
+                      id={fieldErrorId('requestDelayMs')}
+                      className="mt-2 text-sm text-red-600 dark:text-red-400"
+                    >
                       {errors.requestDelayMs}
                     </p>
                   )}
@@ -1252,6 +1329,7 @@ function ModelFormEditor({
                     type="number"
                     name="connectTimeoutMs"
                     id="connectTimeoutMs"
+                    {...fieldErrorAttributes('connectTimeoutMs', errors.connectTimeoutMs)}
                     value={data.connectTimeoutMs ?? ''}
                     onChange={handleInputChange}
                     min="0"
@@ -1263,7 +1341,10 @@ function ModelFormEditor({
                     }`}
                   />
                   {errors.connectTimeoutMs && (
-                    <p className="mt-2 text-sm text-red-600 dark:text-red-400">
+                    <p
+                      id={fieldErrorId('connectTimeoutMs')}
+                      className="mt-2 text-sm text-red-600 dark:text-red-400"
+                    >
                       {errors.connectTimeoutMs}
                     </p>
                   )}
@@ -1280,6 +1361,7 @@ function ModelFormEditor({
                     type="number"
                     name="streamIdleTimeoutMs"
                     id="streamIdleTimeoutMs"
+                    {...fieldErrorAttributes('streamIdleTimeoutMs', errors.streamIdleTimeoutMs)}
                     value={data.streamIdleTimeoutMs ?? ''}
                     onChange={handleInputChange}
                     min="0"
@@ -1291,7 +1373,10 @@ function ModelFormEditor({
                     }`}
                   />
                   {errors.streamIdleTimeoutMs && (
-                    <p className="mt-2 text-sm text-red-600 dark:text-red-400">
+                    <p
+                      id={fieldErrorId('streamIdleTimeoutMs')}
+                      className="mt-2 text-sm text-red-600 dark:text-red-400"
+                    >
                       {errors.streamIdleTimeoutMs}
                     </p>
                   )}
@@ -1520,7 +1605,7 @@ function ModelFormEditor({
                             id={`sampling.${key}`}
                             label={label}
                             value={data.sampling?.[key] ?? ''}
-                            error={mergedErrors[`sampling.${key}`]}
+                            error={errors[`sampling.${key}`]}
                             placeholder={t(
                               'admin.models.placeholders.samplingDefault',
                               'Provider default'
@@ -2416,7 +2501,7 @@ function ModelFormEditor({
           }}
           currentLanguage={i18n.language}
         />
-      </div>
+      </AdminFormErrorFrame>
       {syncVisible && (
         <GatewaySyncDialog
           providerId={syncProvider.id}
@@ -2428,7 +2513,7 @@ function ModelFormEditor({
           onSynced={onSynced}
         />
       )}
-    </FormValidationProvider>
+    </>
   );
 }
 

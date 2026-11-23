@@ -22,7 +22,10 @@ import ConfirmDialog from './ConfirmDialog';
  * @param {string} props.defaultMode - Initial editing mode ('form' | 'json')
  * @param {boolean} props.allowModeSwitch - Whether mode switching is allowed
  * @param {Function} props.onModeChange - Callback fired when mode changes
- * @param {Function} props.onValidationChange - Callback fired when validation state changes
+ * @param {Function} props.onValidationChange - Callback fired when validation state changes.
+ *   The state is `{ isValid, errors, displayed? }`. A form that shows its errors itself
+ *   reports `displayed` (whether it shows any right now): the editor then marks errors only
+ *   while the form shows them and leaves the list of errors to the form.
  * @param {string} props.title - Title for the editor section
  * @param {string} props.description - Description for the editor section
  * @param {boolean} props.showValidationSummary - Whether to show validation summary
@@ -61,6 +64,12 @@ const DualModeEditor = ({
   const initialValueRef = useRef(JSON.stringify(followsSaved ? savedValue : value));
   // Pending question: { kind: 'switch', mode } or { kind: 'reset' } (no window.confirm).
   const [pendingConfirm, setPendingConfirm] = useState(null);
+  // A form that reports `displayed` decides when its errors are seen (not before the admin
+  // touched a field or tried to save) and lists them itself.
+  const formShowsErrors = editingMode === 'form' && typeof validationState.displayed === 'boolean';
+  const errorsMarked = formShowsErrors
+    ? validationState.displayed && !validationState.isValid
+    : !validationState.isValid;
 
   // Track changes to detect unsaved modifications
   useEffect(() => {
@@ -192,7 +201,7 @@ const DualModeEditor = ({
                 </div>
               )}
 
-              {!validationState.isValid && (
+              {errorsMarked && (
                 <div className="flex items-center text-red-600 dark:text-red-400">
                   <Icon name="x-circle" className="h-4 w-4 mr-1" />
                   <span className="text-sm">
@@ -269,37 +278,40 @@ const DualModeEditor = ({
       </div>
 
       {/* Validation Summary */}
-      {showValidationSummary && !validationState.isValid && validationState.errors.length > 0 && (
-        <div className="mt-4 p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-md">
-          <div className="flex">
-            <Icon name="exclamation-triangle" className="h-5 w-5 text-red-400" />
-            <div className="ml-3">
-              <h4 className="text-sm font-medium text-red-800 dark:text-red-300">
-                {t('admin.editor.validationSummary', 'Validation Summary')}
-              </h4>
-              <div className="mt-2 text-sm text-red-700 dark:text-red-300">
-                <p>
-                  {t('admin.editor.errorCount', '{{count}} error(s) found:', {
-                    count: validationState.errors.length
-                  })}
-                </p>
-                <ul className="list-disc list-inside mt-1 space-y-1">
-                  {validationState.errors.slice(0, 5).map((error, index) => (
-                    <li key={index}>{error.message}</li>
-                  ))}
-                  {validationState.errors.length > 5 && (
-                    <li className="text-gray-600 dark:text-gray-400">
-                      {t('admin.editor.moreErrors', '... and {{count}} more', {
-                        count: validationState.errors.length - 5
-                      })}
-                    </li>
-                  )}
-                </ul>
+      {showValidationSummary &&
+        !formShowsErrors &&
+        !validationState.isValid &&
+        validationState.errors.length > 0 && (
+          <div className="mt-4 p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-md">
+            <div className="flex">
+              <Icon name="exclamation-triangle" className="h-5 w-5 text-red-400" />
+              <div className="ml-3">
+                <h4 className="text-sm font-medium text-red-800 dark:text-red-300">
+                  {t('admin.editor.validationSummary', 'Validation Summary')}
+                </h4>
+                <div className="mt-2 text-sm text-red-700 dark:text-red-300">
+                  <p>
+                    {t('admin.editor.errorCount', '{{count}} error(s) found:', {
+                      count: validationState.errors.length
+                    })}
+                  </p>
+                  <ul className="list-disc list-inside mt-1 space-y-1">
+                    {validationState.errors.slice(0, 5).map((error, index) => (
+                      <li key={index}>{error.message}</li>
+                    ))}
+                    {validationState.errors.length > 5 && (
+                      <li className="text-gray-600 dark:text-gray-400">
+                        {t('admin.editor.moreErrors', '... and {{count}} more', {
+                          count: validationState.errors.length - 5
+                        })}
+                      </li>
+                    )}
+                  </ul>
+                </div>
               </div>
             </div>
           </div>
-        </div>
-      )}
+        )}
       <ConfirmDialog
         isOpen={Boolean(pendingConfirm)}
         title={

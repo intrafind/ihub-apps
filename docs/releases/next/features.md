@@ -38,3 +38,15 @@ group there, and the group page shows only what has been set.
   and hides the individual ones.
 - **Save and Discard appear at the bottom when you change something**, like on the other
   settings pages, instead of a permanent Save button.
+
+## App Drafts with AI: Choose the Model That Prepares Drafts
+
+Admins can now choose which AI model prepares app drafts, for admin apps and personal apps:
+**Admin → Platform → Features → Model for drafts**, below the switch **App Drafts with AI**.
+
+- **Automatic (recommended)** keeps the previous behaviour: the standard chat model among the
+  models the author may use. The option names the model it currently picks.
+- A chosen model is used only for authors whose groups may use it; everyone else keeps preparing
+  drafts with the automatic choice. A chosen model that is disabled or deleted is marked as not
+  available, and drafts use the automatic choice until another model is picked.
+- The **New app** page names the model the description is sent to, as before.

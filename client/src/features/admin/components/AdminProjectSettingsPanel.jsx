@@ -122,6 +122,8 @@ function AdminProjectSettingsDialog({ project, section, onClose, onSaved }) {
                 onChange={value => update('name', value)}
                 placeholder={t('admin.projects.fields.namePlaceholder', 'Project name')}
                 error={nameError}
+                // No error summary here: the line announces itself.
+                announceError
               />
               <DynamicLanguageEditor
                 label={t('admin.projects.fields.description', 'Description')}

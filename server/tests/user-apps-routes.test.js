@@ -1192,6 +1192,27 @@ describe('POST /api/apps/_generate', () => {
     assert.deepEqual((await generate('nora')).body.suggestions.integrations, []);
   });
 
+  it('uses the draft model an administrator chose, for callers who may use it', async () => {
+    // Without a setting: the standard chat model.
+    on();
+    assert.equal((await generate('anna')).body.model.id, 'oa');
+    assert.equal(api.drafts.at(-1).model.id, 'oa');
+
+    // `restricted` is chosen; anna may use every model.
+    on({ platform: { appGenerator: { modelId: 'restricted' } } });
+    const chosen = await generate('anna');
+    assert.equal(chosen.status, 200, chosen.text);
+    assert.deepEqual(chosen.body.model, { id: 'restricted', name: 'Restricted model' });
+    assert.equal(api.drafts.at(-1).model.id, 'restricted');
+
+    // `oa` is chosen, but nora may use only `restricted`: the automatic choice among hers.
+    on({ platform: { appGenerator: { modelId: 'oa' } } });
+    const fallback = await generate('nora');
+    assert.equal(fallback.status, 200, fallback.text);
+    assert.equal(fallback.body.model.id, 'restricted');
+    assert.equal(api.drafts.at(-1).model.id, 'restricted');
+  });
+
   it('counts against the draft limit of the admin route, failed drafts included', async () => {
     on();
     api.addPerson('eve', { id: 'eve', name: 'Eve', authMode: 'oidc', groups: ['users'] });
