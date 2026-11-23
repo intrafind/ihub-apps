@@ -249,9 +249,8 @@ Link to external applications or websites directly from the app list. Perfect fo
 
 3. **Add translations** for all supported languages in the `name` and `description` fields
 
-4. **Restart the server** to load the new app configuration
-
-5. **Verify** the app appears in the apps list with an "External" badge
+4. **Verify** the app appears in the apps list with an "External" badge. Apps reload by
+   themselves when a file changes; no restart is needed.
 
 **Configuration Examples:**
 
@@ -364,9 +363,8 @@ Embed external applications directly within iHub Apps using an iframe. This crea
 
 4. **Add translations** for all supported languages
 
-5. **Restart the server** to load the new app configuration
-
-6. **Test the embedded app** to ensure it loads and functions correctly
+5. **Test the embedded app** to ensure it loads and functions correctly. Apps reload by
+   themselves when a file changes; no restart is needed.
 
 #### Iframe Sandbox Permissions
 
@@ -1580,7 +1578,8 @@ If a user does not see an app, check in this order:
    app created with **New app** starts as **Not published**.
 2. **Access:** one of the user's groups grants the app (**Admin → Groups**, the group's apps: its id
    or `*`). Grants add up through `inherits`; anonymous visitors get what
-   `anonymousAuth.defaultGroups` grant.
+   `anonymousAuth.defaultGroups` grant. See
+   [Who can use apps, models and prompts](access-control.md#when-someone-does-not-see-an-app).
 3. **Required features:** every id in the app's `requiredFeatures` is on in
    **Admin → Platform → Features**.
 4. **Integrations:** every integration installation the app binds is installed and enabled

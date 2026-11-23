@@ -8774,7 +8774,15 @@
       "resultCount_other": "{{count}} Treffer",
       "collapseAll": "Alle zuklappen",
       "expandAll": "Alle aufklappen",
-      "tableLabel": "Tabelle"
+      "tableLabel": "Tabelle",
+      "helpLink": "Hilfe: {{topic}}",
+      "helpTopics": {
+        "models": "Modelle einrichten",
+        "providers": "Einen Anbieter verbinden",
+        "apps": "Die erste App erstellen",
+        "prompts": "Prompts verwalten",
+        "access": "Wer Apps, Modelle und Prompts nutzen darf"
+      }
     },
     "aiDisclosure": {
       "title": "KI-Hinweis",

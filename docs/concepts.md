@@ -52,7 +52,7 @@ Model selection can be narrowed or fully predetermined:
 | `preferredModel`          | The model an app starts with                               |
 | `allowedModels`           | Restricts the selectable models for that app               |
 | `disallowModelSelection`  | Hides the model selector entirely — the app decides        |
-| Group `models` permission | Restricts which models a user group may use at all         |
+| Group `models` permission | Restricts which models a user group may use at all ([how](access-control.md#limit-a-model-to-some-groups)) |
 
 ---
 
@@ -72,7 +72,7 @@ An existing app is portable. Download it as JSON from the app editor and re-crea
 
 The [prompt library](prompts.md) offers the opposite trade-off: maximum flexibility inside the general chat. A prompt is a reusable piece of text the user inserts into the input field and then edits freely.
 
-The trade-off is discoverability — beyond a few dozen entries, a flat prompt library becomes hard to navigate. Mitigate that with categories and by scoping prompts to a single app (`appId`), or promote a frequently used prompt into a proper app.
+The trade-off is discoverability — beyond a few dozen entries, a flat prompt library becomes hard to navigate. Mitigate that with categories, by limiting prompts to the groups that need them, and by letting a prompt open in the app it belongs to (**Opens in app**, `appId`; this does not hide it elsewhere). Or promote a frequently used prompt into a proper app.
 
 ### Skills
 

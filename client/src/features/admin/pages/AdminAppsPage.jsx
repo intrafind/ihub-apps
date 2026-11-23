@@ -36,6 +36,7 @@ import { useOptionalAuth } from '../../../shared/contexts/authContextValue';
 import AdminTabs from '../components/AdminTabs';
 import AdminUserAppsTab, { useWaitingUserAppCount } from '../components/AdminUserAppsTab';
 import WaitingAppsNotice from '../components/WaitingAppsNotice';
+import DocsLink from '../components/DocsLink';
 
 /** The tabs of the page, as `?tab=` names them. */
 const APPS_TAB = 'apps';
@@ -648,9 +649,12 @@ function AdminAppsPage() {
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
       <div className="sm:flex sm:items-center">
         <div className="sm:flex-auto">
-          <h1 className="text-2xl font-semibold text-gray-900 dark:text-gray-100">
-            {t('admin.apps.title')}
-          </h1>
+          <div className="flex items-center gap-2">
+            <h1 className="text-2xl font-semibold text-gray-900 dark:text-gray-100">
+              {t('admin.apps.title')}
+            </h1>
+            <DocsLink topic="apps" />
+          </div>
           <p className="mt-2 text-sm text-gray-700 dark:text-gray-300">
             {t('admin.apps.subtitle')}
           </p>
