@@ -23,6 +23,8 @@ import DualModeEditor from '../../../shared/components/DualModeEditor';
 import PromptFormEditor from '../components/PromptFormEditor';
 import ChangeHistoryDrawer from '../components/ChangeHistoryDrawer';
 import AdminLoadError from '../components/AdminLoadError';
+import useSaveAttempts from '../hooks/useSaveAttempts';
+import { FIELD_KEYS } from '../utils/fieldErrors';
 
 function AdminPromptEditPage() {
   const { t } = useTranslation();
@@ -41,7 +43,8 @@ function AdminPromptEditPage() {
   const [formValidation, setFormValidation] = useState({ isValid: true, errors: [] });
   const [editorMode, setEditorMode] = useState('form');
   // Save attempts that the form refused; from the first one on every error shows.
-  const [saveAttempts, setSaveAttempts] = useState(0);
+  // Counted per resource: another resource or a blank "new" form opens without errors.
+  const [saveAttempts, countSaveAttempt] = useSaveAttempts(promptId);
   // IDs of the existing prompts, so a new prompt hears "taken" before it is saved, and the
   // ID the server refused as taken (409) after a save.
   const [existingIds, setExistingIds] = useState([]);
@@ -95,7 +98,15 @@ function AdminPromptEditPage() {
         category: 'creative'
       };
       const tpl = location.state?.templatePrompt;
-      return tpl ? { ...defaults, ...tpl, id: '', enabled: tpl.enabled !== false } : defaults;
+      // A clone from the list proposes `<id>-copy` (or the next free one).
+      return tpl
+        ? {
+            ...defaults,
+            ...tpl,
+            id: location.state?.cloneId ?? '',
+            enabled: tpl.enabled !== false
+          }
+        : defaults;
     },
     saveResource: async (data, id) => {
       if (id === 'new') {
@@ -172,9 +183,12 @@ function AdminPromptEditPage() {
       navigate('/admin/prompts');
     } catch (err) {
       // A taken ID belongs to the ID field: the form says it there and in its summary.
+      // The JSON mode shows no form, so there the page says it.
       if (isNewPrompt && err?.response?.status === 409) {
         setRefusedId(promptData?.id);
-        setSaveAttempts(count => count + 1);
+        countSaveAttempt();
+        if (editorMode === 'form') return;
+        setSaveError(t(FIELD_KEYS.idTaken));
         return;
       }
       setSaveError(getAdminApiErrorMessage(err));
@@ -194,7 +208,7 @@ function AdminPromptEditPage() {
   const handleFormSubmit = async e => {
     e.preventDefault();
     if (editorMode === 'form' && !formValidation.isValid) {
-      setSaveAttempts(count => count + 1);
+      countSaveAttempt();
       return;
     }
     if (typeof e.currentTarget?.reportValidity === 'function' && !e.currentTarget.reportValidity())

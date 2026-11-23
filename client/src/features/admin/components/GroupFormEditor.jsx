@@ -1,17 +1,22 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
-import { useEffect, useMemo } from 'react';
+import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
 import ResourceSelector from './ResourceSelector';
 import GroupMultiSelect from './GroupMultiSelect';
 import GroupIntegrationsSection from './GroupIntegrationsSection';
-import { FIELD_KEYS, isBlank, schemaFieldErrors } from '../utils/fieldErrors';
-import useFieldErrorVisibility from '../hooks/useFieldErrorVisibility';
+import {
+  FIELD_KEYS,
+  fieldErrorAttributes,
+  fieldErrorId,
+  isBlank,
+  schemaFieldErrors
+} from '../utils/fieldErrors';
+import useAdminFormErrors from '../hooks/useAdminFormErrors';
 import RequiredMark from './RequiredMark';
-import AdminFormErrorSummary from './AdminFormErrorSummary';
-import { FormValidationProvider } from '../../../shared/contexts/formValidationContext';
+import AdminFormErrorFrame from './AdminFormErrorFrame';
 import { CHECKBOX_CLASS, INPUT_CLASS } from './formStyles';
 
 const NO_IDS = Object.freeze([]);
@@ -79,27 +84,10 @@ function GroupFormEditor({
     () => (group ? groupFieldErrors(group, jsonSchema, t, { isNewGroup, takenIds }) : {}),
     [group, jsonSchema, t, isNewGroup, takenIds]
   );
-  const { visibleErrors: validationErrors, controlHandlers } = useFieldErrorVisibility(allErrors, {
-    showAll: showAllErrors
+  const { errors: validationErrors, controlHandlers } = useAdminFormErrors(allErrors, {
+    showAll: showAllErrors,
+    onValidationChange
   });
-  const errorsShown = Object.keys(validationErrors).length > 0;
-  // Reported when the problems change, not on every render.
-  const errorsKey = JSON.stringify(allErrors);
-
-  useEffect(() => {
-    if (!onValidationChange) return;
-    onValidationChange({
-      isValid: Object.keys(allErrors).length === 0,
-      errors: Object.entries(allErrors).map(([field, message]) => ({
-        field,
-        message,
-        severity: 'error'
-      })),
-      // The form shows its errors itself; the editor around it only marks them.
-      displayed: errorsShown
-    });
-    // eslint-disable-next-line @eslint-react/exhaustive-deps
-  }, [errorsKey, errorsShown]);
 
   const handleInputChange = (field, value) => {
     const updatedGroup = {
@@ -156,458 +144,455 @@ function GroupFormEditor({
   };
 
   return (
-    <FormValidationProvider errors={validationErrors}>
-      <div className="group-form-editor space-y-6" {...controlHandlers}>
-        {/* One summary, after a save attempt; before it only touched fields say what is wrong. */}
-        {showAllErrors && (
-          <AdminFormErrorSummary
-            errors={validationErrors}
-            labels={errorLabels}
-            title={t('admin.groups.edit.fixErrors', 'Please fix the following errors')}
-            focusKey={summaryFocusKey}
-          />
-        )}
-        {/* Basic Information */}
-        <div className="bg-white dark:bg-gray-800 shadow-sm dark:shadow-gray-900/20 px-4 py-5 sm:rounded-lg sm:p-6">
-          <div className="md:grid md:grid-cols-3 md:gap-6">
-            <div className="md:col-span-1">
-              <h3 className="text-lg font-medium leading-6 text-gray-900 dark:text-gray-100">
-                {t('admin.groups.basicInformation', 'Basic Information')}
-              </h3>
-              <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-                {t(
-                  'admin.groups.basicGroupConfiguration',
-                  'Basic group configuration and metadata'
+    <AdminFormErrorFrame
+      className="group-form-editor space-y-6"
+      errors={validationErrors}
+      controlHandlers={controlHandlers}
+      showSummary={showAllErrors}
+      labels={errorLabels}
+      title={t('admin.groups.edit.fixErrors', 'Please fix the following errors')}
+      focusKey={summaryFocusKey}
+    >
+      {/* Basic Information */}
+      <div className="bg-white dark:bg-gray-800 shadow-sm dark:shadow-gray-900/20 px-4 py-5 sm:rounded-lg sm:p-6">
+        <div className="md:grid md:grid-cols-3 md:gap-6">
+          <div className="md:col-span-1">
+            <h3 className="text-lg font-medium leading-6 text-gray-900 dark:text-gray-100">
+              {t('admin.groups.basicInformation', 'Basic Information')}
+            </h3>
+            <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+              {t('admin.groups.basicGroupConfiguration', 'Basic group configuration and metadata')}
+            </p>
+          </div>
+          <div className="mt-5 md:col-span-2 md:mt-0">
+            <div className="grid grid-cols-6 gap-6">
+              <div className="col-span-6 sm:col-span-3">
+                <label
+                  htmlFor="group-id"
+                  className="block text-sm font-medium text-gray-700 dark:text-gray-300"
+                >
+                  {t('admin.groups.groupId', 'Group ID')}
+                  <RequiredMark />
+                </label>
+                <input
+                  type="text"
+                  id="group-id"
+                  name="id"
+                  required
+                  {...fieldErrorAttributes('id', validationErrors.id)}
+                  value={group.id || ''}
+                  onChange={e => handleInputChange('id', e.target.value)}
+                  disabled={isProtectedGroup(group.id)}
+                  className={`${INPUT_CLASS} mt-1 block ${
+                    validationErrors.id ? 'border-red-500 dark:border-red-400' : ''
+                  }`}
+                  placeholder={t('admin.groups.form.idPlaceholder', 'Enter unique group ID')}
+                />
+                {validationErrors.id && (
+                  <p
+                    id={fieldErrorId('id')}
+                    className="mt-1 text-sm text-red-600 dark:text-red-400"
+                  >
+                    {validationErrors.id}
+                  </p>
                 )}
-              </p>
-            </div>
-            <div className="mt-5 md:col-span-2 md:mt-0">
-              <div className="grid grid-cols-6 gap-6">
-                <div className="col-span-6 sm:col-span-3">
-                  <label
-                    htmlFor="group-id"
-                    className="block text-sm font-medium text-gray-700 dark:text-gray-300"
-                  >
-                    {t('admin.groups.groupId', 'Group ID')}
-                    <RequiredMark />
-                  </label>
-                  <input
-                    type="text"
-                    id="group-id"
-                    name="id"
-                    required
-                    aria-invalid={validationErrors.id ? true : undefined}
-                    value={group.id || ''}
-                    onChange={e => handleInputChange('id', e.target.value)}
-                    disabled={isProtectedGroup(group.id)}
-                    className={`${INPUT_CLASS} mt-1 block ${
-                      validationErrors.id ? 'border-red-500 dark:border-red-400' : ''
-                    }`}
-                    placeholder={t('admin.groups.form.idPlaceholder', 'Enter unique group ID')}
-                  />
-                  {validationErrors.id && (
-                    <p className="mt-1 text-sm text-red-600 dark:text-red-400">
-                      {validationErrors.id}
-                    </p>
-                  )}
-                  {isProtectedGroup(group.id) && (
-                    <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                      {t('admin.groups.protectedSystemGroup', 'This is a protected system group')}
-                    </p>
-                  )}
-                </div>
-
-                <div className="col-span-6 sm:col-span-3">
-                  <label
-                    htmlFor="group-name"
-                    className="block text-sm font-medium text-gray-700 dark:text-gray-300"
-                  >
-                    {t('admin.groups.groupName', 'Group Name')}
-                    <RequiredMark />
-                  </label>
-                  <input
-                    type="text"
-                    id="group-name"
-                    name="name"
-                    required
-                    aria-invalid={validationErrors.name ? true : undefined}
-                    value={group.name || ''}
-                    onChange={e => handleInputChange('name', e.target.value)}
-                    className={`${INPUT_CLASS} mt-1 block ${
-                      validationErrors.name ? 'border-red-500 dark:border-red-400' : ''
-                    }`}
-                    placeholder={t('admin.groups.form.namePlaceholder', 'Enter group display name')}
-                  />
-                  {validationErrors.name && (
-                    <p className="mt-1 text-sm text-red-600 dark:text-red-400">
-                      {validationErrors.name}
-                    </p>
-                  )}
-                </div>
-
-                <div className="col-span-6">
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                    {t('admin.groups.description', 'Description')}
-                  </label>
-                  <textarea
-                    value={group.description || ''}
-                    onChange={e => handleInputChange('description', e.target.value)}
-                    rows={3}
-                    className={`${INPUT_CLASS} mt-1 block`}
-                    placeholder={t(
-                      'admin.groups.form.descriptionPlaceholder',
-                      'Enter group description'
-                    )}
-                  />
-                </div>
-
-                <div className="col-span-6">
-                  <div className="flex items-center">
-                    <input
-                      type="checkbox"
-                      checked={group.permissions?.adminAccess || false}
-                      onChange={e => handlePermissionChange('adminAccess', e.target.checked)}
-                      className={CHECKBOX_CLASS}
-                    />
-                    <label className="ml-2 block text-sm text-gray-900 dark:text-gray-100">
-                      {t('admin.groups.adminAccess', 'Admin Access')}
-                    </label>
-                  </div>
+                {isProtectedGroup(group.id) && (
                   <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                    {t(
-                      'admin.groups.form.adminAccessHelp',
-                      'Allow members of this group to access administrative functions'
-                    )}
+                    {t('admin.groups.protectedSystemGroup', 'This is a protected system group')}
                   </p>
-                </div>
-
-                <div className="col-span-6">
-                  <div className="flex items-center">
-                    <input
-                      type="checkbox"
-                      checked={group.permissions?.contentAdmin || false}
-                      onChange={e => handlePermissionChange('contentAdmin', e.target.checked)}
-                      className={CHECKBOX_CLASS}
-                    />
-                    <label className="ml-2 block text-sm text-gray-900 dark:text-gray-100">
-                      {t('admin.groups.contentAdmin', 'Content Admin (Apps, Prompts, Projects)')}
-                    </label>
-                  </div>
-                  <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                    {t(
-                      'admin.groups.contentAdminHint',
-                      'Allow members to manage Apps, Prompts, and Projects without full admin access'
-                    )}
-                  </p>
-                </div>
-
-                <div className="col-span-6">
-                  <div className="flex items-center">
-                    <input
-                      id="group-permission-scheduled-tasks"
-                      type="checkbox"
-                      checked={group.permissions?.scheduledTasks || false}
-                      onChange={e => handlePermissionChange('scheduledTasks', e.target.checked)}
-                      className={CHECKBOX_CLASS}
-                    />
-                    <label
-                      htmlFor="group-permission-scheduled-tasks"
-                      className="ml-2 block text-sm text-gray-900 dark:text-gray-100"
-                    >
-                      {t('admin.groups.scheduledTasks', 'Scheduled Tasks')}
-                    </label>
-                  </div>
-                  <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                    {t(
-                      'admin.groups.scheduledTasksHint',
-                      'Allow members to create scheduled tasks that run by themselves as the member (needs the Scheduled Tasks feature). Inherited by groups that inherit this one.'
-                    )}
-                  </p>
-                </div>
-
-                <div className="col-span-6">
-                  <div className="flex items-center">
-                    <input
-                      id="group-permission-projects"
-                      type="checkbox"
-                      checked={group.permissions?.projects || false}
-                      onChange={e => handlePermissionChange('projects', e.target.checked)}
-                      className={CHECKBOX_CLASS}
-                    />
-                    <label
-                      htmlFor="group-permission-projects"
-                      className="ml-2 block text-sm text-gray-900 dark:text-gray-100"
-                    >
-                      {t('admin.groups.projects', 'Projects')}
-                    </label>
-                  </div>
-                  <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                    {t(
-                      'admin.groups.projectsHint',
-                      'Allow members to create projects of their own: documents, instructions and chats (needs the User Projects feature). Inherited by groups that inherit this one.'
-                    )}
-                  </p>
-                </div>
-
-                <div className="col-span-6">
-                  <div className="flex items-center">
-                    <input
-                      id="group-permission-project-sharing"
-                      type="checkbox"
-                      checked={group.permissions?.projectSharing || false}
-                      onChange={e => handlePermissionChange('projectSharing', e.target.checked)}
-                      className={CHECKBOX_CLASS}
-                    />
-                    <label
-                      htmlFor="group-permission-project-sharing"
-                      className="ml-2 block text-sm text-gray-900 dark:text-gray-100"
-                    >
-                      {t('admin.groups.projectSharing', 'Project sharing')}
-                    </label>
-                  </div>
-                  <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                    {t(
-                      'admin.groups.projectSharingHint',
-                      'Allow members to add other users, groups or everyone to the projects they own or edit.'
-                    )}
-                  </p>
-                </div>
-
-                <div className="col-span-6">
-                  <div className="flex items-center">
-                    <input
-                      id="group-permission-user-apps"
-                      type="checkbox"
-                      checked={group.permissions?.userApps || false}
-                      onChange={e => handlePermissionChange('userApps', e.target.checked)}
-                      aria-describedby="group-permission-user-apps-hint"
-                      className={CHECKBOX_CLASS}
-                    />
-                    <label
-                      htmlFor="group-permission-user-apps"
-                      className="ml-2 block text-sm text-gray-900 dark:text-gray-100"
-                    >
-                      {t('admin.userApps.groups.userApps')}
-                    </label>
-                  </div>
-                  <p
-                    id="group-permission-user-apps-hint"
-                    className="mt-1 text-xs text-gray-500 dark:text-gray-400"
-                  >
-                    {t('admin.userApps.groups.userAppsHint')}
-                  </p>
-                </div>
-
-                <div className="col-span-6">
-                  <div className="flex items-center">
-                    <input
-                      id="group-permission-user-app-sharing"
-                      type="checkbox"
-                      checked={group.permissions?.userAppSharing || false}
-                      onChange={e => handlePermissionChange('userAppSharing', e.target.checked)}
-                      aria-describedby="group-permission-user-app-sharing-hint"
-                      className={CHECKBOX_CLASS}
-                    />
-                    <label
-                      htmlFor="group-permission-user-app-sharing"
-                      className="ml-2 block text-sm text-gray-900 dark:text-gray-100"
-                    >
-                      {t('admin.userApps.groups.userAppSharing')}
-                    </label>
-                  </div>
-                  <p
-                    id="group-permission-user-app-sharing-hint"
-                    className="mt-1 text-xs text-gray-500 dark:text-gray-400"
-                  >
-                    {t('admin.userApps.groups.userAppSharingHint')}
-                  </p>
-                </div>
-
-                <div className="col-span-6">
-                  <div className="flex items-center">
-                    <input
-                      type="checkbox"
-                      checked={group.enabled !== false}
-                      onChange={e => handleInputChange('enabled', e.target.checked)}
-                      className={CHECKBOX_CLASS}
-                    />
-                    <label className="ml-2 block text-sm text-gray-900 dark:text-gray-100">
-                      {t('admin.groups.enabled', 'Enabled')}
-                    </label>
-                  </div>
-                </div>
+                )}
               </div>
-            </div>
-          </div>
-        </div>
 
-        {/* Inherited Groups */}
-        <div className="bg-white dark:bg-gray-800 shadow-sm dark:shadow-gray-900/20 px-4 py-5 sm:rounded-lg sm:p-6">
-          <div className="md:grid md:grid-cols-3 md:gap-6">
-            <div className="md:col-span-1">
-              <h3 className="text-lg font-medium leading-6 text-gray-900 dark:text-gray-100">
-                {t('admin.groups.inheritance', 'Group Inheritance')}
-              </h3>
-              <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-                {t(
-                  'admin.groups.inheritanceDescription',
-                  'Optionally let this group inherit the permissions of one or more parent groups'
+              <div className="col-span-6 sm:col-span-3">
+                <label
+                  htmlFor="group-name"
+                  className="block text-sm font-medium text-gray-700 dark:text-gray-300"
+                >
+                  {t('admin.groups.groupName', 'Group Name')}
+                  <RequiredMark />
+                </label>
+                <input
+                  type="text"
+                  id="group-name"
+                  name="name"
+                  required
+                  {...fieldErrorAttributes('name', validationErrors.name)}
+                  value={group.name || ''}
+                  onChange={e => handleInputChange('name', e.target.value)}
+                  className={`${INPUT_CLASS} mt-1 block ${
+                    validationErrors.name ? 'border-red-500 dark:border-red-400' : ''
+                  }`}
+                  placeholder={t('admin.groups.form.namePlaceholder', 'Enter group display name')}
+                />
+                {validationErrors.name && (
+                  <p
+                    id={fieldErrorId('name')}
+                    className="mt-1 text-sm text-red-600 dark:text-red-400"
+                  >
+                    {validationErrors.name}
+                  </p>
                 )}
-              </p>
-            </div>
-            <div className="mt-5 md:col-span-2 md:mt-0">
-              <GroupMultiSelect
-                id="group-inherits"
-                label={t('admin.groups.inheritsFrom', 'Inherits From')}
-                value={group.inherits || []}
-                onChange={handleInheritsChange}
-                availableGroups={parentCandidates}
-                allowCustom={false}
-                placeholder={t(
-                  'admin.groups.inheritsPlaceholder',
-                  'Search groups to inherit from…'
-                )}
-                emptyMessage={t(
-                  'admin.groups.inheritsEmpty',
-                  'No parent groups - this group only has its own permissions'
-                )}
-                helpText={t(
-                  'admin.groups.inheritsHelp',
-                  "Members of this group also get the permissions of every parent group (combined, never reduced). The group's own permissions are added on top. Inheritance is optional, and circular inheritance is rejected when you save."
-                )}
-              />
-            </div>
-          </div>
-        </div>
+              </div>
 
-        {/* External Group Mappings */}
-        <div className="bg-white dark:bg-gray-800 shadow-sm dark:shadow-gray-900/20 px-4 py-5 sm:rounded-lg sm:p-6">
-          <div className="md:grid md:grid-cols-3 md:gap-6">
-            <div className="md:col-span-1">
-              <h3 className="text-lg font-medium leading-6 text-gray-900 dark:text-gray-100">
-                {t('admin.groups.externalMappings', 'External Group Mappings')}
-              </h3>
-              <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-                {t(
-                  'admin.groups.externalMappingsDescription',
-                  'Map external groups from OIDC, LDAP, or other providers to this internal group'
-                )}
-              </p>
-            </div>
-            <div className="mt-5 md:col-span-2 md:mt-0">
-              <GroupMultiSelect
-                id="group-external-mappings"
-                label={t('admin.groups.externalGroupNames', 'External Group Names')}
-                value={group.mappings || []}
-                onChange={handleMappingChange}
-                warnOnCustom={false}
-                placeholder={t(
-                  'admin.groups.externalMappingsPlaceholder',
-                  'Type a group name and press Enter…'
-                )}
-                emptyMessage={t('admin.groups.externalMappingsEmpty', 'No external mappings yet')}
-                helpText={t(
-                  'admin.groups.externalMappingsHelp',
-                  'Enter external group names that should be mapped to this group. Users with these external groups will automatically be assigned to this internal group.'
-                )}
-              />
-            </div>
-          </div>
-        </div>
-
-        {/* Permissions */}
-        <div className="bg-white dark:bg-gray-800 shadow-sm dark:shadow-gray-900/20 px-4 py-5 sm:rounded-lg sm:p-6">
-          <div className="md:grid md:grid-cols-3 md:gap-6">
-            <div className="md:col-span-1">
-              <h3 className="text-lg font-medium leading-6 text-gray-900 dark:text-gray-100">
-                {t('admin.groups.permissions', 'Permissions')}
-              </h3>
-              <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-                {t(
-                  'admin.groups.form.permissionsHelp',
-                  'Configure which apps, models, and prompts members of this group can access'
-                )}
-              </p>
-            </div>
-            <div className="mt-5 md:col-span-2 md:mt-0">
-              <div className="space-y-6">
-                {/* Apps Permission */}
-                <ResourceSelector
-                  label={t('admin.nav.apps', 'Apps')}
-                  resources={resources.apps}
-                  selectedResources={group.permissions?.apps || []}
-                  onSelectionChange={selected => handlePermissionChange('apps', selected)}
-                  placeholder={t('admin.groups.form.searchApps', 'Search apps to add…')}
-                  emptyMessage={t(
-                    'admin.groups.form.noApps',
-                    'No apps selected – users won’t see any apps'
+              <div className="col-span-6">
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                  {t('admin.groups.description', 'Description')}
+                </label>
+                <textarea
+                  value={group.description || ''}
+                  onChange={e => handleInputChange('description', e.target.value)}
+                  rows={3}
+                  className={`${INPUT_CLASS} mt-1 block`}
+                  placeholder={t(
+                    'admin.groups.form.descriptionPlaceholder',
+                    'Enter group description'
                   )}
                 />
+              </div>
 
-                {/* Models Permission */}
-                <ResourceSelector
-                  label={t('admin.nav.models', 'Models')}
-                  resources={resources.models}
-                  selectedResources={group.permissions?.models || []}
-                  onSelectionChange={selected => handlePermissionChange('models', selected)}
-                  placeholder={t('admin.groups.form.searchModels', 'Search models to add…')}
-                  emptyMessage={t(
-                    'admin.groups.form.noModels',
-                    'No models selected – users can’t use any AI models'
+              <div className="col-span-6">
+                <div className="flex items-center">
+                  <input
+                    type="checkbox"
+                    checked={group.permissions?.adminAccess || false}
+                    onChange={e => handlePermissionChange('adminAccess', e.target.checked)}
+                    className={CHECKBOX_CLASS}
+                  />
+                  <label className="ml-2 block text-sm text-gray-900 dark:text-gray-100">
+                    {t('admin.groups.adminAccess', 'Admin Access')}
+                  </label>
+                </div>
+                <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                  {t(
+                    'admin.groups.form.adminAccessHelp',
+                    'Allow members of this group to access administrative functions'
                   )}
-                />
+                </p>
+              </div>
 
-                {/* Prompts Permission */}
-                <ResourceSelector
-                  label={t('admin.nav.prompts', 'Prompts')}
-                  resources={resources.prompts}
-                  selectedResources={group.permissions?.prompts || []}
-                  onSelectionChange={selected => handlePermissionChange('prompts', selected)}
-                  placeholder={t('admin.groups.form.searchPrompts', 'Search prompts to add…')}
-                  emptyMessage={t(
-                    'admin.groups.form.noPrompts',
-                    'No prompts selected – users can’t access any prompt templates'
+              <div className="col-span-6">
+                <div className="flex items-center">
+                  <input
+                    type="checkbox"
+                    checked={group.permissions?.contentAdmin || false}
+                    onChange={e => handlePermissionChange('contentAdmin', e.target.checked)}
+                    className={CHECKBOX_CLASS}
+                  />
+                  <label className="ml-2 block text-sm text-gray-900 dark:text-gray-100">
+                    {t('admin.groups.contentAdmin', 'Content Admin (Apps, Prompts, Projects)')}
+                  </label>
+                </div>
+                <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                  {t(
+                    'admin.groups.contentAdminHint',
+                    'Allow members to manage Apps, Prompts, and Projects without full admin access'
                   )}
-                />
+                </p>
+              </div>
 
-                {/* Workflows Permission */}
-                <ResourceSelector
-                  label={t('admin.nav.workflows', 'Workflows')}
-                  resources={resources.workflows || []}
-                  selectedResources={group.permissions?.workflows || []}
-                  onSelectionChange={selected => handlePermissionChange('workflows', selected)}
-                  placeholder={t('admin.groups.form.searchWorkflows', 'Search workflows to add…')}
-                  emptyMessage={t(
-                    'admin.groups.form.noWorkflows',
-                    'No workflows selected – users can’t run any workflows'
+              <div className="col-span-6">
+                <div className="flex items-center">
+                  <input
+                    id="group-permission-scheduled-tasks"
+                    type="checkbox"
+                    checked={group.permissions?.scheduledTasks || false}
+                    onChange={e => handlePermissionChange('scheduledTasks', e.target.checked)}
+                    className={CHECKBOX_CLASS}
+                  />
+                  <label
+                    htmlFor="group-permission-scheduled-tasks"
+                    className="ml-2 block text-sm text-gray-900 dark:text-gray-100"
+                  >
+                    {t('admin.groups.scheduledTasks', 'Scheduled Tasks')}
+                  </label>
+                </div>
+                <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                  {t(
+                    'admin.groups.scheduledTasksHint',
+                    'Allow members to create scheduled tasks that run by themselves as the member (needs the Scheduled Tasks feature). Inherited by groups that inherit this one.'
                   )}
-                />
+                </p>
+              </div>
 
-                {/* Skills Permission */}
-                <ResourceSelector
-                  label={t('admin.nav.skills', 'Skills')}
-                  resources={resources.skills || []}
-                  selectedResources={group.permissions?.skills || []}
-                  onSelectionChange={selected => handlePermissionChange('skills', selected)}
-                  placeholder={t('admin.groups.form.searchSkills', 'Search skills to add…')}
-                  emptyMessage={t(
-                    'admin.groups.form.noSkills',
-                    'No skills selected – users can’t use any agent skills'
+              <div className="col-span-6">
+                <div className="flex items-center">
+                  <input
+                    id="group-permission-projects"
+                    type="checkbox"
+                    checked={group.permissions?.projects || false}
+                    onChange={e => handlePermissionChange('projects', e.target.checked)}
+                    className={CHECKBOX_CLASS}
+                  />
+                  <label
+                    htmlFor="group-permission-projects"
+                    className="ml-2 block text-sm text-gray-900 dark:text-gray-100"
+                  >
+                    {t('admin.groups.projects', 'Projects')}
+                  </label>
+                </div>
+                <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                  {t(
+                    'admin.groups.projectsHint',
+                    'Allow members to create projects of their own: documents, instructions and chats (needs the User Projects feature). Inherited by groups that inherit this one.'
                   )}
-                />
+                </p>
+              </div>
 
-                {/* Integrations Permission (#3093) */}
-                <GroupIntegrationsSection
-                  group={group}
-                  groups={groups}
-                  onChange={selected => handlePermissionChange('integrations', selected)}
-                />
+              <div className="col-span-6">
+                <div className="flex items-center">
+                  <input
+                    id="group-permission-project-sharing"
+                    type="checkbox"
+                    checked={group.permissions?.projectSharing || false}
+                    onChange={e => handlePermissionChange('projectSharing', e.target.checked)}
+                    className={CHECKBOX_CLASS}
+                  />
+                  <label
+                    htmlFor="group-permission-project-sharing"
+                    className="ml-2 block text-sm text-gray-900 dark:text-gray-100"
+                  >
+                    {t('admin.groups.projectSharing', 'Project sharing')}
+                  </label>
+                </div>
+                <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                  {t(
+                    'admin.groups.projectSharingHint',
+                    'Allow members to add other users, groups or everyone to the projects they own or edit.'
+                  )}
+                </p>
+              </div>
+
+              <div className="col-span-6">
+                <div className="flex items-center">
+                  <input
+                    id="group-permission-user-apps"
+                    type="checkbox"
+                    checked={group.permissions?.userApps || false}
+                    onChange={e => handlePermissionChange('userApps', e.target.checked)}
+                    aria-describedby="group-permission-user-apps-hint"
+                    className={CHECKBOX_CLASS}
+                  />
+                  <label
+                    htmlFor="group-permission-user-apps"
+                    className="ml-2 block text-sm text-gray-900 dark:text-gray-100"
+                  >
+                    {t('admin.userApps.groups.userApps')}
+                  </label>
+                </div>
+                <p
+                  id="group-permission-user-apps-hint"
+                  className="mt-1 text-xs text-gray-500 dark:text-gray-400"
+                >
+                  {t('admin.userApps.groups.userAppsHint')}
+                </p>
+              </div>
+
+              <div className="col-span-6">
+                <div className="flex items-center">
+                  <input
+                    id="group-permission-user-app-sharing"
+                    type="checkbox"
+                    checked={group.permissions?.userAppSharing || false}
+                    onChange={e => handlePermissionChange('userAppSharing', e.target.checked)}
+                    aria-describedby="group-permission-user-app-sharing-hint"
+                    className={CHECKBOX_CLASS}
+                  />
+                  <label
+                    htmlFor="group-permission-user-app-sharing"
+                    className="ml-2 block text-sm text-gray-900 dark:text-gray-100"
+                  >
+                    {t('admin.userApps.groups.userAppSharing')}
+                  </label>
+                </div>
+                <p
+                  id="group-permission-user-app-sharing-hint"
+                  className="mt-1 text-xs text-gray-500 dark:text-gray-400"
+                >
+                  {t('admin.userApps.groups.userAppSharingHint')}
+                </p>
+              </div>
+
+              <div className="col-span-6">
+                <div className="flex items-center">
+                  <input
+                    type="checkbox"
+                    checked={group.enabled !== false}
+                    onChange={e => handleInputChange('enabled', e.target.checked)}
+                    className={CHECKBOX_CLASS}
+                  />
+                  <label className="ml-2 block text-sm text-gray-900 dark:text-gray-100">
+                    {t('admin.groups.enabled', 'Enabled')}
+                  </label>
+                </div>
               </div>
             </div>
           </div>
         </div>
       </div>
-    </FormValidationProvider>
+
+      {/* Inherited Groups */}
+      <div className="bg-white dark:bg-gray-800 shadow-sm dark:shadow-gray-900/20 px-4 py-5 sm:rounded-lg sm:p-6">
+        <div className="md:grid md:grid-cols-3 md:gap-6">
+          <div className="md:col-span-1">
+            <h3 className="text-lg font-medium leading-6 text-gray-900 dark:text-gray-100">
+              {t('admin.groups.inheritance', 'Group Inheritance')}
+            </h3>
+            <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+              {t(
+                'admin.groups.inheritanceDescription',
+                'Optionally let this group inherit the permissions of one or more parent groups'
+              )}
+            </p>
+          </div>
+          <div className="mt-5 md:col-span-2 md:mt-0">
+            <GroupMultiSelect
+              id="group-inherits"
+              label={t('admin.groups.inheritsFrom', 'Inherits From')}
+              value={group.inherits || []}
+              onChange={handleInheritsChange}
+              availableGroups={parentCandidates}
+              allowCustom={false}
+              placeholder={t('admin.groups.inheritsPlaceholder', 'Search groups to inherit from…')}
+              emptyMessage={t(
+                'admin.groups.inheritsEmpty',
+                'No parent groups - this group only has its own permissions'
+              )}
+              helpText={t(
+                'admin.groups.inheritsHelp',
+                "Members of this group also get the permissions of every parent group (combined, never reduced). The group's own permissions are added on top. Inheritance is optional, and circular inheritance is rejected when you save."
+              )}
+            />
+          </div>
+        </div>
+      </div>
+
+      {/* External Group Mappings */}
+      <div className="bg-white dark:bg-gray-800 shadow-sm dark:shadow-gray-900/20 px-4 py-5 sm:rounded-lg sm:p-6">
+        <div className="md:grid md:grid-cols-3 md:gap-6">
+          <div className="md:col-span-1">
+            <h3 className="text-lg font-medium leading-6 text-gray-900 dark:text-gray-100">
+              {t('admin.groups.externalMappings', 'External Group Mappings')}
+            </h3>
+            <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+              {t(
+                'admin.groups.externalMappingsDescription',
+                'Map external groups from OIDC, LDAP, or other providers to this internal group'
+              )}
+            </p>
+          </div>
+          <div className="mt-5 md:col-span-2 md:mt-0">
+            <GroupMultiSelect
+              id="group-external-mappings"
+              label={t('admin.groups.externalGroupNames', 'External Group Names')}
+              value={group.mappings || []}
+              onChange={handleMappingChange}
+              warnOnCustom={false}
+              placeholder={t(
+                'admin.groups.externalMappingsPlaceholder',
+                'Type a group name and press Enter…'
+              )}
+              emptyMessage={t('admin.groups.externalMappingsEmpty', 'No external mappings yet')}
+              helpText={t(
+                'admin.groups.externalMappingsHelp',
+                'Enter external group names that should be mapped to this group. Users with these external groups will automatically be assigned to this internal group.'
+              )}
+            />
+          </div>
+        </div>
+      </div>
+
+      {/* Permissions */}
+      <div className="bg-white dark:bg-gray-800 shadow-sm dark:shadow-gray-900/20 px-4 py-5 sm:rounded-lg sm:p-6">
+        <div className="md:grid md:grid-cols-3 md:gap-6">
+          <div className="md:col-span-1">
+            <h3 className="text-lg font-medium leading-6 text-gray-900 dark:text-gray-100">
+              {t('admin.groups.permissions', 'Permissions')}
+            </h3>
+            <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+              {t(
+                'admin.groups.form.permissionsHelp',
+                'Configure which apps, models, and prompts members of this group can access'
+              )}
+            </p>
+          </div>
+          <div className="mt-5 md:col-span-2 md:mt-0">
+            <div className="space-y-6">
+              {/* Apps Permission */}
+              <ResourceSelector
+                label={t('admin.nav.apps', 'Apps')}
+                resources={resources.apps}
+                selectedResources={group.permissions?.apps || []}
+                onSelectionChange={selected => handlePermissionChange('apps', selected)}
+                placeholder={t('admin.groups.form.searchApps', 'Search apps to add…')}
+                emptyMessage={t(
+                  'admin.groups.form.noApps',
+                  'No apps selected – users won’t see any apps'
+                )}
+              />
+
+              {/* Models Permission */}
+              <ResourceSelector
+                label={t('admin.nav.models', 'Models')}
+                resources={resources.models}
+                selectedResources={group.permissions?.models || []}
+                onSelectionChange={selected => handlePermissionChange('models', selected)}
+                placeholder={t('admin.groups.form.searchModels', 'Search models to add…')}
+                emptyMessage={t(
+                  'admin.groups.form.noModels',
+                  'No models selected – users can’t use any AI models'
+                )}
+              />
+
+              {/* Prompts Permission */}
+              <ResourceSelector
+                label={t('admin.nav.prompts', 'Prompts')}
+                resources={resources.prompts}
+                selectedResources={group.permissions?.prompts || []}
+                onSelectionChange={selected => handlePermissionChange('prompts', selected)}
+                placeholder={t('admin.groups.form.searchPrompts', 'Search prompts to add…')}
+                emptyMessage={t(
+                  'admin.groups.form.noPrompts',
+                  'No prompts selected – users can’t access any prompt templates'
+                )}
+              />
+
+              {/* Workflows Permission */}
+              <ResourceSelector
+                label={t('admin.nav.workflows', 'Workflows')}
+                resources={resources.workflows || []}
+                selectedResources={group.permissions?.workflows || []}
+                onSelectionChange={selected => handlePermissionChange('workflows', selected)}
+                placeholder={t('admin.groups.form.searchWorkflows', 'Search workflows to add…')}
+                emptyMessage={t(
+                  'admin.groups.form.noWorkflows',
+                  'No workflows selected – users can’t run any workflows'
+                )}
+              />
+
+              {/* Skills Permission */}
+              <ResourceSelector
+                label={t('admin.nav.skills', 'Skills')}
+                resources={resources.skills || []}
+                selectedResources={group.permissions?.skills || []}
+                onSelectionChange={selected => handlePermissionChange('skills', selected)}
+                placeholder={t('admin.groups.form.searchSkills', 'Search skills to add…')}
+                emptyMessage={t(
+                  'admin.groups.form.noSkills',
+                  'No skills selected – users can’t use any agent skills'
+                )}
+              />
+
+              {/* Integrations Permission (#3093) */}
+              <GroupIntegrationsSection
+                group={group}
+                groups={groups}
+                onChange={selected => handlePermissionChange('integrations', selected)}
+              />
+            </div>
+          </div>
+        </div>
+      </div>
+    </AdminFormErrorFrame>
   );
 }
 

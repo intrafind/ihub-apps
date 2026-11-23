@@ -22,10 +22,12 @@ import { getSchemaByType } from '../../../utils/schemaService';
 import AdminLoadError from '../components/AdminLoadError';
 import UsageLimitsEditor from '../components/UsageLimitsEditor';
 import { buildUserSavePayload } from '../utils/userSavePayload';
+import { FIELD_KEYS } from '../utils/fieldErrors';
 import { apiErrorMessage } from '../../../utils/apiErrorMessage';
 import { useAuth } from '../../../shared/contexts/AuthContext';
 import QuotaBar from '../../../shared/components/QuotaBar';
 import { windowLabel, localizedName } from '../../../shared/utils/usageFormat';
+import useSaveAttempts from '../hooks/useSaveAttempts';
 
 /**
  * Bytes as "12.3 MB" for the file storage bar.
@@ -235,7 +237,8 @@ function AdminUserEditPage() {
   const [formValidation, setFormValidation] = useState({ isValid: true, errors: [] });
   const [editorMode, setEditorMode] = useState('form');
   // Save attempts that the form refused; from the first one on every error shows.
-  const [saveAttempts, setSaveAttempts] = useState(0);
+  // Counted per resource: another resource or a blank "new" form opens without errors.
+  const [saveAttempts, countSaveAttempt] = useSaveAttempts(userId);
 
   // Generate a unique ID for new users
   const generateUserId = () => `user_${crypto.randomUUID().replaceAll('-', '_')}`;
@@ -345,12 +348,12 @@ function AdminUserEditPage() {
   const handleSave = async () => {
     // The form names what is missing at its fields and in its summary.
     if (editorMode === 'form' && !formValidation.isValid) {
-      setSaveAttempts(count => count + 1);
+      countSaveAttempt();
       return;
     }
 
     if (!user.username) {
-      setSaveError(t('admin.users.validation.usernameRequired', 'Username is required'));
+      setSaveError(t(FIELD_KEYS.usernameRequired));
       return;
     }
 

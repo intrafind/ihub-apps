@@ -23,6 +23,7 @@ group and a new user also opened with errors.
 - Messages are short instructions in the admin language, such as "Enter an ID." or "Use only
   lowercase letters, numbers, dots, underscores and hyphens."
 - An ID that another model, prompt or group already uses is reported at the ID field while you
-  type.
+  type. **Clone** of a model, prompt or workflow proposes the ID `<id>-copy` (or `<id>-copy-2`, …
+  when that one is taken) instead of an empty ID or an ID that already exists.
 - Required fields carry one asterisk; the prompt description is now marked as required, as the
   server always required it.

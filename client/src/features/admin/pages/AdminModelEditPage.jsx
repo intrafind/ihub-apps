@@ -22,6 +22,8 @@ import MarketplaceModelReviewNotice from '../components/marketplace/MarketplaceM
 import AdminLoadError from '../components/AdminLoadError';
 import { UsageLimitBucketFields, normalizeLimitBucket } from '../components/UsageLimitsEditor';
 import { normalizeModelHint } from '../components/ModelHintSection';
+import useSaveAttempts from '../hooks/useSaveAttempts';
+import { FIELD_KEYS } from '../utils/fieldErrors';
 
 /**
  * A number field that accepts 0. `''`/null/undefined mean "not set" and drop
@@ -104,7 +106,8 @@ function AdminModelEditPage() {
   const [formValidation, setFormValidation] = useState({ isValid: true, errors: [] });
   const [editorMode, setEditorMode] = useState('form');
   // Save attempts that the form refused; from the first one on every error shows.
-  const [saveAttempts, setSaveAttempts] = useState(0);
+  // Counted per resource: another resource or a blank "new" form opens without errors.
+  const [saveAttempts, countSaveAttempt] = useSaveAttempts(modelId);
   // IDs of the existing models, so a new model hears "taken" before it is saved, and the ID
   // the server refused as taken (409) after a save.
   const [existingIds, setExistingIds] = useState([]);
@@ -120,7 +123,8 @@ function AdminModelEditPage() {
       return {
         ...DEFAULT_MODEL_DATA,
         ...tpl,
-        id: '',
+        // A clone from the list proposes `<id>-copy` (or the next free one).
+        id: location.state.cloneId ?? '',
         enabled: tpl.enabled !== undefined ? tpl.enabled : true,
         default: false
       };
@@ -370,7 +374,7 @@ function AdminModelEditPage() {
   const handleFormSubmit = async e => {
     e.preventDefault();
     if (editorMode === 'form' && !formValidation.isValid) {
-      setSaveAttempts(count => count + 1);
+      countSaveAttempt();
       return;
     }
     if (typeof e.currentTarget?.reportValidity === 'function' && !e.currentTarget.reportValidity())
@@ -388,13 +392,18 @@ function AdminModelEditPage() {
       navigate('/admin/models');
     } catch (err) {
       // A taken ID belongs to the ID field: the form says it there and in its summary.
+      // The JSON mode shows no form, so there the page says it.
       if (isNewModel && err?.response?.status === 409) {
         setRefusedId(formData.id);
-        setSaveAttempts(count => count + 1);
+        countSaveAttempt();
+        if (editorMode === 'form') return;
+        setError(t(FIELD_KEYS.idTaken));
         return;
       }
+      // Shown on the page (an alert above the form); the edits stay. Not re-thrown: the
+      // submit handler is the last one to see it, and a re-throw ends as an unhandled
+      // rejection in the console.
       setError(getAdminApiErrorMessage(err));
-      throw err; // Re-throw to let DualModeEditor handle it
     } finally {
       setSaving(false);
     }

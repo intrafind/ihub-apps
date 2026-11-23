@@ -106,6 +106,9 @@ function AdminFeaturesPage() {
   const handleSave = async () => {
     if (Object.keys(dirtyFlags).length === 0 && !draftModelChanged) return;
 
+    // Whether a write went through: then the shared configuration is re-read even
+    // when the other write fails, and only the failed change stays unsaved.
+    let wrote = false;
     try {
       setSaving(true);
       setMessage('');
@@ -115,6 +118,7 @@ function AdminFeaturesPage() {
           method: 'PUT',
           body: dirtyFlags
         });
+        wrote = true;
         setDirtyFlags({});
         setSavedFeatures(features);
       }
@@ -127,11 +131,11 @@ function AdminFeaturesPage() {
           method: 'PATCH',
           body: { appGenerator: { modelId: draftModel.modelId || null } }
         });
+        wrote = true;
         setSavedDraftModelId(draftModel.modelId);
       }
 
       setMessage(t('admin.features.saved', 'Features updated successfully'));
-      refreshConfig();
 
       // Clear success message after a few seconds
       setTimeout(() => setMessage(''), 3000);
@@ -139,6 +143,7 @@ function AdminFeaturesPage() {
       console.error('Error saving features:', error);
       setMessage(t('admin.features.saveError', 'Failed to save features'));
     } finally {
+      if (wrote) refreshConfig();
       setSaving(false);
     }
   };

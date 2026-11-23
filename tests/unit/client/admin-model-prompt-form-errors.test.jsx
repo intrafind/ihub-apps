@@ -7,14 +7,16 @@
  * field; a field says what is wrong once the admin has left it; the first save
  * attempt shows every problem in one summary, in plain words of the admin's
  * language; a required label carries one asterisk; a taken ID is named before
- * the save.
+ * the save; the summary lists the fields in the order of the form and is the
+ * only alert (a field's own message is tied to its input, not announced); a
+ * clone proposes `<id>-copy`.
  *
  * Runs the real pages, the real DualModeEditor (only Monaco is replaced) and
  * the real JSON schemas the server exports.
  */
 import '@testing-library/jest-dom';
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
-import { MemoryRouter, Route, Routes } from 'react-router-dom';
+import { MemoryRouter, Route, Routes, useNavigate } from 'react-router-dom';
 
 const mockApi = {
   makeAdminApiCall: jest.fn(),
@@ -102,6 +104,7 @@ const de = require('../../../shared/i18n/de.json');
 
 const renderAt = path =>
   render(
+    // A path, or a location with history state (a clone from the list).
     <MemoryRouter initialEntries={[path]}>
       <Routes>
         <Route path="/admin/models/:modelId" element={<AdminModelEditPage />} />
@@ -124,10 +127,7 @@ const submit = () => {
   fireEvent.click(document.querySelector('form button[type="submit"]'));
 };
 
-/**
- * The error summaries on the page: alerts with the summary heading. (A localized
- * field's own message is an alert too, without the heading.)
- */
+/** The error summaries on the page: alerts with the summary heading. */
 const findSummaries = async title => {
   const alerts = await screen.findAllByRole('alert');
   return alerts.filter(alert => alert.querySelector('h3')?.textContent.includes(title));
@@ -195,8 +195,27 @@ describe('new model form', () => {
     expect(text).toContain(`API Model ID: ${en.admin.formErrors.field.modelIdRequired}`);
     expect(text).toContain(`Provider: ${en.admin.formErrors.field.providerRequired}`);
     expect(text).not.toMatch(RAW_SCHEMA_TEXT);
-    // In the order of the form, the ID first.
-    expect(text.indexOf('Model ID:')).toBeLessThan(text.indexOf('Name:'));
+    // In the order of the form (not of the schema): ID, Name, Description, Provider,
+    // then the API Model ID.
+    const order = ['Model ID:', 'Name:', 'Description:', 'Provider:', 'API Model ID:'].map(label =>
+      text.indexOf(label)
+    );
+    expect(order).toEqual([...order].sort((a, b) => a - b));
+    // The summary is the only alert: the inline messages of Name and Description are
+    // tied to their inputs instead of being announced on their own.
+    expect(screen.getAllByRole('alert')).toEqual([summary]);
+    const nameInput = document.getElementById('name.en');
+    expect(nameInput).toHaveAttribute('aria-invalid', 'true');
+    expect(nameInput.getAttribute('aria-describedby')).toContain('name-error');
+    expect(document.getElementById('name-error')).toHaveTextContent(
+      en.admin.formErrors.field.nameRequired
+    );
+    expect(document.getElementById('name-error')).not.toHaveAttribute('role');
+    const modelIdInput = document.getElementById('modelId');
+    expect(modelIdInput).toHaveAttribute('aria-describedby', 'modelId-error');
+    expect(document.getElementById('modelId-error')).toHaveTextContent(
+      en.admin.formErrors.field.modelIdRequired
+    );
     // The editor's own list of errors (the second box) is gone.
     expect(screen.queryByText(en.admin.editor.validationSummary)).not.toBeInTheDocument();
     // Each entry links to its field.
@@ -282,6 +301,12 @@ describe('new prompt form', () => {
     expect(text).toContain(`Description: ${en.admin.formErrors.field.descriptionRequired}`);
     expect(text).toContain(`Prompt: ${en.admin.formErrors.field.promptRequired}`);
     expect(text).not.toMatch(RAW_SCHEMA_TEXT);
+    // In the order of the form.
+    const order = ['Prompt ID:', 'Name:', 'Description:', 'Prompt:'].map(label =>
+      text.indexOf(label)
+    );
+    expect(order).toEqual([...order].sort((a, b) => a - b));
+    expect(screen.getAllByRole('alert')).toEqual([summaries[0]]);
     expect(mockApi.createPrompt).not.toHaveBeenCalled();
   });
 
@@ -404,5 +429,306 @@ describe('message keys', () => {
       expect(typeof lookup(en, key)).toBe('string');
       expect(typeof lookup(de, key)).toBe('string');
     }
+  });
+});
+
+describe('user form wording', () => {
+  test('the user form says what to do, in English and German', () => {
+    const props = {
+      value: BLANK_USER,
+      onChange: () => {},
+      jsonSchema: getUserJsonSchema(),
+      isNewUser: true,
+      showAllErrors: true
+    };
+    const { rerender } = render(<UserFormEditor {...props} />);
+    const summary = screen.getByRole('alert');
+    expect(summary.textContent).toContain(en.admin.formErrors.field.usernameRequired);
+    expect(summary.textContent).toContain(en.admin.formErrors.field.passwordRequired);
+    // Username before Password, as in the form.
+    expect(summary.textContent.indexOf('Username')).toBeLessThan(
+      summary.textContent.indexOf('Password')
+    );
+    // The inline message is tied to its input.
+    const username = document.querySelector('input[name="username"]');
+    expect(username).toHaveAttribute('aria-invalid', 'true');
+    expect(username).toHaveAttribute('aria-describedby', 'username-error');
+    expect(document.getElementById('username-error')).toHaveTextContent(
+      en.admin.formErrors.field.usernameRequired
+    );
+
+    rerender(<UserFormEditor {...props} value={{ ...BLANK_USER, password: 'abc' }} />);
+    expect(screen.getByRole('alert').textContent).toContain(
+      en.admin.formErrors.field.passwordMinLength.replace('{{min}}', '6')
+    );
+
+    rerender(<UserFormEditor {...props} value={{ ...BLANK_USER, password: 'abcdefgh' }} />);
+    expect(screen.getByRole('alert').textContent).toContain(
+      en.admin.formErrors.field.passwordMismatch
+    );
+
+    mockLanguage = 'de';
+    rerender(<UserFormEditor {...props} />);
+    expect(screen.getByRole('alert').textContent).toContain(
+      de.admin.formErrors.field.usernameRequired
+    );
+    expect(screen.getByRole('alert').textContent).not.toMatch(/erforderlich/);
+  });
+});
+
+describe('summary order', () => {
+  const AdminFormErrorSummary =
+    require('../../../client/src/features/admin/components/AdminFormErrorSummary').default;
+
+  test('lists the fields in the order of the form, unknown fields last', () => {
+    render(
+      <form>
+        <AdminFormErrorSummary
+          errors={{ beta: 'B wrong.', ghost: 'No field.', alpha: 'A wrong.', gamma: 'C wrong.' }}
+          labels={{ alpha: 'Alpha', beta: 'Beta', gamma: 'Gamma', ghost: 'Ghost' }}
+        />
+        <input name="gamma" aria-label="Gamma" />
+        <input name="alpha" aria-label="Alpha" />
+        <input name="beta" aria-label="Beta" />
+      </form>
+    );
+    const items = within(screen.getByRole('alert'))
+      .getAllByRole('listitem')
+      .map(item => item.textContent);
+    expect(items).toEqual([
+      'Gamma: C wrong.',
+      'Alpha: A wrong.',
+      'Beta: B wrong.',
+      'Ghost: No field.'
+    ]);
+  });
+});
+
+describe('localized field messages', () => {
+  const DynamicLanguageEditor =
+    require('../../../client/src/shared/components/DynamicLanguageEditor').default;
+
+  test('are tied to the input and not announced by themselves', () => {
+    render(
+      <DynamicLanguageEditor
+        label="Name"
+        name="name"
+        value={{ en: '' }}
+        onChange={() => {}}
+        error="Enter a name."
+      />
+    );
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    const input = document.getElementById('name.en');
+    expect(input).toHaveAttribute('aria-invalid', 'true');
+    expect(input.getAttribute('aria-describedby').split(' ')).toContain('name-error');
+    expect(document.getElementById('name-error')).toHaveTextContent('Enter a name.');
+  });
+
+  test('a form without a summary can have the message announced', () => {
+    render(
+      <DynamicLanguageEditor
+        label="Name"
+        value={{ en: '' }}
+        onChange={() => {}}
+        error="A name is required."
+        announceError
+      />
+    );
+    const alert = screen.getByRole('alert');
+    expect(alert).toHaveTextContent('A name is required.');
+    // Without a field name the message still has an id the input points to.
+    const input = screen.getByRole('textbox');
+    expect(input.getAttribute('aria-describedby').split(' ')).toContain(alert.id);
+  });
+
+  test('without a message the input points to no message', () => {
+    render(
+      <DynamicLanguageEditor label="Name" name="name" value={{ en: '' }} onChange={() => {}} />
+    );
+    expect(document.getElementById('name.en')).not.toHaveAttribute('aria-describedby');
+  });
+});
+
+describe('clone ID', () => {
+  const { copyId } = require('../../../client/src/features/admin/utils/copyId');
+
+  test('proposes <id>-copy, then the next free number', () => {
+    expect(copyId('gpt-4', [])).toBe('gpt-4-copy');
+    expect(copyId('gpt-4', ['gpt-4', 'gpt-4-copy'])).toBe('gpt-4-copy-2');
+    expect(copyId('gpt-4', ['gpt-4-copy', 'gpt-4-copy-2', 'gpt-4-copy-3'])).toBe('gpt-4-copy-4');
+    expect(copyId('gpt-4', ['gpt-4-copy-2'])).toBe('gpt-4-copy');
+  });
+
+  const TEMPLATE_MODEL = {
+    id: 'gpt-4',
+    modelId: 'gpt-4',
+    name: { en: 'GPT-4' },
+    description: { en: 'A model' },
+    provider: 'openai',
+    url: 'https://api.openai.com/v1/chat/completions',
+    enabled: true
+  };
+
+  test('a cloned model opens with the proposed ID', async () => {
+    renderAt({
+      pathname: '/admin/models/new',
+      state: { templateModel: TEMPLATE_MODEL, cloneId: 'gpt-4-copy' }
+    });
+    const id = await screen.findByLabelText(/^Model ID/);
+    expect(id).toHaveValue('gpt-4-copy');
+  });
+
+  test('a cloned prompt opens with the proposed ID', async () => {
+    renderAt({
+      pathname: '/admin/prompts/new',
+      state: {
+        templatePrompt: { id: 'summarize', name: { en: 'Summarize' } },
+        cloneId: 'summarize-copy-2'
+      }
+    });
+    const id = await screen.findByLabelText(/^ID/);
+    expect(id).toHaveValue('summarize-copy-2');
+  });
+
+  test('a model save the server refuses is shown on the page, not thrown', async () => {
+    const unhandled = jest.fn();
+    process.on('unhandledRejection', unhandled);
+    mockApi.makeAdminApiCall.mockImplementation(async (path, options) => {
+      if (options?.method === 'POST') throw new Error('The provider is not reachable.');
+      return path === '/admin/models' ? { data: { items: [{ id: 'gpt-4' }] } } : { data: [] };
+    });
+    try {
+      renderAt({
+        pathname: '/admin/models/new',
+        state: { templateModel: TEMPLATE_MODEL, cloneId: 'gpt-4-copy' }
+      });
+      await screen.findByLabelText(/^Model ID/);
+      await settle();
+
+      submit();
+
+      expect(await screen.findByText('The provider is not reachable.')).toBeInTheDocument();
+      expect(screen.queryByText('models list')).not.toBeInTheDocument();
+      await settle();
+      expect(unhandled).not.toHaveBeenCalled();
+    } finally {
+      process.off('unhandledRejection', unhandled);
+    }
+  });
+});
+
+describe('useAdminFormErrors', () => {
+  const useAdminFormErrors =
+    require('../../../client/src/features/admin/hooks/useAdminFormErrors').default;
+  const {
+    validationReport
+  } = require('../../../client/src/features/admin/hooks/useAdminFormErrors');
+
+  test('validationReport lists every problem', () => {
+    expect(validationReport({}, false)).toEqual({ isValid: true, errors: [], displayed: false });
+    expect(validationReport({ id: 'Enter an ID.' }, true)).toEqual({
+      isValid: false,
+      errors: [{ field: 'id', message: 'Enter an ID.', severity: 'error' }],
+      displayed: true
+    });
+  });
+
+  function Probe({ allErrors, showAll, extraErrors, onValidationChange }) {
+    const { errors, controlHandlers } = useAdminFormErrors(allErrors, {
+      showAll,
+      extraErrors,
+      onValidationChange
+    });
+    return (
+      <div {...controlHandlers}>
+        <input name="id" aria-label="ID" />
+        <output data-testid="errors">{JSON.stringify(errors)}</output>
+      </div>
+    );
+  }
+
+  test('shows touched fields, all after a save attempt, and reports each change', () => {
+    const allErrors = { id: 'Enter an ID.', name: 'Enter a name.' };
+    const onValidationChange = jest.fn();
+    const { rerender } = render(
+      <Probe allErrors={allErrors} onValidationChange={onValidationChange} />
+    );
+    const shown = () => JSON.parse(screen.getByTestId('errors').textContent);
+
+    expect(shown()).toEqual({});
+    expect(onValidationChange).toHaveBeenLastCalledWith(
+      expect.objectContaining({ isValid: false, displayed: false })
+    );
+
+    fireEvent.blur(screen.getByLabelText('ID'));
+    expect(shown()).toEqual({ id: 'Enter an ID.' });
+    expect(onValidationChange).toHaveBeenLastCalledWith(
+      expect.objectContaining({ displayed: true })
+    );
+
+    rerender(
+      <Probe
+        allErrors={allErrors}
+        showAll
+        extraErrors={{ url: 'From the server.' }}
+        onValidationChange={onValidationChange}
+      />
+    );
+    expect(shown()).toEqual({ ...allErrors, url: 'From the server.' });
+  });
+});
+
+describe('save attempts and refusals per resource', () => {
+  /** Moves the router to another path, as a link in the sidebar would. */
+  function GoTo({ path }) {
+    const navigate = useNavigate();
+    return (
+      <button type="button" onClick={() => navigate(path)}>
+        go to {path}
+      </button>
+    );
+  }
+
+  test('another resource opens without the errors of a refused save', async () => {
+    render(
+      <MemoryRouter initialEntries={['/admin/prompts/new']}>
+        <GoTo path="/admin/prompts/summarize" />
+        <Routes>
+          <Route path="/admin/prompts/:promptId" element={<AdminPromptEditPage />} />
+        </Routes>
+      </MemoryRouter>
+    );
+    await screen.findByLabelText(/^ID/);
+    await settle();
+    submit();
+    expect(await findSummaries(en.admin.formErrors.title)).toHaveLength(1);
+
+    // The stored prompt has no texts, so its form has problems; they stay hidden.
+    fireEvent.click(screen.getByRole('button', { name: 'go to /admin/prompts/summarize' }));
+    await waitFor(() => expect(screen.getByLabelText(/^ID/)).toHaveValue('summarize'));
+    await settle();
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+
+    // A refused save of this prompt shows the summary again.
+    submit();
+    expect(await findSummaries(en.admin.formErrors.title)).toHaveLength(1);
+  });
+
+  test('a taken ID refused in the JSON mode is said on the page', async () => {
+    mockApi.fetchAdminPrompts.mockResolvedValue([]);
+    mockApi.createPrompt.mockRejectedValue(
+      Object.assign(new Error('Prompt with this ID already exists'), {
+        response: { status: 409 }
+      })
+    );
+    renderAt('/admin/prompts/new');
+    await screen.findByLabelText(/^ID/);
+    await settle();
+
+    fireEvent.click(screen.getByRole('button', { name: en.admin.editor.jsonMode }));
+    submit();
+
+    expect(await screen.findByText(en.admin.formErrors.field.idTaken)).toBeInTheDocument();
   });
 });

@@ -23,6 +23,7 @@ import ConfirmDialog from '../../../shared/components/ConfirmDialog';
 import { useConfirmAction } from '../hooks/useConfirmAction';
 import { deleteConfirmText } from '../utils/confirmText';
 import { groupsGrantingWorkflow } from '../utils/workflowVisibility';
+import { copyId } from '../utils/copyId';
 
 function WorkflowNameCell({ workflow, currentLanguage }) {
   return (
@@ -133,8 +134,13 @@ function AdminWorkflowsPage() {
 
   const handleCloneWorkflow = async workflow => {
     setActionError(null);
+    // `<id>-copy`, or the next free `<id>-copy-<n>`.
+    const cloneId = copyId(
+      workflow.id,
+      workflows.map(w => w.id)
+    );
     try {
-      const clonedWorkflow = { ...workflow, id: `${workflow.id}-copy` };
+      const clonedWorkflow = { ...workflow, id: cloneId };
       if (typeof clonedWorkflow.name === 'object') {
         const updatedName = {};
         for (const [lang, value] of Object.entries(clonedWorkflow.name)) {
@@ -150,7 +156,7 @@ function AdminWorkflowsPage() {
           t(
             'admin.workflows.cloneExists',
             'A workflow with ID "{{id}}" already exists. Please rename it before cloning.',
-            { id: `${workflow.id}-copy` }
+            { id: cloneId }
           )
         );
       } else {

@@ -6,16 +6,21 @@ import { useTranslation } from 'react-i18next';
 import { DEFAULT_LANGUAGE, getLocalizedContent } from '../../../utils/localizeContent';
 import DynamicLanguageEditor from '../../../shared/components/DynamicLanguageEditor';
 import { isFieldRequired } from '../../../utils/schemaValidation';
-import { FIELD_KEYS, isBlank, schemaFieldErrors } from '../utils/fieldErrors';
-import useFieldErrorVisibility from '../hooks/useFieldErrorVisibility';
+import {
+  FIELD_KEYS,
+  fieldErrorAttributes,
+  fieldErrorId,
+  isBlank,
+  schemaFieldErrors
+} from '../utils/fieldErrors';
+import useAdminFormErrors from '../hooks/useAdminFormErrors';
 import Icon from '../../../shared/components/Icon';
 import { getAdminApiErrorMessage, makeAdminApiCall } from '../../../api/adminApi';
-import AdminFormErrorSummary from './AdminFormErrorSummary';
+import AdminFormErrorFrame from './AdminFormErrorFrame';
 import RequiredMark from './RequiredMark';
 import ApiKeyStatusBadge from './ApiKeyStatusBadge';
 import useApiKeyStatus from '../hooks/useApiKeyStatus';
 import TtsVoicesPanel, { TTS_LANGUAGES, languageName } from './tts/TtsVoicesPanel';
-import { FormValidationProvider } from '../../../shared/contexts/formValidationContext';
 import {
   isPromptCachingEnabled,
   supportsPromptCaching
@@ -340,29 +345,12 @@ function ModelFormEditor({
     () => modelFieldErrors(data, jsonSchema, t, { isNewModel, takenIds }),
     [data, jsonSchema, t, isNewModel, takenIds]
   );
-  const { visibleErrors, controlHandlers } = useFieldErrorVisibility(allErrors, {
-    showAll: showAllErrors
-  });
   // What the fields show: the visible problems, and what the page passes in.
-  const errors = { ...visibleErrors, ...serverErrors };
-  const errorsShown = Object.keys(errors).length > 0;
-  // Reported when the problems change, not on every render.
-  const errorsKey = JSON.stringify(allErrors);
-
-  useEffect(() => {
-    if (!onValidationChange) return;
-    onValidationChange({
-      isValid: Object.keys(allErrors).length === 0,
-      errors: Object.entries(allErrors).map(([field, message]) => ({
-        field,
-        message,
-        severity: 'error'
-      })),
-      // The form shows its errors itself; the editor around it only marks them.
-      displayed: errorsShown
-    });
-    // eslint-disable-next-line @eslint-react/exhaustive-deps
-  }, [errorsKey, errorsShown]);
+  const { errors, controlHandlers } = useAdminFormErrors(allErrors, {
+    showAll: showAllErrors,
+    extraErrors: serverErrors,
+    onValidationChange
+  });
 
   // Adapter-declared provider config schema (e.g. AWS Bedrock region).
   // Drives dynamic field rendering in the Configuration section.
@@ -670,17 +658,16 @@ function ModelFormEditor({
   ];
 
   return (
-    <FormValidationProvider errors={errors}>
-      <div className="space-y-6" {...controlHandlers}>
-        {/* One summary, after a save attempt; before it only touched fields say what is wrong. */}
-        {showAllErrors && (
-          <AdminFormErrorSummary
-            errors={errors}
-            labels={errorLabels}
-            title={t('admin.models.edit.fixErrors', 'Please fix the following errors')}
-            focusKey={summaryFocusKey}
-          />
-        )}
+    <>
+      <AdminFormErrorFrame
+        className="space-y-6"
+        errors={errors}
+        controlHandlers={controlHandlers}
+        showSummary={showAllErrors}
+        labels={errorLabels}
+        title={t('admin.models.edit.fixErrors', 'Please fix the following errors')}
+        focusKey={summaryFocusKey}
+      >
         {/* Basic Information */}
         <div className="bg-white dark:bg-gray-800 shadow-sm px-4 py-5 sm:rounded-lg sm:p-6">
           <div className="md:grid md:grid-cols-3 md:gap-6">
@@ -789,6 +776,7 @@ function ModelFormEditor({
                   </label>
                   <select
                     id="provider"
+                    {...fieldErrorAttributes('provider', errors.provider)}
                     name="provider"
                     value={data.providerId || data.provider || ''}
                     onChange={handleProviderSelect}
@@ -819,7 +807,12 @@ function ModelFormEditor({
                     )}
                   </select>
                   {errors.provider && (
-                    <p className="mt-2 text-sm text-red-600 dark:text-red-400">{errors.provider}</p>
+                    <p
+                      id={fieldErrorId('provider')}
+                      className="mt-2 text-sm text-red-600 dark:text-red-400"
+                    >
+                      {errors.provider}
+                    </p>
                   )}
                   {data.providerId && (
                     <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
@@ -872,6 +865,9 @@ function ModelFormEditor({
                     type="text"
                     name="modelId"
                     id="modelId"
+                    // Required by the form's own check (the save is held until it is filled).
+                    aria-required="true"
+                    {...fieldErrorAttributes('modelId', errors.modelId)}
                     value={data.modelId || ''}
                     onChange={handleInputChange}
                     placeholder={t('admin.models.placeholders.apiModelId')}
@@ -882,7 +878,12 @@ function ModelFormEditor({
                     }`}
                   />
                   {errors.modelId && (
-                    <p className="mt-2 text-sm text-red-600 dark:text-red-400">{errors.modelId}</p>
+                    <p
+                      id={fieldErrorId('modelId')}
+                      className="mt-2 text-sm text-red-600 dark:text-red-400"
+                    >
+                      {errors.modelId}
+                    </p>
                   )}
                   <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
                     {t('admin.models.hints.apiModelId')}
@@ -906,6 +907,7 @@ function ModelFormEditor({
                       type={isTranscription ? 'text' : 'url'}
                       name="url"
                       id="url"
+                      {...fieldErrorAttributes('url', errors.url)}
                       value={data.url || ''}
                       onChange={handleInputChange}
                       placeholder={
@@ -948,7 +950,12 @@ function ModelFormEditor({
                       </p>
                     )}
                     {errors.url && (
-                      <p className="mt-2 text-sm text-red-600 dark:text-red-400">{errors.url}</p>
+                      <p
+                        id={fieldErrorId('url')}
+                        className="mt-2 text-sm text-red-600 dark:text-red-400"
+                      >
+                        {errors.url}
+                      </p>
                     )}
                   </div>
                 )}
@@ -1181,6 +1188,7 @@ function ModelFormEditor({
                         type="number"
                         name="contextWindow"
                         id="contextWindow"
+                        {...fieldErrorAttributes('contextWindow', errors.contextWindow)}
                         value={data.contextWindow || ''}
                         onChange={handleInputChange}
                         min="1"
@@ -1192,7 +1200,10 @@ function ModelFormEditor({
                         required={isFieldRequired('contextWindow', jsonSchema)}
                       />
                       {errors.contextWindow && (
-                        <p className="mt-2 text-sm text-red-600 dark:text-red-400">
+                        <p
+                          id={fieldErrorId('contextWindow')}
+                          className="mt-2 text-sm text-red-600 dark:text-red-400"
+                        >
                           {errors.contextWindow}
                         </p>
                       )}
@@ -1211,6 +1222,7 @@ function ModelFormEditor({
                         type="number"
                         name="maxOutputTokens"
                         id="maxOutputTokens"
+                        {...fieldErrorAttributes('maxOutputTokens', errors.maxOutputTokens)}
                         value={data.maxOutputTokens || ''}
                         onChange={handleInputChange}
                         min="1"
@@ -1233,7 +1245,10 @@ function ModelFormEditor({
                         })}
                       </p>
                       {errors.maxOutputTokens && (
-                        <p className="mt-2 text-sm text-red-600 dark:text-red-400">
+                        <p
+                          id={fieldErrorId('maxOutputTokens')}
+                          className="mt-2 text-sm text-red-600 dark:text-red-400"
+                        >
                           {errors.maxOutputTokens}
                         </p>
                       )}
@@ -1252,6 +1267,7 @@ function ModelFormEditor({
                     type="number"
                     name="concurrency"
                     id="concurrency"
+                    {...fieldErrorAttributes('concurrency', errors.concurrency)}
                     value={data.concurrency || ''}
                     onChange={handleInputChange}
                     min="1"
@@ -1260,7 +1276,10 @@ function ModelFormEditor({
                     }`}
                   />
                   {errors.concurrency && (
-                    <p className="mt-2 text-sm text-red-600 dark:text-red-400">
+                    <p
+                      id={fieldErrorId('concurrency')}
+                      className="mt-2 text-sm text-red-600 dark:text-red-400"
+                    >
                       {errors.concurrency}
                     </p>
                   )}
@@ -1277,6 +1296,7 @@ function ModelFormEditor({
                     type="number"
                     name="requestDelayMs"
                     id="requestDelayMs"
+                    {...fieldErrorAttributes('requestDelayMs', errors.requestDelayMs)}
                     value={data.requestDelayMs || ''}
                     onChange={handleInputChange}
                     min="0"
@@ -1285,7 +1305,10 @@ function ModelFormEditor({
                     }`}
                   />
                   {errors.requestDelayMs && (
-                    <p className="mt-2 text-sm text-red-600 dark:text-red-400">
+                    <p
+                      id={fieldErrorId('requestDelayMs')}
+                      className="mt-2 text-sm text-red-600 dark:text-red-400"
+                    >
                       {errors.requestDelayMs}
                     </p>
                   )}
@@ -1302,6 +1325,7 @@ function ModelFormEditor({
                     type="number"
                     name="connectTimeoutMs"
                     id="connectTimeoutMs"
+                    {...fieldErrorAttributes('connectTimeoutMs', errors.connectTimeoutMs)}
                     value={data.connectTimeoutMs ?? ''}
                     onChange={handleInputChange}
                     min="0"
@@ -1313,7 +1337,10 @@ function ModelFormEditor({
                     }`}
                   />
                   {errors.connectTimeoutMs && (
-                    <p className="mt-2 text-sm text-red-600 dark:text-red-400">
+                    <p
+                      id={fieldErrorId('connectTimeoutMs')}
+                      className="mt-2 text-sm text-red-600 dark:text-red-400"
+                    >
                       {errors.connectTimeoutMs}
                     </p>
                   )}
@@ -1330,6 +1357,7 @@ function ModelFormEditor({
                     type="number"
                     name="streamIdleTimeoutMs"
                     id="streamIdleTimeoutMs"
+                    {...fieldErrorAttributes('streamIdleTimeoutMs', errors.streamIdleTimeoutMs)}
                     value={data.streamIdleTimeoutMs ?? ''}
                     onChange={handleInputChange}
                     min="0"
@@ -1341,7 +1369,10 @@ function ModelFormEditor({
                     }`}
                   />
                   {errors.streamIdleTimeoutMs && (
-                    <p className="mt-2 text-sm text-red-600 dark:text-red-400">
+                    <p
+                      id={fieldErrorId('streamIdleTimeoutMs')}
+                      className="mt-2 text-sm text-red-600 dark:text-red-400"
+                    >
                       {errors.streamIdleTimeoutMs}
                     </p>
                   )}
@@ -2466,7 +2497,7 @@ function ModelFormEditor({
           }}
           currentLanguage={i18n.language}
         />
-      </div>
+      </AdminFormErrorFrame>
       {syncVisible && (
         <GatewaySyncDialog
           providerId={syncProvider.id}
@@ -2478,7 +2509,7 @@ function ModelFormEditor({
           onSynced={onSynced}
         />
       )}
-    </FormValidationProvider>
+    </>
   );
 }
 

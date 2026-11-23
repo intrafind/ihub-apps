@@ -3093,14 +3093,6 @@
         "removeFailed": "Could not remove the confirmation",
         "exportFailed": "Could not export the CSV"
       },
-      "validation": {
-        "usernameRequired": "Username is required",
-        "usernameInvalid": "Username can only contain letters, numbers, periods, hyphens, and underscores",
-        "emailInvalid": "Please enter a valid email address",
-        "passwordRequired": "A password is required for local authentication",
-        "passwordTooShort": "Password must be at least 6 characters long",
-        "passwordMismatch": "Passwords do not match"
-      },
       "fields": {
         "username": "Username",
         "email": "Email",
@@ -9152,7 +9144,12 @@
         "modelIdRequired": "Enter the model ID the provider uses.",
         "providerRequired": "Choose a provider.",
         "urlRequired": "Enter the API URL.",
-        "promptRequired": "Enter the prompt text."
+        "promptRequired": "Enter the prompt text.",
+        "usernameRequired": "Enter a username.",
+        "usernameFormat": "Use only letters, numbers, dots, underscores and hyphens.",
+        "passwordRequired": "Enter a password.",
+        "passwordMinLength": "Enter a password of at least {{min}} characters.",
+        "passwordMismatch": "Enter the same password again."
       }
     },
     "resourceSelector": {

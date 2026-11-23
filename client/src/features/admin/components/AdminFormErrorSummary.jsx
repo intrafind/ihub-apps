@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
-import { useEffect, useMemo, useRef } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
 import { languageNamer } from '../../../shared/utils/languageName';
@@ -15,6 +15,12 @@ import { languageNamer } from '../../../shared/utils/languageName';
  * declaratively by `DynamicLanguageEditor` for localized fields (through
  * `FormValidationProvider` context) and imperatively for plain inputs
  * (id / name / data-field attribute lookup).
+ *
+ * The entries follow the order of their fields in the form (document order of
+ * the linked inputs), not the order of `errors`: a schema lists its rules in
+ * its own order, which need not be the visual one. Entries whose field is not
+ * on the page (a collapsed section, a message without a field) come last, in
+ * the order given.
  *
  * Field IDs can be dot-paths (e.g. `description.en`). The component walks the
  * path until it finds a matching element. DOM queries are scoped to the
@@ -38,8 +44,11 @@ function AdminFormErrorSummary({ errors, title, labels = {}, languageDisplayName
   );
   const containerRef = useRef(null);
   const bannerRef = useRef(null);
-  const entries = normalizeErrors(errors);
-  const hasEntries = entries.length > 0;
+  const givenEntries = normalizeErrors(errors);
+  const hasEntries = givenEntries.length > 0;
+  // Field ids in the order of the form, measured once the fields are on the page.
+  const [fieldOrder, setFieldOrder] = useState([]);
+  const entries = sortByFieldOrder(givenEntries, fieldOrder);
 
   useEffect(() => {
     if (!focusKey || !hasEntries) return;
@@ -48,10 +57,18 @@ function AdminFormErrorSummary({ errors, title, labels = {}, languageDisplayName
     // Only a new save attempt moves the focus, not every change of the errors.
     // eslint-disable-next-line @eslint-react/exhaustive-deps
   }, [focusKey]);
-  const fieldIdsKey = entries
+  const fieldIdsKey = givenEntries
     .map(e => e.fieldId)
     .filter(Boolean)
     .join('|');
+
+  // Before paint, so the list never shows in the given order first.
+  useLayoutEffect(() => {
+    const fieldIds = fieldIdsKey ? fieldIdsKey.split('|') : [];
+    const scope = containerRef.current?.closest('form') || document;
+    const next = orderByDocument(fieldIds, scope);
+    setFieldOrder(previous => (previous.join('|') === next.join('|') ? previous : next));
+  }, [fieldIdsKey]);
 
   // Always render the live-region wrapper so screen readers pick up additions.
   // Persistent highlight + aria-invalid for plain inputs that don't go through
@@ -173,6 +190,39 @@ function findFieldElement(fieldId, scope = document) {
     parts.pop();
   }
   return null;
+}
+
+/**
+ * The field ids whose element is on the page, in document order (the order a
+ * reader meets the fields). Ids without an element are left out.
+ *
+ * @param {string[]} fieldIds
+ * @param {ParentNode} [scope=document]
+ * @returns {string[]}
+ */
+export function orderByDocument(fieldIds, scope = document) {
+  return fieldIds
+    .map(fieldId => ({ fieldId, el: findFieldElement(fieldId, scope) }))
+    .filter(({ el }) => el)
+    .sort((a, b) => {
+      if (a.el === b.el) return 0;
+      return a.el.compareDocumentPosition(b.el) & Node.DOCUMENT_POSITION_FOLLOWING ? -1 : 1;
+    })
+    .map(({ fieldId }) => fieldId);
+}
+
+/**
+ * The entries in the order of `fieldOrder`; entries not in it keep their order
+ * and come last.
+ */
+function sortByFieldOrder(entries, fieldOrder) {
+  if (!fieldOrder.length) return entries;
+  const rank = new Map(fieldOrder.map((fieldId, index) => [fieldId, index]));
+  const rankOf = entry => rank.get(entry.fieldId) ?? Number.POSITIVE_INFINITY;
+  return entries
+    .map((entry, index) => ({ entry, index }))
+    .sort((a, b) => rankOf(a.entry) - rankOf(b.entry) || a.index - b.index)
+    .map(({ entry }) => entry);
 }
 
 function safeQuery(scope, selector) {

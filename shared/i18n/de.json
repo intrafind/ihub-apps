@@ -3590,14 +3590,6 @@
         "removeFailed": "Die Bestätigung konnte nicht entfernt werden",
         "exportFailed": "Die CSV konnte nicht exportiert werden"
       },
-      "validation": {
-        "usernameRequired": "Der Benutzername ist erforderlich",
-        "usernameInvalid": "Der Benutzername darf nur Buchstaben, Ziffern, Punkte, Bindestriche und Unterstriche enthalten",
-        "emailInvalid": "Bitte geben Sie eine gültige E-Mail-Adresse ein",
-        "passwordRequired": "Für die lokale Authentifizierung ist ein Passwort erforderlich",
-        "passwordTooShort": "Das Passwort muss mindestens 6 Zeichen lang sein",
-        "passwordMismatch": "Die Passwörter stimmen nicht überein"
-      },
       "fields": {
         "username": "Benutzername",
         "email": "E-Mail",
@@ -9649,7 +9641,12 @@
         "modelIdRequired": "Geben Sie die Modell-ID ein, die der Anbieter verwendet.",
         "providerRequired": "Wählen Sie einen Anbieter aus.",
         "urlRequired": "Geben Sie die API-URL ein.",
-        "promptRequired": "Geben Sie den Prompt-Text ein."
+        "promptRequired": "Geben Sie den Prompt-Text ein.",
+        "usernameRequired": "Geben Sie einen Benutzernamen ein.",
+        "usernameFormat": "Verwenden Sie nur Buchstaben, Ziffern, Punkte, Unterstriche und Bindestriche.",
+        "passwordRequired": "Geben Sie ein Passwort ein.",
+        "passwordMinLength": "Geben Sie ein Passwort mit mindestens {{min}} Zeichen ein.",
+        "passwordMismatch": "Geben Sie dasselbe Passwort noch einmal ein."
       }
     },
     "resourceSelector": {

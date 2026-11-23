@@ -27,9 +27,10 @@ jest.mock('../../../client/src/api/adminApi', () => ({
   __esModule: true,
   makeAdminApiCall: (...args) => mockAdminApi(...args)
 }));
+const mockRefreshConfig = jest.fn();
 jest.mock('../../../client/src/shared/contexts/PlatformConfigContext', () => ({
   __esModule: true,
-  usePlatformConfig: () => ({ refreshConfig: jest.fn() })
+  usePlatformConfig: () => ({ refreshConfig: mockRefreshConfig })
 }));
 jest.mock('../../../client/src/features/admin/hooks/useUnsavedChanges', () => ({
   __esModule: true,
@@ -127,6 +128,7 @@ describe('Admin → Features saves the draft model', () => {
   };
 
   beforeEach(() => {
+    mockRefreshConfig.mockReset();
     mockAdminApi.mockReset();
     mockAdminApi.mockImplementation(async (url, options = {}) => {
       if (url === '/admin/features') return { data: FEATURES };
@@ -169,6 +171,34 @@ describe('Admin → Features saves the draft model', () => {
         body: { appGenerator: { modelId: null } }
       })
     );
+  });
+
+  it('re-reads the shared configuration when the switches saved and the model did not', async () => {
+    const load = mockAdminApi.getMockImplementation();
+    mockAdminApi.mockImplementation(async (url, options = {}) => {
+      if (url === '/admin/configs/platform' && options.method === 'PATCH') {
+        throw new Error('refused');
+      }
+      return load(url, options);
+    });
+    jest.spyOn(console, 'error').mockImplementation(() => {});
+    render(<AdminFeaturesPage />);
+    const select = await screen.findByLabelText('Model for drafts');
+    fireEvent.click(screen.getByRole('switch', { name: 'App Drafts with AI' }));
+    fireEvent.change(select, { target: { value: 'big' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save Changes' }));
+
+    await screen.findByText('Failed to save features');
+    expect(mockAdminApi).toHaveBeenCalledWith('/admin/features', {
+      method: 'PUT',
+      body: { appGenerator: false }
+    });
+    // The switches were written: the feature map everyone reads is refreshed.
+    expect(mockRefreshConfig).toHaveBeenCalled();
+    // The refused model change stays unsaved and can be saved again.
+    expect(select).toHaveValue('big');
+    expect(screen.getByRole('button', { name: 'Save Changes' })).toBeEnabled();
+    console.error.mockRestore();
   });
 
   it('shows no select when the setting could not be loaded', async () => {

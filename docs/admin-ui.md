@@ -357,6 +357,8 @@ Models define which AI providers and specific model versions are available on yo
 
 **Testing a model:** Use the **Test** button on the model list page to verify connectivity and authentication.
 
+**Cloning a model:** **Clone** in a model's row opens a new model with its settings and the ID `<id>-copy` already filled in, or `<id>-copy-2`, `<id>-copy-3`, … when that ID is taken. Change it before saving if you like. What the form says when something is missing is described in [Errors in a form](#errors-in-a-form).
+
 ---
 
 ## Managing Providers
@@ -382,6 +384,8 @@ Prompts are reusable system prompt templates that can be referenced by apps or u
 Go to **AI Workspace → Prompts**. Prompts and Global Variables are organized as tabs.
 
 **Global Variables** are key-value pairs injected into any system prompt that references `{{variableName}}`. They allow you to maintain shared values (company name, product names, URLs) in one place.
+
+**Cloning a prompt:** **Clone** in a prompt's row opens a new prompt with its texts and the ID `<id>-copy` filled in (`<id>-copy-2`, … when taken). **Clone** of a workflow saves the copy at once under the same kind of ID.
 
 The drafts of **New app** always follow iHub's own instructions; no prompt in the library changes them.
 
@@ -744,6 +748,16 @@ removes content pages created under **Pages** in the meantime, and creating a pa
 Customization is open does not make its save fail.
 
 ---
+
+## Errors in a form
+
+The forms for models, prompts, groups and users open without errors, also when they are blank.
+
+- A field says what is missing or wrong once you leave it or change it, as a short instruction in the admin language ("Enter an ID.", "Enter a username.").
+- The first click on save lists every open point in one summary at the top of the form. The summary takes the focus and lists the fields in the order they appear in the form; each entry jumps to its field.
+- Screen readers announce only the summary. A field's own message is read with the field (it describes the input), so a failed save is not read out as several alerts at once.
+- An ID that another model, prompt or group already uses is reported at the ID field while you type.
+- If the server refuses a save for another reason, the message appears above the form and your edits stay.
 
 ## When a page can't load
 

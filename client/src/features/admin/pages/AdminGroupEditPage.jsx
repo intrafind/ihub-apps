@@ -15,6 +15,8 @@ import { useAdminResourceEditor } from '../hooks/useAdminResourceEditor';
 import AdminEditPageShell, {
   AdminSaveCancelButtons
 } from '../../../shared/components/AdminEditPageShell';
+import useSaveAttempts from '../hooks/useSaveAttempts';
+import { FIELD_KEYS } from '../utils/fieldErrors';
 
 function AdminGroupEditPage() {
   const { t } = useTranslation();
@@ -37,7 +39,8 @@ function AdminGroupEditPage() {
   const [formValidation, setFormValidation] = useState({ isValid: true, errors: [] });
   const [editorMode, setEditorMode] = useState('form');
   // Save attempts that the form refused; from the first one on every error shows.
-  const [saveAttempts, setSaveAttempts] = useState(0);
+  // Counted per resource: another resource or a blank "new" form opens without errors.
+  const [saveAttempts, countSaveAttempt] = useSaveAttempts(groupId);
   // The ID the server refused as taken (409).
   const [refusedId, setRefusedId] = useState(null);
   const isNewGroup = groupId === 'new';
@@ -140,7 +143,7 @@ function AdminGroupEditPage() {
 
     // The form names what is missing at its fields and in its summary.
     if (editorMode === 'form' && !formValidation.isValid) {
-      setSaveAttempts(count => count + 1);
+      countSaveAttempt();
       return;
     }
 
@@ -159,9 +162,12 @@ function AdminGroupEditPage() {
       navigate('/admin/groups');
     } catch (err) {
       // A taken ID belongs to the ID field: the form says it there and in its summary.
+      // The JSON mode shows no form, so there the page says it.
       if (isNewGroup && err?.response?.status === 409) {
         setRefusedId(data.id);
-        setSaveAttempts(count => count + 1);
+        countSaveAttempt();
+        if (editorMode === 'form') return;
+        setSaveError(t(FIELD_KEYS.idTaken));
         return;
       }
       setSaveError(getAdminApiErrorMessage(err));

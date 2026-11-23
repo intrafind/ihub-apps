@@ -51,7 +51,12 @@ export const FIELD_KEYS = Object.freeze({
   modelIdRequired: 'admin.formErrors.field.modelIdRequired',
   providerRequired: 'admin.formErrors.field.providerRequired',
   urlRequired: 'admin.formErrors.field.urlRequired',
-  promptRequired: 'admin.formErrors.field.promptRequired'
+  promptRequired: 'admin.formErrors.field.promptRequired',
+  usernameRequired: 'admin.formErrors.field.usernameRequired',
+  usernameFormat: 'admin.formErrors.field.usernameFormat',
+  passwordRequired: 'admin.formErrors.field.passwordRequired',
+  passwordMinLength: 'admin.formErrors.field.passwordMinLength',
+  passwordMismatch: 'admin.formErrors.field.passwordMismatch'
 });
 
 /**
@@ -214,6 +219,38 @@ export function schemaFieldErrors(data, schema, t, { rules = {}, localizedFields
     if (textMissing(field) && !errors[field]) errors[field] = missingText(field);
   }
   return errors;
+}
+
+/**
+ * The id of the element that holds a field's inline message.
+ * @param {string} field - The field path, such as `id` or `variables.0.name`.
+ * @returns {string}
+ */
+export function fieldErrorId(field) {
+  return `${field}-error`;
+}
+
+/**
+ * The attributes that tie an input to its inline message: `aria-invalid` and
+ * `aria-describedby`. The message itself is no live region; after a failed
+ * save only the error summary, which takes the focus, is announced.
+ *
+ * @param {string} field - The field path.
+ * @param {string|undefined|null} message - The field's visible message, if any.
+ * @param {...(string|undefined|null)} describedBy - Further ids the input is described by
+ *   (a hint), kept in front of the message.
+ * @returns {{'aria-invalid': (true|undefined), 'aria-describedby': (string|undefined)}}
+ *
+ * @example
+ * <input {...fieldErrorAttributes('url', errors.url)} />
+ * {errors.url && <p id={fieldErrorId('url')}>{errors.url}</p>}
+ */
+export function fieldErrorAttributes(field, message, ...describedBy) {
+  const ids = [...describedBy, message ? fieldErrorId(field) : null].filter(Boolean);
+  return {
+    'aria-invalid': message ? true : undefined,
+    'aria-describedby': ids.length ? ids.join(' ') : undefined
+  };
 }
 
 /**
