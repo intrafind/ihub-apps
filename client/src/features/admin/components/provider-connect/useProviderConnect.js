@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { getAdminApiErrorMessage, makeAdminApiCall } from '../../../../api/adminApi';
 import { findIdProblems, suggestModelId, translateDiscoveryError } from '../../utils/modelImport';
@@ -54,6 +54,16 @@ export default function useProviderConnect({ initialTileId = null } = {}) {
   const [testing, setTesting] = useState(false);
   const [testError, setTestError] = useState(null);
   const [discovery, setDiscovery] = useState(null);
+  // Numbers the connection tests. A changed connection or tile counts as a new
+  // one, so an answer still on its way for the old connection is dropped
+  // instead of being taken for the current one.
+  const testRunRef = useRef(0);
+  const forgetTest = useCallback(() => {
+    testRunRef.current += 1;
+    setDiscovery(null);
+    setTestError(null);
+    setTesting(false);
+  }, []);
 
   const [selected, setSelected] = useState({});
   const [editedIds, setEditedIds] = useState({});
@@ -79,10 +89,9 @@ export default function useProviderConnect({ initialTileId = null } = {}) {
       if (!chosen) return;
       setTileId(id);
       setForm(initialConnectionForm(chosen, resolveTarget(chosen, list).provider));
-      setDiscovery(null);
-      setTestError(null);
+      forgetTest();
     },
-    [providers]
+    [providers, forgetTest]
   );
 
   // Providers and models are needed to decide anything; groups only for step
@@ -126,14 +135,18 @@ export default function useProviderConnect({ initialTileId = null } = {}) {
   const tiles = useMemo(() => getAvailableTiles(providers), [providers]);
 
   /** A changed connection invalidates the last test and what was picked from it. */
-  const updateForm = useCallback((field, value) => {
-    setForm(prev => updateConnectionForm(prev, field, value));
-    setDiscovery(null);
-    setTestError(null);
-  }, []);
+  const updateForm = useCallback(
+    (field, value) => {
+      setForm(prev => updateConnectionForm(prev, field, value));
+      forgetTest();
+    },
+    [forgetTest]
+  );
 
   const runTest = useCallback(async () => {
     if (!tile || !form) return;
+    testRunRef.current += 1;
+    const run = testRunRef.current;
     setTesting(true);
     setTestError(null);
     setDiscovery(null);
@@ -142,6 +155,7 @@ export default function useProviderConnect({ initialTileId = null } = {}) {
         method: 'POST',
         body: buildDiscoveryRequest(tile, form, target)
       });
+      if (run !== testRunRef.current) return;
       setDiscovery(response.data);
       setSelected({});
       setEditedIds({});
@@ -150,6 +164,7 @@ export default function useProviderConnect({ initialTileId = null } = {}) {
       setPrefix(suggestedIdPrefix(target, form));
       setDefaultChoice(null);
     } catch (err) {
+      if (run !== testRunRef.current) return;
       const body = err?.response?.data || {};
       const remediation = body.details?.remediation;
       setTestError({
@@ -166,7 +181,7 @@ export default function useProviderConnect({ initialTileId = null } = {}) {
         )
       });
     } finally {
-      setTesting(false);
+      if (run === testRunRef.current) setTesting(false);
     }
   }, [tile, form, target, t]);
 

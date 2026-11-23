@@ -342,7 +342,13 @@ function RestrictAccessBody({ type, id, itemName, groups, onClose, onApplied, ti
         <button
           type="button"
           onClick={() => void apply()}
-          disabled={applying || loading || changes.length === 0}
+          disabled={
+            applying ||
+            loading ||
+            changes.length === 0 ||
+            // No preview of the current choice: never apply one that was not shown.
+            (answer.key === previewKey && Boolean(answer.error))
+          }
           className={PRIMARY_BUTTON_CLASS}
         >
           {applying && <Icon name="refresh" className="h-4 w-4 animate-spin" />}

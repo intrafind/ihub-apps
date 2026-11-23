@@ -267,4 +267,14 @@ describe('Default-Model-Assigned names a default the server picked on its own', 
     expect(res.status).toBe(200);
     expect(res.headers[ASSIGNED]).toBe('large');
   });
+
+  test('unticking Enabled on the default (default still sent) hands the default on', async () => {
+    seed(chat('small', { default: true }), chat('large'));
+    const res = await request(app)
+      .put('/api/admin/models/small')
+      .send({ ...chat('small'), enabled: false, default: true });
+    expect(res.status).toBe(200);
+    expect(res.body.default).toBe(false);
+    expect(res.headers[ASSIGNED]).toBe('large');
+  });
 });

@@ -245,7 +245,10 @@ function ConnectionStep({ tile, form, target, providers, onChange }) {
                   'admin.providers.connect.connection.keyHint',
                   'Stored encrypted on the provider, not on each model.'
                 )}{' '}
+          {/* Only for a provider that exists: the connection test of a new one reads no
+              environment variable (the server looks one up only by a stored provider id). */}
           {envVar &&
+            !isNew &&
             t(
               'admin.providers.connect.connection.envVarHint',
               'Instead of storing it, you can leave this empty and set the environment variable {{envVar}} on the server.',

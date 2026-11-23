@@ -764,7 +764,9 @@ export default function registerAdminModelsRoutes(app) {
     const limitsError = normalizeModelUsageLimits(updatedModel);
     if (limitsError) throw new ServiceError('BAD_REQUEST', limitsError);
 
-    if (!isChatModel(updatedModel)) updatedModel.default = false;
+    // A disabled model answers nobody, so it cannot stay the default (the toggle
+    // already clears it); the next enabled chat model takes over below.
+    if (!isChatModel(updatedModel) || updatedModel.enabled === false) updatedModel.default = false;
     const previousDefaultId = liveDefaultModelId();
     if (updatedModel.default === true) await clearOtherDefaults(modelId);
     // The version being replaced, as it is stored: the history's "before". Replaced under the
@@ -774,6 +776,7 @@ export default function registerAdminModelsRoutes(app) {
       oldModel = current;
       return updatedModel;
     });
+    if (oldModel?.default === true && updatedModel.default !== true) await ensureStoredDefault();
     await configCache.refreshModelsCache();
     if (oldModel) {
       await saveSnapshot({
@@ -836,7 +839,7 @@ export default function registerAdminModelsRoutes(app) {
     if ((await configStore.readJson(newModelPath)) !== null) {
       throw new ServiceError('CONFLICT', 'Model with this ID already exists');
     }
-    if (!isChatModel(newModel)) newModel.default = false;
+    if (!isChatModel(newModel) || newModel.enabled === false) newModel.default = false;
     const previousDefaultId = liveDefaultModelId();
     if (newModel.default === true) await clearOtherDefaults(newModel.id);
     await configStore.writeJson(newModelPath, newModel);

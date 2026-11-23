@@ -182,6 +182,25 @@ describe('enable switch and Make default', () => {
     expect(within(await rowOf('LARGE')).getByText('Default')).toBeInTheDocument();
   });
 
+  test('switching on the model the server makes the default marks its own row', async () => {
+    mockApi.toggleModels.mockResolvedValue({
+      enabled: true,
+      ids: ['large'],
+      assignedDefaultModelId: 'large'
+    });
+    renderPage([model('small', { enabled: false }), model('large', { enabled: false })]);
+
+    const toggle = await screen.findByRole('switch', { name: 'Enabled: LARGE' });
+    await act(async () => {
+      fireEvent.click(toggle);
+    });
+
+    expect(screen.getByTestId('editor-toast')).toHaveTextContent(
+      '"LARGE" is now the default model.'
+    );
+    expect(within(await rowOf('LARGE')).getByText('Default')).toBeInTheDocument();
+  });
+
   test('a toggle that leaves the default where it was announces nothing', async () => {
     mockApi.toggleModels.mockResolvedValue({ enabled: false, ids: ['large'] });
     renderPage([model('small', { default: true }), model('large')]);

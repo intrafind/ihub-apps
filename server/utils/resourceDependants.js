@@ -68,16 +68,20 @@ export function defaultSuccessorId(models, exceptId) {
 }
 
 /**
- * The id of the model that answers when an app names none: the chat model
- * flagged `default`, else the first enabled chat model (what the config loader
- * promotes in memory when no default is configured).
+ * The id of the model that answers when an app names none: the enabled chat
+ * model flagged `default`, else the first enabled chat model (what the config
+ * loader promotes in memory when no default is configured, and what chat falls
+ * back to). A disabled model flagged `default` does not count: chat skips it,
+ * and `@default` must grant the model chat actually uses.
  *
  * @param {Array<Object>} models
  * @returns {string|null}
  */
 export function effectiveDefaultModelId(models) {
   const list = models || [];
-  const flagged = list.find(model => model?.default === true && isChatModel(model));
+  const flagged = list.find(
+    model => model?.default === true && model.enabled !== false && isChatModel(model)
+  );
   if (flagged) return flagged.id;
   const first = list.find(model => model?.enabled === true && isChatModel(model));
   return first ? first.id : null;

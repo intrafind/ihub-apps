@@ -100,6 +100,16 @@ describe('getPermissionsForUser with @default', () => {
     expect([...permissions.models]).toEqual(['first-chat']);
   });
 
+  it('skips a disabled model that is still flagged default, as chat does', () => {
+    mockModels = [
+      { id: 'old-default', enabled: false, default: true },
+      { id: 'first-chat', enabled: true }
+    ];
+    expect(currentDefaultModelId()).toBe('first-chat');
+    const permissions = getPermissionsForUser(['anonymous'], groupPermissions);
+    expect([...permissions.models]).toEqual(['first-chat']);
+  });
+
   it('grants nothing when no model is configured', () => {
     mockModels = [];
     const permissions = getPermissionsForUser(['anonymous'], groupPermissions);

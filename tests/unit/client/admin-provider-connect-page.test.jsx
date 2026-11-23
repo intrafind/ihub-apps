@@ -146,7 +146,8 @@ test('connects an OpenAI-compatible gateway with two models, an explicit default
     target: { value: 'https://hub.example/v1' }
   });
   fireEvent.change(screen.getByLabelText('API key'), { target: { value: 'secret' } });
-  expect(screen.getByText(/LLM_HUB_API_KEY/)).toBeInTheDocument();
+  // A new provider's test reads no environment variable, so the hint is not offered.
+  expect(screen.queryByText(/LLM_HUB_API_KEY/)).not.toBeInTheDocument();
   await next();
 
   // Step 3: the test ran on entering and shows host and model count.
@@ -233,6 +234,7 @@ test('a shipped provider with a stored key starts at the connection from ?vendor
   expect(screen.getByRole('heading', { name: 'Connect OpenAI' })).toBeInTheDocument();
   expect(screen.getByLabelText(/Endpoint URL/)).toHaveAttribute('readonly');
   expect(screen.getByText(/A key is already stored on this provider/)).toBeInTheDocument();
+  expect(screen.getByText(/OPENAI_API_KEY/)).toBeInTheDocument();
   await next();
   expect(calls('/admin/models/_discover', 'POST')[0][1].body).toEqual({
     url: 'https://api.openai.com/v1',
@@ -328,4 +330,44 @@ test('Bedrock stores the key and ends with the Marketplace', async () => {
     'href',
     '/admin/marketplace?type=model'
   );
+});
+
+test('an answer for a connection the admin has since changed is dropped', async () => {
+  let resolveFirst;
+  const bodies = [];
+  mockApi({
+    discover: body => {
+      bodies.push(body);
+      if (bodies.length === 1) {
+        return new Promise(resolve => {
+          resolveFirst = resolve;
+        });
+      }
+      return { data: { ...DISCOVERY, baseUrl: 'https://b.example/v1' } };
+    }
+  });
+  await renderPage();
+  fireEvent.click(screen.getByTestId('connect-tile-openai-compatible'));
+  await next();
+  fireEvent.change(screen.getByLabelText(/^Name/), { target: { value: 'Hub' } });
+  fireEvent.change(screen.getByLabelText(/Endpoint URL/), {
+    target: { value: 'https://a.example/v1' }
+  });
+  await next();
+  expect(bodies[0].url).toBe('https://a.example/v1');
+
+  // Back while the test of A runs, change the URL to B, then A answers.
+  fireEvent.click(screen.getByRole('button', { name: 'Back' }));
+  fireEvent.change(screen.getByLabelText(/Endpoint URL/), {
+    target: { value: 'https://b.example/v1' }
+  });
+  await act(async () => {
+    resolveFirst({ data: DISCOVERY });
+  });
+
+  // Entering the test step again tests B; A's answer was not kept.
+  await next();
+  await screen.findByTestId('connect-test-success');
+  expect(bodies).toHaveLength(2);
+  expect(bodies[1].url).toBe('https://b.example/v1');
 });

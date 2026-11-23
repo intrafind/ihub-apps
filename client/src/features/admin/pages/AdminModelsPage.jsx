@@ -253,8 +253,12 @@ function AdminModelsPage() {
       const assigned = result?.assignedDefaultModelId;
       setModels(prev =>
         prev.map(m => {
-          // A disabled model loses the default flag on the server.
-          if (m.id === modelId) return { ...m, enabled, ...(enabled ? {} : { default: false }) };
+          // A disabled model loses the default flag on the server; an enabled one
+          // can be the default the server just assigned.
+          if (m.id === modelId) {
+            if (!enabled) return { ...m, enabled, default: false };
+            return { ...m, enabled, ...(assigned ? { default: assigned === m.id } : {}) };
+          }
           return assigned ? { ...m, default: m.id === assigned } : m;
         })
       );
