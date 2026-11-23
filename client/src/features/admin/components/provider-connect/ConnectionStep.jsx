@@ -26,7 +26,7 @@ function urlHint(t, tile, form) {
       return t(
         'admin.providers.connect.connection.urlHintSelfHosted',
         'The API base as the iHub server reaches it (not your browser), for example {{example}}.',
-        { example: server?.urlPlaceholder || 'http://gpu01:8000/v1' }
+        { example: server?.urlPlaceholder || 'http://localhost:8000/v1' }
       );
     }
     case 'ifinder-gateway':

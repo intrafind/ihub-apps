@@ -53,7 +53,7 @@ export const SELF_HOSTED_SERVERS = Object.freeze([
     id: 'vllm',
     name: 'vLLM',
     apiType: 'local',
-    urlPlaceholder: 'http://gpu01:8000/v1'
+    urlPlaceholder: 'http://localhost:8000/v1'
   },
   {
     id: 'lm-studio',
