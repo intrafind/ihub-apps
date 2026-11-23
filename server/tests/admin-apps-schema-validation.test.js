@@ -343,6 +343,26 @@ describe('PUT /api/admin/apps/:appId', () => {
     expect(store['apps/embed.json']).toEqual(existing);
   });
 
+  test('keeps the personal app a published app came from, and refuses another value', async () => {
+    const source = 'uap_0123456789abcdef0123456789abcdef';
+    seed(chatApp('published', { sourceUserAppId: source }));
+    const edited = chatApp('published', {
+      sourceUserAppId: source,
+      description: { en: 'Edited by an admin' }
+    });
+
+    const res = await request(app).put('/api/admin/apps/published').send(edited);
+    expect(res.status).toBe(200);
+    expect(store['apps/published.json']).toEqual(edited);
+
+    const wrong = await request(app)
+      .put('/api/admin/apps/published')
+      .send({ ...edited, sourceUserAppId: 'not-a-personal-app' });
+    expect(wrong.status).toBe(400);
+    expect(wrong.body.detail).toContain('sourceUserAppId');
+    expect(store['apps/published.json']).toEqual(edited);
+  });
+
   test('rejects an update with an invalid field value', async () => {
     seed(chatApp('helper'));
 

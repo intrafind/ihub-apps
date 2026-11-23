@@ -156,7 +156,7 @@ export function useDraftRequest({ generate, language, onDraft }) {
  * @param {string} props.description - The text in the box.
  * @param {(text: string) => void} props.onDescriptionChange
  * @param {(result: object, description: string) => void} props.onDraft - Called with the body of
- *   `POST /api/admin/apps/_generate` (`{ app, suggestions, warnings, model, brief }`) and the
+ *   `POST /api/admin/apps/_generate` (`{ app, suggestions, warnings, model }`) and the
  *   description that was sent.
  * @param {(request: { description: string, language?: string, signal: AbortSignal }) => Promise<object>} props.generate
  * @param {string} [props.language] - The content language of the draft; the UI language when absent.

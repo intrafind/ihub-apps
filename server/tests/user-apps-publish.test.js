@@ -250,6 +250,8 @@ describe('what a publish writes', () => {
     assert.equal(appConfigSchema.safeParse(file).success, true);
     assert.equal(file.id, SLUG);
     assert.equal(isUserAppId(file.id), false);
+    // The file records the personal app it came from.
+    assert.equal(file.sourceUserAppId, record.id);
     assert.equal(file.enabled, true);
     assert.deepEqual(file.toolApproval, { default: 'writes' });
     assert.equal('category' in file, false);
@@ -826,6 +828,7 @@ describe('POST /api/admin/user-apps/{appId}/_promote', () => {
     assert.equal(res.body.enabled, false);
     assert.deepEqual(await appFile(SLUG), res.body);
     assert.equal(appConfigSchema.safeParse(res.body).success, true);
+    assert.equal(res.body.sourceUserAppId, record.id, 'a take-over stamps the file too');
 
     const stored = await api.repo().get(record.id);
     assert.equal(stored.state, 'promoted');
@@ -1063,6 +1066,42 @@ describe('the way back', () => {
     const view = await as('anna').get(`/api/apps/${record.id}`);
     assert.equal(view.body.state, 'active');
     assert.equal(view.body.permissions.canEdit, true);
+  });
+
+  it("a company app without the record's stamp releases the record (finding 14)", async () => {
+    for (const stamp of [undefined, 'uap_00000000000000000000000000000001']) {
+      const record = await sharedApp();
+      assert.equal((await publish('anna', record)).status, 200);
+      const appId = (await api.repo().get(record.id)).publishedAs.appId;
+      // An admin replaces the file by hand under the held ID: no stamp, or another app's.
+      const { sourceUserAppId: _stamp, ...handMade } = await appFile(appId);
+      await configStore.writeJson(`apps/${appId}.json`, {
+        ...handMade,
+        ...(stamp ? { sourceUserAppId: stamp } : {})
+      });
+      await configCache.refreshAppsCache();
+
+      const view = await as('anna').get(`/api/apps/${record.id}`);
+      assert.equal(view.body.state, 'active', String(stamp));
+      assert.equal(view.body.permissions.canEdit, true, String(stamp));
+      const stored = await api.repo().get(record.id);
+      assert.equal(stored.state, 'active', String(stamp));
+      assert.equal(stored.publishedAs, null, String(stamp));
+      // The hand-made app stays as the admin wrote it.
+      assert.ok(await appFile(appId));
+    }
+  });
+
+  it('an admin edit that keeps the stamp keeps the record promoted', async () => {
+    const record = await sharedApp();
+    assert.equal((await publish('anna', record)).status, 200);
+    const file = await appFile(SLUG);
+    await configStore.writeJson(`apps/${SLUG}.json`, { ...file, description: { en: 'Edited' } });
+    await configCache.refreshAppsCache();
+    assert.equal(appConfigSchema.safeParse(await appFile(SLUG)).success, true);
+    const view = await as('anna').get(`/api/apps/${record.id}`);
+    assert.equal(view.body.state, 'retired');
+    assert.equal((await api.repo().get(record.id)).state, 'promoted');
   });
 
   it('an offer of an app whose company app was deleted can be accepted', async () => {

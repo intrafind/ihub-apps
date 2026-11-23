@@ -388,6 +388,21 @@ describe('the form state (userAppForm.js)', () => {
     expect(
       readOnlyReason(userApp({ permissions: { canEdit: false, isOwner: false, role: 'user' } }))
     ).toEqual({ reason: 'role' });
+    // A blocked owner: their own apps are read-only; their editors see the suspended shares.
+    expect(
+      readOnlyReason(
+        userApp({
+          permissions: { canEdit: false, isOwner: true, role: 'owner', suspended: 'ownerBlocked' }
+        })
+      )
+    ).toEqual({ reason: 'ownerBlocked' });
+    expect(
+      readOnlyReason(
+        userApp({
+          permissions: { ...EDITOR_PERMISSIONS, canEdit: false, suspended: 'ownerBlocked' }
+        })
+      )
+    ).toEqual({ reason: 'role' });
     expect(withheldCapabilities(userApp({ capabilities: denied }))).toEqual([
       {
         id: 'integration:jira-main',
@@ -791,6 +806,41 @@ describe('read-only', () => {
     expect(screen.queryByRole('button', { name: en.admin.apps.edit.test })).not.toBeInTheDocument();
     // The owner can still delete it, and cannot duplicate it.
     expect(await openMore()).toEqual([en.userApps.list.menu.delete]);
+  });
+
+  test('a blocked owner sees the app read-only with the reason, and nothing to change', async () => {
+    // The reduced body, as for every caller who may not chat with the app.
+    mockApi.fetchUserApp.mockResolvedValue({
+      id: APP_ID,
+      ownership: 'user',
+      name: { en: 'Job ad writer' },
+      icon: 'document-text',
+      color: '#4F46E5',
+      owner: { id: 'anna', name: 'Anna Schmidt', active: true },
+      state: 'active',
+      permissions: {
+        canView: true,
+        canUse: false,
+        canEdit: false,
+        canShare: false,
+        canDelete: false,
+        canOffer: false,
+        canPublish: false,
+        isOwner: true,
+        role: 'owner',
+        readOnly: false,
+        suspended: 'ownerBlocked'
+      },
+      disabled: null
+    });
+    await renderEditor();
+    expect(banner()).toHaveTextContent(EDIT.readOnly.ownerBlocked);
+    expect(banner()).toHaveAttribute('data-reason', 'ownerBlocked');
+    expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: SAVE })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Share' })).not.toBeInTheDocument();
+    // Nothing to delete, duplicate or hand over: no menu at all.
+    expect(screen.queryByRole('button', { name: 'More' })).not.toBeInTheDocument();
   });
 
   test('an editor who may not use what the app uses', async () => {

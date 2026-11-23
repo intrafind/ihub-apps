@@ -142,7 +142,13 @@ function AdminUserViewPage() {
   }
 
   if (error || !user) {
-    return <AdminLoadError title="Error" message={error || 'User not found'} action={null} />;
+    return (
+      <AdminLoadError
+        title={t('common.error', 'Error')}
+        message={error || t('admin.users.view.notFound', 'User not found')}
+        action={null}
+      />
+    );
   }
 
   return (

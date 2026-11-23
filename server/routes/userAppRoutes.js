@@ -176,8 +176,11 @@ function requiredRevision(req) {
  * of the app gets 409 `CONFLICT` with `details.reason` `promoted` or
  * `disabled`; everyone else 403 `PERMISSION_DENIED` with `details.required`.
  *
+ * A caller stopped because the owner is blocked gets `details.reason`
+ * `ownerBlocked`.
+ *
  * @param {import('express').Request} req - After `userAppAccessRequired('view')`.
- * @param {'edit'|'share'|'offer'|'use'} level
+ * @param {'edit'|'share'|'offer'|'use'|'delete'} level
  * @throws {ServiceError}
  */
 function requireLevel(req, level) {
@@ -190,7 +193,9 @@ function requireLevel(req, level) {
       : (level === 'edit' || level === 'share') && (role === 'owner' || role === 'editor');
   if (holdsRole) assertChangeable(req.userApp, req.userAppContext);
   const details = { required: level };
-  if (level === 'share' && holdsRole) {
+  if (permissions.suspended === 'ownerBlocked') {
+    details.reason = 'ownerBlocked';
+  } else if (level === 'share' && holdsRole) {
     // Sharing needs the permission of the caller and of the owner.
     details.required = 'userAppSharing';
     if (mayShareUserApps(req.user)) details.reason = 'ownerMayNotShare';
@@ -394,7 +399,6 @@ export default function registerUserAppRoutes(app, { llmClient, service: injecte
         ...(record.modelId ? { modelId: record.modelId } : {}),
         ...(record.usage ? { usage: record.usage } : {}),
         ...(request ? { descriptionLength: request.description.length } : {}),
-        ...(record.brief ? { brief: record.brief } : {}),
         ...extra
       }
     });
@@ -430,7 +434,7 @@ export default function registerUserAppRoutes(app, { llmClient, service: injecte
    *               language: { type: string, pattern: '^[a-z]{2}(-[A-Z]{2})?$' }
    *     responses:
    *       200:
-   *         description: The draft (`app`, `suggestions`, `warnings`, `model`, `brief`)
+   *         description: The draft (`app`, `suggestions`, `warnings`, `model`)
    *       400:
    *         description: The body is invalid (`VALIDATION_FAILED`), or the model refused the request
    *       401:
@@ -683,7 +687,7 @@ export default function registerUserAppRoutes(app, { llmClient, service: injecte
    *       401:
    *         description: Not signed in (`AUTH_REQUIRED`)
    *       403:
-   *         description: Not allowed to edit (`PERMISSION_DENIED`), a capability is not available (`USER_APP_CAPABILITY_DENIED`), access changed meanwhile (`USER_APP_ACCESS_CHANGED`), or personal apps are switched off (`USER_APPS_DISABLED`)
+   *         description: Not allowed to edit, or the owner is blocked (`PERMISSION_DENIED`, `details.reason` `ownerBlocked`), a capability is not available (`USER_APP_CAPABILITY_DENIED`), access changed meanwhile (`USER_APP_ACCESS_CHANGED`), or personal apps are switched off (`USER_APPS_DISABLED`)
    *       404:
    *         description: No app the caller can see (`NOT_FOUND`)
    *       409:
@@ -705,7 +709,7 @@ export default function registerUserAppRoutes(app, { llmClient, service: injecte
    *       401:
    *         description: Not signed in (`AUTH_REQUIRED`)
    *       403:
-   *         description: Not the owner (`PERMISSION_DENIED`), or personal apps are switched off (`USER_APPS_DISABLED`)
+   *         description: Not the owner, or the owner is blocked (`PERMISSION_DENIED`, `details.reason` `ownerBlocked`), or personal apps are switched off (`USER_APPS_DISABLED`)
    *       404:
    *         description: No app the caller can see (`NOT_FOUND`)
    */
@@ -736,6 +740,8 @@ export default function registerUserAppRoutes(app, { llmClient, service: injecte
   });
 
   app.delete(route('/:appId'), ...appGate, userAppAccessRequired('own'), async (req, res) => {
+    // The owner, and not while an administrator blocked them.
+    requireLevel(req, 'delete');
     const removed = await service().remove(req.userApp, { context: req.userAppContext });
     logAudit({
       req,
@@ -845,7 +851,7 @@ export default function registerUserAppRoutes(app, { llmClient, service: injecte
    *       400:
    *         description: The body is invalid (`VALIDATION_FAILED`), or a target is unknown (`SHARE_TARGET_INVALID`)
    *       403:
-   *         description: The caller or the owner may not share (`PERMISSION_DENIED`), or the audience is not allowed (`SHARE_TARGET_NOT_ALLOWED`)
+   *         description: The caller or the owner may not share, or the owner is blocked (`PERMISSION_DENIED`), or the audience is not allowed (`SHARE_TARGET_NOT_ALLOWED`)
    *       404:
    *         description: No app the caller can see (`NOT_FOUND`)
    *       409:

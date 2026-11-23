@@ -33,7 +33,7 @@ import { appConfigSchema } from '../validators/appConfigSchema.js';
 import defaultLlmClient from './loop/LLMClient.js';
 import installedIntegrationService from './integrations/InstalledIntegrationService.js';
 import { mayUseIntegration } from './integrations/integrationAccess.js';
-import { APP_GENERATOR_PROMPT_ID, buildGeneratorMessages } from './appGeneratorBrief.js';
+import { buildGeneratorMessages } from './appGeneratorBrief.js';
 import { integrationsFromAnswer } from '../../shared/appGenerator.js';
 import {
   DEFAULT_APP_CATEGORY,
@@ -222,24 +222,6 @@ export function integrationsBlock(integrations) {
     ...lines,
     CATALOGUE_CLOSE
   ].join('\n');
-}
-
-/**
- * The text `GET /api/admin/prompts/app-generator` answers with: the library
- * prompt in one language plus the catalogue of installed integrations. Drafts
- * are prepared with {@link generateAppDraft}, which does not use it.
- *
- * @param {Object} promptConfig - the `app-generator` prompt (`prompt`)
- * @param {string} language
- * @param {string} defaultLanguage
- * @param {ReturnType<typeof describeInstalledIntegrations>} integrations
- * @returns {{ prompt: string }}
- */
-export function buildAppGeneratorBrief(promptConfig, language, defaultLanguage, integrations) {
-  const text = promptConfig?.prompt?.[language] || promptConfig?.prompt?.[defaultLanguage] || '';
-  return {
-    prompt: text + integrationsBlock(integrations)
-  };
 }
 
 // ---------------------------------------------------------------------------
@@ -801,7 +783,7 @@ function searchFor(user) {
  * @param {AbortSignal} [params.signal] - Aborts the model call.
  * @param {{ complete: Function }} [params.llmClient] - The model client.
  * @param {object} [params.record] - Receives what the call used, as far as it
- *   got: `modelId`, `brief` and, after the model answered, `usage`. The route
+ *   got: `modelId` and, after the model answered, `usage`. The route
  *   writes it into the audit entry, also when the draft fails.
  * @param {{ settings: object }|null} [params.personal] - Set for the draft of a
  *   personal app (`POST /api/apps/_generate`), with the effective
@@ -810,7 +792,7 @@ function searchFor(user) {
  *   use: web search when `capabilities.webSearch` is on and a search engine is
  *   available to the caller; installations from `capabilities.integrations`,
  *   each with named actions from that list.
- * @returns {Promise<{ app: object, suggestions: object, warnings: object[], model: { id: string, name: string }, brief: 'standard'|'customised' }>}
+ * @returns {Promise<{ app: object, suggestions: object, warnings: object[], model: { id: string, name: string } }>}
  * @throws {ServiceError} `ABORTED` (499) when the signal is aborted before
  *   the model is called; `APP_GENERATOR_NO_MODEL` (503) without a usable
  *   model; `APP_GENERATOR_INVALID_ANSWER` (502) for an answer that cannot
@@ -838,21 +820,14 @@ export async function generateAppDraft({
   record.modelId = model.id;
 
   const defaultLanguage = configCache.getPlatform()?.defaultLanguage || 'en';
-  const libraryPrompt =
-    (configCache.getPrompts(true)?.data || []).find(
-      prompt => prompt?.id === APP_GENERATOR_PROMPT_ID
-    ) || null;
   const categories = appCategoryIds();
   const installed = await installationsFor(user, language, personal);
-  const { brief, messages } = buildGeneratorMessages({
-    libraryPrompt,
+  const { messages } = buildGeneratorMessages({
     description,
     language,
-    defaultLanguage,
     categories,
     integrationsBlock: integrationsBlock(installed)
   });
-  record.brief = brief;
 
   // A request that was closed before this point must not start a paid call.
   if (signal?.aborted) {
@@ -903,7 +878,6 @@ export async function generateAppDraft({
   logger.debug('Prepared an app draft', {
     component: COMPONENT,
     modelId: model.id,
-    brief,
     warnings: draft.warnings.length,
     finishReason: result?.finishReason ?? null
   });
@@ -913,7 +887,6 @@ export async function generateAppDraft({
     model: {
       id: model.id,
       name: getLocalizedString(model.name, baseLanguage(language), defaultLanguage, model.id)
-    },
-    brief
+    }
   };
 }

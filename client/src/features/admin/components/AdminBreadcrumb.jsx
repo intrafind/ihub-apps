@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
 import { Link } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
 
 /**
@@ -12,12 +13,13 @@ import Icon from '../../../shared/components/Icon';
  *   Each crumb with a `href` renders as a link; the last crumb is always plain text.
  */
 function AdminBreadcrumb({ crumbs = [] }) {
+  const { t } = useTranslation();
   if (crumbs.length === 0) return null;
 
   return (
     <nav
       className="flex items-center gap-1 text-sm text-gray-500 dark:text-gray-400 mb-4"
-      aria-label="Breadcrumb"
+      aria-label={t('admin.breadcrumbLabel', 'Breadcrumb')}
     >
       {crumbs.map((crumb, index) => {
         const isLast = index === crumbs.length - 1;

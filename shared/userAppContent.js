@@ -220,7 +220,8 @@ export const USER_APP_FIELD_POLICY = Object.freeze({
   allowInheritance: 'never',
   parentId: 'never',
   inheritanceLevel: 'never',
-  overriddenFields: 'never'
+  overriddenFields: 'never',
+  sourceUserAppId: 'never'
 });
 
 /** The keys of {@link USER_APP_FIELD_POLICY} with one verdict, in the order of the policy. */

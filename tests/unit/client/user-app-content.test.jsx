@@ -131,7 +131,8 @@ function appWithEverySchemaKey() {
     allowInheritance: true,
     parentId: 'parent',
     inheritanceLevel: 1,
-    overriddenFields: ['name']
+    overriddenFields: ['name'],
+    sourceUserAppId: 'uap_0123456789abcdef0123456789abcdef'
   };
   return values;
 }

@@ -363,6 +363,26 @@ describe('the runner is the owner', () => {
     assert.equal(requests.length, 2, 'the model got the result and answered');
   });
 
+  it('content an editor saved runs under the owner settings too: a read runs without a card', async () => {
+    const shared = await sharedApp();
+    // Carol ("Can edit") saved the current content; nobody confirms it.
+    const record = await harness
+      .repo()
+      .mutate(
+        shared.id,
+        current => ({ ...current, updatedBy: { id: 'carol', name: 'Carol Shaw' } }),
+        { bumpRevision: false }
+      );
+    assert.equal(record.updatedBy.id, 'carol');
+    const chatId = randomUUID();
+    script = [toolTurn(SEARCH_TOOL, { query: 'job ads' }), textTurn('Here is what I found.')];
+    const res = await send('anna', record.id, chatId, message('Search for it'));
+    assert.equal(res.status, 200, res.text);
+    const { state, open } = await pendingApproval(chatId);
+    assert.equal(state.pending, null);
+    assert.equal(open.length, 0);
+  });
+
   it('a read_url call runs without a card', async () => {
     const record = await sharedApp();
     const chatId = randomUUID();

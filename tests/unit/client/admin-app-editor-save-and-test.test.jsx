@@ -555,7 +555,7 @@ describe('the header', () => {
     expect(screen.getByTestId('app-status')).toHaveTextContent('Nicht veröffentlicht');
     expect(screen.getByRole('button', { name: 'Veröffentlichen' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Testen' })).toBeInTheDocument();
-    const trail = screen.getByRole('navigation', { name: 'Breadcrumb' });
+    const trail = screen.getByRole('navigation', { name: de.admin.breadcrumbLabel });
     expect(within(trail).getByRole('link', { name: de.documentTitle.admin })).toHaveAttribute(
       'href',
       '/admin'

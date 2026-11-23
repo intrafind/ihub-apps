@@ -65,7 +65,7 @@ export function initialDraftState() {
     source: null,
     /** What the author wrote for the AI. */
     description: '',
-    /** The answer of the draft request: `{ app, suggestions, warnings, model, brief }`. */
+    /** The answer of the draft request: `{ app, suggestions, warnings, model }`. */
     generated: null,
     extras: { ...INITIAL_EXTRAS, integrationIds: [] },
     /** The author edited the app ID; it no longer follows the name. */

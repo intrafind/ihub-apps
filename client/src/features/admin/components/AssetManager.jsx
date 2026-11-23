@@ -60,13 +60,18 @@ function AssetManager({ t }) {
       'image/vnd.microsoft.icon'
     ];
     if (!allowedTypes.includes(file.type)) {
-      setError('Invalid file type. Only SVG, PNG, JPG, and ICO files are allowed.');
+      setError(
+        t(
+          'admin.ui.assets.invalidType',
+          'Invalid file type. Only SVG, PNG, JPG, and ICO files are allowed.'
+        )
+      );
       return;
     }
 
     // Validate file size (2MB limit)
     if (file.size > 2 * 1024 * 1024) {
-      setError('File size must be less than 2MB');
+      setError(t('admin.ui.assets.tooLarge', 'The file must be smaller than 2 MB'));
       return;
     }
 
@@ -139,7 +144,7 @@ function AssetManager({ t }) {
         setTimeout(() => setSuccessMessage(''), 2000);
       })
       .catch(() => {
-        setError('Failed to copy to clipboard');
+        setError(t('admin.ui.assets.copyFailed', 'Failed to copy to clipboard'));
       });
   };
 
@@ -319,10 +324,8 @@ function AssetManager({ t }) {
               </div>
               <div className="mt-3 p-3 bg-blue-100 dark:bg-blue-900/50 rounded-sm">
                 <p className="font-mono text-xs">
-                  {t(
-                    'admin.ui.assets.usage.example',
-                    `Example: <img src="${buildUploadUrl('assets/logo-123456.png')}" alt="Logo" />`
-                  )}
+                  {t('admin.ui.assets.usage.example', 'Example:')}{' '}
+                  {`<img src="${buildUploadUrl('assets/logo-123456.png')}" alt="Logo" />`}
                 </p>
               </div>
             </div>
@@ -421,7 +424,7 @@ function AssetManager({ t }) {
                         scope="col"
                         className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide"
                       >
-                        {t('admin.ui.assets.uploaded', 'Uploaded')}
+                        {t('admin.ui.assets.uploadedColumn', 'Uploaded')}
                       </th>
                       <th scope="col" className="relative px-6 py-3">
                         <span className="sr-only">{t('admin.common.actions', 'Actions')}</span>

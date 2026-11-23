@@ -123,10 +123,16 @@ function ResourceSelector({
               type="checkbox"
               checked={isWildcard}
               onChange={e => handleWildcardToggle(e.target.checked)}
-              aria-label={typeof label === 'string' && label ? `${label}: All (*)` : undefined}
+              aria-label={
+                typeof label === 'string' && label
+                  ? t('admin.groups.form.allWildcardFor', '{{label}}: All (*)', { label })
+                  : undefined
+              }
               className={`${CHECKBOX_CLASS} mr-2`}
             />
-            <span className="text-sm text-gray-700 dark:text-gray-300">All (*)</span>
+            <span className="text-sm text-gray-700 dark:text-gray-300">
+              {t('admin.groups.form.allWildcard', 'All (*)')}
+            </span>
           </label>
         )}
       </div>
