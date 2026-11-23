@@ -1,10 +1,11 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { fetchAdminModels, makeAdminApiCall } from '../../../api/adminApi';
 import { localizedName } from '../../../shared/utils/usageFormat';
+import Icon from '../../../shared/components/Icon';
 import { HELP_CLASS, INPUT_CLASS, LABEL_CLASS } from './formStyles';
 
 /**
@@ -310,16 +311,65 @@ export function UsageLimitBucketFields({
   );
 }
 
+/** Value of the "Add a limit" list for each general limit. */
+const ADD_ALL_MODELS = 'all';
+const ADD_FILES = 'files';
+const ADD_OTHER_MODELS = 'model:*';
+
+/** Whether a stored `usageLimits` has an entry for a limit. */
+function isConfigured(limits, key) {
+  if (key === ADD_ALL_MODELS) return normalizeLimitBucket(limits.allModels) !== null;
+  if (key === ADD_FILES) return typeof limits.fileStorageBytes === 'number';
+  const modelId = key.slice('model:'.length);
+  return normalizeLimitBucket(limits.models?.[modelId]) !== null;
+}
+
+/** One configured limit: a titled card with a Remove button. */
+function LimitCard({ title, subtitle, note, removeLabel, onRemove, disabled, children }) {
+  return (
+    <section
+      aria-label={title}
+      className="rounded-md border border-gray-200 dark:border-gray-700 p-4"
+      data-testid="usage-limit-card"
+    >
+      <div className="flex items-start justify-between gap-3 mb-3">
+        <div className="min-w-0">
+          <h4 className="text-sm font-semibold text-gray-900 dark:text-gray-100">{title}</h4>
+          {subtitle && (
+            <p className="text-xs text-gray-500 dark:text-gray-400 font-mono">{subtitle}</p>
+          )}
+          {note && <p className="text-xs text-amber-700 dark:text-amber-400">{note}</p>}
+        </div>
+        <button
+          type="button"
+          onClick={onRemove}
+          disabled={disabled}
+          aria-label={removeLabel}
+          className="shrink-0 inline-flex items-center gap-1 px-2 py-1 text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30 rounded-md disabled:opacity-50 focus:outline-hidden focus:ring-2 focus:ring-red-500"
+        >
+          <Icon name="x" size="sm" />
+        </button>
+      </div>
+      {children}
+    </section>
+  );
+}
+
 /**
- * The "Usage limits" section of the group and user editors: a budget across
- * all models, a file storage limit and per-model limits. Limits here can only
- * lower those of the model (and, for a user, of their groups).
+ * The "Usage limits" section of the group and user editors. It lists only the
+ * limits that are set, each as a card, and offers "Add a limit" for the ones
+ * that are not: all models together, file storage, one model, or every other
+ * model. A group or user without limits shows no input at all. Limits here can
+ * only lower those of the model (and, for a user, of their groups).
+ *
+ * A card stays on screen while its fields are being cleared (an emptied limit
+ * is dropped from the saved data, not from the page) until Remove is pressed.
  *
  * @param {Object} props
  * @param {Object|undefined} props.value - The current `usageLimits`
  * @param {(next: Object|undefined) => void} props.onChange - Receives the new
  *   `usageLimits` (`undefined` when nothing is set)
- * @param {Array<string>} [props.modelIds] - Model ids to list (`*` = all)
+ * @param {Array<string>} [props.modelIds] - Models that can be limited (`*` = all)
  * @param {'group'|'user'} [props.level] - Changes the explanatory text
  * @param {boolean} [props.disabled]
  *
@@ -335,34 +385,112 @@ function UsageLimitsEditor({ value, onChange, modelIds, level = 'group', disable
   const { t, i18n } = useTranslation();
   const { models, allModelsCeiling, loading } = useUsageLimitCeilings();
   const limits = value || {};
+  const addId = useId();
+  // Limits the admin added or edited here: they stay shown while empty.
+  const [kept, setKept] = useState(() => new Set());
+  const focusKeyRef = useRef(null);
 
-  const { rows, wildcard } = useMemo(
-    () => limitModelRows(modelIds, models, limits.models),
-    [modelIds, models, limits.models]
-  );
-  const sortedRows = useMemo(
-    () =>
-      [...rows].sort((a, b) =>
-        localizedName(a.model?.name, i18n.language, a.id).localeCompare(
-          localizedName(b.model?.name, i18n.language, b.id)
-        )
-      ),
-    [rows, i18n.language]
-  );
-
-  /** Apply a change and hand the cleaned limits (or undefined) to the parent. */
-  const update = next => onChange(normalizeUsageLimits(next) || undefined);
-
-  const setModelBucket = (modelId, bucket) =>
-    update({ ...limits, models: { ...(limits.models || {}), [modelId]: bucket } });
-
-  const fileMb = bytesToMb(limits.fileStorageBytes);
   const idBase = `usage-limits-${level}`;
   const windowHeaders = {
     day: t('admin.usageLimits.window.dayShort', 'Daily'),
     week: t('admin.usageLimits.window.weekShort', 'Weekly'),
     month: t('admin.usageLimits.window.monthShort', 'Monthly')
   };
+
+  /** The model rows a limit can be added for (`*` expands to every model). */
+  const { rows: modelRows, wildcard } = useMemo(
+    () => limitModelRows(modelIds, models, limits.models),
+    [modelIds, models, limits.models]
+  );
+  const modelName = (id, model) => localizedName(model?.name, i18n.language, id);
+  const rowById = useMemo(() => new Map(modelRows.map(row => [row.id, row])), [modelRows]);
+
+  const keep = key =>
+    setKept(previous => (previous.has(key) ? previous : new Set(previous).add(key)));
+  const isShown = key => kept.has(key) || isConfigured(limits, key);
+
+  // Focus the first field of a limit just added, once it is on the page.
+  useEffect(() => {
+    const key = focusKeyRef.current;
+    if (!key) return;
+    focusKeyRef.current = null;
+    const targets = {
+      [ADD_ALL_MODELS]: `${idBase}-all-day`,
+      [ADD_FILES]: `${idBase}-files`,
+      [ADD_OTHER_MODELS]: `${idBase}-model-wildcard-day`
+    };
+    const id = targets[key] || `${idBase}-model-${key.slice('model:'.length)}-day`;
+    document.getElementById(id)?.focus();
+  }, [kept, idBase]);
+
+  /** Apply a change and hand the cleaned limits (or undefined) to the parent. */
+  const update = next => onChange(normalizeUsageLimits(next) || undefined);
+
+  const setModelBucket = (modelId, bucket) => {
+    keep(`model:${modelId}`);
+    update({ ...limits, models: { ...(limits.models || {}), [modelId]: bucket } });
+  };
+
+  const removeLimit = key => {
+    const next = { ...limits };
+    if (key === ADD_ALL_MODELS) delete next.allModels;
+    else if (key === ADD_FILES) delete next.fileStorageBytes;
+    else {
+      const remaining = { ...(limits.models || {}) };
+      delete remaining[key.slice('model:'.length)];
+      next.models = remaining;
+    }
+    setKept(previous => {
+      const rest = new Set(previous);
+      rest.delete(key);
+      return rest;
+    });
+    update(next);
+  };
+
+  const addLimit = key => {
+    if (!key) return;
+    focusKeyRef.current = key;
+    keep(key);
+  };
+
+  // What is configured or kept, in a fixed order: general limits, models by name, the rest.
+  const modelKeys = useMemo(() => {
+    const ids = new Set(Object.keys(limits.models || {}));
+    for (const key of kept) if (key.startsWith('model:')) ids.add(key.slice('model:'.length));
+    ids.delete('*');
+    return [...ids]
+      .filter(id => isShown(`model:${id}`))
+      .sort((a, b) =>
+        modelName(a, rowById.get(a)?.model).localeCompare(modelName(b, rowById.get(b)?.model))
+      );
+    // eslint-disable-next-line @eslint-react/exhaustive-deps
+  }, [limits.models, kept, rowById, i18n.language]);
+
+  const showAll = isShown(ADD_ALL_MODELS);
+  const showFiles = isShown(ADD_FILES);
+  // A card the admin is editing stays, even when clearing it removed its `*` entry.
+  const showOthers = isShown(ADD_OTHER_MODELS);
+  const anyShown = showAll || showFiles || showOthers || modelKeys.length > 0;
+
+  // The "Add a limit" options: what is not shown yet.
+  const addGeneral = [
+    ...(showAll
+      ? []
+      : [[ADD_ALL_MODELS, t('admin.usageLimits.addAllModels', 'All models together')]]),
+    ...(showFiles ? [] : [[ADD_FILES, t('admin.usageLimits.addFileStorage', 'File storage')]]),
+    ...(wildcard && !showOthers
+      ? [[ADD_OTHER_MODELS, t('admin.usageLimits.otherModels', 'All other models')]]
+      : [])
+  ];
+  const addModels = modelRows
+    .filter(row => row.id !== '*' && !modelKeys.includes(row.id))
+    .map(row => ({ id: row.id, label: modelName(row.id, row.model) }))
+    .sort((a, b) => a.label.localeCompare(b.label));
+  const nothingToAdd = addGeneral.length === 0 && addModels.length === 0;
+
+  const fileMb = bytesToMb(limits.fileStorageBytes);
+  const otherModelsLabel = t('admin.usageLimits.otherModels', 'All other models');
 
   return (
     <div className="bg-white dark:bg-gray-800 shadow-sm rounded-lg">
@@ -383,200 +511,204 @@ function UsageLimitsEditor({ value, onChange, modelIds, level = 'group', disable
                 'Limits for each member of this group. They can only lower the limit of the model.'
               )}
         </p>
-        <p className={HELP_CLASS}>
-          {level === 'user'
-            ? t(
-                'admin.usageLimits.emptyHintUser',
-                'An empty field means no personal limit. 0 blocks the model for this user.'
-              )
-            : t(
-                'admin.usageLimits.emptyHintGroup',
-                'An empty field means no limit from this group. A member of several groups gets the most generous group limit; enter -1 to lift a limit that other groups of a member set. 0 blocks.'
-              )}
-        </p>
       </div>
 
-      <div className="px-6 py-4 space-y-6">
-        {/* All models */}
-        <section aria-labelledby={`${idBase}-all-heading`}>
-          <h4
-            id={`${idBase}-all-heading`}
-            className="text-sm font-semibold text-gray-900 dark:text-gray-100"
-          >
-            {t('admin.usageLimits.allModelsTitle', 'All models')}
-          </h4>
-          <p className={`${HELP_CLASS} mb-3`}>
-            {t(
+      <div className="px-6 py-4 space-y-4">
+        {!anyShown && (
+          <p className="text-sm text-gray-500 dark:text-gray-400" data-testid="usage-limits-empty">
+            {level === 'user'
+              ? t('admin.usageLimits.emptyUser', 'No personal limits are set.')
+              : t('admin.usageLimits.emptyGroup', 'No limits are set for this group.')}
+          </p>
+        )}
+
+        {showAll && (
+          <LimitCard
+            title={t('admin.usageLimits.allModelsTitle', 'All models')}
+            subtitle={t(
               'admin.usageLimits.allModelsHint',
               'Tokens a user may use across all models together.'
             )}
-          </p>
-          <UsageLimitBucketFields
-            idPrefix={`${idBase}-all`}
-            value={limits.allModels}
-            ceiling={allModelsCeiling}
-            ceilingKind="platform"
+            removeLabel={t('admin.usageLimits.removeLimit', 'Remove limit: {{name}}', {
+              name: t('admin.usageLimits.allModelsTitle', 'All models')
+            })}
             disabled={disabled}
-            onChange={bucket => update({ ...limits, allModels: bucket })}
-          />
-        </section>
-
-        {/* File storage */}
-        <section aria-labelledby={`${idBase}-files-heading`}>
-          <h4
-            id={`${idBase}-files-heading`}
-            className="text-sm font-semibold text-gray-900 dark:text-gray-100"
+            onRemove={() => removeLimit(ADD_ALL_MODELS)}
           >
-            {t('admin.usageLimits.fileStorageTitle', 'File storage')}
-          </h4>
-          <div className="mt-2 max-w-xs">
-            <label htmlFor={`${idBase}-files`} className={LABEL_CLASS}>
-              {t('admin.usageLimits.fileStorageLabel', 'Storage limit (MB)')}
-            </label>
-            <input
-              id={`${idBase}-files`}
-              type="number"
-              min={-1}
-              step="any"
-              inputMode="decimal"
+            <UsageLimitBucketFields
+              idPrefix={`${idBase}-all`}
+              value={limits.allModels}
+              ceiling={allModelsCeiling}
+              ceilingKind="platform"
               disabled={disabled}
-              value={fileMb}
-              placeholder={t('admin.usageLimits.placeholderNoLimit', 'no limit')}
-              onChange={e => {
-                const bytes = mbInputToBytes(e.target.value);
-                if (bytes === null) return;
-                update({ ...limits, fileStorageBytes: bytes });
+              onChange={bucket => {
+                keep(ADD_ALL_MODELS);
+                update({ ...limits, allModels: bucket });
               }}
-              className={`${INPUT_CLASS} tabular-nums`}
             />
-          </div>
-          <p className={HELP_CLASS}>
-            {t(
+          </LimitCard>
+        )}
+
+        {showFiles && (
+          <LimitCard
+            title={t('admin.usageLimits.fileStorageTitle', 'File storage')}
+            subtitle={t(
               'admin.usageLimits.fileStorageHint',
               'The most a user may keep in uploaded files. Empty means no limit at this level.'
             )}
-          </p>
-        </section>
-
-        {/* Per model */}
-        <section aria-labelledby={`${idBase}-models-heading`}>
-          <h4
-            id={`${idBase}-models-heading`}
-            className="text-sm font-semibold text-gray-900 dark:text-gray-100"
+            removeLabel={t('admin.usageLimits.removeLimit', 'Remove limit: {{name}}', {
+              name: t('admin.usageLimits.fileStorageTitle', 'File storage')
+            })}
+            disabled={disabled}
+            onRemove={() => removeLimit(ADD_FILES)}
           >
-            {t('admin.usageLimits.perModelTitle', 'Per model')}
-          </h4>
-          <p className={`${HELP_CLASS} mb-3`}>
-            {t(
-              'admin.usageLimits.perModelHint',
-              "Tokens a user may use of one model. The placeholder shows the model's own limit."
-            )}
-          </p>
-
-          {loading ? (
-            <p className="text-sm text-gray-500 dark:text-gray-400">
-              {t('admin.usageLimits.loadingModels', 'Loading models…')}
-            </p>
-          ) : sortedRows.length === 0 && !wildcard ? (
-            <p className="text-sm text-gray-500 dark:text-gray-400">
-              {level === 'user'
-                ? t('admin.usageLimits.noModels', 'No models available.')
-                : t(
-                    'admin.usageLimits.noModelsGroup',
-                    'This group has no model permissions. Add models under Permissions to limit them here.'
-                  )}
-            </p>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
-                <thead>
-                  <tr>
-                    <th
-                      scope="col"
-                      className="py-2 pr-4 text-left text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-gray-400"
-                    >
-                      {t('admin.usageLimits.modelColumn', 'Model')}
-                    </th>
-                    {USAGE_LIMIT_WINDOWS.map(window => (
-                      <th
-                        key={window}
-                        scope="col"
-                        className="py-2 px-2 text-left text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-gray-400"
-                      >
-                        {windowHeaders[window]}
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
-                  {sortedRows.map(({ id, model }) => {
-                    const name = localizedName(model?.name, i18n.language, id);
-                    return (
-                      <tr key={id} className="align-top">
-                        <th scope="row" className="py-2 pr-4 text-left font-normal">
-                          <div className="text-sm font-medium text-gray-900 dark:text-gray-100">
-                            {name}
-                          </div>
-                          <div className="text-xs text-gray-500 dark:text-gray-400 font-mono">
-                            {id}
-                          </div>
-                          {!model && (
-                            <div className="text-xs text-amber-700 dark:text-amber-400">
-                              {t('admin.usageLimits.unknownModel', 'Model not found')}
-                            </div>
-                          )}
-                        </th>
-                        {USAGE_LIMIT_WINDOWS.map(window => (
-                          <td key={window} className="py-2 px-2">
-                            <LimitInput
-                              id={`${idBase}-model-${id}-${window}`}
-                              label={`${name} – ${windowHeaders[window]}`}
-                              value={limits.models?.[id]?.[window]}
-                              ceiling={ceilingOf(model?.usageLimits, window)}
-                              disabled={disabled}
-                              onChange={next =>
-                                setModelBucket(id, withWindow(limits.models?.[id], window, next))
-                              }
-                            />
-                          </td>
-                        ))}
-                      </tr>
-                    );
-                  })}
-                  {wildcard && (
-                    <tr className="align-top">
-                      <th scope="row" className="py-2 pr-4 text-left font-normal">
-                        <div className="text-sm font-medium text-gray-900 dark:text-gray-100">
-                          {t('admin.usageLimits.otherModels', 'All other models')}
-                        </div>
-                        <div className="text-xs text-gray-500 dark:text-gray-400">
-                          {t(
-                            'admin.usageLimits.otherModelsHint',
-                            'Each model without its own entry above'
-                          )}
-                        </div>
-                      </th>
-                      {USAGE_LIMIT_WINDOWS.map(window => (
-                        <td key={window} className="py-2 px-2">
-                          <LimitInput
-                            id={`${idBase}-model-wildcard-${window}`}
-                            label={`${t('admin.usageLimits.otherModels', 'All other models')} – ${windowHeaders[window]}`}
-                            value={limits.models?.['*']?.[window]}
-                            ceiling={null}
-                            disabled={disabled}
-                            onChange={next =>
-                              setModelBucket('*', withWindow(limits.models?.['*'], window, next))
-                            }
-                          />
-                        </td>
-                      ))}
-                    </tr>
-                  )}
-                </tbody>
-              </table>
+            <div className="max-w-xs">
+              <label htmlFor={`${idBase}-files`} className={LABEL_CLASS}>
+                {t('admin.usageLimits.fileStorageLabel', 'Storage limit (MB)')}
+              </label>
+              <input
+                id={`${idBase}-files`}
+                type="number"
+                min={-1}
+                step="any"
+                inputMode="decimal"
+                disabled={disabled}
+                value={fileMb}
+                placeholder={t('admin.usageLimits.placeholderNoLimit', 'no limit')}
+                onChange={e => {
+                  const bytes = mbInputToBytes(e.target.value);
+                  if (bytes === null) return;
+                  keep(ADD_FILES);
+                  update({ ...limits, fileStorageBytes: bytes });
+                }}
+                className={`${INPUT_CLASS} tabular-nums`}
+              />
             </div>
+          </LimitCard>
+        )}
+
+        {modelKeys.map(id => {
+          const model = rowById.get(id)?.model ?? models.find(entry => entry.id === id) ?? null;
+          const name = modelName(id, model);
+          return (
+            <LimitCard
+              key={id}
+              title={name}
+              subtitle={id}
+              note={
+                !loading && !model ? t('admin.usageLimits.unknownModel', 'Model not found') : null
+              }
+              removeLabel={t('admin.usageLimits.removeLimit', 'Remove limit: {{name}}', { name })}
+              disabled={disabled}
+              onRemove={() => removeLimit(`model:${id}`)}
+            >
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                {USAGE_LIMIT_WINDOWS.map(window => (
+                  <LimitInput
+                    key={window}
+                    id={`${idBase}-model-${id}-${window}`}
+                    label={`${name} – ${windowHeaders[window]}`}
+                    showLabel
+                    value={limits.models?.[id]?.[window]}
+                    ceiling={ceilingOf(model?.usageLimits, window)}
+                    disabled={disabled}
+                    onChange={next =>
+                      setModelBucket(id, withWindow(limits.models?.[id], window, next))
+                    }
+                  />
+                ))}
+              </div>
+            </LimitCard>
+          );
+        })}
+
+        {showOthers && (
+          <LimitCard
+            title={otherModelsLabel}
+            subtitle={t('admin.usageLimits.otherModelsHint', 'Each model without its own limit')}
+            removeLabel={t('admin.usageLimits.removeLimit', 'Remove limit: {{name}}', {
+              name: otherModelsLabel
+            })}
+            disabled={disabled}
+            onRemove={() => removeLimit(ADD_OTHER_MODELS)}
+          >
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              {USAGE_LIMIT_WINDOWS.map(window => (
+                <LimitInput
+                  key={window}
+                  id={`${idBase}-model-wildcard-${window}`}
+                  label={`${otherModelsLabel} – ${windowHeaders[window]}`}
+                  showLabel
+                  value={limits.models?.['*']?.[window]}
+                  ceiling={null}
+                  disabled={disabled}
+                  onChange={next =>
+                    setModelBucket('*', withWindow(limits.models?.['*'], window, next))
+                  }
+                />
+              ))}
+            </div>
+          </LimitCard>
+        )}
+
+        {/* Add a limit */}
+        <div>
+          <label htmlFor={addId} className="sr-only">
+            {t('admin.usageLimits.addLabel', 'Add a limit')}
+          </label>
+          <select
+            id={addId}
+            value=""
+            disabled={disabled || nothingToAdd}
+            onChange={event => addLimit(event.target.value)}
+            className={`${INPUT_CLASS} max-w-xs`}
+          >
+            <option value="">
+              {loading
+                ? t('admin.usageLimits.loadingModels', 'Loading models…')
+                : nothingToAdd
+                  ? t('admin.usageLimits.nothingToAdd', 'Every limit has been added.')
+                  : t('admin.usageLimits.addPlaceholder', 'Add a limit…')}
+            </option>
+            {addGeneral.length > 0 && (
+              <optgroup label={t('admin.usageLimits.addGeneral', 'General')}>
+                {addGeneral.map(([key, label]) => (
+                  <option key={key} value={key}>
+                    {label}
+                  </option>
+                ))}
+              </optgroup>
+            )}
+            {addModels.length > 0 && (
+              <optgroup label={t('admin.usageLimits.addModel', 'Per model')}>
+                {addModels.map(({ id, label }) => (
+                  <option key={id} value={`model:${id}`}>
+                    {label}
+                  </option>
+                ))}
+              </optgroup>
+            )}
+          </select>
+          <p className={HELP_CLASS}>
+            {level === 'user'
+              ? t(
+                  'admin.usageLimits.emptyHintUser',
+                  'An empty field means no personal limit. 0 blocks the model for this user.'
+                )
+              : t(
+                  'admin.usageLimits.emptyHintGroup',
+                  'An empty field means no limit from this group. A member of several groups gets the most generous group limit; enter -1 to lift a limit that other groups of a member set. 0 blocks.'
+                )}
+          </p>
+          {level === 'group' && !loading && modelRows.length === 0 && !wildcard && (
+            <p className={HELP_CLASS}>
+              {t(
+                'admin.usageLimits.noModelsGroup',
+                'This group has no model permissions. Add models under Permissions to limit them here.'
+              )}
+            </p>
           )}
-        </section>
+        </div>
       </div>
     </div>
   );

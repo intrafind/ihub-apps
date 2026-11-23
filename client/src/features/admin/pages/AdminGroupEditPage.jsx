@@ -10,11 +10,11 @@ import GroupFormEditor from '../components/GroupFormEditor';
 import { getAdminApiErrorMessage, makeAdminApiCall } from '../../../api/adminApi';
 import { getSchemaByType } from '../../../utils/schemaService';
 import AdminLoadError from '../components/AdminLoadError';
+import GroupMembersSection from '../components/GroupMembersSection';
 import UsageLimitsEditor, { normalizeUsageLimits } from '../components/UsageLimitsEditor';
 import { useAdminResourceEditor } from '../hooks/useAdminResourceEditor';
-import AdminEditPageShell, {
-  AdminSaveCancelButtons
-} from '../../../shared/components/AdminEditPageShell';
+import AdminEditPageShell from '../../../shared/components/AdminEditPageShell';
+import AdminSaveBar from '../components/AdminSaveBar';
 import useSaveAttempts from '../hooks/useSaveAttempts';
 import { FIELD_KEYS } from '../utils/fieldErrors';
 
@@ -24,6 +24,8 @@ function AdminGroupEditPage() {
   const navigate = useNavigate();
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState(null);
+  // Bumped by Discard, so editors that keep their own view state start over.
+  const [editorGeneration, setEditorGeneration] = useState(0);
   const [resources, setResources] = useState({
     apps: [],
     models: [],
@@ -98,6 +100,8 @@ function AdminGroupEditPage() {
   const {
     data: group,
     setData: setGroup,
+    initialData,
+    isDirty,
     loading,
     error,
     save,
@@ -158,8 +162,11 @@ function AdminGroupEditPage() {
       setSaving(true);
       setSaveError(null);
       await save();
-      // Success - axios doesn't have response.ok, successful responses are returned directly
-      navigate('/admin/groups');
+      // A new group opens on its own page, where its members are added; an
+      // edited one goes back to the list.
+      navigate(
+        groupId === 'new' ? `/admin/groups/${encodeURIComponent(data.id)}` : '/admin/groups'
+      );
     } catch (err) {
       // A taken ID belongs to the ID field: the form says it there and in its summary.
       // The JSON mode shows no form, so there the page says it.
@@ -174,6 +181,12 @@ function AdminGroupEditPage() {
     } finally {
       setSaving(false);
     }
+  };
+
+  const handleDiscard = () => {
+    setGroup(initialData);
+    setSaveError(null);
+    setEditorGeneration(generation => generation + 1);
   };
 
   const handleDataChange = newData => {
@@ -297,7 +310,22 @@ function AdminGroupEditPage() {
           }
         />
 
+        {groupId === 'new' ? (
+          <p className="text-sm text-gray-600 dark:text-gray-400" data-testid="group-members-hint">
+            {t(
+              'admin.groups.members.saveFirst',
+              'Save the group first, then add its members here.'
+            )}
+          </p>
+        ) : (
+          <GroupMembersSection
+            groupId={groupId}
+            hasExternalMappings={(group?.mappings || []).length > 0}
+          />
+        )}
+
         <UsageLimitsEditor
+          key={editorGeneration}
           level="group"
           value={group?.usageLimits}
           modelIds={group?.permissions?.models}
@@ -310,20 +338,14 @@ function AdminGroupEditPage() {
             })
           }
         />
-
-        {/* Save buttons */}
-        <AdminSaveCancelButtons
-          onCancel={() => navigate('/admin/groups')}
-          cancelLabel={t('admin.groups.edit.cancel', 'Cancel')}
-          saving={saving}
-          saveLabel={
-            groupId === 'new'
-              ? t('admin.groups.edit.create', 'Create Group')
-              : t('admin.groups.edit.save', 'Save Group')
-          }
-          savingLabel={t('admin.groups.edit.saving', 'Saving...')}
-        />
       </form>
+
+      <AdminSaveBar
+        dirty={isDirty}
+        saving={saving}
+        onSave={() => void handleSave(group)}
+        onDiscard={handleDiscard}
+      />
     </AdminEditPageShell>
   );
 }

@@ -6080,9 +6080,9 @@
       "integrations": {
         "title": "Integrations",
         "help": "Which installed integrations members may use. An app that binds an integration offers it only to members of a group that grants it. Groups that inherit this one get the same.",
-        "inheritedHelp": "Ticked and greyed out: granted by a group this one inherits. Change it there.",
+        "inheritedHelp": "Granted by a group this one inherits. Change it there.",
         "all": "All integrations",
-        "allHelp": "Every installed integration, including ones installed later.",
+        "allHelp": "\"All integrations\" covers every installed integration, including ones installed later.",
         "none": "Members of this group may use no integration.",
         "loading": "Loading integrations…",
         "loadError": "Could not load the installed integrations: {{error}}",
@@ -6107,7 +6107,10 @@
         "with": "with {{name}}",
         "other": "Other entries",
         "otherHelp": "Entries the list above does not show: definition ids, or installations that no longer exist.",
-        "remove": "Remove {{key}}"
+        "remove": "Remove {{key}}",
+        "addLabel": "Add integration",
+        "addPlaceholder": "Add an integration…",
+        "nothingToAdd": "Everything installed has been added."
       },
       "deleteBlockedTitle": "Cannot delete group",
       "deleteFailed": "The group could not be deleted.",
@@ -6182,6 +6185,26 @@
         "noSkills": "No skills selected – users can’t use any agent skills",
         "allWildcard": "All (*)",
         "allWildcardFor": "{{label}}: All (*)"
+      },
+      "members": {
+        "title": "Members",
+        "description": "Users that belong to this group. Adding or removing a user takes effect immediately; you do not need to save the group.",
+        "externalNote": "Users who get this group from an external provider through the mappings are not listed here.",
+        "loading": "Loading members…",
+        "loadError": "The members could not be loaded.",
+        "addError": "The users could not be added.",
+        "removeError": "The user could not be removed.",
+        "empty": "This group has no members yet.",
+        "inactive": "Inactive",
+        "remove": "Remove {{name}} from group",
+        "removeShort": "Remove",
+        "addLabel": "Add users",
+        "searchPlaceholder": "Search by name, username or email",
+        "noMatches": "No users match your search.",
+        "allAdded": "Every user is already a member.",
+        "moreMatches": "{{count}} more users match. Narrow the search to find them.",
+        "addSelected": "Add {{count}} selected",
+        "saveFirst": "Save the group first, then add its members here."
       }
     },
     "contentAccess": {
@@ -8212,7 +8235,7 @@
       "modelColumn": "Model",
       "unknownModel": "Model not found",
       "otherModels": "All other models",
-      "otherModelsHint": "Each model without its own entry above",
+      "otherModelsHint": "Each model without its own limit",
       "placeholderCeiling": "max {{limit}}",
       "placeholderNoLimit": "no limit",
       "noEffectModel": "Has no effect — the model allows at most {{limit}}",
@@ -8240,7 +8263,17 @@
         "dayShort": "Daily",
         "weekShort": "Weekly",
         "monthShort": "Monthly"
-      }
+      },
+      "removeLimit": "Remove limit: {{name}}",
+      "addLabel": "Add a limit",
+      "addPlaceholder": "Add a limit…",
+      "addGeneral": "General",
+      "addModel": "Per model",
+      "addAllModels": "All models together",
+      "addFileStorage": "File storage",
+      "nothingToAdd": "Every limit has been added.",
+      "emptyGroup": "No limits are set for this group.",
+      "emptyUser": "No personal limits are set."
     },
     "unsavedChanges": {
       "title": "Leave without saving?",
