@@ -4,6 +4,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
+import WildcardExplanation from './access/WildcardExplanation';
 import {
   fetchContentAccess,
   getAdminApiErrorMessage,
@@ -324,6 +325,8 @@ function ContentAccessSection({
             </p>
           )}
         </div>
+
+        <WildcardExplanation view={access} type={resourceType} />
 
         {/* Search / add */}
         <div className="relative">

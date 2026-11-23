@@ -29,6 +29,14 @@ import { ServiceError } from './ServiceError.js';
  */
 export const CONTENT_ACCESS_TYPES = Object.freeze(['apps', 'prompts', 'skills', 'workflows']);
 
+/**
+ * The permission lists the read-only views describe: the content lists plus
+ * `models`. Who may use a model is shown to full admins (the model's access
+ * card, the access check), but never changed through the content-access
+ * route, whose writes stay limited to {@link CONTENT_ACCESS_TYPES}.
+ */
+export const GRANT_LIST_TYPES = Object.freeze(['apps', 'models', 'prompts', 'skills', 'workflows']);
+
 const STATUS_CODES = { 403: 'FORBIDDEN', 404: 'NOT_FOUND' };
 
 /**
@@ -58,6 +66,18 @@ export class ContentAccessError extends ServiceError {
  */
 export function canonicalContentAccessType(type) {
   return CONTENT_ACCESS_TYPES.find(candidate => candidate === type);
+}
+
+/**
+ * The allowlisted constant of {@link GRANT_LIST_TYPES} equal to `type`, or
+ * undefined. Same purpose as {@link canonicalContentAccessType}: only a fixed
+ * key is ever read from `permissions`.
+ *
+ * @param {string} type
+ * @returns {string | undefined}
+ */
+export function canonicalGrantListType(type) {
+  return GRANT_LIST_TYPES.find(candidate => candidate === type);
 }
 
 /**
@@ -112,6 +132,74 @@ export function collectAncestorGroups(groups, groupId) {
   }
 
   return ancestors;
+}
+
+/**
+ * Every group `groupId` inherits from, with the inheritance chain that leads
+ * there: breadth-first, so each ancestor comes with its shortest chain and the
+ * nearest ancestors come first. Cycle-safe and tolerant of missing parents,
+ * like {@link collectAncestorGroups}.
+ *
+ * @param {Object<string, object>} groups - `groups` map from groups.json
+ * @param {string} groupId
+ * @returns {Array<{groupId: string, path: string[]}>} `path` starts at
+ *   `groupId` and ends at the ancestor, e.g. `['admins', 'users', 'authenticated']`
+ *
+ * @example
+ * collectAncestorPaths(
+ *   { admins: { inherits: ['users'] }, users: { inherits: ['authenticated'] }, authenticated: {} },
+ *   'admins'
+ * ); // → [{ groupId: 'users', path: ['admins', 'users'] },
+ *    //    { groupId: 'authenticated', path: ['admins', 'users', 'authenticated'] }]
+ */
+export function collectAncestorPaths(groups, groupId) {
+  const map = groups || {};
+  const result = [];
+  const seen = new Set([groupId]);
+  const parentsOf = id => (Array.isArray(map[id]?.inherits) ? map[id].inherits : []);
+  const queue = parentsOf(groupId).map(parentId => ({ parentId, path: [groupId] }));
+
+  while (queue.length > 0) {
+    const { parentId, path } = queue.shift();
+    if (typeof parentId !== 'string' || seen.has(parentId)) continue;
+    seen.add(parentId);
+    if (!Object.hasOwn(map, parentId)) continue;
+    const chain = [...path, parentId];
+    result.push({ groupId: parentId, path: chain });
+    for (const next of parentsOf(parentId)) queue.push({ parentId: next, path: chain });
+  }
+
+  return result;
+}
+
+/**
+ * Every way members of `groupId` get one item: through the group's own list or
+ * a list of a group it inherits from, by naming the item or by the wildcard.
+ *
+ * The group's own list comes first, then the ancestors nearest first. A list
+ * that holds both the item and `*` counts as `wildcard`: removing the item
+ * alone would change nothing.
+ *
+ * @param {object} options
+ * @param {Object<string, object>} options.groups - `groups` map from groups.json
+ * @param {string} options.type - One of {@link GRANT_LIST_TYPES}
+ * @param {string} options.contentId - The item's id (matched case-insensitively)
+ * @param {string} options.groupId - The group whose members are asked about
+ * @returns {Array<{groupId: string, kind: 'explicit'|'wildcard', path: string[]}>}
+ *   `groupId` is the group whose own list grants the item, `path` the chain
+ *   from the asked group to it (just `[groupId]` for the group's own list)
+ */
+export function describeGrantRoutes({ groups, type, contentId, groupId }) {
+  const key = canonicalGrantListType(type);
+  if (key === undefined || !Object.hasOwn(groups || {}, groupId)) return [];
+  const sources = [{ groupId, path: [groupId] }, ...collectAncestorPaths(groups, groupId)];
+  const routes = [];
+  for (const source of sources) {
+    const list = ownList(groups[source.groupId], key);
+    if (listHasWildcard(list)) routes.push({ ...source, kind: 'wildcard' });
+    else if (listGrants(list, contentId)) routes.push({ ...source, kind: 'explicit' });
+  }
+  return routes;
 }
 
 /**
@@ -181,16 +269,22 @@ export function resolveManageableGroups({
  *
  * @param {object} options
  * @param {Object<string, object>} options.groups - `groups` map from groups.json
- * @param {string} options.type - One of CONTENT_ACCESS_TYPES
+ * @param {string} options.type - One of GRANT_LIST_TYPES (`models` too: the
+ *   view is read-only)
  * @param {string} options.contentId - The content's id
  * @param {string[]} options.groupIds - Groups to describe, in output order
  * @param {string[]} [options.implicitGroups] - Groups people carry without
  *   being a member; their rows get `implicit: true`
+ * `via` lists every route by which the group's members get the content (see
+ * {@link describeGrantRoutes}); clients use it to say in words why a group
+ * has access, e.g. "through 'all apps', inherited from Authenticated".
+ *
  * @returns {Array<{id: string, name: string, description: string, granted: boolean,
- *   wildcard: boolean, inheritedFrom: string[], effective: boolean, implicit?: true}>}
+ *   wildcard: boolean, inheritedFrom: string[], effective: boolean,
+ *   via: Array<{groupId: string, kind: 'explicit'|'wildcard', path: string[]}>, implicit?: true}>}
  */
 export function describeContentAccess({ groups, type, contentId, groupIds, implicitGroups = [] }) {
-  const key = canonicalContentAccessType(type);
+  const key = canonicalGrantListType(type);
   return groupIds.map(groupId => {
     const group = groups[groupId];
     const list = ownList(group, key);
@@ -208,6 +302,7 @@ export function describeContentAccess({ groups, type, contentId, groupIds, impli
       wildcard,
       inheritedFrom,
       effective: granted || wildcard || inheritedFrom.length > 0,
+      via: describeGrantRoutes({ groups, type: key, contentId, groupId }),
       ...(implicitGroups.includes(groupId) ? { implicit: true } : {})
     };
   });

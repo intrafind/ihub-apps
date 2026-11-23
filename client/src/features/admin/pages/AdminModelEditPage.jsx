@@ -16,6 +16,7 @@ import Icon from '../../../shared/components/Icon';
 import DualModeEditor from '../../../shared/components/DualModeEditor';
 import ModelFormEditor from '../components/ModelFormEditor';
 import ChangeHistoryDrawer from '../components/ChangeHistoryDrawer';
+import ItemAccessCard from '../components/access/ItemAccessCard';
 import { useAdminResourceEditor } from '../hooks/useAdminResourceEditor';
 import AdminEditPageShell from '../../../shared/components/AdminEditPageShell';
 import MarketplaceModelReviewNotice from '../components/marketplace/MarketplaceModelReviewNotice';
@@ -578,6 +579,13 @@ function AdminModelEditPage() {
           {/* Usage Stats and Apps List - integrated as sections */}
           {!isNewModel && (
             <div className="space-y-8">
+              {/* Who can use this model: groups, wildcards, restrict, access check */}
+              <ItemAccessCard
+                type="models"
+                id={modelId}
+                itemName={getLocalizedContent(formData.name, currentLanguage) || modelId}
+              />
+
               {/* Usage Stats */}
               <div className="bg-white dark:bg-gray-800 shadow-sm rounded-lg">
                 <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700">

@@ -9967,6 +9967,100 @@
     },
     "integrationPages": {
       "oauthClientId": "OAuth-Client-ID:"
+    },
+    "access": {
+      "items": {
+        "apps": "Apps",
+        "models": "Modelle",
+        "prompts": "Prompts",
+        "skills": "Skills",
+        "workflows": "Workflows"
+      },
+      "explain": {
+        "heading": "Freigegeben über „alle {{items}}“:",
+        "ownWildcard": "Alle in {{group}} sehen dies über „alle {{items}}“.",
+        "inheritedWildcard": "Alle in {{group}} sehen dies über „alle {{items}}“ (geerbt von {{source}}: {{chain}}).",
+        "ownExplicit": "{{group}} ist dies namentlich freigegeben.",
+        "inheritedExplicit": "Alle in {{group}} erhalten dies namentlich von {{source}} ({{chain}})."
+      },
+      "card": {
+        "title": "Wer dieses Modell verwenden darf",
+        "description": "Welche Gruppen das Modell verwenden dürfen und warum. Gruppenlisten werden unter Gruppen bearbeitet; „Zugriff einschränken“ nimmt das Modell aus Gruppen heraus, die alle Modelle freigeben.",
+        "loading": "Zugriff wird geladen…",
+        "loadError": "Der Zugriff konnte nicht geladen werden.",
+        "audienceEveryone": "Alle dürfen dies verwenden, auch nicht angemeldete Personen.",
+        "audienceSignedIn": "Alle angemeldeten Benutzer dürfen dies verwenden.",
+        "audienceAnonymous": "Nicht angemeldete Personen dürfen dies verwenden. Gruppen: {{groups}}",
+        "audienceGroups": "Nur diese Gruppen dürfen dies verwenden: {{groups}}.",
+        "audienceNone": "Keine Gruppe darf dies verwenden."
+      },
+      "tools": {
+        "title": "Zugriff einschränken und prüfen"
+      },
+      "check": {
+        "title": "Warum sieht jemand dies nicht?",
+        "description": "Wählen Sie eine Gruppe oder einen Benutzer. Die Prüfung wendet dieselben Regeln an wie der Server, wenn er Apps und Modelle für sie auflistet.",
+        "subjectLegend": "Prüfen für",
+        "byGroup": "Eine Gruppe",
+        "byUser": "Einen Benutzer",
+        "groupLabel": "Gruppe",
+        "userLabel": "Benutzer",
+        "userPlaceholder": "Benutzername, E-Mail oder Benutzer-ID",
+        "run": "Zugriff prüfen",
+        "error": "Die Prüfung konnte nicht ausgeführt werden.",
+        "subjectGroups": "Geprüft mit den Gruppen: {{groups}}",
+        "identityProviderNote": "Dieser Benutzer meldet sich über einen Identitätsanbieter an. Gruppen, die dieser bei der Anmeldung sendet, sind hier nicht bekannt; geprüft wurden nur die in iHub gespeicherten Gruppen.",
+        "verdict": {
+          "availableGroup": "Mitglieder von {{name}} dürfen dies verwenden.",
+          "unavailableGroup": "Mitglieder von {{name}} dürfen dies nicht verwenden.",
+          "availableUser": "{{name}} darf dies verwenden.",
+          "unavailableUser": "{{name}} darf dies nicht verwenden.",
+          "availableAnonymous": "Nicht angemeldete Personen dürfen dies verwenden.",
+          "unavailableAnonymous": "Nicht angemeldete Personen dürfen dies nicht verwenden."
+        },
+        "reasons": {
+          "anonymousAccessOff": "Der anonyme Zugriff ist ausgeschaltet, nicht angemeldete Personen sehen also nichts.",
+          "userInactive": "Das Konto ist deaktiviert.",
+          "itemEnabled": "Es ist aktiviert.",
+          "itemDisabled": "Es ist deaktiviert: Niemand sieht es, bis es aktiviert wird.",
+          "featureOn": "Erforderliche Funktionen sind eingeschaltet: {{features}}.",
+          "featureOff": "Die erforderliche Funktion „{{feature}}“ ist ausgeschaltet (Funktionen).",
+          "integrationOff": "Eine benötigte Integration ist ausgeschaltet: {{integrations}}.",
+          "granted": "Eine Gruppe gibt es frei:",
+          "notGranted": "Keine ihrer Gruppen gibt es frei, weder namentlich noch über „alle“.",
+          "modelsAvailable": "Modelle, die sie damit verwenden dürfen: {{models}}.",
+          "noUsableModel": "Es bleibt kein Modell übrig, das sie damit verwenden dürfen:",
+          "preferredModelUnavailable": "Das bevorzugte Modell {{model}} steht ihnen nicht zur Verfügung; ein anderes Modell wird verwendet."
+        },
+        "modelCause": {
+          "missing": "{{model}} ist nicht eingerichtet.",
+          "disabled": "{{model}} ist deaktiviert.",
+          "notAllowedForApp": "{{model}} ist für diese App nicht zugelassen oder hat eine Fähigkeit nicht, die die App braucht.",
+          "notGranted": "{{model}} ist ihren Gruppen nicht freigegeben."
+        },
+        "noModelsConfigured": "Es ist kein Chat-Modell eingerichtet."
+      },
+      "restrict": {
+        "open": "Zugriff einschränken…",
+        "openHelp": "Gruppen, die alle {{items}} freigeben, umfassen auch dieses Element. Beim Einschränken wird „alle“ in diesen Gruppen durch eine explizite Liste ersetzt.",
+        "title": "Einschränken, wer {{name}} verwenden darf",
+        "intro": "Diese Gruppen sehen über „alle {{items}}“ jedes Element. Um ihnen {{name}} zu entziehen, wird „alle“ durch eine Liste aller aktuellen Elemente außer diesem ersetzt.",
+        "convertLegend": "Gruppen, die alle {{items}} freigeben",
+        "convertRow": "„alle {{items}}“ wird zu einer Liste mit {{count}} {{items}}",
+        "keepRow": "Behält „alle {{items}}“ und sieht dies weiterhin",
+        "passesTo": "Weitergegeben an: {{groups}}",
+        "grantLegend": "Danach namentlich freigeben für (optional)",
+        "grantHelp": "Diese Gruppen dürfen {{name}} nach der Änderung verwenden, unabhängig von der Auswahl oben.",
+        "previewTitle": "Nach der Änderung",
+        "previewLoading": "Änderung wird berechnet…",
+        "keeps": "Dürfen es verwenden: {{groups}}",
+        "keepsNone": "Keine Gruppe darf es verwenden.",
+        "loses": "Dürfen es nicht mehr verwenden: {{groups}}",
+        "stillEveryone": "Alle angemeldeten Benutzer dürfen es weiterhin verwenden:",
+        "newItemsWarning": "Neue {{items}}, die Sie später hinzufügen, erscheinen in den umgestellten Gruppen nicht mehr automatisch. Fügen Sie sie diesen Gruppen beim Anlegen hinzu. Die Änderung wird im Verlauf jeder Gruppe festgehalten.",
+        "error": "Der Zugriff konnte nicht eingeschränkt werden.",
+        "apply": "Zugriff einschränken"
+      }
     }
   },
   "cloudStorage": {

@@ -909,6 +909,73 @@ export const updateContentAccess = async (type, id, { grant = [], revoke = [] } 
   return response.data;
 };
 
+// Item access (full admins): who can use an app, model, prompt, … and why,
+// the access check, and replacing wildcards so that one item is no longer
+// granted to everyone. See server/routes/admin/itemAccess.js.
+
+const itemAccessUrl = (type, id) =>
+  `/admin/access/${encodeURIComponent(type)}/${encodeURIComponent(id)}`;
+
+/**
+ * Every group with the routes by which its members get the item.
+ *
+ * @param {'apps'|'models'|'prompts'|'skills'|'workflows'} type
+ * @param {string} id
+ * @returns {Promise<{type: string, id: string, groups: object[], audience: object,
+ *   wildcardGroups: string[], restrictable: boolean}>}
+ */
+export const fetchItemAccess = async (type, id) => {
+  const response = await makeAdminApiCall(itemAccessUrl(type, id));
+  return response.data;
+};
+
+/**
+ * Whether a group or a user can use an app or a model, with the reasons.
+ *
+ * @param {'apps'|'models'} type
+ * @param {string} id
+ * @param {{groupId?: string, userId?: string}} subject - Exactly one of the two
+ * @returns {Promise<{subject: object, verdict: 'available'|'unavailable', reasons: object[]}>}
+ */
+export const fetchAccessVerdict = async (type, id, { groupId, userId } = {}) => {
+  const query = new URLSearchParams(groupId ? { groupId } : { userId: userId || '' });
+  const response = await makeAdminApiCall(`${itemAccessUrl(type, id)}/verdict?${query}`);
+  return response.data;
+};
+
+/**
+ * What restricting the item would change, without writing.
+ *
+ * @param {'apps'|'models'|'prompts'} type
+ * @param {string} id
+ * @param {{groupIds?: string[], grantGroupIds?: string[]}} [body]
+ * @returns {Promise<object>} The restriction plan
+ */
+export const previewAccessRestriction = async (type, id, body = {}) => {
+  const response = await makeAdminApiCall(`${itemAccessUrl(type, id)}/_preview-restrict`, {
+    method: 'POST',
+    body
+  });
+  return response.data;
+};
+
+/**
+ * Replaces `*` in the chosen groups with an explicit list without the item,
+ * then grants it to `grantGroupIds`.
+ *
+ * @param {'apps'|'models'|'prompts'} type
+ * @param {string} id
+ * @param {{groupIds?: string[], grantGroupIds?: string[]}} body
+ * @returns {Promise<object>} The access view after the change, with `changed`
+ */
+export const restrictItemAccess = async (type, id, body) => {
+  const response = await makeAdminApiCall(`${itemAccessUrl(type, id)}/_restrict`, {
+    method: 'POST',
+    body
+  });
+  return response.data;
+};
+
 // Credential store API functions
 
 /**

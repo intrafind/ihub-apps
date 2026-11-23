@@ -9470,6 +9470,100 @@
     },
     "integrationPages": {
       "oauthClientId": "OAuth Client ID:"
+    },
+    "access": {
+      "items": {
+        "apps": "apps",
+        "models": "models",
+        "prompts": "prompts",
+        "skills": "skills",
+        "workflows": "workflows"
+      },
+      "explain": {
+        "heading": "Granted through “all {{items}}”:",
+        "ownWildcard": "Everyone in {{group}} sees this through “all {{items}}”.",
+        "inheritedWildcard": "Everyone in {{group}} sees this through “all {{items}}” (inherited from {{source}}: {{chain}}).",
+        "ownExplicit": "{{group}} is granted this by name.",
+        "inheritedExplicit": "Everyone in {{group}} gets this by name from {{source}} ({{chain}})."
+      },
+      "card": {
+        "title": "Who can use this model",
+        "description": "Which groups may use the model, and why. Group lists are edited under Groups; “Restrict access” takes the model out of groups that grant all models.",
+        "loading": "Loading access…",
+        "loadError": "Access could not be loaded.",
+        "audienceEveryone": "Everyone can use this, including people who are not signed in.",
+        "audienceSignedIn": "Everyone who signs in can use this.",
+        "audienceAnonymous": "People who are not signed in can use this. Groups: {{groups}}",
+        "audienceGroups": "Only these groups can use this: {{groups}}.",
+        "audienceNone": "No group can use this."
+      },
+      "tools": {
+        "title": "Restrict access and check access"
+      },
+      "check": {
+        "title": "Why can't someone see this?",
+        "description": "Pick a group or a user. The check applies the same rules the server applies when it lists apps and models for them.",
+        "subjectLegend": "Check for",
+        "byGroup": "A group",
+        "byUser": "A user",
+        "groupLabel": "Group",
+        "userLabel": "User",
+        "userPlaceholder": "Username, email or user ID",
+        "run": "Check access",
+        "error": "The check could not be run.",
+        "subjectGroups": "Checked with the groups: {{groups}}",
+        "identityProviderNote": "This user signs in through an identity provider. Groups it sends at sign-in are not known here; only the groups stored in iHub were checked.",
+        "verdict": {
+          "availableGroup": "Members of {{name}} can use this.",
+          "unavailableGroup": "Members of {{name}} cannot use this.",
+          "availableUser": "{{name}} can use this.",
+          "unavailableUser": "{{name}} cannot use this.",
+          "availableAnonymous": "People who are not signed in can use this.",
+          "unavailableAnonymous": "People who are not signed in cannot use this."
+        },
+        "reasons": {
+          "anonymousAccessOff": "Anonymous access is switched off, so people who are not signed in see nothing.",
+          "userInactive": "The account is deactivated.",
+          "itemEnabled": "It is enabled.",
+          "itemDisabled": "It is disabled: nobody sees it until it is enabled.",
+          "featureOn": "Required features are on: {{features}}.",
+          "featureOff": "The required feature “{{feature}}” is off (Features).",
+          "integrationOff": "An integration it needs is off: {{integrations}}.",
+          "granted": "A group grants it:",
+          "notGranted": "No group of theirs grants it, by name or through “all”.",
+          "modelsAvailable": "Models they can use with it: {{models}}.",
+          "noUsableModel": "No model is left that they may use with it:",
+          "preferredModelUnavailable": "The preferred model {{model}} is not available to them; another model is used."
+        },
+        "modelCause": {
+          "missing": "{{model}} is not configured.",
+          "disabled": "{{model}} is disabled.",
+          "notAllowedForApp": "{{model}} is not allowed for this app or lacks a capability the app needs.",
+          "notGranted": "{{model}} is not granted to their groups."
+        },
+        "noModelsConfigured": "No chat model is configured."
+      },
+      "restrict": {
+        "open": "Restrict access…",
+        "openHelp": "Groups that grant all {{items}} cover this one too. Restricting replaces “all” in those groups with an explicit list.",
+        "title": "Restrict who can use {{name}}",
+        "intro": "These groups see every one of the {{items}} through “all {{items}}”. To take {{name}} away from them, “all” is replaced with a list of every current item except this one.",
+        "convertLegend": "Groups that grant all {{items}}",
+        "convertRow": "“all {{items}}” becomes a list of {{count}} {{items}}",
+        "keepRow": "Keeps “all {{items}}” and keeps seeing this",
+        "passesTo": "Passed on to: {{groups}}",
+        "grantLegend": "Then grant it by name to (optional)",
+        "grantHelp": "These groups can use {{name}} after the change, whatever happens above.",
+        "previewTitle": "After the change",
+        "previewLoading": "Working out the change…",
+        "keeps": "Can use it: {{groups}}",
+        "keepsNone": "No group can use it.",
+        "loses": "Can no longer use it: {{groups}}",
+        "stillEveryone": "Everyone who signs in can still use it:",
+        "newItemsWarning": "New {{items}} you add later no longer appear automatically in the groups you convert. Add them to those groups when you create them. The change is recorded in each group's history.",
+        "error": "Access could not be restricted.",
+        "apply": "Restrict access"
+      }
     }
   },
   "cloudStorage": {
