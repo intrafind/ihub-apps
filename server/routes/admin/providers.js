@@ -462,6 +462,50 @@ function picksOf(body) {
   }));
 }
 
+/**
+ * The region the Bedrock adapter uses for a model without a region of its
+ * own, as far as the server knows it without a call: the provider's
+ * `config.region`, else `AWS_REGION` / `AWS_DEFAULT_REGION` (the first one
+ * set). Undefined when none is set or the deciding value is not a region (the
+ * adapter refuses that one; see BedrockAdapter.resolveRegion). Sent as the
+ * read-only `effectiveRegion` of the Bedrock entry, so the admin UI can
+ * prefill the region the server would use; it is never stored.
+ *
+ * @param {Object} provider - The provider entry
+ * @returns {string|undefined}
+ */
+function bedrockEffectiveRegion(provider) {
+  const sources = [provider.config?.region, process.env.AWS_REGION, process.env.AWS_DEFAULT_REGION];
+  const value = sources.find(entry => typeof entry === 'string' && entry.trim() !== '');
+  return isValidBedrockRegion(value) ? value : undefined;
+}
+
+/**
+ * A provider entry as the admin API returns it: the API key masked
+ * (`apiKeyMasked`, `apiKeySet`) and, for Bedrock, the `effectiveRegion`.
+ * These helper fields are dropped again on save.
+ *
+ * @param {Object} provider
+ * @returns {Object}
+ */
+function providerForAdmin(provider) {
+  const masked = { ...provider };
+  if (masked.apiKey) {
+    // Show masked value to indicate a key is set
+    masked.apiKeyMasked = '••••••••';
+    masked.apiKeySet = true;
+    // Remove the actual encrypted key from response
+    delete masked.apiKey;
+  } else {
+    masked.apiKeySet = false;
+  }
+  if (provider.id === 'bedrock') {
+    const region = bedrockEffectiveRegion(provider);
+    if (region) masked.effectiveRegion = region;
+  }
+  return masked;
+}
+
 export default function registerAdminProvidersRoutes(app) {
   /**
    * @swagger
@@ -486,19 +530,7 @@ export default function registerAdminProvidersRoutes(app) {
     const { data: providers, etag: providersEtag } = configCache.getProviders(true);
 
     // Mask API keys in the response for security
-    const maskedProviders = providers.map(provider => {
-      const maskedProvider = { ...provider };
-      if (maskedProvider.apiKey) {
-        // Show masked value to indicate a key is set
-        maskedProvider.apiKeyMasked = '••••••••';
-        maskedProvider.apiKeySet = true;
-        // Remove the actual encrypted key from response
-        delete maskedProvider.apiKey;
-      } else {
-        maskedProvider.apiKeySet = false;
-      }
-      return maskedProvider;
-    });
+    const maskedProviders = providers.map(providerForAdmin);
 
     res.setHeader('ETag', responseEtag(providersEtag));
     res.json({ items: maskedProviders });
@@ -753,20 +785,8 @@ export default function registerAdminProvidersRoutes(app) {
       throw new ServiceError('NOT_FOUND', 'Provider not found');
     }
 
-    // Mask API key in the response for security
-    const maskedProvider = { ...provider };
-    if (maskedProvider.apiKey) {
-      // Show masked value to indicate a key is set
-      maskedProvider.apiKeyMasked = '••••••••';
-      maskedProvider.apiKeySet = true;
-      // Remove the actual encrypted key from response
-      delete maskedProvider.apiKey;
-    } else {
-      maskedProvider.apiKeySet = false;
-    }
-
     res.setHeader('ETag', responseEtag(providersEtag));
-    res.json(maskedProvider);
+    res.json(providerForAdmin(provider));
   });
 
   /**
@@ -878,6 +898,7 @@ export default function registerAdminProvidersRoutes(app) {
       // Remove client-side helper fields
       delete next.apiKeySet;
       delete next.apiKeyMasked;
+      delete next.effectiveRegion;
 
       // The category decides which fields an entry has; it is fixed at creation.
       if (providers[index].category !== undefined) {
@@ -992,6 +1013,7 @@ export default function registerAdminProvidersRoutes(app) {
 
     // Remove client-side helper fields
     delete newProvider.apiKeySet;
+    delete newProvider.effectiveRegion;
     delete newProvider.apiKeyMasked;
 
     // Set defaults

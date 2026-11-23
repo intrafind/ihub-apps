@@ -269,8 +269,11 @@ export function initialConnectionForm(tile, existing) {
     serverKind: server?.id || '',
     apiType: server?.apiType || tile.apiType,
     gatewayApiType: tile.gateway ? GATEWAY_API_TYPES[0] : undefined,
-    // Bedrock: the region stored on the provider, else the adapter's default.
-    region: tile.region ? existing?.config?.region || DEFAULT_BEDROCK_REGION : ''
+    // Bedrock: the region the adapter uses today: the provider's, else the server's
+    // AWS_REGION (`effectiveRegion`, sent by GET /admin/providers), else the default.
+    region: tile.region
+      ? existing?.config?.region || existing?.effectiveRegion || DEFAULT_BEDROCK_REGION
+      : ''
   };
 }
 
@@ -596,8 +599,10 @@ export function planGroupUpdates(groupsFile, access, modelIds) {
  * self-hosted server without key, `requiresApiKey: false` so its models
  * count as keyless. Existing provider: `PUT` of the entry as listed, plus the
  * new key and `enabled: true`. For Bedrock the region the models were listed
- * in is stored too (`config.region`): the imported models carry inference
- * profile ids of that region's geography and are called there.
+ * in is stored on the provider (`config.region`) only when the provider has
+ * none yet: each imported model carries that region itself
+ * ({@link buildModelConfigs}), so a second run in another region does not move
+ * the models imported before.
  *
  * @param {Object} tile
  * @param {Object} form
@@ -608,12 +613,18 @@ export function planGroupUpdates(groupsFile, access, modelIds) {
 export function buildProviderWrite(tile, form, target, discovery) {
   const apiKey = form.apiKey.trim();
   if (target.mode === 'existing') {
-    const { apiKeySet: _set, apiKeyMasked: _masked, ...entry } = target.provider;
+    const {
+      apiKeySet: _set,
+      apiKeyMasked: _masked,
+      effectiveRegion: _effective,
+      ...entry
+    } = target.provider;
     const region = tile.region ? discovery?.region || form.region.trim() : '';
-    const regionChanged = Boolean(region) && entry.config?.region !== region;
-    if (!apiKey && entry.enabled !== false && !regionChanged) return null;
+    // The provider's region is the one of every Bedrock model without its own: set it once.
+    const setsRegion = Boolean(region) && !entry.config?.region;
+    if (!apiKey && entry.enabled !== false && !setsRegion) return null;
     const body = { ...entry, enabled: true };
-    if (regionChanged) body.config = { ...entry.config, region };
+    if (setsRegion) body.config = { ...entry.config, region };
     // The server keeps the stored key for the masked placeholder.
     body.apiKey = apiKey || (target.provider.apiKeySet ? '••••••••' : undefined);
     if (body.apiKey === undefined) delete body.apiKey;
@@ -646,7 +657,8 @@ export function buildProviderWrite(tile, form, target, discovery) {
  * Model configs for `POST /admin/models`, one per pick. Each is linked to the
  * provider (`providerId` for a custom one, the API type for a shipped one) and
  * carries no key: it uses the provider's (AI-PM6). Its inference URL is built
- * from the endpoint the provider holds. The chosen default carries
+ * from the endpoint the provider holds; a Bedrock model carries the region it
+ * was listed in (`config.region`). The chosen default carries
  * `default: true`; the server clears the flag on every other model.
  *
  * @param {Object} params
@@ -666,7 +678,8 @@ export function buildModelConfigs({ discovery, picks, providerId, defaultId }) {
       apiType: discovery.apiType,
       providerId,
       modelsUrl: discovery.modelsUrl,
-      enabled: true
+      enabled: true,
+      region: discovery.region
     });
     if (pick.id === defaultId) config.default = true;
     return config;

@@ -352,28 +352,67 @@ test('normalizeBedrockModel and indexInferenceProfiles ignore inactive profiles 
   );
 });
 
-test('adapter: an invalid region in a model config is skipped, never put into the host name', async () => {
+test('adapter: a set but invalid region is a configuration error, never a fallback', async () => {
   const { default: BedrockAdapter } = await import('../adapters/bedrock.js');
+  const { isLLMError, LLM_ERROR_CODES } = await import('../services/loop/contracts/errors.js');
   const saved = {
     AWS_REGION: process.env.AWS_REGION,
     AWS_DEFAULT_REGION: process.env.AWS_DEFAULT_REGION
   };
   delete process.env.AWS_REGION;
   delete process.env.AWS_DEFAULT_REGION;
+  const refused = region => err =>
+    isLLMError(err) &&
+    err.code === LLM_ERROR_CODES.INVALID_REQUEST &&
+    err.providerCode === 'BEDROCK_REGION_INVALID' &&
+    err.message.includes(`"${region}"`) &&
+    err.message.includes('config.region of the model');
   try {
     assert.equal(BedrockAdapter.resolveRegion({ config: { region: 'us-west-2' } }), 'us-west-2');
-    assert.equal(
-      BedrockAdapter.resolveRegion({ config: { region: 'evil.com/x' } }),
-      'eu-central-1'
-    );
+    // The legacy placeholder, a typo and a host name: refused, not sent to eu-central-1.
+    for (const region of ['apac-northeast-1', 'us-east1', 'evil.com/x']) {
+      assert.throws(() => BedrockAdapter.resolveRegion({ config: { region } }), refused(region));
+    }
+    // Nor to a region the next source names.
     process.env.AWS_REGION = 'eu-north-1';
+    assert.throws(
+      () => BedrockAdapter.resolveRegion({ config: { region: 'us-east1' } }),
+      refused('us-east1')
+    );
+    // Only an empty value is skipped.
     assert.equal(BedrockAdapter.resolveRegion({ config: {} }), 'eu-north-1');
+    assert.equal(BedrockAdapter.resolveRegion({ config: { region: '' } }), 'eu-north-1');
+    assert.equal(BedrockAdapter.resolveRegion({ config: { region: '  ' } }), 'eu-north-1');
+    // An invalid environment value is refused too, naming the variable.
+    process.env.AWS_REGION = 'Frankfurt';
+    assert.throws(
+      () => BedrockAdapter.resolveRegion({ config: {} }),
+      err => err.providerCode === 'BEDROCK_REGION_INVALID' && /AWS_REGION/.test(err.message)
+    );
   } finally {
     for (const [key, value] of Object.entries(saved)) {
       if (value === undefined) delete process.env[key];
       else process.env[key] = value;
     }
   }
+});
+
+test('adapter: an invalid region fails the request before anything is sent', async () => {
+  const { default: BedrockAdapter } = await import('../adapters/bedrock.js');
+  await assert.rejects(
+    BedrockAdapter.createCompletionRequest(
+      {
+        id: 'claude',
+        provider: 'bedrock',
+        modelId: 'anthropic.claude',
+        config: { region: 'us-east1' }
+      },
+      [{ role: 'user', content: 'hi' }],
+      'key',
+      { stream: false }
+    ),
+    err => err.providerCode === 'BEDROCK_REGION_INVALID'
+  );
 });
 
 test('adapter: a listed profile id of any geography is sent as it is', async () => {

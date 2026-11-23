@@ -105,10 +105,14 @@ The models use the provider's key, and a one-prompt test at the end shows that t
   address, lists the models that region offers, and goes through the same steps. Models that
   Bedrock only serves through a cross-region inference profile are offered under the profile of
   the region (`eu.anthropic.claude-…`); embedding and image models are shown but cannot be picked.
-  The region is stored on the AWS Bedrock provider.
+  Each imported model keeps the region it was listed in, so adding models from a second region
+  does not move the ones you added before. The region field starts with the region the server
+  uses today, and the AWS Bedrock provider gets it only when it has none yet.
 - **The AWS Bedrock provider page has an AWS region field.** It applies to every Bedrock model
   that sets no region of its own; left empty, `AWS_REGION` on the server (default
-  `eu-central-1`) applies as before.
+  `eu-central-1`) applies as before. A region that is set but is not a region (for example
+  `us-east1`) now stops the model call with a message that names it, instead of sending the
+  data to another region; saving a model with such a region is refused.
 
 ## Models: What Still Uses a Model or App, and the Default in Your Hands
 

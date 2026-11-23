@@ -683,7 +683,7 @@ The adapter needs no AWS SDK and no access key pair: the API key is sent as `Aut
 
 ### Region configuration
 
-The region is set on the **AWS Bedrock provider** (Admin → Models → Providers → AWS Bedrock → **AWS region**, stored as `config.region` in `providers.json`) and can be overridden per model via `config.region` in the Admin Model Editor. Both accept an AWS region code or `global`; anything else is refused when saved, and the adapter skips (with a warning) a value that is not a region rather than putting it into the host name. Values:
+The region is set on the **AWS Bedrock provider** (Admin → Models → Providers → AWS Bedrock → **AWS region**, stored as `config.region` in `providers.json`) and can be overridden per model via `config.region` in the Admin Model Editor. Both accept an AWS region code or `global`; anything else is refused when saved (`400`). A value that is set but is not a region (a hand-edited file, the legacy placeholder `apac-northeast-1`, a typo such as `us-east1`, an invalid `AWS_REGION`) is never put into the host name and never replaced by the next source or the default: the model call fails with the error code `INVALID_REQUEST` (provider code `BEDROCK_REGION_INVALID`), and the message names the value and where it is set. Administrators see it in the model test and in the chat; other users see that the model call failed. Values:
 
 | Value | Behavior |
 | --- | --- |
@@ -694,18 +694,18 @@ The region is set on the **AWS Bedrock provider** (Admin → Models → Provider
 
 If you write the modelId with an explicit profile prefix (`us.`, `eu.`, `apac.`, `jp.`, `au.`, `ca.`, `us-gov.`, `global.`, e.g. `us.anthropic.claude-sonnet-4-6`) the adapter sends it as-is. Such a model only works while the region belongs to that geography: after changing the provider region from `eu-central-1` to `us-east-1`, re-add models that carry `eu.` ids.
 
-Fallback order: `model.config.region` → `providers.json` `bedrock.config.region` → env `AWS_REGION` / `AWS_DEFAULT_REGION` → default `eu-central-1`.
+Fallback order: `model.config.region` → `providers.json` `bedrock.config.region` → env `AWS_REGION` / `AWS_DEFAULT_REGION` → default `eu-central-1`. Only an empty source is skipped; the first one that is set decides.
 
 ### Adding models with "Connect a model provider"
 
-The **AWS Bedrock** tile of the guided flow (Admin → Models → Providers → Add provider) asks for the region and the API key (a key already stored on the provider, or `BEDROCK_API_KEY`, is used when the field is left empty), then lists the region's models:
+The **AWS Bedrock** tile of the guided flow (Admin → Models → Providers → Add provider) asks for the region (prefilled with the region the server uses today: the provider's, else `AWS_REGION`, which `GET /api/admin/providers` sends as the read-only `effectiveRegion` of the Bedrock entry) and the API key (a key already stored on the provider, or `BEDROCK_API_KEY`, is used when the field is left empty), then lists the region's models:
 
 - `GET https://bedrock.<region>.amazonaws.com/foundation-models` (`ListFoundationModels`) and `GET …/inference-profiles?type=SYSTEM_DEFINED` (`ListInferenceProfiles`), with the same Bearer key. The key's IAM identity needs `bedrock:ListFoundationModels` and `bedrock:ListInferenceProfiles` (both in the `AmazonBedrockLimitedAccess` policy that Bedrock API keys get by default).
 - A model Bedrock serves on demand is offered under its own id; a model it serves only through a cross-region inference profile under the profile id of the region's geography (`eu.anthropic.claude-sonnet-4-…` for `eu-central-1`). With `global`, only models with a `global.` profile can be picked. Embedding and image models, and models without a profile in the region, are listed but cannot be picked; provisioned-throughput-only variants are not listed.
 - If the profile listing is refused, the models are still offered, with the region's prefix in front of models that need a profile.
 - A rejected key, a key without permission and an unknown region are reported as such ("The endpoint rejected the key", "access denied", "host not found" with the region named).
 
-The picked models are created as `provider: "bedrock"` configs without `url` and without a key of their own; the region the models were listed in is stored on the provider.
+The picked models are created as `provider: "bedrock"` configs without `url` and without a key of their own. Each model stores the region it was listed in as its own `config.region`, because its id is an inference profile of that region's geography. The provider's region is set to it only when the provider has none yet: a second run in another region adds models there and leaves the provider and the models imported before where they are. The **Import models** dialog of the Bedrock provider does the same.
 
 ### Supported models (Converse-compatible families)
 

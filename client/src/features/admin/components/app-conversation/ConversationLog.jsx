@@ -41,8 +41,8 @@ function Speaker({ who }) {
  * @param {boolean} props.working - A turn is running.
  * @param {Array<{key: string, values?: object}>} [props.stakes]
  * @param {boolean} [props.testOpen]
- * @param {boolean} [props.savesOtherChanges] - Apply and Undo also save unsaved changes
- *   of the form outside the content keys.
+ * @param {object|null} [props.saved] - The app as it was last loaded or saved; each change
+ *   card compares the form with it outside the keys of its own change.
  * @param {(text: string) => void} props.onSend - Sends an author message.
  * @param {(id: number, ticked: object) => void} props.onApply
  * @param {(id: number) => void} props.onDismiss
@@ -59,7 +59,7 @@ function ConversationLog({
   working,
   stakes,
   testOpen,
-  savesOtherChanges = false,
+  saved = null,
   onSend,
   onApply,
   onDismiss,
@@ -149,7 +149,7 @@ function ConversationLog({
                 undoAvailable={stillApplied(form, entry.applied)}
                 stakes={stakes}
                 testOpen={testOpen}
-                savesOtherChanges={savesOtherChanges}
+                saved={saved}
                 onApply={ticked => onApply(entry.id, ticked)}
                 onDismiss={() => onDismiss(entry.id)}
                 onUndo={() => onUndo(entry.id)}

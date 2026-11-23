@@ -17,17 +17,19 @@ import {
   applyRevisionPatch
 } from '../../../shared/appRevision.js';
 import {
+  changeKeysOf,
   changeSections,
   changedLanguages,
   contentChangedSince,
   draftOf,
+  linesOf,
   offeredSuggestions,
   readConversation,
   restoreValues,
   sameValue,
   stillApplied,
   suggestionChanges,
-  unsavedOutsideContent,
+  unsavedOutsideChange,
   valuesOf,
   warningKey,
   wireConversation,
@@ -192,14 +194,60 @@ describe('what a turn sends and when a change still applies', () => {
     window.sessionStorage.clear();
   });
 
-  test('unsaved changes outside the content keys are told apart from content edits', () => {
-    const saved = { name: { en: 'A' }, preferredModel: 'x', capabilities: { upload: false } };
-    expect(unsavedOutsideContent({ ...saved, name: { en: 'B' } }, saved, 'admin')).toBe(false);
-    expect(unsavedOutsideContent({ ...saved, preferredModel: 'y' }, saved, 'admin')).toBe(true);
+  test("unsaved edits are every difference from the saved app outside the change's own keys", () => {
+    const saved = { name: { en: 'A' }, description: { en: 'D' }, system: { en: 'S' }, x: 1 };
+    // An unsaved description goes with a change of the instructions: content keys count too.
+    expect(unsavedOutsideChange({ ...saved, description: { en: 'D2' } }, saved, ['system'])).toBe(
+      true
+    );
+    // The change's own key is what Apply writes; it is not an "other" edit.
+    expect(unsavedOutsideChange({ ...saved, system: { en: 'S2' } }, saved, ['system'])).toBe(false);
+    expect(unsavedOutsideChange({ ...saved, x: 2 }, saved, ['system'])).toBe(true);
+    expect(unsavedOutsideChange({ ...saved, capabilities: { upload: true } }, saved, [])).toBe(
+      true
+    );
+    expect(unsavedOutsideChange(saved, null, ['system'])).toBe(false);
+  });
+
+  test('the keys of a change: patch and ticked suggestions before Apply, what Apply set after', () => {
+    const entry = {
+      kind: 'change',
+      status: 'proposed',
+      patch: { system: { en: 'S2' }, allowEmptyContent: true },
+      suggestions: { websearch: true, integrations: [{ id: 'jira', label: 'Jira' }] }
+    };
+    expect(changeKeysOf('admin', FORM, entry)).toEqual(['system', 'allowEmptyContent']);
     expect(
-      unsavedOutsideContent({ ...saved, capabilities: { upload: true } }, saved, 'personal')
-    ).toBe(true);
-    expect(unsavedOutsideContent(saved, null, 'admin')).toBe(false);
+      changeKeysOf('admin', FORM, entry, { webSearch: true, integrationIds: ['jira'] })
+    ).toEqual(['system', 'allowEmptyContent', 'websearch', 'integrations']);
+    expect(
+      changeKeysOf('personal', {}, entry, { webSearch: false, integrationIds: ['jira'] })
+    ).toEqual(['system', 'allowEmptyContent', 'capabilities']);
+    const applied = {
+      ...entry,
+      status: 'applied',
+      before: { values: { system: { en: 'S' } }, missing: ['prompt'] },
+      applied: { values: { system: { en: 'S2' } }, missing: ['prompt'] }
+    };
+    expect(changeKeysOf('admin', FORM, applied)).toEqual(['system', 'prompt']);
+  });
+
+  test('a change without a sentence is still sent, so the question count resets', () => {
+    const wire = wireConversation([
+      { id: 1, role: 'author', text: 'Make it formal' },
+      { id: 2, role: 'builder', kind: 'question', text: '', question: { text: 'Which tone?' } },
+      { id: 3, role: 'author', text: 'Formal' },
+      { id: 4, role: 'builder', kind: 'change', text: '' },
+      { id: 5, role: 'builder', kind: 'message', text: ' ' },
+      { id: 6, role: 'author', text: 'Shorter' }
+    ]);
+    expect(wire).toEqual([
+      { role: 'author', text: 'Make it formal' },
+      { role: 'builder', kind: 'question', text: 'Which tone?' },
+      { role: 'author', text: 'Formal' },
+      { role: 'builder', kind: 'change', text: '' },
+      { role: 'author', text: 'Shorter' }
+    ]);
   });
 
   test('a save that was running when the page went away is settled on read', () => {
@@ -281,6 +329,37 @@ describe('answers and suggestions', () => {
     ).toEqual({
       capabilities: { webSearch: true, integrations: [{ id: 'jira', actions: ['search'] }] }
     });
+  });
+
+  test('a field line names the type and the default, so changing either changes the line', () => {
+    const t = (key, values) => (values ? `${key}:${values.value}` : key);
+    const field = {
+      name: 'tone',
+      label: { en: 'Tone' },
+      type: 'select',
+      required: true,
+      defaultValue: { en: 'Friendly' },
+      predefinedValues: [
+        { value: 'friendly', label: { en: 'Friendly' } },
+        { value: 'formal', label: { en: 'Formal' } }
+      ]
+    };
+    const [line] = linesOf('variables', [field], 'en', t);
+    expect(line).toBe(
+      'Tone admin.apps.conversation.line.required · admin.apps.edit.typeSelect (Friendly, Formal)' +
+        ' · admin.apps.conversation.line.default:Friendly'
+    );
+    const variants = [
+      { ...field, type: 'string', predefinedValues: undefined },
+      { ...field, defaultValue: { en: 'Formal' } },
+      { ...field, defaultValue: undefined },
+      { ...field, type: 'boolean', predefinedValues: undefined, defaultValue: { en: 'true' } }
+    ];
+    for (const variant of variants) {
+      expect(linesOf('variables', [variant], 'en', t)[0]).not.toBe(line);
+    }
+    // A type this client does not know is shown as it is.
+    expect(linesOf('variables', [{ name: 'x', type: 'color' }], 'en', t)[0]).toBe('x · color');
   });
 
   test('changeSections names each changed part in plain words, colour and icon together', () => {

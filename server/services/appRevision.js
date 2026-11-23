@@ -430,25 +430,116 @@ function withText(before, text, language) {
   return { ...localizedObject(before), [revisionLanguageKey(before, language)]: text };
 }
 
+/** The keys of an input field the sanitiser writes; every other key is the author's own. */
+const SANITISED_VARIABLE_KEYS = [
+  'name',
+  'label',
+  'type',
+  'required',
+  'defaultValue',
+  'predefinedValues'
+];
+
+/** The keys of a conversation starter the sanitiser writes; every other key is the author's own. */
+const SANITISED_STARTER_KEYS = ['title', 'message'];
+
+/** Keys never copied from an entry, whatever it holds. */
+const UNSAFE_KEYS = new Set(['__proto__', 'constructor', 'prototype']);
+
+/**
+ * An entry of the draft with the sanitiser's keys replaced by `written`. The
+ * keys the sanitiser does not write (a field's `description` and
+ * `placeholder`, a starter's `description`, `variables` and `autoSend`, and
+ * any other key the author's app has there) stay as the draft holds them, in
+ * their place; a sanitiser key missing from `written` is removed. Those keys
+ * come from the draft only, never from the model: the sanitiser reads none of
+ * them. A new entry (no `before`) is `written` alone.
+ *
+ * @param {unknown} before - The entry of the draft it replaces, or nothing.
+ * @param {object} written - The sanitiser's keys of the new entry.
+ * @param {string[]} sanitisedKeys - The keys the sanitiser writes.
+ * @returns {object}
+ */
+function overEntry(before, written, sanitisedKeys) {
+  const result = {};
+  if (isPlainObject(before)) {
+    for (const [key, value] of Object.entries(before)) {
+      if (UNSAFE_KEYS.has(key)) continue;
+      if (!sanitisedKeys.includes(key) || Object.hasOwn(written, key)) result[key] = value;
+    }
+  }
+  for (const [key, value] of Object.entries(written)) result[key] = value;
+  return result;
+}
+
+/**
+ * The default text a revised field writes in `language`: the draft's own text
+ * when it means the same default as the sanitiser's, else the sanitiser's. The
+ * sanitiser writes the default of a field with options as that option's label
+ * (`Professional`); a shipped app may name it by value (`professional`) or in
+ * another case, and a change of some other field must not rewrite it.
+ *
+ * @param {object|undefined} before - The field of the draft with this name.
+ * @param {object} variable - The sanitised field; its texts are under `lang`.
+ * @param {string} lang - The sanitiser's language key.
+ * @param {string} language - The language of the revision.
+ * @returns {string}
+ */
+function defaultTextToWrite(before, variable, lang, language) {
+  const proposed = variable.defaultValue[lang];
+  const own = isPlainObject(before?.defaultValue)
+    ? before.defaultValue[revisionLanguageKey(before.defaultValue, language)]
+    : undefined;
+  if (typeof own !== 'string') return proposed;
+  const old = stripHiddenCharacters(own).trim();
+  if (old === proposed) return own;
+  const option = (variable.predefinedValues || []).find(entry => entry.label[lang] === proposed);
+  if (!option) return proposed;
+  const folded = old.toLowerCase();
+  const names = [option.value, option.label[lang]];
+  return names.some(name => name === old || name.toLowerCase() === folded) ? own : proposed;
+}
+
 /**
  * Step 8 for `variables`: the sanitised fields (texts in `lang` only) with the
  * other languages of a field whose `name` stayed: its label, default and the
  * labels of options whose `value` stayed. A revised text goes under the key it
- * was read from (`language`).
+ * was read from (`language`). Each field starts from the field of the draft
+ * with that name, so the keys the sanitiser does not write (`description`,
+ * `placeholder`, …) stay; a new field has none of them. `required` stays
+ * absent on a field of the draft that had none and is still optional. A field
+ * the model wrote back as it was (the same in `unchanged`) is the draft's own.
+ * With `keepDraft` false every field is built from the sanitiser's keys alone
+ * (see {@link changeReply}).
  */
-function variablesWithLanguages(sanitized, currentVariables, lang, language) {
+function variablesWithLanguages(sanitized, currentVariables, lang, language, options) {
+  const { unchanged, keepDraft } = options;
   return sanitized.map(variable => {
     const before = variableNamed(currentVariables, variable.name);
+    if (keepDraft && before && sameValue(variableNamed(unchanged, variable.name), variable)) {
+      return before;
+    }
     const result = {
       name: variable.name,
       label: withText(before?.label, variable.label[lang], language),
-      type: variable.type,
-      required: variable.required
+      type: variable.type
     };
+    // A field of the draft without `required` keeps it absent while it stays optional.
+    if (
+      !keepDraft ||
+      variable.required ||
+      !isPlainObject(before) ||
+      Object.hasOwn(before, 'required')
+    ) {
+      result.required = variable.required;
+    }
     const otherDefaults = localizedObject(before?.defaultValue);
-    delete otherDefaults[revisionLanguageKey(before?.defaultValue, language)];
+    const ownDefaultKey = revisionLanguageKey(before?.defaultValue, language);
+    // An empty default the draft holds in this language was empty before and stays: no change.
+    if (textIn(otherDefaults[ownDefaultKey], language)) delete otherDefaults[ownDefaultKey];
     if (variable.defaultValue) {
-      result.defaultValue = withText(before?.defaultValue, variable.defaultValue[lang], language);
+      const text = defaultTextToWrite(before, variable, lang, language);
+      result.defaultValue = withText(before?.defaultValue, text, language);
     } else if (Object.keys(otherDefaults).length > 0 && before?.type === variable.type) {
       result.defaultValue = otherDefaults;
     }
@@ -464,7 +555,7 @@ function variablesWithLanguages(sanitized, currentVariables, lang, language) {
         };
       });
     }
-    return result;
+    return overEntry(keepDraft ? before : undefined, result, SANITISED_VARIABLE_KEYS);
   });
 }
 
@@ -472,20 +563,34 @@ function variablesWithLanguages(sanitized, currentVariables, lang, language) {
  * Step 8 for `starterPrompts`: the sanitised starters with the other languages
  * of the starter they replace: the one whose title or message in `lang` is the
  * same, else, when the number of starters stayed, the one at the same place.
+ * Each starter starts from the one it replaces, so the keys the sanitiser does
+ * not write (`description`, `variables`, `autoSend`, …) stay; a starter that
+ * replaces none has none of them. A starter the model wrote back as it was is
+ * the draft's own. With `keepDraft` false every starter is built from the
+ * sanitiser's keys alone (see {@link changeReply}).
  */
-function startersWithLanguages(sanitized, currentStarters, lang, language) {
+function startersWithLanguages(sanitized, currentStarters, lang, language, keepDraft) {
   const before = (Array.isArray(currentStarters) ? currentStarters : []).filter(isPlainObject);
   return sanitized.map((starter, index) => {
+    const same =
+      keepDraft &&
+      before.find(
+        candidate =>
+          textIn(candidate.title, language) === starter.title[lang] &&
+          textIn(candidate.message, language) === starter.message[lang]
+      );
+    if (same) return same;
     const match =
       before.find(
         candidate =>
           textIn(candidate.title, language) === starter.title[lang] ||
           textIn(candidate.message, language) === starter.message[lang]
       ) || (before.length === sanitized.length ? before[index] : undefined);
-    return {
+    const written = {
       title: withText(match?.title, starter.title[lang], language),
       message: withText(match?.message, starter.message[lang], language)
     };
+    return overEntry(keepDraft ? match : undefined, written, SANITISED_STARTER_KEYS);
   });
 }
 
@@ -501,9 +606,14 @@ function startersWithLanguages(sanitized, currentStarters, lang, language) {
  * @param {object} source - The draft's content keys.
  * @param {string} lang - The base language, the sanitiser's key.
  * @param {string} language - The language of the revision as requested.
+ * @param {object} draftOptions
+ * @param {object} draftOptions.unchangedApp - The sanitiser's app of the draft without the
+ *   proposal: an input field that is the same there and in `sanitizedApp` is the draft's own.
+ * @param {boolean} draftOptions.keepDraft - Keep the draft's own entries and keys in
+ *   `variables` and `starterPrompts`; `false` builds them from the sanitiser alone.
  * @returns {unknown}
  */
-function patchValue(key, sanitizedApp, source, lang, language) {
+function patchValue(key, sanitizedApp, source, lang, language, { unchangedApp, keepDraft }) {
   if (REVISE_LOCALIZED_KEYS.includes(key)) {
     const value = localizedObject(source[key]);
     const own = revisionLanguageKey(source[key], language);
@@ -513,14 +623,18 @@ function patchValue(key, sanitizedApp, source, lang, language) {
     return Object.keys(value).length > 0 ? value : null;
   }
   if (key === 'variables') {
-    return variablesWithLanguages(sanitizedApp.variables, source.variables, lang, language);
+    return variablesWithLanguages(sanitizedApp.variables, source.variables, lang, language, {
+      unchanged: unchangedApp?.variables,
+      keepDraft
+    });
   }
   if (key === 'starterPrompts') {
     return startersWithLanguages(
       sanitizedApp.starterPrompts,
       source.starterPrompts,
       lang,
-      language
+      language,
+      keepDraft
     );
   }
   return sanitizedApp[key] ?? null;
@@ -532,13 +646,13 @@ function fieldRoot(field) {
 }
 
 /**
- * Step 9: the patched app passes the schema of its target. Only issues on the
- * patched keys count: the request's untouched content is the author's own and
- * is checked by the save.
+ * Step 9: the issues of the patched app against the schema of its target.
+ * Only issues on the patched keys count: the request's untouched content is
+ * the author's own and is checked by the save.
  *
- * @throws {ServiceError} `APP_GENERATOR_INVALID_ANSWER` (`incomplete`)
+ * @returns {Array<{ path: Array<string|number>, code: string }>}
  */
-function assertPatchFitsSchema({ source, draft, patch, personal, lang, modelId }) {
+function patchSchemaIssues({ source, draft, patch, personal, lang }) {
   const keys = new Set(Object.keys(patch));
   let result;
   if (personal) {
@@ -552,8 +666,18 @@ function assertPatchFitsSchema({ source, draft, patch, personal, lang, modelId }
     };
     result = appConfigSchema.safeParse(applyRevisionPatch(base, patch));
   }
-  if (result.success) return;
-  const issues = result.error.issues.filter(issue => keys.has(String(issue.path[0])));
+  if (result.success) return [];
+  return result.error.issues.filter(issue => keys.has(String(issue.path[0])));
+}
+
+/**
+ * Step 9: the patched app passes the schema of its target
+ * ({@link patchSchemaIssues}).
+ *
+ * @throws {ServiceError} `APP_GENERATOR_INVALID_ANSWER` (`incomplete`)
+ */
+function assertPatchFitsSchema({ source, draft, patch, personal, lang, modelId }) {
+  const issues = patchSchemaIssues({ source, draft, patch, personal, lang });
   if (issues.length === 0) return;
   // A bug in the sanitiser, not in the answer. The paths are logged, never a text.
   logger.error('A revised app does not pass the schema of its target', {
@@ -621,9 +745,20 @@ function switchesOnEmptyContent({ changed, after, draft, personal }) {
 
 /**
  * Steps 7 to 10: the patch, the changed keys, the warnings and the suggestions
- * of a change.
+ * of a change. `keepDraft` (default `true`) keeps the draft's own entries and
+ * keys in `variables` and `starterPrompts` (see {@link patchValue}).
  */
-function changeOf({ answer, source, current, allowed, draft, language, lang, sanitizeOptions }) {
+function changeOf({
+  answer,
+  source,
+  current,
+  allowed,
+  draft,
+  language,
+  lang,
+  sanitizeOptions,
+  keepDraft = true
+}) {
   const proposed = isPlainObject(answer.change) ? answer.change : {};
   const { proposal, warnings } = proposalOf(proposed, allowed, language);
   const suggestionInput = sanitizeOptions.mayPropose
@@ -641,7 +776,12 @@ function changeOf({ answer, source, current, allowed, draft, language, lang, san
 
   const changed = changedKeys(proposal, before, after);
   const patch = {};
-  for (const key of changed) patch[key] = patchValue(key, after.app, source, lang, language);
+  for (const key of changed) {
+    patch[key] = patchValue(key, after.app, source, lang, language, {
+      unchangedApp: before.app,
+      keepDraft
+    });
+  }
   if (switchesOnEmptyContent({ changed, after, draft, personal: sanitizeOptions.personal })) {
     patch.allowEmptyContent = true;
   }
@@ -781,11 +921,13 @@ function changeReply({ answer, text, content, call, user, personal, language, la
     installed: call.installed,
     description: '',
     mayPropose,
+    // The caps of the target: an admin app is not cut to the size of a personal app.
+    limits: REVISE_CONTENT_LIMITS[personal ? 'personal' : 'admin'],
     personal: personal
       ? { webSearch: personal.settings?.capabilities?.webSearch === true && searchFor(user) }
       : null
   };
-  const outcome = changeOf({
+  const changeInput = {
     answer,
     source,
     current,
@@ -794,7 +936,8 @@ function changeReply({ answer, text, content, call, user, personal, language, la
     language,
     lang,
     sanitizeOptions
-  });
+  };
+  let outcome = changeOf(changeInput);
   if (outcome.changed.length === 0) {
     const warnings = [
       ...outcome.warnings.filter(warning => warning.code === 'KEY_IGNORED'),
@@ -802,8 +945,14 @@ function changeReply({ answer, text, content, call, user, personal, language, la
     ];
     return { ...unchangedParts(), reply: 'message', text, warnings };
   }
-  // 9. The patched app passes the schema of its target.
-  assertPatchFitsSchema({ source, draft: input, patch: outcome.patch, personal, lang, modelId });
+  // 9. The patched app passes the schema of its target. The draft's own entries and keys kept
+  // in `variables` and `starterPrompts` are the author's, possibly half-edited in the form: when
+  // they break the schema, the entries are built from the sanitiser alone, as a draft's are.
+  const schemaCheck = { source, draft: input, personal, lang };
+  if (patchSchemaIssues({ ...schemaCheck, patch: outcome.patch }).length > 0) {
+    outcome = changeOf({ ...changeInput, keepDraft: false });
+  }
+  assertPatchFitsSchema({ ...schemaCheck, patch: outcome.patch, modelId });
   return {
     reply: 'change',
     text,

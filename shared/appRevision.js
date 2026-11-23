@@ -136,7 +136,9 @@ export const REVISE_WARNINGS = Object.freeze({
  * (`category`, `color`, `icon`, a field's `name` and `type`). A request over a
  * limit is refused before the turn counts against the limiter
  * (`APP_REVISE_TOO_LONG`, `details.field` names the key), so the content a
- * model call gets stays bounded.
+ * model call gets stays bounded. A change is sanitised with the same limits
+ * (`limits` of `sanitizeGeneratedApp`), so it never cuts content the request
+ * was allowed to carry.
  *
  * - `personal`: the limits of the personal-app schema (`USER_APP_LIMITS`), so a
  *   personal app that can be saved can always be revised.

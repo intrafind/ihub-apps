@@ -17,7 +17,7 @@ import AppFormEditor from '../components/AppFormEditor';
 import { CALLOUT_CLASS, SECONDARY_BUTTON_CLASS } from '../components/formStyles';
 import ConversationPanel from '../components/app-conversation/ConversationPanel';
 import { adminStakes } from '../components/app-conversation/stakes';
-import { unsavedOutsideContent } from '../components/app-conversation/conversationState';
+import { unsavedOutsideChange } from '../components/app-conversation/conversationState';
 import {
   CONVERSATION_VIEW,
   VIEW_PARAM,
@@ -194,18 +194,20 @@ function AdminAppEditPage() {
       }
     });
 
-  // Apply and Undo save the whole form: unsaved changes outside the content keys go with them.
-  const savesOtherChanges = unsavedOutsideContent(app, savedApp, 'admin');
-
   /**
    * The conversation's Apply and Undo: the editor's own save, conditional on
-   * the revision this editor loaded. When the form holds other unsaved changes
-   * they are saved too, so the form's validity check runs as for Save. The
-   * test chat restarts on the saved app; below `lg`, where the test is a
-   * dialog, a toast points to it.
+   * the revision this editor loaded. When the form holds other unsaved edits
+   * than the change's own keys (any key, content keys included), they are
+   * saved too, so the form's validity check runs as for Save. The test chat
+   * restarts on the saved app; below `lg`, where the test is a dialog, a toast
+   * points to it.
+   *
+   * @param {object} next - The form with the change merged over it, or put back.
+   * @param {{ keys: string[] }} change - The keys the change writes.
    */
-  const persistFromConversation = async next => {
-    const outcome = await saveValue(next, { checkForm: savesOtherChanges });
+  const persistFromConversation = async (next, { keys } = { keys: [] }) => {
+    const checkForm = unsavedOutsideChange(next, savedApp, keys);
+    const outcome = await saveValue(next, { checkForm });
     if (outcome.status !== 'saved') return outcome;
     setTestRun(run => run + 1);
     if (!wide) showToast(t('admin.apps.conversation.toast'));
@@ -421,7 +423,7 @@ function AdminAppEditPage() {
                 persist={persistFromConversation}
                 stakes={stakes}
                 testOpen={testOpen && wide}
-                savesOtherChanges={savesOtherChanges}
+                saved={savedApp}
               />
             </div>
           ) : (

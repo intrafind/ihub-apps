@@ -163,25 +163,26 @@ export function contentChangedSince(form, baseSnapshot, target) {
 }
 
 /**
- * Whether the form has unsaved changes outside the content keys of the target
- * (a model, the upload settings, a personal app's capabilities): Apply and
- * Undo save the whole form, so they would save those too, and the change card
- * says so. Changes to the content keys are what a change replaces or is
- * stale against, so they do not count here.
+ * Whether the form has unsaved changes a change does not make: Apply and Undo
+ * save the whole form, so they would save those too, and the change card says
+ * so (and the admin editor checks the form first, as Save does). Every key of
+ * the form and of the saved app counts, content keys included: an unsaved
+ * description goes with a change of the instructions. Only the keys the change
+ * itself writes are left out ({@link changeKeysOf}).
  *
  * @param {object|null} form - The app as the editor holds it.
  * @param {object|null} saved - The app as it was last loaded or saved.
- * @param {'admin'|'personal'} target
+ * @param {string[]} changeKeys - The keys the change writes.
  * @returns {boolean}
  * @example
- * unsavedOutsideContent({ name: 'B', preferredModel: 'x' }, { name: 'A', preferredModel: 'x' }, 'admin'); // → false
- * unsavedOutsideContent({ preferredModel: 'y' }, { preferredModel: 'x' }, 'admin'); // → true
+ * unsavedOutsideChange({ name: 'B', system: 'x' }, { name: 'A', system: 'y' }, ['system']); // → true
+ * unsavedOutsideChange({ name: 'A', system: 'x' }, { name: 'A', system: 'y' }, ['system']); // → false
  */
-export function unsavedOutsideContent(form, saved, target) {
+export function unsavedOutsideChange(form, saved, changeKeys) {
   if (!isPlainObject(form) || !isPlainObject(saved)) return false;
-  const content = new Set(appRevisionKeys(target));
+  const own = new Set(Array.isArray(changeKeys) ? changeKeys : []);
   const keys = new Set([...Object.keys(form), ...Object.keys(saved)]);
-  return [...keys].some(key => !content.has(key) && !sameValue(form[key], saved[key]));
+  return [...keys].some(key => !own.has(key) && !sameValue(form[key], saved[key]));
 }
 
 /**
@@ -270,6 +271,46 @@ export function suggestionChanges(target, form, offered, ticked) {
 }
 
 /**
+ * What Apply merges over the form: the change's patch and what the ticked
+ * suggestions add ({@link suggestionChanges}).
+ *
+ * @param {'admin'|'personal'} target
+ * @param {object} form
+ * @param {{ patch?: object, suggestions?: object }} entry - The change entry.
+ * @param {{ webSearch?: boolean, integrationIds?: string[] }} [ticked]
+ * @returns {object}
+ */
+export function changesOf(target, form, entry, ticked) {
+  const offered = offeredSuggestions(target, form, entry?.suggestions);
+  return {
+    ...(isPlainObject(entry?.patch) ? entry.patch : {}),
+    ...suggestionChanges(target, form || {}, offered, ticked)
+  };
+}
+
+/**
+ * The keys a change writes when it is saved: for a proposed change the keys
+ * of its patch and of the ticked suggestions ({@link changesOf}); for an
+ * applied one the keys Apply set or removed, which Undo puts back.
+ *
+ * @param {'admin'|'personal'} target
+ * @param {object|null} form
+ * @param {object} entry - The change entry.
+ * @param {{ webSearch?: boolean, integrationIds?: string[] }} [ticked]
+ * @returns {string[]}
+ */
+export function changeKeysOf(target, form, entry, ticked) {
+  const applied = entry?.before || entry?.applied;
+  if (applied && ['applied', 'undoing', 'kept', 'undone'].includes(entry.status)) {
+    return [
+      ...Object.keys(isPlainObject(applied.values) ? applied.values : {}),
+      ...(Array.isArray(applied.missing) ? applied.missing : [])
+    ];
+  }
+  return Object.keys(changesOf(target, form, entry, ticked));
+}
+
+/**
  * The values the form holds for some keys, to put back later; a key the form
  * does not have is listed in `missing`, so that putting back removes it.
  *
@@ -327,7 +368,10 @@ const clip = (text, max) => (typeof text === 'string' ? text.slice(0, max) : '')
 /**
  * The conversation as a turn sends it: the last 12 entries, each with its
  * role, its kind (builder only) and its text within the limits of the route.
- * A question is sent with its own wording; the choices are not.
+ * A question is sent with its own wording; the choices are not. An entry
+ * without text is left out, except a builder's change: the server counts the
+ * questions since the last change (`questionsSinceLastChange`), and a change
+ * the model sent without a sentence must still reset that count.
  *
  * @param {object[]} entries - The entries of the conversation.
  * @returns {Array<{ role: 'author'|'builder', kind?: string, text: string }>}
@@ -347,7 +391,9 @@ export function wireConversation(entries) {
             )
           }
     )
-    .filter(entry => entry.text.trim() !== '');
+    .filter(
+      entry => entry.text.trim() !== '' || (entry.role === 'builder' && entry.kind === 'change')
+    );
 }
 
 /**
@@ -387,6 +433,44 @@ function labelIn(value, language) {
     : Object.values(value).find(text => typeof text === 'string') || '';
 }
 
+/** The message key of an input field's type, as the form's type picker names it. */
+const FIELD_TYPE_KEYS = Object.freeze({
+  string: 'admin.apps.edit.typeString',
+  text: 'admin.apps.edit.typeText',
+  select: 'admin.apps.edit.typeSelect',
+  date: 'admin.apps.edit.typeDate',
+  number: 'admin.apps.edit.typeNumber',
+  boolean: 'admin.apps.conversation.line.typeBoolean'
+});
+
+/**
+ * One input field as one line of the change card: its label, whether it is
+ * required, its type, its options and its default. Every part a change can
+ * make is in the line, so a change of the type or the default shows as a
+ * changed line rather than as two equal ones.
+ *
+ * @param {object} variable
+ * @param {string} language
+ * @param {(key: string, values?: object) => string} t
+ * @returns {string}
+ */
+function fieldLine(variable, language, t) {
+  const label = labelIn(variable.label, language) || variable.name || '';
+  const required = variable.required ? ` ${t('admin.apps.conversation.line.required')}` : '';
+  const type = variable.type || 'string';
+  const typeName = FIELD_TYPE_KEYS[type] ? t(FIELD_TYPE_KEYS[type]) : String(type);
+  const options = (Array.isArray(variable.predefinedValues) ? variable.predefinedValues : [])
+    .map(option => labelIn(option?.label, language) || option?.value)
+    .filter(Boolean);
+  const defaultText = labelIn(variable.defaultValue, language);
+  const parts = [
+    `${label}${required}`,
+    options.length > 0 ? `${typeName} (${options.join(', ')})` : typeName,
+    ...(defaultText ? [t('admin.apps.conversation.line.default', { value: defaultText })] : [])
+  ];
+  return parts.join(' · ');
+}
+
 /**
  * The lines the change card compares for a key: a text by its own lines, an
  * input field or an example question as one line each, a colour or icon as
@@ -400,16 +484,9 @@ function labelIn(value, language) {
  */
 export function linesOf(key, value, language, t) {
   if (key === 'variables') {
-    return (Array.isArray(value) ? value : []).filter(isPlainObject).map(variable => {
-      const label = labelIn(variable.label, language) || variable.name || '';
-      const options = (Array.isArray(variable.predefinedValues) ? variable.predefinedValues : [])
-        .map(option => labelIn(option?.label, language) || option?.value)
-        .filter(Boolean);
-      const required = variable.required ? ` ${t('admin.apps.conversation.line.required')}` : '';
-      return options.length > 0
-        ? `${label}${required} (${options.join(', ')})`
-        : `${label}${required}`;
-    });
+    return (Array.isArray(value) ? value : [])
+      .filter(isPlainObject)
+      .map(variable => fieldLine(variable, language, t));
   }
   if (key === 'starterPrompts') {
     return (Array.isArray(value) ? value : []).filter(isPlainObject).map(prompt => {

@@ -24,6 +24,7 @@ import { progressEntry, utf8Bytes } from './toolCalling/toolCallProgress.js';
 import { getReadableStream } from '../utils/streamUtils.js';
 import configCache from '../configCache.js';
 import logger from '../utils/logger.js';
+import { LLMError, LLM_ERROR_CODES } from '../services/loop/contracts/errors.js';
 import {
   BEDROCK_REGION_SUGGESTIONS,
   DEFAULT_BEDROCK_REGION,
@@ -136,12 +137,18 @@ class BedrockAdapterClass extends BaseAdapter {
   /**
    * Resolve the effective region from model → provider → env → default.
    *
-   * The region becomes part of the host name the request is sent to, so a
-   * value that is not a region (a hand-edited config, a stray env value) is
-   * skipped with a warning instead of being put into the URL.
+   * The first source that sets a region decides; only an empty source is
+   * skipped. A set value that is not a region (the legacy `apac-northeast-1`,
+   * a typo such as `us-east1`) is a configuration error, not a reason to fall
+   * through: the next source, or eu-central-1, would send the data to a region
+   * the admin did not choose. It is never put into the URL either, since the
+   * region becomes part of the host name.
    *
    * @param {Object} model - Model config (`config.region`)
    * @returns {string} AWS region code or `global`
+   * @throws {LLMError} `INVALID_REQUEST` with providerCode `BEDROCK_REGION_INVALID`
+   *   when the deciding source holds no valid region; the message names the
+   *   source and how to fix it, for the admin (model test, chat error).
    */
   resolveRegion(model) {
     let providerRegion;
@@ -152,19 +159,32 @@ class BedrockAdapterClass extends BaseAdapter {
       /* configCache may be unavailable in tests */
     }
     const candidates = [
-      ['model.config.region', model?.config?.region],
-      ['providers.json bedrock.config.region', providerRegion],
-      ['AWS_REGION', process.env.AWS_REGION],
-      ['AWS_DEFAULT_REGION', process.env.AWS_DEFAULT_REGION]
+      ['config.region of the model', model?.config?.region],
+      ['config.region of the AWS Bedrock provider', providerRegion],
+      ['environment variable AWS_REGION', process.env.AWS_REGION],
+      ['environment variable AWS_DEFAULT_REGION', process.env.AWS_DEFAULT_REGION]
     ];
     for (const [source, value] of candidates) {
-      if (!value) continue;
+      if (value === undefined || value === null) continue;
+      if (typeof value === 'string' && value.trim() === '') continue;
       if (isValidBedrockRegion(value)) return value;
-      logger.warn('Ignoring invalid AWS Bedrock region', {
+      logger.error('Invalid AWS Bedrock region', {
         component: 'BedrockAdapter',
         source,
         modelId: model?.id
       });
+      // The value is the admin's own configuration; it names no secret.
+      throw new LLMError(
+        `The AWS Bedrock region "${String(value).slice(0, 40)}" (${source}) is not an AWS ` +
+          'region code. Set a region such as eu-central-1 or ap-northeast-1, or global, ' +
+          'on the model or the AWS Bedrock provider.',
+        {
+          code: LLM_ERROR_CODES.INVALID_REQUEST,
+          providerCode: 'BEDROCK_REGION_INVALID',
+          provider: 'bedrock',
+          modelId: model?.id
+        }
+      );
     }
     return DEFAULT_BEDROCK_REGION;
   }
