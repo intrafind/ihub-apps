@@ -27,6 +27,7 @@ const modelsInStore = () =>
 const stored = id => store[`models/${id}.json`];
 let apps = [];
 let workflows = [];
+let agents = [];
 
 const chat = (id, extra = {}) => ({
   id,
@@ -50,6 +51,7 @@ jest.unstable_mockModule('../configCache.js', () => ({
     getModels: () => ({ data: modelsInStore(), etag: 'm' }),
     getApps: () => ({ data: clone(apps), etag: 'a' }),
     getWorkflows: () => ({ data: clone(workflows), etag: 'w' }),
+    getAgentProfiles: () => ({ data: clone(agents), etag: 'g' }),
     getProviders: () => ({ data: [], etag: 'p' }),
     refreshModelsCache: async () => {},
     refreshProvidersCache: async () => {}
@@ -105,6 +107,7 @@ function seed(...models) {
   for (const model of models) store[`models/${model.id}.json`] = clone(model);
   apps = [];
   workflows = [];
+  agents = [];
 }
 
 const ASSIGNED = 'default-model-assigned';
@@ -145,9 +148,47 @@ describe('GET /api/admin/models/{id}/_dependants', () => {
         { id: 'research', name: { en: 'Research' }, references: ['defaultModel'] },
         { id: 'loop', name: { en: 'Loop' }, references: ['node'] }
       ],
+      agents: [],
       groups: [{ id: 'pilot', name: 'Pilot' }],
       isDefault: false
     });
+  });
+
+  test('lists agent profiles that name the model, and matches ids without regard to case', async () => {
+    seed(chat('small', { default: true }), chat('large'));
+    apps = [{ id: 'chat', name: { en: 'Chat' }, preferredModel: 'LARGE' }];
+    agents = [
+      { id: 'analyst', name: { en: 'Analyst' }, preferredModel: 'Large' },
+      {
+        id: 'writer',
+        name: { en: 'Writer' },
+        nodeModels: { draft: 'large' },
+        review: { modelId: 'large' }
+      },
+      {
+        id: 'planner',
+        name: { en: 'Planner' },
+        planner: { modelId: 'large' },
+        memory: { modelId: 'small' }
+      },
+      { id: 'idle', name: { en: 'Idle' }, preferredModel: 'small' }
+    ];
+    store['config/groups.json'] = {
+      groups: { pilot: { id: 'pilot', name: 'Pilot', permissions: { models: ['Large'] } } }
+    };
+
+    const res = await request(app).get('/api/admin/models/large/_dependants');
+
+    expect(res.status).toBe(200);
+    expect(res.body.apps).toEqual([
+      { id: 'chat', name: { en: 'Chat' }, references: ['preferredModel'] }
+    ]);
+    expect(res.body.agents).toEqual([
+      { id: 'analyst', name: { en: 'Analyst' }, references: ['preferredModel'] },
+      { id: 'writer', name: { en: 'Writer' }, references: ['nodeModels', 'review'] },
+      { id: 'planner', name: { en: 'Planner' }, references: ['planner'] }
+    ]);
+    expect(res.body.groups).toEqual([{ id: 'pilot', name: 'Pilot' }]);
   });
 
   test('says when the model is the default and which model takes over', async () => {

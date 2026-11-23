@@ -2362,6 +2362,7 @@
   "GET /api/admin/models/:modelId/_dependants": {
     "status": 200,
     "shape": {
+      "agents": [],
       "apps": [],
       "groups": [],
       "isDefault": "boolean",

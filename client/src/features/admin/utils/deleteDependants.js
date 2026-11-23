@@ -92,7 +92,7 @@ export function modelDeleteConsequences(dependants, { t, language, modelName = i
     return [
       t(
         'admin.confirm.dependants.checkFailed',
-        'Could not check what uses it. Apps, workflows or groups may still name it.'
+        'Could not check what uses it. Apps, workflows, agents or groups may still name it.'
       )
     ];
   }
@@ -108,6 +108,7 @@ export function modelDeleteConsequences(dependants, { t, language, modelName = i
         'Workflows that name it: {{names}}',
         dependants.workflows
       ],
+      ['admin.confirm.dependants.modelAgents', 'Agents that name it: {{names}}', dependants.agents],
       [
         'admin.confirm.dependants.modelGroups',
         'Groups that grant it by name: {{names}}',

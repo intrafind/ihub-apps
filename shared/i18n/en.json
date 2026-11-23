@@ -8967,9 +8967,10 @@
       "dependants": {
         "modelMessage": "The model is removed for all users. A copy stays in the change history: open {{path}} again to restore it.",
         "appMessage": "The app is removed for all users. A copy stays in the change history: open {{path}} again to restore it.",
-        "checkFailed": "Could not check what uses it. Apps, workflows or groups may still name it.",
+        "checkFailed": "Could not check what uses it. Apps, workflows, agents or groups may still name it.",
         "modelApps": "Apps that name it (they answer with another model): {{names}}",
         "modelWorkflows": "Workflows that name it: {{names}}",
+        "modelAgents": "Agents that name it: {{names}}",
         "modelGroups": "Groups that grant it by name: {{names}}",
         "defaultMoves": "It is the default model. \"{{name}}\" becomes the default.",
         "defaultNone": "It is the default model, and no other enabled chat model can take over. Apps without a model of their own have none until you enable one.",

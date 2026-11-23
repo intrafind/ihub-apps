@@ -61,6 +61,20 @@ describe('modelDeleteConsequences', () => {
     );
   });
 
+  test('names the agents that use the model', () => {
+    const lines = modelDeleteConsequences(
+      {
+        apps: [],
+        workflows: [],
+        agents: [{ id: 'analyst', name: { en: 'Analyst' }, references: ['preferredModel'] }],
+        groups: [],
+        isDefault: false
+      },
+      { t, language: 'en' }
+    );
+    expect(lines).toEqual(['Agents that name it: Analyst']);
+  });
+
   test('says which model becomes the default, or that none can', () => {
     const base = { apps: [], workflows: [], groups: [], isDefault: true };
     expect(

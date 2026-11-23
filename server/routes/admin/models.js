@@ -1059,6 +1059,7 @@ export default function registerAdminModelsRoutes(app) {
       const dependants = findModelDependants(modelId, {
         apps: configCache.getApps(true)?.data ?? [],
         workflows: configCache.getWorkflows(true)?.data ?? [],
+        agents: configCache.getAgentProfiles?.(true)?.data ?? [],
         // The authored file: the cache's groups carry their parents' permissions as their own.
         groupsConfig: await configStore.readJson('config/groups.json').catch(() => null),
         models

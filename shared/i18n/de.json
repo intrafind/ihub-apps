@@ -9464,9 +9464,10 @@
       "dependants": {
         "modelMessage": "Das Modell wird für alle Benutzer entfernt. Eine Kopie bleibt im Änderungsverlauf: Öffnen Sie {{path}} erneut, um es wiederherzustellen.",
         "appMessage": "Die App wird für alle Benutzer entfernt. Eine Kopie bleibt im Änderungsverlauf: Öffnen Sie {{path}} erneut, um sie wiederherzustellen.",
-        "checkFailed": "Es konnte nicht geprüft werden, was den Eintrag verwendet. Apps, Workflows oder Gruppen nennen ihn möglicherweise noch.",
+        "checkFailed": "Es konnte nicht geprüft werden, was den Eintrag verwendet. Apps, Workflows, Agenten oder Gruppen nennen ihn möglicherweise noch.",
         "modelApps": "Apps, die es nennen (sie antworten dann mit einem anderen Modell): {{names}}",
         "modelWorkflows": "Workflows, die es nennen: {{names}}",
+        "modelAgents": "Agenten, die es nennen: {{names}}",
         "modelGroups": "Gruppen, die es namentlich freigeben: {{names}}",
         "defaultMoves": "Es ist das Standardmodell. „{{name}}“ wird zum Standardmodell.",
         "defaultNone": "Es ist das Standardmodell, und kein anderes aktiviertes Chat-Modell kann übernehmen. Apps ohne eigenes Modell haben keines, bis Sie eines aktivieren.",

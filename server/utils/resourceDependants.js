@@ -45,10 +45,25 @@ export function groupsNaming(groupsConfig, kind, id) {
   return Object.entries(groups)
     .filter(([, group]) => {
       const listed = group?.permissions?.[kind];
-      return Array.isArray(listed) && listed.includes(id);
+      return Array.isArray(listed) && listed.some(entry => sameId(entry, id));
     })
     .map(([groupId, group]) => ({ id: group?.id || groupId, name: group?.name || groupId }));
 }
+
+/**
+ * Whether two resource ids name the same resource. Ids are compared without
+ * regard to case, as the runtime permission and model lookups do.
+ *
+ * @param {unknown} a
+ * @param {unknown} b
+ * @returns {boolean}
+ */
+export function sameId(a, b) {
+  return typeof a === 'string' && typeof b === 'string' && a.toLowerCase() === b.toLowerCase();
+}
+
+/** The parts of an agent profile that can name a model of their own. */
+const AGENT_MODEL_PARTS = ['memory', 'planner', 'synthesizer', 'dynamicTasks', 'review'];
 
 /**
  * The chat model that becomes the default when `exceptId` goes away or stops
@@ -94,6 +109,8 @@ export function effectiveDefaultModelId(models) {
  *   `allowedModels`, `speechRecognition` for the transcription model of voice
  *   input, `voiceMode` for the read-aloud model).
  * - `workflows`: workflows that name it as their default model or in a node.
+ * - `agents`: agent profiles that name it (preferred model, a node model, or the
+ *   model of their memory, planner, synthesizer, dynamic tasks or review).
  * - `groups`: groups whose model permissions list it explicitly.
  * - `isDefault`: it is the platform's default model; with `nextDefaultModelId`,
  *   the model that takes over (absent when none can).
@@ -102,12 +119,14 @@ export function effectiveDefaultModelId(models) {
  * @param {Object} lists
  * @param {Array<Object>} [lists.apps]
  * @param {Array<Object>} [lists.workflows]
+ * @param {Array<Object>} [lists.agents] - Agent profiles
  * @param {Object|null} [lists.groupsConfig] - `groups.json` as stored
  * @param {Array<Object>} [lists.models] - The models as the server lists them, in the
  *   order it promotes a new default in
  * @returns {{
  *   apps: Array<{id: string, name: *, references: string[]}>,
  *   workflows: Array<{id: string, name: *, references: string[]}>,
+ *   agents: Array<{id: string, name: *, references: string[]}>,
  *   groups: Array<{id: string, name: string}>,
  *   isDefault: boolean,
  *   nextDefaultModelId?: string
@@ -119,19 +138,19 @@ export function effectiveDefaultModelId(models) {
  */
 export function findModelDependants(
   modelId,
-  { apps = [], workflows = [], groupsConfig, models = [] }
+  { apps = [], workflows = [], agents = [], groupsConfig, models = [] }
 ) {
   const appRefs = apps
     .map(app => {
       const references = [];
-      if (app?.preferredModel === modelId) references.push('preferredModel');
-      if (Array.isArray(app?.allowedModels) && app.allowedModels.includes(modelId)) {
+      if (sameId(app?.preferredModel, modelId)) references.push('preferredModel');
+      if (Array.isArray(app?.allowedModels) && app.allowedModels.some(m => sameId(m, modelId))) {
         references.push('allowedModels');
       }
-      if (app?.settings?.speechRecognition?.modelId === modelId) {
+      if (sameId(app?.settings?.speechRecognition?.modelId, modelId)) {
         references.push('speechRecognition');
       }
-      if (app?.inputMode?.voiceMode?.ttsModelId === modelId) references.push('voiceMode');
+      if (sameId(app?.inputMode?.voiceMode?.ttsModelId, modelId)) references.push('voiceMode');
       return { id: app?.id, name: app?.name, references };
     })
     .filter(ref => ref.references.length > 0);
@@ -139,18 +158,37 @@ export function findModelDependants(
   const workflowRefs = workflows
     .map(workflow => {
       const references = [];
-      if (workflow?.config?.defaultModelId === modelId) references.push('defaultModel');
-      if (allNodes(workflow?.nodes).some(node => node?.config?.modelId === modelId)) {
+      if (sameId(workflow?.config?.defaultModelId, modelId)) references.push('defaultModel');
+      if (allNodes(workflow?.nodes).some(node => sameId(node?.config?.modelId, modelId))) {
         references.push('node');
       }
       return { id: workflow?.id, name: workflow?.name, references };
     })
     .filter(ref => ref.references.length > 0);
 
-  const isDefault = effectiveDefaultModelId(models) === modelId;
+  const agentRefs = agents
+    .map(agent => {
+      const references = [];
+      if (sameId(agent?.preferredModel, modelId)) references.push('preferredModel');
+      if (
+        agent?.nodeModels &&
+        typeof agent.nodeModels === 'object' &&
+        Object.values(agent.nodeModels).some(m => sameId(m, modelId))
+      ) {
+        references.push('nodeModels');
+      }
+      for (const part of AGENT_MODEL_PARTS) {
+        if (sameId(agent?.[part]?.modelId, modelId)) references.push(part);
+      }
+      return { id: agent?.id, name: agent?.name, references };
+    })
+    .filter(ref => ref.references.length > 0);
+
+  const isDefault = sameId(effectiveDefaultModelId(models), modelId);
   const result = {
     apps: appRefs,
     workflows: workflowRefs,
+    agents: agentRefs,
     groups: groupsNaming(groupsConfig, 'models', modelId),
     isDefault
   };
@@ -188,24 +226,24 @@ export function findAppDependants(
   { apps = [], prompts = [], workflows = [], groupsConfig }
 ) {
   const appRefs = apps
-    .filter(app => app?.id !== appId)
+    .filter(app => !sameId(app?.id, appId))
     .map(app => {
       const references = [];
-      if (Array.isArray(app?.apps) && app.apps.includes(appId)) references.push('tool');
-      if (app?.parentId === appId) references.push('parent');
+      if (Array.isArray(app?.apps) && app.apps.some(a => sameId(a, appId))) references.push('tool');
+      if (sameId(app?.parentId, appId)) references.push('parent');
       return { id: app?.id, name: app?.name, references };
     })
     .filter(ref => ref.references.length > 0);
 
   return {
     prompts: prompts
-      .filter(prompt => prompt?.appId === appId)
+      .filter(prompt => sameId(prompt?.appId, appId))
       .map(prompt => ({ id: prompt.id, name: prompt.name })),
     apps: appRefs,
     workflows: workflows
       .filter(workflow =>
         allNodes(workflow?.nodes).some(
-          node => Array.isArray(node?.config?.apps) && node.config.apps.includes(appId)
+          node => Array.isArray(node?.config?.apps) && node.config.apps.some(a => sameId(a, appId))
         )
       )
       .map(workflow => ({ id: workflow.id, name: workflow.name })),
