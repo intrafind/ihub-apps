@@ -728,9 +728,9 @@ Some things never ask:
 - A page that is still loading, or whose settings could not be loaded: there is nothing of yours to lose.
 - Saving and then leaving.
 
-On pages with several sections, such as **Security**, every section with unsaved changes is marked with **Unsaved changes** next to its heading and a dot in the section list, and one dialog covers them all. On an integration's page and on **Usage Reports**, edits on the **Settings** and **Limits & quotas** tabs are kept when you switch to another tab of the same page and come back; leaving the page asks first.
+On pages with several sections, such as **Security**, every section with unsaved changes is marked with **Unsaved changes** next to its heading and a dot in the section list, and one dialog covers them all. On an integration's page and on **Usage Reports**, edits on the **Settings** and **Limits & quotas** tabs are kept when you switch to another tab of the same page and come back; leaving the page asks first. The same holds for the settings of **Personal apps** (**Apps**), **User prompts** (**Prompts**) and **User skills** (**Skills**): the tab stays open in the background, and the bar at the bottom still shows the unsaved changes and can save them from the other tab. The settings cards on **Providers** (LLM timeouts) and **Projects** (sharing) ask before you leave the page too.
 
-A few places do not ask yet: forms in dialogs (such as installing an integration or editing a credential, which keep their own **Save**), and the cards on the **Apps**, **Prompts** and **Skills** admin tabs, which unmount when you switch tabs.
+A few places do not ask: forms in dialogs (such as installing an integration or editing a credential, which keep their own **Save**), and the **Variables** tab on **Prompts**, which asks when you leave the page but not when you switch tabs.
 
 ### When someone else saved first
 
