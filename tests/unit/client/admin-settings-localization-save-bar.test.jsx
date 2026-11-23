@@ -125,6 +125,7 @@ describe('Localization save bar', () => {
 
   test('a refused save keeps the bar, says why in it, and can be tried again', async () => {
     await open();
+    const original = language().value;
     fireEvent.change(language(), { target: { value: 'fr' } });
     failNextPost = true;
 
@@ -133,6 +134,12 @@ describe('Localization save bar', () => {
     });
 
     await waitFor(() => expect(within(bar()).getByText(/the server said no/)).toBeVisible());
+
+    // Back at the stored language the form is clean, but the write may have gone through and
+    // only its answer been lost: the bar stays, so the shown value can be sent again.
+    fireEvent.change(language(), { target: { value: original } });
+    expect(bar()).toBeInTheDocument();
+    fireEvent.change(language(), { target: { value: 'fr' } });
 
     await act(async () => {
       fireEvent.click(saveButton());

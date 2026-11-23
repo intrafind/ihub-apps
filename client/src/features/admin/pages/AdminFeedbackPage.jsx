@@ -67,7 +67,7 @@ function AdminFeedbackPage() {
   // The setting whose request failed: the server may hold its new value although the page
   // still counts the old one as saved (a lost response). The next save sends it again, also
   // when the admin put the field back to what was loaded, so that value reaches the server.
-  const uncertainFieldRef = useRef(null);
+  const uncertainFieldsRef = useRef(new Set());
 
   // Saved state, as it came from the server
   const [saved, setSaved] = useState({
@@ -136,9 +136,13 @@ function AdminFeedbackPage() {
     // (the platform save, say) the page compares against what the
     // server now holds, and a retry does not resend what was already saved.
     const target = draft;
-    const markSaved = field => setSaved(prev => ({ ...prev, [field]: target[field] }));
-    // Whether `field` is to be written: it differs from what is saved, or its last write failed.
-    const wanted = field => target[field] !== saved[field] || uncertainFieldRef.current === field;
+    const markSaved = field => {
+      uncertainFieldsRef.current.delete(field);
+      setSaved(prev => ({ ...prev, [field]: target[field] }));
+    };
+    // Whether `field` is to be written: it differs from what is saved, or a write of it failed
+    // and has not succeeded since (every such field is kept, not only the latest).
+    const wanted = field => target[field] !== saved[field] || uncertainFieldsRef.current.has(field);
     // Names the setting being written, so a failure can mark it uncertain.
     let writing = null;
     try {
@@ -173,11 +177,11 @@ function AdminFeedbackPage() {
         markSaved('trackingMode');
       }
 
-      uncertainFieldRef.current = null;
+      uncertainFieldsRef.current.clear();
       setMessage({ type: 'success', text: t('admin.feedback.saved', 'Feedback settings saved') });
       refreshConfig();
     } catch (error) {
-      uncertainFieldRef.current = writing;
+      if (writing) uncertainFieldsRef.current.add(writing);
       setSaveFailed(true);
       setMessage({
         type: 'error',
@@ -193,7 +197,7 @@ function AdminFeedbackPage() {
   // Back to what was loaded or last saved. The per-app switches save at once and stay.
   const handleDiscard = () => {
     setDraft(saved);
-    uncertainFieldRef.current = null;
+    uncertainFieldsRef.current.clear();
     setSaveFailed(false);
     setMessage(null);
   };

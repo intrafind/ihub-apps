@@ -71,4 +71,20 @@ describe('MonacoJsonEditor with a value set from outside', () => {
     expect(onValidationChange).not.toHaveBeenCalled();
     expect(screen.getByLabelText('JSON').value).toContain('"id": "a"');
   });
+
+  test('replaces broken text with the saved object even when no valid edit came first', () => {
+    const onValidationChange = jest.fn();
+    render(<Page onValidationChange={onValidationChange} />);
+
+    // Broken text typed straight into the saved value: the page's object never changed.
+    fireEvent.change(screen.getByLabelText('JSON'), { target: { value: '{ "id": "a", }' } });
+    expect(screen.getByText('Invalid JSON')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'discard' }));
+
+    expect(screen.queryByText('Invalid JSON')).not.toBeInTheDocument();
+    expect(onValidationChange).toHaveBeenLastCalledWith({ isValid: true, errors: [] });
+    expect(screen.getByLabelText('JSON').value).toContain('"id": "a"');
+    expect(screen.getByLabelText('JSON').value).not.toContain('},');
+  });
 });

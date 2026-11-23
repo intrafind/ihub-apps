@@ -1345,7 +1345,7 @@ export default function AdminAgentEditPage() {
                 'admin.agents.edit.jsonInvalid',
                 'The JSON is not valid. Fix it before you save or switch to the form.'
               )
-            : undefined
+            : error || undefined
         }
         onSave={() => {
           if (!saveBlocked) void handleSave();

@@ -1074,6 +1074,7 @@ export default function AdminDocumentTemplateEditPage() {
         dirty={isDirty}
         saving={saving}
         saveLabel={isNew ? t('admin.ui.saveBar.create', 'Create') : undefined}
+        message={message?.type === 'error' ? message.text : undefined}
         onSave={() => void save()}
         onDiscard={discard}
       />

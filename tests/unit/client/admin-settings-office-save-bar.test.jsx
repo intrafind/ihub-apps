@@ -193,6 +193,7 @@ describe('Office integration settings page', () => {
   test('a failed save keeps the bar and names the error in it', async () => {
     failSave = true;
     await renderPage();
+    const original = screen.getByLabelText('Default action').value;
     fireEvent.change(screen.getByLabelText('Default action'), { target: { value: 'answer' } });
 
     await act(async () => {
@@ -203,6 +204,9 @@ describe('Office integration settings page', () => {
     expect(bar()).toBeInTheDocument();
     expect(within(bar()).getByText('boom')).toBeInTheDocument();
     expect(screen.getByLabelText('Default action')).toHaveValue('answer');
+    // Back at the loaded value, the bar stays: the write may have gone through unanswered.
+    fireEvent.change(screen.getByLabelText('Default action'), { target: { value: original } });
+    expect(bar()).toBeInTheDocument();
     fireEvent.click(discardButton());
     expect(bar()).not.toBeInTheDocument();
   });

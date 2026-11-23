@@ -75,6 +75,9 @@ function AdminOAuthServerPage() {
   const [clientsEnabled, setClientsEnabled] = useState(false);
   const [jwtAlgorithm, setJwtAlgorithm] = useState('RS256');
   const [savingConfig, setSavingConfig] = useState(false);
+  // A failed save keeps the bar (to retry or discard) even when the form is back at its saved
+  // state: the write may have gone through and only its answer been lost.
+  const [saveFailed, setSaveFailed] = useState(false);
   // The revision of platform.json this page was loaded from (then: last saved).
   // Its saves send exactly this as If-Match; a 412 leaves it as it is, so the
   // next save is refused again until the page reloads or the admin chooses
@@ -196,6 +199,7 @@ function AdminOAuthServerPage() {
   const handleSaveOAuthConfig = async () => {
     if (!ready) return;
     setSavingConfig(true);
+    setSaveFailed(false);
     setMessage('');
 
     try {
@@ -238,6 +242,7 @@ function AdminOAuthServerPage() {
       });
       await refreshConfig();
     } catch (error) {
+      setSaveFailed(true);
       setMessage({
         type: 'error',
         text: `${t('admin.auth.oauth.configSaveError', 'Failed to save authorization server settings')}: ${error.message}`
@@ -250,6 +255,7 @@ function AdminOAuthServerPage() {
   // Back to the settings as loaded or last saved, with the banner of a refused save gone.
   const handleDiscard = () => {
     setOauthConfig(savedOauthConfig);
+    setSaveFailed(false);
     setMessage('');
   };
 
@@ -891,7 +897,7 @@ function AdminOAuthServerPage() {
         )}
       </div>
       <AdminSaveBar
-        dirty={isDirty}
+        dirty={isDirty || saveFailed}
         saving={savingConfig}
         onSave={() => void handleSaveOAuthConfig()}
         onDiscard={handleDiscard}

@@ -86,6 +86,9 @@ function AdminVoiceInputPage() {
   const { t, i18n } = useTranslation();
   const { refreshConfig } = usePlatformConfig();
   const [saving, setSaving] = useState(false);
+  // A failed save keeps the bar (to retry or discard) even when the form is back at its saved
+  // state: the write may have gone through and only its answer been lost.
+  const [saveFailed, setSaveFailed] = useState(false);
   const [message, setMessage] = useState('');
   const [config, setConfig] = useState(DEFAULT_SPEECH);
   const [savedConfig, setSavedConfig] = useState(DEFAULT_SPEECH);
@@ -100,6 +103,9 @@ function AdminVoiceInputPage() {
   const { blocker, isDirty } = useUnsavedChanges(hasLoaded ? savedConfig : null, config);
   const [azureTesting, setAzureTesting] = useState(false);
   const [azureTestResult, setAzureTestResult] = useState(null);
+  // Counts the credentials' edits and discards: an Azure test that started before the latest
+  // one tested credentials that are not on the page any more, so its answer is dropped.
+  const azureTestGenerationRef = useRef(0);
   const [transcriptionModels, setTranscriptionModels] = useState(null);
   // Every TTS model, disabled ones included: the seeded Voxtral TTS model
   // ships disabled, and the picker says so instead of hiding it.
@@ -174,6 +180,7 @@ function AdminVoiceInputPage() {
     if (!ready) return;
     try {
       setSaving(true);
+      setSaveFailed(false);
       setMessage('');
       // Read-modify-write for the sections this page does not show. This read
       // does not change the revision the save sends (the one the form loaded).
@@ -203,6 +210,7 @@ function AdminVoiceInputPage() {
         text: t('admin.voiceInput.saveSuccess', 'Voice input settings saved.')
       });
     } catch (error) {
+      setSaveFailed(true);
       setMessage({
         type: 'error',
         text:
@@ -214,6 +222,7 @@ function AdminVoiceInputPage() {
   };
 
   const handleTestAzure = async () => {
+    const generation = azureTestGenerationRef.current;
     try {
       setAzureTesting(true);
       setAzureTestResult(null);
@@ -229,9 +238,13 @@ function AdminVoiceInputPage() {
         ok: false,
         message: t('admin.voiceInput.azure.test.noResponse', 'No response')
       };
-      setAzureTestResult({ ok: result.ok, message: describeAzureTest(result) });
+      if (generation === azureTestGenerationRef.current) {
+        setAzureTestResult({ ok: result.ok, message: describeAzureTest(result) });
+      }
     } catch (error) {
-      setAzureTestResult({ ok: false, message: error.message || 'Test request failed' });
+      if (generation === azureTestGenerationRef.current) {
+        setAzureTestResult({ ok: false, message: error.message || 'Test request failed' });
+      }
     } finally {
       setAzureTesting(false);
     }
@@ -275,11 +288,14 @@ function AdminVoiceInputPage() {
   // with the discarded values, and the banner of a refused save.
   const handleDiscard = () => {
     setConfig(savedConfig);
+    azureTestGenerationRef.current += 1;
     setAzureTestResult(null);
+    setSaveFailed(false);
     setMessage('');
   };
 
   const setAzure = (field, value) => {
+    azureTestGenerationRef.current += 1;
     setAzureTestResult(null);
     setConfig(prev => ({ ...prev, azure: { ...prev.azure, [field]: value } }));
   };
@@ -725,7 +741,7 @@ function AdminVoiceInputPage() {
         />
       </div>
       <AdminSaveBar
-        dirty={isDirty}
+        dirty={isDirty || saveFailed}
         saving={saving}
         onSave={() => void handleSave()}
         onDiscard={handleDiscard}

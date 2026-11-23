@@ -708,6 +708,7 @@ Pages and cards with several independent sections have one bar for the whole pag
 - An item made from a template or a copy can be created at once; the bar is there as the page opens.
 - A refused save (for example a missing field or a taken ID) keeps your changes and the bar, and says what is wrong.
 - On a settings page, a refused save is also named in the bar itself, so you see it without scrolling to the top.
+- After a refused save the bar stays even if you put the field back to its stored value: the save may have reached the server and only its answer been lost, so you can send the value again or **Discard**. An edit made while a save is running stays unsaved and keeps the bar.
 - **Localization** saves the default language with the bar; the translation overrides below it keep their own **Save**, **Cancel** and **Reset** for each text.
 - **Save** and the Enter key run the same checks as before; a page with invalid JSON in its JSON mode does not save it.
 

@@ -835,7 +835,7 @@ function AdminBrowserExtensionPage() {
         )}
       </div>
       <AdminSaveBar
-        dirty={ready && !loading && isDirty}
+        dirty={ready && !loading && (isDirty || Boolean(saveError))}
         saving={saving}
         onSave={() => void handleSaveConfig()}
         onDiscard={handleDiscard}

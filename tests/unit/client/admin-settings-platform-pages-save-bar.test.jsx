@@ -79,13 +79,14 @@ const etagOf = revision => `"rev-${revision}"`;
 const ok = (data, etag) => ({ status: 200, data, headers: etag ? { etag } : {} });
 
 /** The fake server: platform.json with its revision, and every POST it received. */
-const server = { revision: 1, platform: {}, posts: [], failNextPost: false };
+const server = { revision: 1, platform: {}, posts: [], failNextPost: false, azureTest: null };
 
 beforeEach(() => {
   server.revision = 1;
   server.platform = {};
   server.posts = [];
   server.failNextPost = false;
+  server.azureTest = null;
   mockRequest.mockReset();
   mockRequest.mockImplementation(async config => {
     const method = String(config.method || 'GET').toUpperCase();
@@ -105,6 +106,7 @@ beforeEach(() => {
       server.revision += 1;
       return ok({}, etagOf(server.revision));
     }
+    if (path === '/admin/voice/azure/_test') return server.azureTest();
     if (path === '/admin/models') return ok({ items: [] });
     return ok({});
   });
@@ -129,6 +131,7 @@ const PAGES = [
     platform: { telemetry: { spans: { enabled: true } } },
     ready: () => screen.getByLabelText(/Emit spans/),
     edit: () => fireEvent.click(screen.getByLabelText(/Emit spans/)),
+    revert: () => fireEvent.click(screen.getByLabelText(/Emit spans/)),
     restored: () => expect(screen.getByLabelText(/Emit spans/)).toBeChecked(),
     sent: body => expect(body.telemetry.spans.enabled).toBe(false)
   },
@@ -138,6 +141,8 @@ const PAGES = [
     platform: { speech: { azure: { region: 'westeurope' } } },
     ready: () => screen.getByLabelText('Region'),
     edit: () => fireEvent.change(screen.getByLabelText('Region'), { target: { value: 'eastus' } }),
+    revert: () =>
+      fireEvent.change(screen.getByLabelText('Region'), { target: { value: 'westeurope' } }),
     restored: () => expect(screen.getByLabelText('Region')).toHaveValue('westeurope'),
     sent: body => expect(body.speech.azure.region).toBe('eastus')
   },
@@ -149,6 +154,7 @@ const PAGES = [
     },
     ready: () => screen.getByRole('switch', { name: /Stateless mode/ }),
     edit: () => fireEvent.click(screen.getByRole('switch', { name: /Stateless mode/ })),
+    revert: () => fireEvent.click(screen.getByRole('switch', { name: /Stateless mode/ })),
     restored: () =>
       expect(screen.getByRole('switch', { name: /Stateless mode/ })).toHaveAttribute(
         'aria-checked',
@@ -162,6 +168,7 @@ const PAGES = [
     platform: { oauth: { enabled: { authz: true }, personalKeys: { enabled: false } } },
     ready: () => screen.getByRole('switch', { name: /Personal API Keys/ }),
     edit: () => fireEvent.click(screen.getByRole('switch', { name: /Personal API Keys/ })),
+    revert: () => fireEvent.click(screen.getByRole('switch', { name: /Personal API Keys/ })),
     restored: () =>
       expect(screen.getByRole('switch', { name: /Personal API Keys/ })).toHaveAttribute(
         'aria-checked',
@@ -171,65 +178,132 @@ const PAGES = [
   }
 ];
 
-describe.each(PAGES)('$name save bar', ({ element, platform, ready, edit, restored, sent }) => {
-  const open = async () => {
-    server.platform = structuredClone(platform);
-    render(element);
-    await waitFor(() => expect(ready()).toBeInTheDocument());
+describe.each(PAGES)(
+  '$name save bar',
+  ({ element, platform, ready, edit, revert, restored, sent }) => {
+    const open = async () => {
+      server.platform = structuredClone(platform);
+      render(element);
+      await waitFor(() => expect(ready()).toBeInTheDocument());
+      await settle();
+    };
+
+    test('no bar until something changed; a change of a nested setting shows it', async () => {
+      await open();
+      expect(bar()).not.toBeInTheDocument();
+
+      edit();
+
+      expect(bar()).toBeInTheDocument();
+      expect(within(bar()).getByText('You have unsaved changes')).toBeInTheDocument();
+    });
+
+    test('Discard puts the setting back and takes the bar away', async () => {
+      await open();
+      edit();
+
+      fireEvent.click(discardButton());
+
+      restored();
+      expect(bar()).not.toBeInTheDocument();
+      expect(server.posts).toHaveLength(0);
+    });
+
+    test('Save sends the change with the loaded revision, and the bar goes away', async () => {
+      await open();
+      edit();
+
+      await act(async () => {
+        fireEvent.click(saveButton());
+      });
+
+      await waitFor(() => expect(server.posts).toHaveLength(1));
+      expect(server.posts[0].ifMatch).toBe(etagOf(1));
+      sent(server.posts[0].body);
+      await waitFor(() => expect(bar()).not.toBeInTheDocument());
+    });
+
+    test('a refused save keeps the bar, says why in it, and can be tried again', async () => {
+      await open();
+      edit();
+      server.failNextPost = true;
+
+      await act(async () => {
+        fireEvent.click(saveButton());
+      });
+
+      await waitFor(() =>
+        expect(within(bar()).getByText(/boom: the server refused/)).toBeVisible()
+      );
+      expect(bar()).toBeInTheDocument();
+
+      await act(async () => {
+        fireEvent.click(saveButton());
+      });
+      await waitFor(() => expect(server.posts).toHaveLength(2));
+      await waitFor(() => expect(bar()).not.toBeInTheDocument());
+    });
+    test('after a refused save the bar stays even when the form is back at the loaded value', async () => {
+      // The write may have gone through and only its answer been lost: the admin must still be
+      // able to send the shown value again, or to discard.
+      await open();
+      edit();
+      server.failNextPost = true;
+      await act(async () => {
+        fireEvent.click(saveButton());
+      });
+      await waitFor(() =>
+        expect(within(bar()).getByText(/boom: the server refused/)).toBeVisible()
+      );
+
+      revert();
+      restored();
+
+      expect(bar()).toBeInTheDocument();
+      fireEvent.click(discardButton());
+      expect(bar()).not.toBeInTheDocument();
+    });
+  }
+);
+
+describe('Voice input: an Azure test that is still running when the credentials change', () => {
+  test('its answer is dropped after Discard, and no result is shown for credentials that are gone', async () => {
+    let answer;
+    server.platform = { speech: { azure: { region: 'westeurope' } } };
+    server.azureTest = () =>
+      new Promise(resolve => {
+        answer = () => resolve(ok({ ok: true, code: 'token-issued', region: 'eastus' }));
+      });
+    render(<AdminVoiceInputPage />);
+    await waitFor(() => expect(screen.getByLabelText('Region')).toBeInTheDocument());
     await settle();
-  };
 
-  test('no bar until something changed; a change of a nested setting shows it', async () => {
-    await open();
-    expect(bar()).not.toBeInTheDocument();
-
-    edit();
-
-    expect(bar()).toBeInTheDocument();
-    expect(within(bar()).getByText('You have unsaved changes')).toBeInTheDocument();
-  });
-
-  test('Discard puts the setting back and takes the bar away', async () => {
-    await open();
-    edit();
-
+    fireEvent.change(screen.getByLabelText('Region'), { target: { value: 'eastus' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Test connection' }));
+    await waitFor(() => expect(answer).toBeDefined());
     fireEvent.click(discardButton());
+    expect(screen.getByLabelText('Region')).toHaveValue('westeurope');
 
-    restored();
-    expect(bar()).not.toBeInTheDocument();
-    expect(server.posts).toHaveLength(0);
+    await act(async () => {
+      answer();
+    });
+
+    expect(screen.queryByText(/Key accepted/)).not.toBeInTheDocument();
   });
 
-  test('Save sends the change with the loaded revision, and the bar goes away', async () => {
-    await open();
-    edit();
+  test('a failed test shows its error while the credentials are unchanged', async () => {
+    server.platform = { speech: { azure: { region: 'westeurope' } } };
+    server.azureTest = async () => {
+      throw new Error('test request refused');
+    };
+    render(<AdminVoiceInputPage />);
+    await waitFor(() => expect(screen.getByLabelText('Region')).toBeInTheDocument());
+    await settle();
 
     await act(async () => {
-      fireEvent.click(saveButton());
+      fireEvent.click(screen.getByRole('button', { name: 'Test connection' }));
     });
 
-    await waitFor(() => expect(server.posts).toHaveLength(1));
-    expect(server.posts[0].ifMatch).toBe(etagOf(1));
-    sent(server.posts[0].body);
-    await waitFor(() => expect(bar()).not.toBeInTheDocument());
-  });
-
-  test('a refused save keeps the bar, says why in it, and can be tried again', async () => {
-    await open();
-    edit();
-    server.failNextPost = true;
-
-    await act(async () => {
-      fireEvent.click(saveButton());
-    });
-
-    await waitFor(() => expect(within(bar()).getByText(/boom: the server refused/)).toBeVisible());
-    expect(bar()).toBeInTheDocument();
-
-    await act(async () => {
-      fireEvent.click(saveButton());
-    });
-    await waitFor(() => expect(server.posts).toHaveLength(2));
-    await waitFor(() => expect(bar()).not.toBeInTheDocument());
+    expect(await screen.findByText(/test request refused/)).toBeInTheDocument();
   });
 });

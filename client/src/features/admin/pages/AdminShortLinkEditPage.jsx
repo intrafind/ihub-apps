@@ -95,7 +95,11 @@ function AdminShortLinkEditPage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
 
-  const { isDirty, blocker, markSaved } = useUnsavedChanges(initialData, link);
+  // The Params (JSON) text is guarded with the link: an edit of it alone is unsaved work too.
+  const { isDirty, blocker, markSaved } = useUnsavedChanges(
+    initialData && { link: initialData, params: initialParamsText },
+    { link, params: paramsText }
+  );
   const formRef = useRef(null);
 
   // The app search box offers every app by its name in the current language;
@@ -380,7 +384,7 @@ function AdminShortLinkEditPage() {
 
       {/* Save goes through the form's own submit handler. */}
       <AdminSaveBar
-        dirty={isDirty || paramsText !== initialParamsText}
+        dirty={isDirty}
         saving={saving}
         saveLabel={isNew ? t('admin.ui.saveBar.create', 'Create') : undefined}
         onSave={() => formRef.current?.requestSubmit()}

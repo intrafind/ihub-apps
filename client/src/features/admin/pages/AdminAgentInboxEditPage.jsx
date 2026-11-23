@@ -80,7 +80,12 @@ export default function AdminAgentInboxEditPage() {
   // this text too or such an edit would show no bar and could not be saved.
   const [savedRawBody, setSavedRawBody] = useState('');
 
-  const { isDirty, blocker, markSaved } = useUnsavedChanges(initialData, parsed);
+  // Raw text counts for the guard too: an edit of the layout alone parses to the same items.
+  const rawEdited = view === 'raw' && rawBody !== savedRawBody;
+  const { isDirty, blocker, markSaved } = useUnsavedChanges(
+    initialData && { parsed: initialData, raw: savedRawBody },
+    { parsed, raw: rawEdited ? rawBody : savedRawBody }
+  );
 
   const [newText, setNewText] = useState('');
   const [newPriority, setNewPriority] = useState('p2');
@@ -181,7 +186,8 @@ export default function AdminAgentInboxEditPage() {
 
   // Back to the last saved state, in both views.
   function handleDiscard() {
-    setParsed(initialData);
+    // Without a loaded inbox (the load failed) the saved text is the only baseline.
+    setParsed(initialData ?? parseBody(savedRawBody));
     // The stored text itself, not a re-serialization that would rewrite its layout.
     setRawBody(savedRawBody);
     setError(null);
@@ -388,7 +394,7 @@ export default function AdminAgentInboxEditPage() {
       </div>
 
       <AdminSaveBar
-        dirty={isDirty || (view === 'raw' && rawBody !== savedRawBody)}
+        dirty={isDirty}
         saving={saving}
         onSave={() => void handleSave()}
         onDiscard={handleDiscard}

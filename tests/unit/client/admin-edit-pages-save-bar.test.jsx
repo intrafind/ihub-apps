@@ -235,6 +235,28 @@ describe('agent inbox editor', () => {
       expect(bar()).not.toBeInTheDocument();
     });
 
+    test('leaving with an edit the parser drops asks first', async () => {
+      const raw = await openRaw();
+
+      fireEvent.change(raw, { target: { value: EDITED } });
+      fireEvent.click(screen.getByRole('button', { name: 'Back' }));
+
+      expect(screen.getByRole('alertdialog')).toBeInTheDocument();
+      expect(screen.getByText('Leave without saving?')).toBeInTheDocument();
+    });
+
+    test('no bar after a failed load, even when text is typed: there is nothing stored to compare', async () => {
+      mockFetchInbox.mockRejectedValue(new Error('offline'));
+      await renderAt('/admin/agents/inboxes/triage');
+      fireEvent.click(screen.getByRole('button', { name: 'Raw' }));
+
+      fireEvent.change(screen.getByRole('textbox'), {
+        target: { value: '# typed\n- [ ] (P2) item\n' }
+      });
+
+      expect(bar()).not.toBeInTheDocument();
+    });
+
     test('typing the stored text back leaves nothing to save', async () => {
       const raw = await openRaw();
       fireEvent.change(raw, { target: { value: EDITED } });
@@ -298,6 +320,17 @@ describe('agent editor', () => {
     fireEvent.click(saveButton());
     await flush();
     expect(mockUpdateAgentProfile).not.toHaveBeenCalled();
+  });
+
+  test('a refused save is named in the bar, where the admin is looking', async () => {
+    mockUpdateAgentProfile.mockRejectedValue(new Error('the server said no'));
+    await renderAt('/admin/agents/digest');
+    fireEvent.change(screen.getByDisplayValue('7'), { target: { value: '9' } });
+
+    fireEvent.click(saveButton());
+    await flush();
+
+    expect(within(bar()).getByTestId('save-bar-message')).toHaveTextContent('the server said no');
   });
 
   test('the new agent page offers Create once it changed', async () => {

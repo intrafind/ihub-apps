@@ -118,7 +118,17 @@ function AdminProviderEditPage() {
     if (response) setModels(Array.isArray(response.data?.items) ? response.data.items : []);
   }, []);
 
+  // The redirect after a save. An edit made while it is pending cancels it, so the page stays
+  // and the bar offers the new change.
+  const redirectTimerRef = useRef(null);
+  useEffect(() => () => clearTimeout(redirectTimerRef.current), []);
+
   const handleChange = (field, value) => {
+    if (redirectTimerRef.current) {
+      clearTimeout(redirectTimerRef.current);
+      redirectTimerRef.current = null;
+      setSuccess(false);
+    }
     setFormData(prev => ({
       ...prev,
       [field]: value
@@ -177,7 +187,8 @@ function AdminProviderEditPage() {
       markSaved();
 
       // Redirect after a short delay
-      setTimeout(() => {
+      redirectTimerRef.current = setTimeout(() => {
+        redirectTimerRef.current = null;
         navigate('/admin/providers');
       }, 1500);
     } catch (err) {

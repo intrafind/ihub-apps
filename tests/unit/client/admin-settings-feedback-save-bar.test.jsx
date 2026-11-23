@@ -171,6 +171,45 @@ describe('Admin → Feedback save bar', () => {
     await waitFor(() => expect(bar()).not.toBeInTheDocument());
   });
 
+  test('a field whose write failed is kept when a later save fails on another field first', async () => {
+    const real = mockApi.makeAdminApiCall.getMockImplementation();
+    const fail = { patch: 1, put: 1 };
+    mockApi.makeAdminApiCall.mockImplementation(async (url, options = {}) => {
+      if (url === '/admin/configs/platform' && options.method === 'PATCH' && fail.patch-- > 0) {
+        throw new Error('storage response lost');
+      }
+      if (url === '/admin/features' && options.method === 'PUT' && fail.put-- > 0) {
+        throw new Error('features refused');
+      }
+      return real(url, options);
+    });
+    await renderPage();
+
+    // Save 1: "Store feedback" is written and its answer is lost.
+    fireEvent.click(store());
+    fireEvent.click(saveButton());
+    await waitFor(() =>
+      expect(within(bar()).getByText('storage response lost')).toBeInTheDocument()
+    );
+
+    // Save 2 fails on "Collect feedback", which is written before it.
+    fireEvent.click(store());
+    fireEvent.click(collect());
+    fireEvent.click(saveButton());
+    await waitFor(() => expect(within(bar()).getByText('features refused')).toBeInTheDocument());
+
+    // Both are back at their loaded values, yet the first write may have gone through: Save
+    // sends both again.
+    fireEvent.click(collect());
+    expect(bar()).toBeInTheDocument();
+    fireEvent.click(saveButton());
+
+    await waitFor(() => expect(bar()).not.toBeInTheDocument());
+    const patches = writes().filter(([, options]) => options.method === 'PATCH');
+    expect(patches).toHaveLength(2);
+    expect(patches[1][1].body).toEqual({ features: { feedbackTracking: true } });
+  });
+
   test('no bar while the settings could not be loaded', async () => {
     mockApi.makeAdminApiCall.mockRejectedValue(new Error('down'));
     render(<AdminFeedbackPage />);

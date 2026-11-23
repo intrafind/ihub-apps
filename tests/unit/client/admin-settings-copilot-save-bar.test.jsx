@@ -176,6 +176,7 @@ describe('Copilot agent settings page', () => {
   test('a failed save keeps the bar and names the error in it', async () => {
     failSave = true;
     await renderPage();
+    const original = screen.getByLabelText('Name').value;
     fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'iHub Agent' } });
 
     await act(async () => {
@@ -186,6 +187,9 @@ describe('Copilot agent settings page', () => {
     expect(bar()).toBeInTheDocument();
     expect(within(bar()).getByText(/Failed to save the settings: boom/)).toBeInTheDocument();
     expect(screen.getByLabelText('Name')).toHaveValue('iHub Agent');
+    // Back at the loaded value, the bar stays: the write may have gone through unanswered.
+    fireEvent.change(screen.getByLabelText('Name'), { target: { value: original } });
+    expect(bar()).toBeInTheDocument();
     fireEvent.click(discardButton());
     expect(bar()).not.toBeInTheDocument();
   });

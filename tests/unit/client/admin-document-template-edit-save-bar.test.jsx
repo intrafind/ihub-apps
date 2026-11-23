@@ -122,6 +122,10 @@ describe('AdminDocumentTemplateEditPage save bar', () => {
     });
 
     expect(mockCreate).not.toHaveBeenCalled();
-    expect(screen.getByText('Fix the marked fields first.')).toBeInTheDocument();
+    // Named at the top of the page and in the bar, which is what the admin sees while scrolled down.
+    expect(screen.getByRole('alert')).toHaveTextContent('Fix the marked fields first.');
+    expect(screen.getByTestId('save-bar-message')).toHaveTextContent(
+      'Fix the marked fields first.'
+    );
   });
 });

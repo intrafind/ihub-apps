@@ -60,7 +60,9 @@ const MonacoJsonEditor = ({
 
     // Check if value actually changed from external source
     const valueStr = JSON.stringify(value);
-    if (valueStr === lastExternalValue.current) {
+    // A text that no longer parses is not the saved value, even when the object is unchanged:
+    // typing broken JSON does not touch `lastExternalValue`, so Discard must still replace it.
+    if (valueStr === lastExternalValue.current && textParsesRef.current) {
       return;
     }
     lastExternalValue.current = valueStr;

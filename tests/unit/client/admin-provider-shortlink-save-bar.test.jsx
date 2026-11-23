@@ -128,6 +128,31 @@ describe('existing provider', () => {
   });
 });
 
+describe('existing provider after a save', () => {
+  test('an edit made while the redirect is pending cancels it and keeps the bar', async () => {
+    renderAt('/admin/providers/gw');
+    fireEvent.change(await screen.findByDisplayValue('Gateway'), {
+      target: { value: 'Gateway 2' }
+    });
+    const buttons = within(bar()).getAllByRole('button');
+    await act(async () => {
+      fireEvent.click(buttons[buttons.length - 1]);
+    });
+    expect(bar()).toBeNull();
+
+    // The form is still editable until the redirect: another change must not be lost.
+    fireEvent.change(screen.getByDisplayValue('Gateway 2'), { target: { value: 'Gateway 3' } });
+    expect(bar()).not.toBeNull();
+
+    await act(async () => {
+      await new Promise(resolve => setTimeout(resolve, 1800));
+    });
+
+    expect(screen.getByDisplayValue('Gateway 3')).toBeInTheDocument();
+    expect(bar()).not.toBeNull();
+  });
+});
+
 describe('short link', () => {
   test('a new link: no bar until the params change (they are not part of the link); Discard resets them', async () => {
     renderAt('/admin/shortlinks/new');
@@ -156,5 +181,15 @@ describe('short link', () => {
     fireEvent.click(within(bar()).getByRole('button', { name: 'Discard' }));
     expect(screen.getByLabelText('Params (JSON)')).toHaveValue(stored);
     expect(bar()).toBeNull();
+  });
+  test('an edit of the params alone is guarded too: leaving asks first', async () => {
+    renderAt('/admin/shortlinks/abc');
+    await settle();
+
+    fireEvent.change(screen.getByLabelText('Params (JSON)'), { target: { value: '{"a":"2"}' } });
+    fireEvent.click(screen.getByRole('link', { name: /SSRF Allowlist/ }));
+
+    expect(screen.getByRole('alertdialog')).toBeInTheDocument();
+    expect(screen.getByText('Leave without saving?')).toBeInTheDocument();
   });
 });

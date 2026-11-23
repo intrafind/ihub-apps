@@ -30,6 +30,9 @@ function AdminLocalizationPage() {
   const { uiConfig, refreshUIConfig } = useUIConfig();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  // A failed save keeps the bar (to retry or discard) even when the form is back at its saved
+  // state: the write may have gone through and only its answer been lost.
+  const [saveFailed, setSaveFailed] = useState(false);
   const [message, setMessage] = useState('');
   const [defaultLanguage, setDefaultLanguage] = useState('en');
   // Save is only safe once the stored value is actually known: before that the
@@ -95,6 +98,7 @@ function AdminLocalizationPage() {
   const handleSave = async () => {
     try {
       setSaving(true);
+      setSaveFailed(false);
       setMessage('');
 
       // Only the field this page owns. The endpoint merges named keys over the
@@ -121,6 +125,7 @@ function AdminLocalizationPage() {
       setTimeout(() => setMessage(''), 3000);
     } catch (error) {
       console.error('Failed to save platform configuration:', error);
+      setSaveFailed(true);
       setMessage({
         type: 'error',
         text:
@@ -135,6 +140,7 @@ function AdminLocalizationPage() {
   // Back to the language as loaded or last saved, with the banner of a refused save gone.
   const handleDiscard = () => {
     setDefaultLanguage(savedDefaultLanguage);
+    setSaveFailed(false);
     setMessage('');
   };
 
@@ -256,7 +262,7 @@ function AdminLocalizationPage() {
       {/* No bar until the stored language is known: the initial 'en' must never be saved over it. */}
       {loaded && (
         <AdminSaveBar
-          dirty={isDirty}
+          dirty={isDirty || saveFailed}
           saving={saving}
           onSave={() => void handleSave()}
           onDiscard={handleDiscard}

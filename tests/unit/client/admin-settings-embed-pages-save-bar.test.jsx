@@ -207,6 +207,7 @@ describe.each([
   test('a failed save keeps the bar and names the error in it', async () => {
     failSave = true;
     await renderPage(setup);
+    const original = screen.getByLabelText('Display Name').value;
     fireEvent.change(screen.getByLabelText('Display Name'), { target: { value: 'Renamed' } });
 
     await act(async () => {
@@ -218,6 +219,10 @@ describe.each([
     expect(within(bar()).getByText(setup.saveError)).toBeInTheDocument();
     // The edit is still there, and Discard clears the error with it.
     expect(screen.getByLabelText('Display Name')).toHaveValue('Renamed');
+    // Back at the loaded value the form is clean, but the write may have gone through and only
+    // its answer been lost: the bar stays until a save succeeds or the admin discards.
+    fireEvent.change(screen.getByLabelText('Display Name'), { target: { value: original } });
+    expect(bar()).toBeInTheDocument();
     fireEvent.click(discardButton());
     expect(bar()).not.toBeInTheDocument();
   });

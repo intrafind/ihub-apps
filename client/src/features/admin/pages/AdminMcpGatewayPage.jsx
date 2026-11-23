@@ -43,6 +43,9 @@ function AdminMcpGatewayPage() {
   const [platform, setPlatform] = useState(null);
   const [message, setMessage] = useState(null);
   const [saving, setSaving] = useState(false);
+  // A failed save keeps the bar (to retry or discard) even when the form is back at its saved
+  // state: the write may have gone through and only its answer been lost.
+  const [saveFailed, setSaveFailed] = useState(false);
   // The platform config as last loaded or saved; null until it loaded.
   const [savedPlatform, setSavedPlatform] = useState(null);
   const { blocker, isDirty } = useUnsavedChanges(savedPlatform, platform);
@@ -147,6 +150,7 @@ function AdminMcpGatewayPage() {
   const save = async () => {
     if (!ready || !platform) return;
     setSaving(true);
+    setSaveFailed(false);
     try {
       await makeAdminApiCall('/admin/configs/platform', {
         method: 'POST',
@@ -157,6 +161,7 @@ function AdminMcpGatewayPage() {
       setSavedPlatform(platform);
       setMessage({ type: 'success', text: t('admin.mcp.common.saved', 'Saved') });
     } catch (err) {
+      setSaveFailed(true);
       setMessage({
         type: 'error',
         text: t('admin.mcp.gateway.saveError', 'Save failed: {{error}}', {
@@ -171,6 +176,7 @@ function AdminMcpGatewayPage() {
   // Back to the configuration as loaded or last saved, with the banner of a refused save gone.
   const handleDiscard = () => {
     setPlatform(savedPlatform);
+    setSaveFailed(false);
     setMessage(null);
   };
 
@@ -602,7 +608,7 @@ function AdminMcpGatewayPage() {
       {/* No bar until the platform config loaded: saving would drop the rest of `mcpServer` and `oauth`. */}
       {ready && (
         <AdminSaveBar
-          dirty={isDirty}
+          dirty={isDirty || saveFailed}
           saving={saving}
           onSave={() => void save()}
           onDiscard={handleDiscard}

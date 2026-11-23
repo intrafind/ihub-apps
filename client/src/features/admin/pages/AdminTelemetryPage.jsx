@@ -69,6 +69,9 @@ function deepMerge(base, overlay) {
 function AdminTelemetryPage() {
   const { t } = useTranslation();
   const [saving, setSaving] = useState(false);
+  // A failed save keeps the bar (to retry or discard) even when the form is back at its saved
+  // state: the write may have gone through and only its answer been lost.
+  const [saveFailed, setSaveFailed] = useState(false);
   const [message, setMessage] = useState('');
   const [config, setConfig] = useState(DEFAULT_TELEMETRY);
   // The configuration as last loaded or saved; null until it loaded.
@@ -109,6 +112,7 @@ function AdminTelemetryPage() {
     if (!ready) return;
     try {
       setSaving(true);
+      setSaveFailed(false);
       setMessage('');
       // Read-modify-write for the sections this page does not show. This read
       // does not change the revision the save sends (the one the form loaded).
@@ -129,6 +133,7 @@ function AdminTelemetryPage() {
         )
       });
     } catch (error) {
+      setSaveFailed(true);
       setMessage({
         type: 'error',
         text:
@@ -142,6 +147,7 @@ function AdminTelemetryPage() {
   // Back to the configuration as loaded or last saved, with the banner of a refused save gone.
   const handleDiscard = () => {
     setConfig(savedConfig);
+    setSaveFailed(false);
     setMessage('');
   };
 
@@ -618,7 +624,7 @@ function AdminTelemetryPage() {
       {/* No bar until the platform config loaded: the defaults must never be saved over it. */}
       {ready && (
         <AdminSaveBar
-          dirty={isDirty}
+          dirty={isDirty || saveFailed}
           saving={saving}
           onSave={() => void handleSave()}
           onDiscard={handleDiscard}

@@ -705,7 +705,7 @@ function AdminCopilotAgentPage() {
       </div>
 
       <AdminSaveBar
-        dirty={ready && !loading && isDirty}
+        dirty={ready && !loading && (isDirty || Boolean(saveError))}
         saving={saving}
         onSave={() => void handleSave()}
         onDiscard={handleDiscard}

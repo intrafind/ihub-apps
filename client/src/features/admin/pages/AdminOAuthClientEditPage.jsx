@@ -184,6 +184,9 @@ function AdminOAuthClientEditPage() {
     }
 
     setSaving(true);
+    // What this request sends. Edits made while it runs stay unsaved: the saved baseline becomes
+    // this snapshot, not whatever the form holds when the answer arrives.
+    const submitted = formData;
 
     try {
       if (isNew) {
@@ -206,10 +209,10 @@ function AdminOAuthClientEditPage() {
           headers: {
             'Content-Type': 'application/json'
           },
-          body: formData
+          body: submitted
         });
 
-        markSaved();
+        setInitialData(submitted);
         setMessage({
           type: 'success',
           text: t('admin.auth.oauth.updateSuccess', 'OAuth client updated successfully')
