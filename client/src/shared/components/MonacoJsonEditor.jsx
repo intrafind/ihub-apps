@@ -68,6 +68,16 @@ const MonacoJsonEditor = ({
     try {
       const formatted = JSON.stringify(value, null, 2);
       setJsonString(formatted);
+      // The text now is a serialized object, so it parses, whatever the text before it did.
+      // Monaco does not call `onChange` for a text set from outside, so the parse flag the
+      // typing left behind would otherwise stay `false` (a page that discards a broken edit
+      // would keep saying the JSON is invalid).
+      const parsedBefore = textParsesRef.current;
+      textParsesRef.current = true;
+      setIsValidJson(true);
+      if (!parsedBefore && onValidationChange) {
+        onValidationChange({ isValid: true, errors: [] });
+      }
     } catch (error) {
       console.error('Error formatting JSON:', error);
       setJsonString('{}');

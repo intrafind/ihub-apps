@@ -14,6 +14,7 @@ import useAdminPageAccess from '../hooks/useAdminPageAccess';
 import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
 import UnsavedChangesDialog from '../components/UnsavedChangesDialog';
 import AdminSaveBar from '../components/AdminSaveBar';
+import ImplicitSubmit from '../../../shared/components/ImplicitSubmit';
 
 /** The empty form a new provider starts from; also the unsaved-changes baseline. */
 const INITIAL_FORM = {
@@ -165,6 +166,7 @@ function AdminProviderCreatePage() {
           onSubmit={handleSave}
           className="bg-white dark:bg-gray-800 shadow-sm rounded-lg p-6"
         >
+          <ImplicitSubmit disabled={saving} />
           <p className="mb-6 text-xs text-gray-500 dark:text-gray-400">
             {t(
               'admin.providers.create.llmHelp',

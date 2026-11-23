@@ -23,6 +23,7 @@ import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
 import AdminLoadError from '../components/AdminLoadError';
 import UnsavedChangesDialog from '../components/UnsavedChangesDialog';
 import AdminSaveBar from '../components/AdminSaveBar';
+import ImplicitSubmit from '../../../shared/components/ImplicitSubmit';
 
 function AdminProviderEditPage() {
   const { t, i18n } = useTranslation();
@@ -247,6 +248,7 @@ function AdminProviderEditPage() {
           onSubmit={handleSave}
           className="bg-white dark:bg-gray-800 shadow-sm rounded-lg p-6"
         >
+          <ImplicitSubmit disabled={saving} />
           <ProviderFormFields
             data={formData}
             onChange={handleChange}

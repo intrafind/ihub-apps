@@ -7,6 +7,7 @@ import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
 import AdminEditPageShell from '../../../shared/components/AdminEditPageShell';
 import AdminSaveBar from '../components/AdminSaveBar';
+import ImplicitSubmit from '../../../shared/components/ImplicitSubmit';
 import { useAdminResourceEditor } from '../hooks/useAdminResourceEditor';
 import ContentAccessSection from '../components/ContentAccessSection';
 import {
@@ -204,11 +205,16 @@ function AdminPromptEditPage() {
 
   const formRef = useRef(null);
   // A prompt made from a template is complete as it opens: it can be created at once.
-  const startsFromTemplate = isNewPrompt && Boolean(location.state?.templatePrompt);
+  const [templateDiscarded, setTemplateDiscarded] = useState(false);
+  const startsFromTemplate =
+    isNewPrompt && Boolean(location.state?.templatePrompt) && !templateDiscarded;
 
   const handleDiscard = () => {
     setPromptData(initialData);
     setSaveError(null);
+    // Discarding the draft of a template puts the template back and ends the "can be
+    // created at once": the bar is for edits again.
+    setTemplateDiscarded(true);
   };
 
   /**
@@ -337,8 +343,10 @@ function AdminPromptEditPage() {
 
       {/* noValidate: the form's own messages come first (see handleFormSubmit). */}
       <form ref={formRef} onSubmit={handleFormSubmit} noValidate className="space-y-8">
+        <ImplicitSubmit disabled={saving} />
         <DualModeEditor
           value={promptData}
+          savedValue={initialData}
           onChange={handleDataChange}
           formComponent={PromptFormEditor}
           onValidationChange={setFormValidation}

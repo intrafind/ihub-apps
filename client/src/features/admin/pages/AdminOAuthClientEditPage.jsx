@@ -12,6 +12,7 @@ import { makeAdminApiCall } from '../../../api/adminApi';
 import LoadingSpinner from '../../../shared/components/LoadingSpinner';
 import UnsavedChangesDialog from '../components/UnsavedChangesDialog';
 import AdminSaveBar from '../components/AdminSaveBar';
+import ImplicitSubmit from '../../../shared/components/ImplicitSubmit';
 import SecretRevealDialog from '../../../shared/components/SecretRevealDialog';
 import {
   clientGrantWarnings,
@@ -525,6 +526,7 @@ function AdminOAuthClientEditPage() {
             onSubmit={handleSubmit}
             className="bg-white dark:bg-gray-800 shadow-sm rounded-lg p-6 space-y-6"
           >
+            <ImplicitSubmit disabled={saving} />
             {/* Basic Information */}
             <div>
               <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100 mb-4">

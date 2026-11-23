@@ -19,7 +19,7 @@ const PAGES_DIR = path.resolve(__dirname, '../../../client/src/features/admin/pa
 
 /** A Save button, a submit button, a form submit handler or a shared save frame. */
 const SAVE_CONTROL =
-  /AdminSaveBar|EditorSaveBar|AdminSettingsPage|type="submit"|onSubmit=\{|onClick=\{[^}\n]*\b(?:handle)?[sS]ave[A-Za-z]*\b/;
+  /AdminSaveBar|EditorSaveBar|AdminSettingsPage|type="submit"|onSubmit=\{|onSave=\{|onClick=\{[^}]*[sS]ave[A-Za-z]*/;
 
 /** The shared bar, directly or through the settings frame that renders it for `onSave`. */
 const SAVE_BAR = /<(?:AdminSaveBar|EditorSaveBar)\b/;
@@ -53,7 +53,16 @@ const BASELINE = new Map([
   ['AdminScheduledTasksPage.jsx', OTHER],
   ['AdminSecurityPage.jsx', CARDS],
   ['AdminTelemetryPage.jsx', SETTINGS],
-  ['AdminVoiceInputPage.jsx', SETTINGS]
+  ['AdminVoiceInputPage.jsx', SETTINGS],
+  ['WorkflowEditorPage.jsx', `${OTHER}: the canvas editor renders its own Save`]
+]);
+
+/**
+ * Pages that match the save patterns without saving anything of their own: a dialog's
+ * `onSave` only refreshes the list behind it.
+ */
+const NOT_EDIT_PAGES = new Map([
+  ['AdminMarketplaceRegistriesPage.jsx', 'the Save belongs to a dialog; the page edits nothing']
 ]);
 
 const read = name => fs.readFileSync(path.join(PAGES_DIR, name), 'utf8');
@@ -68,7 +77,7 @@ function pageFiles() {
 function pagesWithoutBar() {
   return pageFiles().filter(name => {
     const source = read(name);
-    if (!SAVE_CONTROL.test(source)) return false;
+    if (NOT_EDIT_PAGES.has(name) || !SAVE_CONTROL.test(source)) return false;
     return !SAVE_BAR.test(source) && !SETTINGS_FRAME_WITH_BAR(source);
   });
 }
@@ -89,6 +98,31 @@ describe('admin save bar coverage', () => {
   ])('%s shows the save bar', name => {
     const source = read(name);
     expect(SAVE_BAR.test(source) || SETTINGS_FRAME_WITH_BAR(source)).toBe(true);
+  });
+
+  it('a form around the save bar keeps Enter-to-save through ImplicitSubmit', () => {
+    // The bar's Save sits outside the form, so a form without a submit button of its own
+    // would stop saving on Enter. Group, prompt, model, user, page, provider, short link
+    // and OAuth client are the pages this protects.
+    const withoutIt = pageFiles().filter(name => {
+      const source = read(name);
+      const hasBar = SAVE_BAR.test(source);
+      const hasForm = /<form\b/.test(source) && /onSubmit=\{/.test(source);
+      return hasBar && hasForm && !/<ImplicitSubmit\b/.test(source);
+    });
+    expect(withoutIt).toEqual([]);
+  });
+
+  it('a page with the bar and a DualModeEditor gives it the saved value, so Reset follows Discard', () => {
+    // Without `savedValue` the editor's Reset goes back to the value it was last switched
+    // modes with, which after a Discard can be the very edit the admin threw away.
+    const without = pageFiles().filter(name => {
+      const source = read(name);
+      return (
+        SAVE_BAR.test(source) && /<DualModeEditor\b/.test(source) && !/savedValue=\{/.test(source)
+      );
+    });
+    expect(without).toEqual([]);
   });
 
   it('recognizes a page with its own Save button', () => {

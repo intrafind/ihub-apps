@@ -166,9 +166,11 @@ function AdminWorkflowEditPage() {
       if (isUnsafeKey(segment)) {
         return;
       }
-      if (!Object.hasOwn(target, segment) || target[segment] == null) {
-        target[segment] = {};
-      }
+      // Copy each level on the way down: the nested objects are shared with the saved
+      // baseline, and writing into them would change the baseline with the edit, so the
+      // page would not see anything to save.
+      target[segment] =
+        Object.hasOwn(target, segment) && target[segment] != null ? { ...target[segment] } : {};
       target = target[segment];
     }
 

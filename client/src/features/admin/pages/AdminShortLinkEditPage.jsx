@@ -13,6 +13,7 @@ import AdminBreadcrumb from '../components/AdminBreadcrumb';
 import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
 import UnsavedChangesDialog from '../components/UnsavedChangesDialog';
 import AdminSaveBar from '../components/AdminSaveBar';
+import ImplicitSubmit from '../../../shared/components/ImplicitSubmit';
 import { getBasePath } from '../../../utils/runtimeBasePath';
 import {
   buildShortLinkTarget,
@@ -222,6 +223,7 @@ function AdminShortLinkEditPage() {
           </div>
         )}
         <form ref={formRef} onSubmit={handleSave} className="space-y-4">
+          <ImplicitSubmit disabled={saving} />
           <div>
             <label
               htmlFor="shortlink-code"

@@ -75,6 +75,10 @@ export default function AdminAgentInboxEditPage() {
   const [error, setError] = useState(null);
   const [view, setView] = useState('form'); // 'form' | 'raw'
   const [rawBody, setRawBody] = useState('');
+  // The raw text as stored. The Raw view saves it as typed, and the parsed form drops what
+  // it cannot read (other bullets, blank lines, notes between items), so the page compares
+  // this text too or such an edit would show no bar and could not be saved.
+  const [savedRawBody, setSavedRawBody] = useState('');
 
   const { isDirty, blocker, markSaved } = useUnsavedChanges(initialData, parsed);
 
@@ -91,6 +95,7 @@ export default function AdminAgentInboxEditPage() {
         setParsed(parsedBody);
         setInitialData(parsedBody);
         setRawBody(body);
+        setSavedRawBody(body);
         setVersion(data.version || 0);
       } catch (err) {
         setError(getAdminApiErrorMessage(err));
@@ -157,6 +162,7 @@ export default function AdminAgentInboxEditPage() {
       setParsed(reparsed);
       setInitialData(reparsed);
       setRawBody(body);
+      setSavedRawBody(body);
       markSaved();
     } catch (err) {
       const code = err?.response?.data?.code;
@@ -176,7 +182,8 @@ export default function AdminAgentInboxEditPage() {
   // Back to the last saved state, in both views.
   function handleDiscard() {
     setParsed(initialData);
-    setRawBody(serializeBody(initialData));
+    // The stored text itself, not a re-serialization that would rewrite its layout.
+    setRawBody(savedRawBody);
     setError(null);
   }
 
@@ -381,7 +388,7 @@ export default function AdminAgentInboxEditPage() {
       </div>
 
       <AdminSaveBar
-        dirty={isDirty}
+        dirty={isDirty || (view === 'raw' && rawBody !== savedRawBody)}
         saving={saving}
         onSave={() => void handleSave()}
         onDiscard={handleDiscard}

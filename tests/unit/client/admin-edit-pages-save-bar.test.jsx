@@ -197,6 +197,51 @@ describe('agent inbox editor', () => {
     expect(version).toBe(1);
     expect(bar()).not.toBeInTheDocument();
   });
+
+  // The parsed form reads `*` and `-` bullets alike and drops the layout of what it cannot
+  // parse, so these edits change nothing in the parsed view. The Raw view saves the text as
+  // typed, so they are real changes that must show the bar.
+  describe('raw view', () => {
+    const STORED = '# triage\n- [ ] (P2) first item\n';
+    const EDITED = '# triage\n* [ ] (P2) first item\n\n';
+
+    const openRaw = async () => {
+      await renderAt('/admin/agents/inboxes/triage');
+      fireEvent.click(screen.getByRole('button', { name: 'Raw' }));
+      return screen.getByDisplayValue(/# triage/);
+    };
+
+    test('an edit the parser drops shows the bar and is saved as typed', async () => {
+      const raw = await openRaw();
+      expect(bar()).not.toBeInTheDocument();
+
+      fireEvent.change(raw, { target: { value: EDITED } });
+      expect(bar()).toBeInTheDocument();
+
+      fireEvent.click(saveButton());
+      await flush();
+
+      expect(mockWriteInbox).toHaveBeenCalledWith('triage', EDITED, 1);
+      expect(bar()).not.toBeInTheDocument();
+    });
+
+    test('Discard brings back the stored text exactly', async () => {
+      const raw = await openRaw();
+      fireEvent.change(raw, { target: { value: EDITED } });
+
+      fireEvent.click(discardButton());
+
+      expect(screen.getByDisplayValue(/# triage/).value).toBe(STORED);
+      expect(bar()).not.toBeInTheDocument();
+    });
+
+    test('typing the stored text back leaves nothing to save', async () => {
+      const raw = await openRaw();
+      fireEvent.change(raw, { target: { value: EDITED } });
+      fireEvent.change(raw, { target: { value: STORED } });
+      expect(bar()).not.toBeInTheDocument();
+    });
+  });
 });
 
 describe('agent editor', () => {

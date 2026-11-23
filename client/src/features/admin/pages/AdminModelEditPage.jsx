@@ -19,6 +19,7 @@ import ChangeHistoryDrawer from '../components/ChangeHistoryDrawer';
 import { useAdminResourceEditor } from '../hooks/useAdminResourceEditor';
 import AdminEditPageShell from '../../../shared/components/AdminEditPageShell';
 import AdminSaveBar from '../components/AdminSaveBar';
+import ImplicitSubmit from '../../../shared/components/ImplicitSubmit';
 import MarketplaceModelReviewNotice from '../components/marketplace/MarketplaceModelReviewNotice';
 import AdminLoadError from '../components/AdminLoadError';
 import { UsageLimitBucketFields, normalizeLimitBucket } from '../components/UsageLimitsEditor';
@@ -381,9 +382,13 @@ function AdminModelEditPage() {
   };
 
   const formRef = useRef(null);
+  const [templateDiscarded, setTemplateDiscarded] = useState(false);
   const handleDiscard = () => {
     setFormData(initialData);
     setError(null);
+    // Discarding the draft of a template or clone puts it back and ends the "can be created
+    // at once": the bar is for edits again.
+    setTemplateDiscarded(true);
   };
 
   const handleSave = async () => {
@@ -521,10 +526,12 @@ function AdminModelEditPage() {
 
       {/* noValidate: the form's own messages come first (see handleFormSubmit). */}
       <form ref={formRef} onSubmit={handleFormSubmit} noValidate className="space-y-8">
+        <ImplicitSubmit disabled={saving} />
         <div className="space-y-8">
           {/* Main Form Editor */}
           <DualModeEditor
             value={formData}
+            savedValue={initialData}
             onChange={handleDataChange}
             formComponent={ModelFormEditor}
             onValidationChange={setFormValidation}
@@ -680,7 +687,9 @@ function AdminModelEditPage() {
 
       <AdminSaveBar
         // A model made from a template or a clone is complete as it opens.
-        dirty={isDirty || (isNewModel && Boolean(location.state?.templateModel))}
+        dirty={
+          isDirty || (isNewModel && Boolean(location.state?.templateModel) && !templateDiscarded)
+        }
         saving={saving}
         saveLabel={isNewModel ? t('admin.ui.saveBar.create', 'Create') : undefined}
         onSave={() => formRef.current?.requestSubmit()}

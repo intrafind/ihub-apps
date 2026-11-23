@@ -16,6 +16,7 @@ import AdminBreadcrumb from '../components/AdminBreadcrumb';
 import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
 import UnsavedChangesDialog from '../components/UnsavedChangesDialog';
 import AdminSaveBar from '../components/AdminSaveBar';
+import ImplicitSubmit from '../../../shared/components/ImplicitSubmit';
 
 function AdminPageEditPage() {
   const { t } = useTranslation();
@@ -141,6 +142,7 @@ function AdminPageEditPage() {
           ]}
         />
         <form ref={formRef} onSubmit={handleSubmit} className="space-y-6">
+          <ImplicitSubmit disabled={saving} />
           <div>
             <label
               htmlFor="page-id"

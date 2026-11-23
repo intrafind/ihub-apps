@@ -8,6 +8,7 @@ import Icon from '../../../shared/components/Icon';
 import { useAdminResourceEditor } from '../hooks/useAdminResourceEditor';
 import AdminEditPageShell from '../../../shared/components/AdminEditPageShell';
 import AdminSaveBar from '../components/AdminSaveBar';
+import ImplicitSubmit from '../../../shared/components/ImplicitSubmit';
 import ConfirmDialog from '../../../shared/components/ConfirmDialog';
 import DualModeEditor from '../../../shared/components/DualModeEditor';
 import UserFormEditor from '../components/UserFormEditor';
@@ -482,8 +483,10 @@ function AdminUserEditPage() {
 
       {/* noValidate: the form's own messages come first (see handleSave). */}
       <form ref={formRef} onSubmit={handleFormSubmit} noValidate className="space-y-8">
+        <ImplicitSubmit disabled={saving} />
         <DualModeEditor
           value={user}
+          savedValue={acceptedUser}
           onChange={handleDataChange}
           formComponent={UserFormEditor}
           onValidationChange={setFormValidation}

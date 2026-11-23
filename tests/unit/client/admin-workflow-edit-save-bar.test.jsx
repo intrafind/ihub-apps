@@ -21,6 +21,7 @@ jest.mock('../../../client/src/api/adminApi', () => ({
     version: '1.0.0',
     name: { en: 'Triage' },
     description: { en: '' },
+    config: { maxExecutionTime: 300000 },
     nodes: [],
     edges: []
   }),
@@ -99,6 +100,37 @@ describe('AdminWorkflowEditPage save bar', () => {
     expect(mockUpdate).toHaveBeenCalledTimes(1);
     expect(mockUpdate).toHaveBeenCalledWith('wf1', expect.objectContaining({ version: '2.0.0' }));
     expect(await screen.findByText('workflows list')).toBeInTheDocument();
+  });
+
+  it('counts an edit of a nested setting as a change: it can be saved and discarded', async () => {
+    renderPage('/admin/workflows/wf1');
+    const seconds = await screen.findByLabelText('Max execution time (seconds)');
+    await settle();
+    expect(bar()).toBeNull();
+
+    // Only the nested `config.maxExecutionTime` changes; nothing else on the page does.
+    fireEvent.change(seconds, { target: { value: '600' } });
+    expect(bar()).toBeInTheDocument();
+
+    await act(async () => {
+      fireEvent.click(saveButton());
+    });
+    expect(mockUpdate).toHaveBeenCalledWith(
+      'wf1',
+      expect.objectContaining({ config: expect.objectContaining({ maxExecutionTime: 600000 }) })
+    );
+  });
+
+  it('discards an edit of a nested setting', async () => {
+    renderPage('/admin/workflows/wf1');
+    const seconds = await screen.findByLabelText('Max execution time (seconds)');
+    await settle();
+
+    fireEvent.change(seconds, { target: { value: '600' } });
+    fireEvent.click(within(bar()).getByRole('button', { name: en.admin.ui.saveBar.discard }));
+
+    expect(screen.getByLabelText('Max execution time (seconds)')).toHaveValue(300);
+    expect(bar()).toBeNull();
   });
 
   it('shows the bar for JSON that cannot be parsed, and Save refuses it', async () => {
