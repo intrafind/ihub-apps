@@ -867,7 +867,7 @@ A marker in the user message scripts the stub (`tests/config/e2e-llm-stub.mjs`).
 
 | Marker | The model then |
 |---|---|
-| `e2e-slow:<ms>:<n>` | writes `slow-1` … `slow-<n>`, one word every `<ms>` milliseconds |
+| `e2e-slow:<ms>:<n>` | writes `slow-1` … `slow-<n>`, one word every `<ms>` milliseconds (at most 60 000 ms, 500 words, two minutes in all) |
 | `e2e-hang:<key>` | starts the answer and waits until the spec calls `stub.release('<key>')`; a hang nobody releases ends after two minutes |
 | `e2e-tool:<name>:<json-args>` | calls the tool once and then answers `E2E tool result seen: <start of the result>` |
 | `e2e-tools-parallel:<a>,<b>` | calls the tools in one step (arguments: an optional JSON array, `:[{…},{…}]`) |
@@ -896,7 +896,7 @@ Every test carries a tag: `test('…', { tag: '@gate' }, async ({ page }) => { �
 | `@matrix` | in the full run, once per overlay in `tests/config/agents-spec-map.json` |
 | `@slow` | in the full run; never in the pull request job |
 
-The pull request job (`.github/workflows/e2e.yml`, 10 minutes) runs the `@gate` tests, every test of a spec that `agents-spec-map.json` maps to a path the pull request touches, and `tests/e2e/chat.spec.js`. When you add a spec for a feature, add a row that maps the feature's directories to it. A test in the gate should finish in well under a minute.
+The pull request job (`.github/workflows/e2e.yml`, 10 minutes) runs the `@gate` tests, the tests of every spec that `agents-spec-map.json` maps to a path the pull request touches (except those tagged `@slow`), and `tests/e2e/chat.spec.js`. When you add a spec for a feature, add a row that maps the feature's directories to it. A test in the gate should finish in well under a minute.
 
 The full run is the `full` job of the same workflow: every test of the suite, then the `@matrix` tests once per overlay. Nothing starts it on a schedule yet. Start it by hand (Actions, **End-to-end**, **Run workflow**) before a slice of the agents epic is merged, and whenever you add or change a `@slow` test or a test that depends on an overlay: the pull request job runs no `@slow` test and starts no server with an overlay.
 
