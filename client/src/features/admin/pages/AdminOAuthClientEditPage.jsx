@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
@@ -11,6 +11,8 @@ import ResourceSelector from '../components/ResourceSelector';
 import { makeAdminApiCall } from '../../../api/adminApi';
 import LoadingSpinner from '../../../shared/components/LoadingSpinner';
 import UnsavedChangesDialog from '../components/UnsavedChangesDialog';
+import AdminSaveBar from '../components/AdminSaveBar';
+import ImplicitSubmit from '../../../shared/components/ImplicitSubmit';
 import SecretRevealDialog from '../../../shared/components/SecretRevealDialog';
 import {
   clientGrantWarnings,
@@ -63,7 +65,8 @@ function AdminOAuthClientEditPage() {
     trusted: false
   }));
 
-  const { blocker, markSaved } = useUnsavedChanges(initialData, formData);
+  const { isDirty, blocker, markSaved } = useUnsavedChanges(initialData, formData);
+  const formRef = useRef(null);
 
   useEffect(() => {
     void loadAvailableOptions();
@@ -150,6 +153,14 @@ function AdminOAuthClientEditPage() {
     }
   };
 
+  const handleDiscard = () => {
+    if (initialData) setFormData(initialData);
+    setRedirectUriInput('');
+    setPostLogoutUriInput('');
+    setUriErrors({});
+    setMessage('');
+  };
+
   const handleSubmit = async e => {
     e.preventDefault();
     setMessage('');
@@ -173,6 +184,9 @@ function AdminOAuthClientEditPage() {
     }
 
     setSaving(true);
+    // What this request sends. Edits made while it runs stay unsaved: the saved baseline becomes
+    // this snapshot, not whatever the form holds when the answer arrives.
+    const submitted = formData;
 
     try {
       if (isNew) {
@@ -195,10 +209,10 @@ function AdminOAuthClientEditPage() {
           headers: {
             'Content-Type': 'application/json'
           },
-          body: formData
+          body: submitted
         });
 
-        markSaved();
+        setInitialData(submitted);
         setMessage({
           type: 'success',
           text: t('admin.auth.oauth.updateSuccess', 'OAuth client updated successfully')
@@ -511,9 +525,11 @@ function AdminOAuthClientEditPage() {
           )}
 
           <form
+            ref={formRef}
             onSubmit={handleSubmit}
             className="bg-white dark:bg-gray-800 shadow-sm rounded-lg p-6 space-y-6"
           >
+            <ImplicitSubmit disabled={saving} />
             {/* Basic Information */}
             <div>
               <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100 mb-4">
@@ -964,31 +980,18 @@ function AdminOAuthClientEditPage() {
                 )}
               </div>
             </div>
-
-            {/* Submit buttons */}
-            <div className="flex justify-end space-x-4 pt-6 border-t border-gray-200 dark:border-gray-700">
-              <button
-                type="button"
-                onClick={() => navigate('/admin/oauth/clients')}
-                className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-xs text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-              >
-                {t('common.cancel', 'Cancel')}
-              </button>
-              <button
-                type="submit"
-                disabled={saving}
-                className="px-4 py-2 border border-transparent rounded-md shadow-xs text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
-              >
-                {saving
-                  ? t('common.saving', 'Saving...')
-                  : isNew
-                    ? t('common.create', 'Create')
-                    : t('common.save', 'Save')}
-              </button>
-            </div>
           </form>
         </div>
       </div>
+
+      {/* Save goes through the form's own submit handler. Not while the new client's secret is shown. */}
+      <AdminSaveBar
+        dirty={isDirty && !showSecretModal}
+        saving={saving}
+        saveLabel={isNew ? t('admin.ui.saveBar.create', 'Create') : undefined}
+        onSave={() => formRef.current?.requestSubmit()}
+        onDiscard={handleDiscard}
+      />
 
       <UnsavedChangesDialog blocker={blocker} />
 

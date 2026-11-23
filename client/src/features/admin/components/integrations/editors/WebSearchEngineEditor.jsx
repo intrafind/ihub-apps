@@ -6,7 +6,10 @@ import { useTranslation } from 'react-i18next';
 import { CredentialRefSelect } from '../../OpenApiToolEditor';
 import ConfigFieldInput, { pickText } from '../ConfigFieldInput';
 import { CALLOUT_CLASS } from '../../formStyles';
-import useInstallationEditor, { useInstallationEditorDirty } from './useInstallationEditor';
+import useInstallationEditor, {
+  useInstallationEditorDirty,
+  useInstallationEditorSave
+} from './useInstallationEditor';
 import {
   AccessSection,
   ActionsSection,
@@ -75,9 +78,11 @@ function WebSearchEngineEditor({ instance, definition, onSaved, onCancel }) {
   const keyEnv = ENGINE_KEY_ENV[instance.definition] || null;
   const engineName = pickText(definition?.name, lang) || instance.id;
 
+  const save = () => editor.save(values);
+  useInstallationEditorSave(editor, save);
   const submit = event => {
     event.preventDefault();
-    void editor.save(values);
+    void save();
   };
 
   return (

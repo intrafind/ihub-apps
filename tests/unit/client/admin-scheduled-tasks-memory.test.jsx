@@ -241,7 +241,7 @@ describe('AdminScheduledTasksPage: memory', () => {
     });
     fireEvent.click(screen.getByRole('checkbox', { name: 'Allow memory between runs' }));
     await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Save Changes' }));
     });
     await flush();
 
@@ -257,13 +257,16 @@ describe('AdminScheduledTasksPage: memory', () => {
         maxTasksPerUser: 10
       })
     );
-    expect(screen.getByRole('status')).toHaveTextContent('Settings saved');
+    expect(screen.getByText('Settings saved')).toBeInTheDocument();
   });
 
   it('sends memory enabled when the switch was left on, and the limits as numbers', async () => {
     await renderPage();
+    fireEvent.change(screen.getByLabelText(/maxTasksPerUser|Tasks per user/i), {
+      target: { value: '11' }
+    });
     await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Save Changes' }));
     });
     await flush();
 

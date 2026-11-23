@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
-import { use, useEffect, useMemo, useState } from 'react';
+import { createContext, use, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { pickText } from '../ConfigFieldInput';
 import { buildActionsPolicy, initialCheckedActions } from '../actionsPolicy';
@@ -13,6 +13,16 @@ import {
 import { fetchAdminGroups, getAdminApiErrorMessage } from '../../../../../api/adminApi';
 import { groupsGranting } from '../../../utils/groupIntegrationAccess';
 import { DirtyReportContext, useDirtyReport } from '../../../hooks/useDirtyReport';
+
+/**
+ * What a page hosting an editor offers it so the page's save bar can save the editor
+ * (`AdminInstallationPage`). The value is `{ saveRef, setError }`: the editor puts its save
+ * in `saveRef.current` (see {@link useInstallationEditorSave}) and reports why a save failed
+ * through `setError`. Without a host the editor draws its own Save and Cancel buttons.
+ *
+ * @type {React.Context<{ saveRef: { current: (() => Promise<boolean>)|null }, setError: (message: string|null) => void }|undefined>}
+ */
+export const EditorSaveContext = createContext(undefined);
 
 /** `GET /api/admin/groups` → `groups` (id → group), or an empty object. */
 function groupsOf(groupsResult) {
@@ -149,25 +159,47 @@ export default function useInstallationEditor({ instance, definition, onSaved })
     }
   };
 
-  /** Save the values (see `buildPayload` for `extra`); `onSaved` gets the stored installation. */
-  const save = async (values, extra = {}) => {
-    setSaving(true);
-    setError(null);
-    setFieldErrors({});
-    try {
-      const saved = await updateInstalledIntegration(instance.id, buildPayload(values, extra));
-      onSaved?.(saved);
-    } catch (err) {
-      applyError(err);
-    } finally {
-      setSaving(false);
-    }
+  // The save that is running: a second request (the bar's Save and Enter in a field) joins it
+  // instead of sending the installation twice.
+  const inflightRef = useRef(null);
+
+  /**
+   * Save the values (see `buildPayload` for `extra`); `onSaved` gets the stored installation and
+   * is awaited, so the page has reloaded when this resolves.
+   *
+   * @returns {Promise<boolean>} whether the installation was stored
+   */
+  const save = (values, extra = {}) => {
+    if (inflightRef.current) return inflightRef.current;
+    const run = (async () => {
+      setSaving(true);
+      setError(null);
+      setFieldErrors({});
+      try {
+        const saved = await updateInstalledIntegration(instance.id, buildPayload(values, extra));
+        await onSaved?.(saved);
+        return true;
+      } catch (err) {
+        applyError(err);
+        return false;
+      } finally {
+        setSaving(false);
+        inflightRef.current = null;
+      }
+    })();
+    inflightRef.current = run;
+    return run;
   };
 
-  /** A check of the editor's own failed: show it like a server error on that field. */
+  /**
+   * A check of the editor's own failed: show it like a server error on that field.
+   *
+   * @returns {false} so a `save` can `return editor.reject(…)`
+   */
   const reject = (key, message) => {
     setFieldErrors(key ? { [key]: message } : {});
     setError(message);
+    return false;
   };
 
   return {
@@ -221,4 +253,55 @@ export function useInstallationEditorDirty(editor, edited) {
   );
   const [baseline] = useState(current);
   return useDirtyReport(baseline, current, report);
+}
+
+/**
+ * Hands the editor's save to the page that hosts it, so the page's save bar saves the editor
+ * (and its Save and Cancel buttons are left out, see `EditorFooter`). Call it with the same
+ * function the form's `onSubmit` runs: it checks the values, then saves, and resolves whether the
+ * installation was stored.
+ *
+ * Without a host the editor is not managed and keeps its own buttons.
+ *
+ * @param {ReturnType<typeof useInstallationEditor>} editor - the editor state
+ * @param {() => Promise<boolean>} save - validate and save the form
+ * @returns {{ managed: boolean }}
+ *
+ * @example
+ * const save = async () => {
+ *   const problem = validate(values);
+ *   if (problem) return editor.reject(problem.key, problem.message);
+ *   return editor.save(values);
+ * };
+ * useInstallationEditorSave(editor, save);
+ * const submit = event => {
+ *   event.preventDefault();
+ *   void save();
+ * };
+ */
+export function useInstallationEditorSave(editor, save) {
+  const host = use(EditorSaveContext);
+  const error = editor.error;
+
+  // The newest save on every render, so the bar never runs a stale form.
+  useEffect(() => {
+    if (host) host.saveRef.current = save;
+  });
+  // An editor that goes away (a remount after a save or a discard) has nothing left to save.
+  useEffect(() => {
+    if (!host) return undefined;
+    return () => {
+      host.saveRef.current = null;
+    };
+  }, [host]);
+
+  useEffect(() => {
+    host?.setError(error || null);
+  }, [host, error]);
+  useEffect(() => {
+    if (!host) return undefined;
+    return () => host.setError(null);
+  }, [host]);
+
+  return { managed: Boolean(host) };
 }

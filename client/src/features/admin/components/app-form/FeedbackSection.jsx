@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
 import { useTranslation } from 'react-i18next';
+import { CHECKBOX_CLASS } from '../formStyles';
 
 /**
  * FeedbackSection - per-app switch for the response feedback UI.
@@ -43,12 +44,16 @@ function FeedbackSection({ app, onChange }) {
           <div className="space-y-4">
             <div className="flex items-center">
               <input
+                id="app-enable-feedback"
                 type="checkbox"
                 checked={enabled}
                 onChange={e => handleChange(e.target.checked)}
-                className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 dark:border-gray-600 rounded-sm"
+                className={CHECKBOX_CLASS}
               />
-              <label className="ml-2 block text-sm text-gray-900 dark:text-gray-100">
+              <label
+                htmlFor="app-enable-feedback"
+                className="ml-2 block text-sm text-gray-900 dark:text-gray-100"
+              >
                 {t('admin.apps.edit.enableFeedback', 'Enable response feedback')}
               </label>
             </div>

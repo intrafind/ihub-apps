@@ -26,6 +26,7 @@ import { stop as stopReadAloud } from '../../voice/utils/readAloud';
 import { CHECKBOX_CLASS, INPUT_CLASS } from '../components/formStyles';
 import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
 import UnsavedChangesDialog from '../components/UnsavedChangesDialog';
+import AdminSaveBar from '../components/AdminSaveBar';
 
 /** Playback id of the read-aloud test, apart from every chat message. */
 const READ_ALOUD_TEST_ID = 'admin-read-aloud-test';
@@ -85,6 +86,9 @@ function AdminVoiceInputPage() {
   const { t, i18n } = useTranslation();
   const { refreshConfig } = usePlatformConfig();
   const [saving, setSaving] = useState(false);
+  // A failed save keeps the bar (to retry or discard) even when the form is back at its saved
+  // state: the write may have gone through and only its answer been lost.
+  const [saveFailed, setSaveFailed] = useState(false);
   const [message, setMessage] = useState('');
   const [config, setConfig] = useState(DEFAULT_SPEECH);
   const [savedConfig, setSavedConfig] = useState(DEFAULT_SPEECH);
@@ -96,9 +100,12 @@ function AdminVoiceInputPage() {
   // next save is refused again until the page reloads or the admin chooses
   // "Keep my changes and overwrite" (which re-reads into this holder).
   const revisionRef = useRef(null);
-  const { blocker } = useUnsavedChanges(hasLoaded ? savedConfig : null, config);
+  const { blocker, isDirty } = useUnsavedChanges(hasLoaded ? savedConfig : null, config);
   const [azureTesting, setAzureTesting] = useState(false);
   const [azureTestResult, setAzureTestResult] = useState(null);
+  // Counts the credentials' edits and discards: an Azure test that started before the latest
+  // one tested credentials that are not on the page any more, so its answer is dropped.
+  const azureTestGenerationRef = useRef(0);
   const [transcriptionModels, setTranscriptionModels] = useState(null);
   // Every TTS model, disabled ones included: the seeded Voxtral TTS model
   // ships disabled, and the picker says so instead of hiding it.
@@ -173,6 +180,7 @@ function AdminVoiceInputPage() {
     if (!ready) return;
     try {
       setSaving(true);
+      setSaveFailed(false);
       setMessage('');
       // Read-modify-write for the sections this page does not show. This read
       // does not change the revision the save sends (the one the form loaded).
@@ -202,6 +210,7 @@ function AdminVoiceInputPage() {
         text: t('admin.voiceInput.saveSuccess', 'Voice input settings saved.')
       });
     } catch (error) {
+      setSaveFailed(true);
       setMessage({
         type: 'error',
         text:
@@ -213,6 +222,7 @@ function AdminVoiceInputPage() {
   };
 
   const handleTestAzure = async () => {
+    const generation = azureTestGenerationRef.current;
     try {
       setAzureTesting(true);
       setAzureTestResult(null);
@@ -228,9 +238,13 @@ function AdminVoiceInputPage() {
         ok: false,
         message: t('admin.voiceInput.azure.test.noResponse', 'No response')
       };
-      setAzureTestResult({ ok: result.ok, message: describeAzureTest(result) });
+      if (generation === azureTestGenerationRef.current) {
+        setAzureTestResult({ ok: result.ok, message: describeAzureTest(result) });
+      }
     } catch (error) {
-      setAzureTestResult({ ok: false, message: error.message || 'Test request failed' });
+      if (generation === azureTestGenerationRef.current) {
+        setAzureTestResult({ ok: false, message: error.message || 'Test request failed' });
+      }
     } finally {
       setAzureTesting(false);
     }
@@ -270,7 +284,18 @@ function AdminVoiceInputPage() {
     }
   };
 
+  // Back to the settings as loaded or last saved: the form, the result of an Azure test made
+  // with the discarded values, and the banner of a refused save.
+  const handleDiscard = () => {
+    setConfig(savedConfig);
+    azureTestGenerationRef.current += 1;
+    setAzureTestResult(null);
+    setSaveFailed(false);
+    setMessage('');
+  };
+
   const setAzure = (field, value) => {
+    azureTestGenerationRef.current += 1;
     setAzureTestResult(null);
     setConfig(prev => ({ ...prev, azure: { ...prev.azure, [field]: value } }));
   };
@@ -706,17 +731,6 @@ function AdminVoiceInputPage() {
           </p>
         </div>
 
-        <div className="flex justify-end">
-          <button
-            type="button"
-            onClick={handleSave}
-            disabled={saving}
-            className="inline-flex items-center px-4 py-2 rounded-md bg-indigo-600 text-white text-sm font-medium hover:bg-indigo-700 disabled:opacity-50"
-          >
-            {saving ? t('common.saving', 'Saving...') : t('common.save', 'Save')}
-          </button>
-        </div>
-
         <VoiceInputTestPanel
           speech={toPublicSpeech(savedConfig, dictationModels)}
           models={transcriptionModels}
@@ -726,6 +740,13 @@ function AdminVoiceInputPage() {
           language={i18n.language}
         />
       </div>
+      <AdminSaveBar
+        dirty={isDirty || saveFailed}
+        saving={saving}
+        onSave={() => void handleSave()}
+        onDiscard={handleDiscard}
+        message={message?.type === 'error' ? message.text : undefined}
+      />
       <UnsavedChangesDialog blocker={blocker} />
     </div>
   );

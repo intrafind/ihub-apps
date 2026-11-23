@@ -12,6 +12,7 @@ import ConfigCheckCard from '../components/euAiAct/ConfigCheckCard';
 import ProvenanceSettingsCard from '../components/euAiAct/ProvenanceSettingsCard';
 import VerificationCard from '../components/euAiAct/VerificationCard';
 import WatermarkKeysCard from '../components/euAiAct/WatermarkKeysCard';
+import { SaveSectionsBar, SaveSectionsProvider } from '../components/SaveSections';
 import useEuAiActStatus from '../hooks/useEuAiActStatus';
 
 /**
@@ -21,7 +22,7 @@ import useEuAiActStatus from '../hooks/useEuAiActStatus';
  * settings, acknowledgements, watermark keys (with detector and self-test), provenance
  * settings and verification. Each card loads and fails on its own.
  */
-function AdminEuAiActPage() {
+function EuAiActContent() {
   const { t } = useTranslation();
   const { hash } = useLocation();
   const { status, loading, checking, error, reload } = useEuAiActStatus();
@@ -84,7 +85,16 @@ function AdminEuAiActPage() {
         <ProvenanceSettingsCard onSaved={reload} />
         <VerificationCard maxFileBytes={status?.provenance?.media?.maxVerifyBytes} />
       </div>
+      <SaveSectionsBar />
     </div>
+  );
+}
+
+function AdminEuAiActPage() {
+  return (
+    <SaveSectionsProvider>
+      <EuAiActContent />
+    </SaveSectionsProvider>
   );
 }
 

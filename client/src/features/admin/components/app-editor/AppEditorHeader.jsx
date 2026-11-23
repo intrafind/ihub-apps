@@ -4,6 +4,7 @@
 import { useTranslation } from 'react-i18next';
 import Icon from '../../../../shared/components/Icon';
 import MoreActionsMenu from '../MoreActionsMenu';
+import EditorViewSwitch from '../app-conversation/EditorViewSwitch';
 import { PRIMARY_BUTTON_CLASS, SECONDARY_BUTTON_CLASS } from '../formStyles';
 import { DEFAULT_APP_COLOR, DEFAULT_APP_ICON } from '../../../../../../shared/appDefaults.js';
 
@@ -49,6 +50,9 @@ const DOT_CLASS = {
  * @param {() => void} props.onDuplicate
  * @param {{ current: HTMLElement|null }} [props.headingRef] - The heading, for a focus
  *   that lost its control.
+ * @param {'form'|'conversation'} [props.view='form'] - What the editor shows.
+ * @param {(view: 'form'|'conversation') => void} [props.onViewChange] - Without it there
+ *   is no "Form | Conversation" control (the feature is off, or the app is no chat app).
  * @returns {JSX.Element}
  */
 function AppEditorHeader({
@@ -66,7 +70,9 @@ function AppEditorHeader({
   onHistory,
   onDownload,
   onDuplicate,
-  headingRef
+  headingRef,
+  view = 'form',
+  onViewChange
 }) {
   const { t } = useTranslation();
   const tone = published ? 'published' : 'notPublished';
@@ -120,6 +126,7 @@ function AppEditorHeader({
         </div>
       </div>
       <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">
+        {onViewChange && <EditorViewSwitch view={view} onChange={onViewChange} />}
         {!published && (
           <button
             type="button"

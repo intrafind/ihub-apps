@@ -146,9 +146,10 @@ function LocationProbe() {
 async function renderEditor({
   app = SAVED_APP,
   path: route = '/admin/apps/chat',
-  user = null
+  user = null,
+  adminModels
 } = {}) {
-  server = createAppServer({ app });
+  server = createAppServer({ app, adminModels });
   mockRequest.mockImplementation(server.request);
   const routes = (
     <MemoryRouter initialEntries={[route]}>
@@ -923,6 +924,36 @@ describe('the test panel', () => {
       name: en.admin.apps.create.noModel.actionAdmin
     });
     expect(setup).toHaveAttribute('href', '/admin/models');
+  });
+
+  test('a full admin whose models are all disabled is told there is no model', async () => {
+    // The editor reads the admin model list: disabled models are listed, but none answers.
+    await renderEditor({
+      user: { id: 'admin', permissions: { adminAccess: true } },
+      adminModels: [{ id: 'off', name: 'Off model', enabled: false }]
+    });
+
+    fireEvent.click(testButton());
+
+    expect(await screen.findByText(en.admin.apps.create.noModel.title)).toBeInTheDocument();
+    expect(mockFetchModels).not.toHaveBeenCalled();
+  });
+
+  test('a full admin with an enabled model in the admin list gets the chat', async () => {
+    // The public list (what the admin may use in a chat) is empty; the admin list is not.
+    mockFetchModels.mockResolvedValue([]);
+    await renderEditor({
+      user: { id: 'admin', permissions: { adminAccess: true } },
+      adminModels: [
+        { id: 'on', name: 'On model', enabled: true, default: true },
+        { id: 'voice', name: 'Voice', enabled: true, modelType: 'tts' }
+      ]
+    });
+
+    fireEvent.click(testButton());
+
+    expect(await screen.findByTestId('app-chat')).toBeInTheDocument();
+    expect(screen.queryByText(en.admin.apps.create.noModel.title)).not.toBeInTheDocument();
   });
 
   test('a model list that could not be loaded is not read as "no model"', async () => {

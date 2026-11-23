@@ -158,7 +158,8 @@ describe('describeContentAccess', () => {
         granted: true,
         wildcard: false,
         inheritedFrom: [],
-        effective: true
+        effective: true,
+        via: [{ groupId: 'users', kind: 'explicit', path: ['users'] }]
       },
       {
         id: 'sales',
@@ -167,7 +168,8 @@ describe('describeContentAccess', () => {
         granted: false,
         wildcard: false,
         inheritedFrom: ['users'],
-        effective: true
+        effective: true,
+        via: [{ groupId: 'users', kind: 'explicit', path: ['sales', 'users'] }]
       },
       {
         id: 'admins',
@@ -176,7 +178,8 @@ describe('describeContentAccess', () => {
         granted: false,
         wildcard: true,
         inheritedFrom: [],
-        effective: true
+        effective: true,
+        via: [{ groupId: 'admins', kind: 'wildcard', path: ['admins'] }]
       },
       {
         id: 'anonymous',
@@ -185,7 +188,8 @@ describe('describeContentAccess', () => {
         granted: false,
         wildcard: false,
         inheritedFrom: [],
-        effective: false
+        effective: false,
+        via: []
       }
     ]);
   });

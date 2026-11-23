@@ -24,6 +24,8 @@ import NoModelNotice from './NoModelNotice';
  * @param {boolean} props.enabled - Whether drafting with AI is switched on.
  * @param {object[]|null|undefined} props.models - The models the author may
  *   use; `undefined` while loading, `null` when the list could not be loaded.
+ * @param {string} [props.configuredModelId] - The draft model an administrator
+ *   chose (`platformConfig.appGenerator.modelId`); empty for the automatic choice.
  * @param {string|null} [props.modelSetupHref] - Where a model is set up, for
  *   someone who may open that page.
  * @param {string} props.language - The content language of a draft.
@@ -37,6 +39,7 @@ function DescribeSlot({
   source,
   enabled,
   models,
+  configuredModelId = '',
   modelSetupHref = null,
   language,
   description,
@@ -53,7 +56,7 @@ function DescribeSlot({
     );
   }
   if (models === undefined) return null;
-  const model = pickDraftModel(models);
+  const model = pickDraftModel(models, configuredModelId);
   // A list that could not be loaded says nothing about the models: the box
   // stays, and the draft request answers for itself.
   if (Array.isArray(models) && !model) return <NoModelNotice setupHref={modelSetupHref} />;

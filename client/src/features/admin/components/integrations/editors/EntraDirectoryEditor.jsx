@@ -6,7 +6,10 @@ import { useTranslation } from 'react-i18next';
 import { CredentialRefSelect } from '../../OpenApiToolEditor';
 import { CALLOUT_CLASS, HELP_CLASS, LABEL_CLASS, MONO_INPUT_CLASS } from '../../formStyles';
 import { fetchPeopleDirectoryEditorContext } from '../../../../../api/integrationsAdminApi';
-import useInstallationEditor, { useInstallationEditorDirty } from './useInstallationEditor';
+import useInstallationEditor, {
+  useInstallationEditorDirty,
+  useInstallationEditorSave
+} from './useInstallationEditor';
 import {
   AccessSection,
   ActionsSection,
@@ -166,13 +169,16 @@ function EntraDirectoryEditor({ instance, definition, onSaved, onCancel }) {
     );
   };
 
-  const submit = event => {
-    event.preventDefault();
-    void editor.save({
+  const save = () =>
+    editor.save({
       tenantId: values.tenantId.trim(),
       clientId: values.clientId.trim(),
       clientSecretRef: values.clientSecretRef
     });
+  useInstallationEditorSave(editor, save);
+  const submit = event => {
+    event.preventDefault();
+    void save();
   };
 
   const missing = ['tenantId', 'clientId'].filter(

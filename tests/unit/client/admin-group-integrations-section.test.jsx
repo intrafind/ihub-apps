@@ -133,89 +133,145 @@ describe('group integration helpers', () => {
 });
 
 describe('GroupIntegrationsSection', () => {
-  it('offers "*", the type rows and every installation, grouped', async () => {
+  const picker = () => screen.getByLabelText('Add integration');
+  const optionLabels = () =>
+    within(picker())
+      .getAllByRole('option')
+      .map(o => o.textContent);
+
+  it('shows nothing but a hint for a group without integrations', async () => {
     renderSection({ id: 'g', permissions: { integrations: [] } });
-    await screen.findByText('Corp');
-    expect(screen.getByLabelText(/All integrations/)).not.toBeChecked();
-    for (const label of [
-      'All people directories',
-      'All web search engines',
-      'All storage providers'
-    ]) {
-      expect(screen.getByLabelText(new RegExp(label))).toBeInTheDocument();
-    }
-    expect(screen.getByLabelText(/All CKAN installations/)).toBeInTheDocument();
-    const mcp = screen.getByTestId('group-integrations-mcp');
-    expect(within(mcp).getByText('draw.io')).toBeInTheDocument();
-    expect(
-      within(screen.getByTestId('group-integrations-a2a')).getByText('Langdock')
-    ).toBeInTheDocument();
-    expect(
-      within(screen.getByTestId('group-integrations-builtIn')).getByText('iHub tools')
-    ).toBeInTheDocument();
-    expect(screen.getByText(/ckan-b · disabled/)).toBeInTheDocument();
-    expect(screen.queryByText('gone')).not.toBeInTheDocument();
+    await screen.findByLabelText('Add integration');
     expect(screen.getByText('Members of this group may use no integration.')).toBeInTheDocument();
+    expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
+    expect(
+      within(screen.getByTestId('group-integrations-selected')).queryByText('Corp')
+    ).not.toBeInTheDocument();
   });
 
-  it('grants an installation, a type and everything', async () => {
+  it('offers "All integrations", the type entries and every installation, grouped', async () => {
+    renderSection({ id: 'g', permissions: { integrations: [] } });
+    await screen.findByLabelText('Add integration');
+    const labels = optionLabels();
+    for (const label of [
+      'All integrations',
+      'All people directories',
+      'All web search engines',
+      'All storage providers',
+      'All CKAN installations',
+      'Corp',
+      'IVBB',
+      'draw.io',
+      'Langdock',
+      'iHub tools',
+      'GovData',
+      'City (disabled)'
+    ]) {
+      expect(labels).toContain(label);
+    }
+    expect(labels).not.toContain('gone');
+    expect(
+      within(picker())
+        .getAllByRole('group')
+        .map(g => g.getAttribute('label'))
+    ).toContain('MCP servers');
+  });
+
+  it('lists "All integrations" last, so an arrow key on the closed list cannot grant everything', async () => {
+    renderSection({ id: 'g', permissions: { integrations: [] } });
+    await screen.findByLabelText('Add integration');
+    const labels = optionLabels();
+    expect(labels[0]).toBe('Add an integration…');
+    expect(labels[labels.length - 1]).toBe('All integrations');
+  });
+
+  it('still offers "All integrations" when the installed list could not be loaded', async () => {
+    mockFetchInstalled.mockRejectedValueOnce(new Error('offline'));
     const onChange = renderSection({ id: 'g', permissions: { integrations: ['corp'] } });
-    await screen.findByText('Corp');
-    fireEvent.click(screen.getByLabelText(/^IVBB/));
-    expect(onChange).toHaveBeenLastCalledWith(['corp', 'x500bund']);
-    fireEvent.click(screen.getByLabelText(/All storage providers/));
-    expect(onChange).toHaveBeenLastCalledWith(['corp', 'type:storage']);
-    fireEvent.click(screen.getByLabelText(/^Corp/));
+    await waitFor(() => expect(screen.getByRole('alert')).toBeInTheDocument());
+    // What needs no installed list stays: the type entries and "All integrations", last.
+    expect(optionLabels()).toEqual([
+      'Add an integration…',
+      'All people directories',
+      'All web search engines',
+      'All storage providers',
+      'All integrations'
+    ]);
+    fireEvent.change(picker(), { target: { value: '*' } });
+    expect(onChange).toHaveBeenLastCalledWith(['*']);
+    // An entry that is already there stays removable.
+    fireEvent.click(screen.getByLabelText('Remove corp'));
     expect(onChange).toHaveBeenLastCalledWith([]);
-    fireEvent.click(screen.getByLabelText(/All integrations/));
+  });
+
+  it('adds an installation, a type and everything', async () => {
+    const onChange = renderSection({ id: 'g', permissions: { integrations: ['corp'] } });
+    await screen.findByLabelText('Add integration');
+    fireEvent.change(picker(), { target: { value: 'x500bund' } });
+    expect(onChange).toHaveBeenLastCalledWith(['corp', 'x500bund']);
+    fireEvent.change(picker(), { target: { value: 'type:storage' } });
+    expect(onChange).toHaveBeenLastCalledWith(['corp', 'type:storage']);
+    fireEvent.change(picker(), { target: { value: '*' } });
     expect(onChange).toHaveBeenLastCalledWith(['*']);
   });
 
-  it('shows installations a broader key of the group covers as ticked and locked', async () => {
-    renderSection({ id: 'g', permissions: { integrations: ['type:people-directory'] } });
-    await screen.findByText('Corp');
-    const corp = screen.getByLabelText(/^Corp/);
-    expect(corp).toBeChecked();
-    expect(corp).toBeDisabled();
-    expect(screen.getAllByText('with All people directories')).toHaveLength(2);
-    expect(screen.getByLabelText(/^draw\.io/)).not.toBeChecked();
+  it('shows only the added integrations and removes one', async () => {
+    const onChange = renderSection({
+      id: 'g',
+      permissions: { integrations: ['corp', 'type:web-search'] }
+    });
+    await screen.findByLabelText('Add integration');
+    const selected = screen.getByTestId('group-integrations-selected');
+    expect(within(selected).getByText('Corp')).toBeInTheDocument();
+    expect(within(selected).getByText('All web search engines')).toBeInTheDocument();
+    expect(within(selected).queryByText('IVBB')).not.toBeInTheDocument();
+    // What is added already is not offered again, nor what a broader entry covers.
+    expect(optionLabels()).not.toContain('Corp');
+    expect(optionLabels()).not.toContain('All web search engines');
+    expect(optionLabels()).not.toContain('brave');
+    fireEvent.click(screen.getByLabelText('Remove Corp'));
+    expect(onChange).toHaveBeenLastCalledWith(['type:web-search']);
+  });
+
+  it('shows "All integrations" alone, without the list to add more', async () => {
+    renderSection({ id: 'g', permissions: { integrations: ['*', 'corp'] } });
+    await waitFor(() => expect(mockFetchInstalled).toHaveBeenCalled());
+    await screen.findByText('All integrations');
+    const selected = screen.getByTestId('group-integrations-selected');
+    expect(within(selected).getAllByRole('listitem')).toHaveLength(1);
+    expect(within(selected).queryByText('Corp')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('Add integration')).not.toBeInTheDocument();
   });
 
   it('shows what the group inherits, read-only, with the group it comes from', async () => {
     renderSection({ id: 'admins', inherits: ['users'], permissions: { integrations: ['drawio'] } });
-    await screen.findByText('Corp');
-    const corp = screen.getByLabelText(/^Corp/);
-    expect(corp).toBeChecked();
-    expect(corp).toBeDisabled();
-    expect(screen.getAllByText('via users').length).toBeGreaterThan(0);
-    expect(screen.getAllByText('via authenticated').length).toBeGreaterThan(0);
-    const web = screen.getByLabelText(/All web search engines/);
-    expect(web).toBeChecked();
-    expect(web).toBeDisabled();
-    // The group's own grant stays editable.
-    expect(screen.getByLabelText(/^draw\.io/)).toBeEnabled();
-    expect(screen.getByText(/granted by a group this one inherits/)).toBeInTheDocument();
+    await screen.findByLabelText('Add integration');
+    const inherited = screen.getAllByTestId('group-integrations-inherited');
+    expect(inherited.map(entry => entry.textContent)).toEqual([
+      `${LDAP}via users`,
+      'All web search enginesvia authenticated'
+    ]);
+    for (const entry of inherited) expect(within(entry).queryByRole('button')).toBeNull();
+    // What a parent grants is not offered again.
+    expect(optionLabels()).not.toContain('All web search engines');
+    expect(optionLabels()).not.toContain('Corp');
+    expect(optionLabels()).toContain('Langdock');
   });
 
-  it('locks every row when an inherited group grants everything', async () => {
+  it('offers nothing to add when an inherited group grants everything', async () => {
     renderSection({ id: 'g', inherits: ['everyone'], permissions: { integrations: [] } });
-    await screen.findByText('Corp');
-    const all = screen.getByLabelText(/All integrations/);
-    expect(all).toBeChecked();
-    expect(all).toBeDisabled();
-    expect(screen.getByLabelText(/^Langdock/)).toBeDisabled();
-    expect(screen.getAllByText('via everyone').length).toBeGreaterThan(3);
+    await screen.findByText('All integrations');
+    expect(screen.getByText('via everyone')).toBeInTheDocument();
+    expect(screen.queryByLabelText('Add integration')).not.toBeInTheDocument();
   });
 
-  it('keeps keys the list does not show removable', async () => {
+  it('keeps entries the list does not know visible and removable', async () => {
     const onChange = renderSection({ id: 'g', permissions: { integrations: [LDAP, 'old'] } });
-    await screen.findByText('Corp');
-    const other = screen.getByTestId('group-integrations-other');
-    expect(within(other).getByText(LDAP)).toBeInTheDocument();
-    fireEvent.click(within(other).getByLabelText('Remove old'));
+    await screen.findByLabelText('Add integration');
+    const selected = screen.getByTestId('group-integrations-selected');
+    expect(within(selected).getByText('old')).toBeInTheDocument();
+    fireEvent.click(screen.getByLabelText('Remove old'));
     expect(onChange).toHaveBeenLastCalledWith([LDAP]);
-    // The definition grant covers both directories.
-    expect(screen.getByLabelText(/^Corp/)).toBeChecked();
   });
 
   it('reports a failed load', async () => {

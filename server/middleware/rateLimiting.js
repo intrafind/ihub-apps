@@ -9,7 +9,10 @@ import { ServiceError } from '../utils/ServiceError.js';
 import {
   APP_GENERATOR_DRAFT_LIMIT,
   APP_GENERATOR_DRAFT_WINDOW_MS,
-  APP_GENERATOR_LIMITER
+  APP_GENERATOR_LIMITER,
+  APP_REVISE_LIMITER,
+  APP_REVISE_TURN_LIMIT,
+  APP_REVISE_WINDOW_MS
 } from '../../shared/appGenerator.js';
 /**
  * Rate limiting middleware configuration for API protection
@@ -381,12 +384,33 @@ const LIMITER_FALLBACKS = Object.freeze({
   // App drafts (`POST /api/admin/apps/_generate`): every request is a paid model call, also
   // one whose answer cannot be used, so failed requests count. Code defaults only: it is not
   // in RATE_LIMITER_KEYS, so platform.json and Admin → Security do not carry it.
+  // Sign-in for iHub in a frame of another site (`routes/embedAuth.js`): the popup page and the
+  // two code endpoints share this budget. A sign-in is a few requests and the people of one
+  // company often reach the server from one address, so it is sized for real traffic. The codes
+  // cannot be guessed (384 bits, one try each): this bounds floods, not credential guessing.
+  // Code defaults only: not in RATE_LIMITER_KEYS, so platform.json and Admin → Security do not
+  // carry it.
+  embedAuthApi: {
+    limit: 300,
+    windowMs: 15 * 60 * 1000,
+    skipSuccessfulRequests: false,
+    skipFailedRequests: false
+  },
   appGeneratorApi: {
     limit: APP_GENERATOR_DRAFT_LIMIT,
     windowMs: APP_GENERATOR_DRAFT_WINDOW_MS,
     skipSuccessfulRequests: false,
     skipFailedRequests: false,
     message: 'Too many drafts were prepared in the last hour. Try again later.'
+  },
+  // Conversation turns that change an app (`POST /api/admin/apps/_revise`, `POST /api/apps/_revise`):
+  // the same reasoning as the draft limit, with a budget of its own. Code defaults only.
+  appReviseApi: {
+    limit: APP_REVISE_TURN_LIMIT,
+    windowMs: APP_REVISE_WINDOW_MS,
+    skipSuccessfulRequests: false,
+    skipFailedRequests: false,
+    message: 'Too many changes were asked for in the last hour. Try again later.'
   }
 });
 
@@ -507,6 +531,29 @@ export function createProvenanceVerifyLimiter(platformConfig = {}) {
 }
 
 /**
+ * The limiter of the sign-in for iHub in a frame of another site: the popup page and the two code
+ * endpoints. The route file mounts it itself, one instance for all three, so they spend one
+ * budget per address, counted across cluster workers. Limit and window are code defaults
+ * (`LIMITER_FALLBACKS.embedAuthApi`); only the header settings follow `rateLimit.default`.
+ *
+ * Its 429 carries `details.limiter: 'embedAuth'`.
+ *
+ * @param {Object} platformConfig - Platform configuration object
+ * @returns {Function} Express rate limiter middleware
+ */
+export function createEmbedAuthLimiter(platformConfig = {}) {
+  const { standardHeaders = true, legacyHeaders = false } =
+    platformConfig?.rateLimit?.default || {};
+  return createRateLimiter(
+    { standardHeaders, legacyHeaders, ...LIMITER_FALLBACKS.embedAuthApi },
+    {},
+    'embed sign-in',
+    undefined,
+    { shared: true, details: { limiter: 'embedAuth' } }
+  );
+}
+
+/**
  * The limiter of the app draft generator (`POST /api/admin/apps/_generate`): 30 drafts per
  * user per hour, counted across cluster workers. Failed requests count, because a draft that
  * ends in an unusable answer is a model call that was paid for, and the admin limiter skips
@@ -558,4 +605,54 @@ export function appGeneratorLimiter(platformConfig = {}) {
 /** Forget the shared draft limiter, so the next route registration counts from zero (tests). */
 export function resetAppGeneratorLimiter() {
   sharedAppGeneratorLimiter = null;
+}
+
+/**
+ * The limiter of the conversation that changes an app (`POST /api/admin/apps/_revise` and
+ * `POST /api/apps/_revise`): 60 turns per user per hour, counted across cluster workers. Every
+ * turn is a paid model call, so failed turns count too. A budget of its own, apart from the
+ * draft limit: a conversation takes many more turns than drafts are asked for.
+ *
+ * Its 429 carries `details.limiter: 'appRevise'`. Limit and window are code defaults
+ * (`LIMITER_FALLBACKS.appReviseApi`); only the header settings follow `rateLimit.default`.
+ *
+ * @param {Object} platformConfig - Platform configuration object
+ * @returns {Function} Express rate limiter middleware
+ */
+function createAppReviseLimiter(platformConfig = {}) {
+  const { standardHeaders = true, legacyHeaders = false } =
+    platformConfig?.rateLimit?.default || {};
+  return createRateLimiter(
+    { standardHeaders, legacyHeaders, ...LIMITER_FALLBACKS.appReviseApi },
+    {},
+    'app revise',
+    undefined,
+    {
+      shared: true,
+      keyGenerator: adminApiRateLimitKey,
+      details: { limiter: APP_REVISE_LIMITER }
+    }
+  );
+}
+
+let sharedAppReviseLimiter = null;
+
+/**
+ * The one revise limiter of this process. The admin and the personal revise routes both mount
+ * this instance, so a user has one budget of turns for the two routes together, also on a server
+ * with a single worker.
+ *
+ * The instance is created on the first call, so the header settings of later calls are ignored.
+ *
+ * @param {Object} platformConfig - Platform configuration object
+ * @returns {Function} Express rate limiter middleware
+ */
+export function appReviseLimiter(platformConfig = {}) {
+  sharedAppReviseLimiter ??= createAppReviseLimiter(platformConfig);
+  return sharedAppReviseLimiter;
+}
+
+/** Forget the shared revise limiter, so the next route registration counts from zero (tests). */
+export function resetAppReviseLimiter() {
+  sharedAppReviseLimiter = null;
 }

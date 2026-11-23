@@ -80,6 +80,9 @@ import { findSkillDraft } from '../../skills/utils/skillDraft';
 import { matchesModelFilter, modelSupportsTools } from '../../../../../shared/modelCapabilities.js';
 import './ChatMessage.css';
 import { useChatFiles } from '../contexts/ChatFilesContext';
+import { useChatDiagnostics } from '../contexts/ChatDiagnosticsContext';
+import { failureCauseMessage } from '../utils/failureCause';
+import ConnectionErrorDetails from '../../admin/components/ConnectionErrorDetails';
 import MessageAttachments from './MessageAttachments';
 import { submitShortcutLabel } from '../utils/submitShortcut';
 import { VoiceWaveIcon } from '../../voice/components/VoiceModeButton';
@@ -152,6 +155,8 @@ function ChatMessage({
   const chatFiles = useChatFiles();
   const { t } = useTranslation();
   const auth = useOptionalAuth();
+  // The admin test panel shows what to check below a failed model call.
+  const showFailureDiagnostics = useChatDiagnostics();
   const featureFlags = useFeatureFlags();
   // Response feedback is off when either the platform flag or this app's
   // `features.feedback` says so. One check for every surface: ChatMessage is
@@ -674,7 +679,9 @@ function ChatMessage({
               'error.runInterrupted',
               'This answer was interrupted: the server stopped while it was being produced.'
             )
-          : message.errorMessage || t('error.streamingError', 'An error occurred during streaming');
+          : failureCauseMessage(t, { failureCause: message.failureDiagnostics?.messageKey }) ||
+            message.errorMessage ||
+            t('error.streamingError', 'An error occurred during streaming');
     }
 
     if (isEditing) {
@@ -1054,6 +1061,14 @@ function ChatMessage({
           <ConnectCards prompts={message.integrationAuthRequired} readOnly={readOnly} />
         )}
         {renderContent()}
+        {/* A failed model call in the admin test panel: status, host, what to check. */}
+        {!isUser && showFailureDiagnostics && message.failureDiagnostics && (
+          <ConnectionErrorDetails
+            details={message.failureDiagnostics}
+            className="mt-2"
+            textClassName="text-sm text-gray-700 dark:text-gray-300"
+          />
+        )}
         {/* Files the answer's tools generated (a PDF from the pdf skill). */}
         {!isUser && message.generatedFiles?.length > 0 && (
           <GeneratedFiles files={message.generatedFiles} chatId={chatId} />

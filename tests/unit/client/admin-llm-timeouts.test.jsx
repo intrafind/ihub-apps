@@ -1,6 +1,10 @@
 import { act, fireEvent, render, screen } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import LlmTimeoutsCard from '../../../client/src/features/admin/components/LlmTimeoutsCard';
+import {
+  SaveSectionsBar,
+  SaveSectionsProvider
+} from '../../../client/src/features/admin/components/SaveSections';
 import ProviderTimeoutFields from '../../../client/src/features/admin/components/ProviderTimeoutFields';
 import { makeAdminApiCall } from '../../../client/src/api/adminApi';
 
@@ -30,6 +34,15 @@ jest.mock('../../../client/src/shared/components/Icon', () => ({
   default: () => <span />
 }));
 
+/** The card sits on the Providers page, whose bar saves it. */
+const renderCard = () =>
+  render(
+    <SaveSectionsProvider>
+      <LlmTimeoutsCard />
+      <SaveSectionsBar />
+    </SaveSectionsProvider>
+  );
+
 const flush = () =>
   act(async () => {
     await Promise.resolve();
@@ -54,7 +67,7 @@ describe('LlmTimeoutsCard', () => {
 
   it('shows the saved values, with the defaults as placeholders for unset ones', async () => {
     makeAdminApiCall.mockResolvedValue(payload({ connectTimeoutMs: 45000 }));
-    render(<LlmTimeoutsCard />);
+    renderCard();
     await flush();
     openCard();
 
@@ -66,7 +79,7 @@ describe('LlmTimeoutsCard', () => {
 
   it('starts collapsed to one summary line and opens with Edit', async () => {
     makeAdminApiCall.mockResolvedValue(payload({ streamIdleTimeoutMs: 0 }));
-    render(<LlmTimeoutsCard />);
+    renderCard();
     await flush();
 
     expect(screen.getByTestId('llm-timeouts-summary')).toHaveTextContent(
@@ -83,7 +96,7 @@ describe('LlmTimeoutsCard', () => {
 
   it('shows a failed load next to the title even while collapsed', async () => {
     makeAdminApiCall.mockRejectedValue(new Error('boom'));
-    render(<LlmTimeoutsCard />);
+    renderCard();
     await flush();
 
     expect(screen.getByRole('alert')).toHaveTextContent('API error: boom');
@@ -93,7 +106,7 @@ describe('LlmTimeoutsCard', () => {
 
   it('shows a failed load once, with a visible Retry, and no Edit (R7)', async () => {
     makeAdminApiCall.mockRejectedValueOnce(new Error('boom'));
-    render(<LlmTimeoutsCard />);
+    renderCard();
     await flush();
 
     // One alert, also counting hidden ones (the collapsed body).
@@ -114,23 +127,24 @@ describe('LlmTimeoutsCard', () => {
     expect(screen.getByLabelText('Connect timeout (ms)')).toBeVisible();
   });
 
-  it('keeps Save disabled until something changes', async () => {
+  it('shows the save bar only once something changed', async () => {
     makeAdminApiCall.mockResolvedValue(payload());
-    render(<LlmTimeoutsCard />);
+    renderCard();
     await flush();
     openCard();
 
-    const save = screen.getByRole('button', { name: 'Save timeouts' });
-    expect(save).toBeDisabled();
+    // No Save of its own, and no bar until something changes.
+    expect(screen.queryByRole('button', { name: 'Save timeouts' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: 'Save changes' })).not.toBeInTheDocument();
     fireEvent.change(screen.getByLabelText('Stream idle timeout (ms)'), {
       target: { value: '180000' }
     });
-    expect(save).toBeEnabled();
+    expect(screen.getByRole('region', { name: 'Save changes' })).toBeInTheDocument();
   });
 
   it('sends a number for a filled field and null for an empty one', async () => {
     makeAdminApiCall.mockResolvedValueOnce(payload({ connectTimeoutMs: 45000 }));
-    render(<LlmTimeoutsCard />);
+    renderCard();
     await flush();
     openCard();
 
@@ -139,7 +153,7 @@ describe('LlmTimeoutsCard', () => {
     fireEvent.change(screen.getByLabelText('Stream idle timeout (ms)'), {
       target: { value: '0' }
     });
-    fireEvent.click(screen.getByRole('button', { name: 'Save timeouts' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Save Changes' }));
     await flush();
 
     expect(makeAdminApiCall).toHaveBeenLastCalledWith('/admin/llm-timeouts', {
@@ -148,20 +162,23 @@ describe('LlmTimeoutsCard', () => {
     });
     expect(screen.getByRole('status')).toHaveTextContent('Timeouts saved');
     expect(screen.getByLabelText('Stream idle timeout (ms)')).toHaveValue(0);
+    expect(screen.queryByRole('region', { name: 'Save changes' })).not.toBeInTheDocument();
   });
 
   it('shows the server error and keeps the typed value when saving fails', async () => {
     makeAdminApiCall.mockResolvedValueOnce(payload());
-    render(<LlmTimeoutsCard />);
+    renderCard();
     await flush();
     openCard();
 
     makeAdminApiCall.mockRejectedValueOnce(new Error('too large'));
     fireEvent.change(screen.getByLabelText('Connect timeout (ms)'), { target: { value: '5' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Save timeouts' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Save Changes' }));
     await flush();
 
-    expect(screen.getByRole('alert')).toHaveTextContent('API error: too large');
+    // The bar stays, names the error, and the typed value stays for a retry.
+    expect(screen.getByTestId('save-bar-message')).toHaveTextContent('API error: too large');
+    expect(screen.getByRole('button', { name: 'Save Changes' })).toBeEnabled();
     expect(screen.getByLabelText('Connect timeout (ms)')).toHaveValue(5);
   });
 });

@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
-import { act, fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import AdminShortLinkEditPage from '../../../client/src/features/admin/pages/AdminShortLinkEditPage';
@@ -42,8 +42,20 @@ jest.mock('../../../client/src/features/admin/components/AdminBreadcrumb', () =>
 }));
 
 jest.mock('../../../client/src/features/admin/hooks/useUnsavedChanges', () => ({
-  useUnsavedChanges: () => ({ blocker: { state: 'unblocked' }, markSaved: jest.fn() })
+  // Always dirty: the page's save bar is shown only for unsaved changes.
+  useUnsavedChanges: () => ({
+    blocker: { state: 'unblocked' },
+    markSaved: jest.fn(),
+    isDirty: true
+  })
 }));
+
+/** The save bar's primary button (the last one; Discard comes first) submits the form. */
+function clickBarSave() {
+  const bar = screen.getByRole('region', { name: /save changes/i });
+  const buttons = within(bar).getAllByRole('button');
+  fireEvent.click(buttons[buttons.length - 1]);
+}
 
 async function flush() {
   await act(async () => {
@@ -90,7 +102,7 @@ test('the app is picked from a search box and saved by its id', async () => {
   fireEvent.click(screen.getByRole('button', { name: /^Chat$/ }));
   expect(screen.queryByText('Email Composer')).not.toBeInTheDocument();
 
-  fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+  clickBarSave();
   await flush();
   expect(makeAdminApiCall).toHaveBeenCalledWith(
     '/shortlinks',
@@ -130,7 +142,7 @@ test('a new link adds its params (a prefilled prompt) and shows where it leads (
   });
   expect(preview()).toBe('/apps/chat?prefill=Hello+there');
 
-  fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+  clickBarSave();
   await flush();
   expect(savedBody()).toMatchObject({
     appId: 'chat',
@@ -155,7 +167,8 @@ test('the params warning is announced and describes the fields it is about (R7)'
   fireEvent.change(screen.getByLabelText('Params (JSON)'), {
     target: { value: '{"prefill":"Hi"}' }
   });
-  const status = screen.getByRole('status');
+  // The warning's own live region (the save bar has a status line of its own).
+  const status = document.getElementById('shortlink-params-left-out');
   expect(status).toBeEmptyDOMElement();
   expect(screen.getByLabelText('Params (JSON)')).not.toHaveAttribute('aria-describedby');
 
@@ -201,7 +214,7 @@ test('editing a link built from its app sends no stale target, so a new app take
   fireEvent.click(screen.getByRole('button', { name: /Email Composer/ }));
   expect(preview()).toBe('/apps/email-composer');
 
-  fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+  clickBarSave();
   await flush();
   expect(makeAdminApiCall).toHaveBeenLastCalledWith(
     '/shortlinks/abc',

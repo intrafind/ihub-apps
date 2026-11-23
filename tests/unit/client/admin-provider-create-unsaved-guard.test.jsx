@@ -5,7 +5,7 @@
  * New provider form: after the provider is created the form is locked and the
  * delayed redirect to the list is never held by the unsaved-changes guard.
  */
-import { act, fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import AdminProviderCreatePage from '../../../client/src/features/admin/pages/AdminProviderCreatePage';
@@ -60,11 +60,15 @@ describe('AdminProviderCreatePage after a successful create', () => {
       target: { value: 'My gateway' }
     });
     await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: 'Create Provider' }));
+      const bar = screen.getByRole('region', { name: 'Save changes' });
+      const buttons = within(bar).getAllByRole('button');
+      fireEvent.click(buttons[buttons.length - 1]);
     });
     expect(makeAdminApiCall).toHaveBeenCalledTimes(1);
     expect(screen.getByText('Provider created successfully!')).toBeInTheDocument();
     expect(apiKey).toBeDisabled();
+    // Nothing is left to save: the bar is gone and offers no second save.
+    expect(screen.queryByRole('region', { name: 'Save changes' })).not.toBeInTheDocument();
 
     // A change in the redirect window (the field is disabled, but the guard
     // must stay clean regardless).
