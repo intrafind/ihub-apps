@@ -762,6 +762,87 @@ test.describe('Accessibility — the app editor', () => {
   });
 });
 
+// The conversation of the app editor (#3898, concepts/app-builder-rework-2026-11/
+// 04-chat-builder-implementation-plan.md, 3.2): `?view=conversation` shows it in
+// place of the form, with the test chat beside it. The preview feature
+// `appBuilderChat` ships switched off, so the test switches it on, creates the
+// app it changes, and puts both back. The model stub answers the
+// `e2e-revise-*` markers (tests/config/e2e-llm-stub.mjs). Each state is held
+// at zero: the first message with its chips, a question, a change card, and
+// the "Applied" line with Undo.
+test.describe('Accessibility — the app conversation', () => {
+  const APP_ID = 'a11y-conversation-check';
+  let featureWasOn;
+
+  test.beforeEach(async ({ page }) => {
+    await signInAsAdmin(page);
+    await page.addInitScript(() => {
+      window.localStorage.setItem('ihub-disclaimer-acknowledged', 'true');
+    });
+    const features = await page.request.get('/api/admin/features');
+    featureWasOn = (await features.json()).features?.find(f => f.id === 'appBuilderChat')?.enabled;
+    await page.request.put('/api/admin/features', { data: { appBuilderChat: true } });
+    await page.request.delete(`/api/admin/apps/${APP_ID}`);
+    const created = await page.request.post('/api/admin/apps?origin=blank', {
+      data: {
+        id: APP_ID,
+        name: { en: 'Accessibility conversation check' },
+        description: { en: 'Changed in the conversation of the editor.' },
+        system: { en: 'You answer in one sentence.' },
+        color: '#4F46E5',
+        icon: 'chat-bubbles',
+        enabled: false
+      }
+    });
+    expect(created.status(), await created.text()).toBe(201);
+  });
+
+  test.afterEach(async ({ page }) => {
+    await page.request.delete(`/api/admin/apps/${APP_ID}`);
+    if (featureWasOn !== true) {
+      await page.request.put('/api/admin/features', { data: { appBuilderChat: false } });
+    }
+  });
+
+  test('has no critical or serious violations: start, a question, a change, applied', async ({
+    page
+  }) => {
+    test.setTimeout(150_000);
+    await gotoSettled(page, `/admin/apps/${APP_ID}?view=conversation`);
+    const panel = page.getByTestId('conversation-panel');
+    await expect(panel).toBeVisible();
+    await expect(page.getByRole('complementary', { name: 'Test app' })).toBeVisible();
+    await page.waitForLoadState('networkidle');
+    await expectNoBlockingViolations(page, 'App conversation — start');
+
+    const composer = panel.getByRole('textbox', { name: 'Tell the builder what to change' });
+    const ask = async text => {
+      await composer.fill(text);
+      await Promise.all([
+        page.waitForResponse(response => response.url().endsWith('/api/admin/apps/_revise')),
+        composer.press('Enter')
+      ]);
+    };
+
+    await ask('Make it more formal. e2e-revise-question');
+    const question = panel.getByRole('radiogroup', { name: 'Who reads the answers of this app?' });
+    await expect(question).toBeVisible();
+    await question.getByRole('radio', { name: 'Something else' }).check();
+    await expect(panel.getByRole('textbox', { name: 'Your answer' })).toBeVisible();
+    await expectNoBlockingViolations(page, 'App conversation — a question');
+
+    await ask('e2e-revise-system');
+    const card = panel.getByTestId('change-card');
+    await expect(card.getByRole('button', { name: 'Apply' })).toBeEnabled();
+    await expectNoBlockingViolations(page, 'App conversation — a change card');
+
+    await card.getByRole('button', { name: 'Apply' }).click();
+    await expect(card.getByTestId('change-applied')).toBeFocused();
+    await expect(card.getByRole('button', { name: 'Undo' })).toBeEnabled();
+    await expectNoBlockingViolations(page, 'App conversation — applied, with Undo');
+  });
+});
+
 // Personal apps (concepts/app-builder-rework-2026-11/02-personal-apps.md, 11.10):
 // the apps page with its scope chips, "New app" and the editor for a user, the
 // chat notice of an app someone else owns, and the admin tab. The feature
