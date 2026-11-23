@@ -44,6 +44,9 @@ import { getChatRepository } from '../services/chat/ChatRepository.js';
 import { resolveChatOwner } from '../services/chat/chatOwner.js';
 import { beginTranscriptionTurn } from '../services/chat/transcriptionTurn.js';
 import { getAppAsTools, invokeAppTool } from '../services/chat/appToolsGateway.js';
+import { RunService, appRunSpec } from '../services/run/RunService.js';
+import { HeadlessHost } from '../services/run/hosts/HeadlessHost.js';
+import { requestRunContext } from '../services/run/principalResolver.js';
 import * as tasks from '../services/scheduler/tasks/taskService.js';
 import { executeTaskRun } from '../services/scheduler/tasks/taskExecution.js';
 import { getScheduledTaskRepository } from '../services/scheduler/tasks/ScheduledTaskRepository.js';
@@ -941,13 +944,19 @@ describe('the other ways of running an app treat an unpublished app as unknown',
       assert.ok(!JSON.stringify(result).includes(SECRET), name);
     }
     // And the service the tool would run through, asked directly.
-    const direct = await new ChatService().invokeAppInternal({
-      appId: UNPUBLISHED,
-      user: user('admin'),
-      messages: [{ role: 'user', content: 'hello' }]
-    });
+    const context = requestRunContext(user('admin'));
+    assert.equal(context.ok, true, context.message);
+    const direct = await new RunService().run(
+      appRunSpec({
+        context: context.context,
+        appId: UNPUBLISHED,
+        messages: [{ role: 'user', content: 'hello' }]
+      }),
+      new HeadlessHost()
+    );
     assert.equal(direct.status, 'error');
     assert.equal(direct.error.code, 'APP_NOT_FOUND');
+    assert.ok(!JSON.stringify(direct).includes(SECRET));
     assert.equal(turns.length, 0);
   });
 
@@ -1008,7 +1017,7 @@ describe('raw app lookups (ratchet)', () => {
    * shrink.
    */
   const BASELINE_FILE = path.join(here, 'app-unpublished-access.baseline.json');
-  const SCOPES = ['server/routes', 'server/services/chat'];
+  const SCOPES = ['server/routes', 'server/services/chat', 'server/services/run'];
   const EXCLUDED = 'server/routes/admin/';
   const RAW_LOOKUP = /\b(?:getApps|getAppsForUser|getAppForUserById)\(/g;
 

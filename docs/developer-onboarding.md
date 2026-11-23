@@ -470,7 +470,8 @@ graph TB
 ```
 
 **Key Components**:
-- `ChatService.js` - One chat turn: `prepareChatRequest()`, `runTurn()`, headless `invokeAppInternal()`
+- `ChatService.js` - One chat turn: `prepareChatRequest()`, `runTurn()`
+- `../run/RunService.js` - An app run without a client (app as a tool, MCP, A2A): `run(spec, host)`
 - `RequestBuilder.js` - Resolves app, model, messages, tools and options (template processing)
 - `chatChannel.js` / `chatSeams.js` - Project loop chunks and tool events onto chat SSE events
 - `chatErrors.js` / `chatTelemetry.js` - Localized error payloads, usage and metrics per model call

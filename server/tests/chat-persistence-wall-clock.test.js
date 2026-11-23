@@ -13,8 +13,8 @@
  * stays `running` forever, so every reopen replays a dead run and spins on an
  * empty placeholder. There is no client left to press Stop.
  *
- * `invokeAppInternal`, the other path that runs with no client, has carried a
- * `maxWallClockMs` for this reason all along. These tests pin that the chat
+ * An app run without a client (`services/run/RunService.js`), the other path
+ * that runs with no client, has carried a `maxWallClockMs` for this reason all along. These tests pin that the chat
  * path now does too — and only for turns that can outlive their client, since
  * a user watching a long tool chain must not have it cut short by a ceiling
  * that exists for absent clients.

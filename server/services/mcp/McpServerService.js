@@ -8,11 +8,16 @@ import {
 } from '@modelcontextprotocol/sdk/types.js';
 import { z } from 'zod';
 import configCache from '../../configCache.js';
-import { toolRunner, ToolCallRefusedError, workflowToolDef } from '../run/ToolRunner.js';
 import {
-  filterDirectoryToolsForUser,
-  mayUseDirectory
-} from '../peopleDirectory/PeopleDirectoryService.js';
+  toolRunner,
+  ToolCallRefusedError,
+  TOOL_REFUSAL_CODES,
+  workflowToolDef
+} from '../run/ToolRunner.js';
+import { requestRunContext } from '../run/principalResolver.js';
+import { auditRefusal } from '../run/runAudit.js';
+import { RUN_REFUSAL_CODES } from '../run/RunService.js';
+import { filterDirectoryToolsForUser } from '../peopleDirectory/PeopleDirectoryService.js';
 import { invokeAppNonStreaming } from './appInvoker.js';
 import { recordTextOutput } from '../provenance/turnProvenance.js';
 import { mcpMeta } from '../provenance/httpProvenance.js';
@@ -21,7 +26,6 @@ import { MCP_SCOPES } from './scopes.js';
 import logger from '../../utils/logger.js';
 import { getLocalizedString } from '../../utils/localize.js';
 import { workflowAnswerParts } from '../workflow/answerParts.js';
-import { installedIntegrationById } from '../integrations/installedRefs.js';
 import { APPROVAL_ERROR_CODES } from '../../../shared/toolApproval.js';
 
 /**
@@ -230,6 +234,9 @@ export function buildAppInputSchema(app) {
 
 const IHUB_DEFINITION_ID = 'com.intrafind/ihub';
 
+/** What `tools/call` answers for a tool the caller may not run. */
+const ACCESS_DENIED_TOOL = 'access_denied: tool not permitted for this caller';
+
 /**
  * Whether the gateway offers an installed integration's action as an MCP tool.
  * The integrations are the tools (#3275): every action of an enabled
@@ -319,12 +326,8 @@ export async function buildMcpServer({ user, platform }) {
   // ---- Tools (the actions of the installed integrations) ------------------
   if (expose.tools && tokenScopes.includes(MCP_SCOPES.TOOLS_READ)) {
     const language = platform?.defaultLanguage || 'en';
-    const {
-      discoverIntegrationTools,
-      filterIntegrationToolsForUser,
-      getIntegrationToolsForApp,
-      userMayUse
-    } = await import('../integrations/integrationTools.js');
+    const { discoverIntegrationTools, filterIntegrationToolsForUser, getIntegrationToolsForApp } =
+      await import('../integrations/integrationTools.js');
     let tools = filterDirectoryToolsForUser(
       filterIntegrationToolsForUser(
         (await discoverIntegrationTools(language)).filter(tool => isToolAllowed(tool, expose)),
@@ -341,14 +344,16 @@ export async function buildMcpServer({ user, platform }) {
     const clientApps = user.clientAllowedApps;
     const clientNarrowsApps =
       Array.isArray(clientApps) && clientApps.length > 0 && !clientApps.includes('*');
-    let reachable = null;
     if (user.isOAuthClient || clientNarrowsApps) {
       const { data: apps = [] } = await configCache.getAppsForUser(user, platform);
-      reachable = new Set(
+      const reachable = new Set(
         apps.flatMap(app => getIntegrationToolsForApp(app, tools, { user }).map(tool => tool.id))
       );
       tools = tools.filter(tool => reachable.has(tool.id));
     }
+    // What a call of this server may run: the tools it offers this caller
+    // (for a client bounded by its apps, the reachable ones only).
+    const toolGrant = tools.map(tool => tool.id);
     for (const tool of tools) {
       registerTool(
         tool.id,
@@ -356,24 +361,30 @@ export async function buildMcpServer({ user, platform }) {
           description: typeof tool.description === 'string' ? tool.description : '',
           ...jsonSchemaToInputSchema(tool.parameters)
         },
-        async args => {
+        async (args, extra) => {
           if (!tokenScopes.includes(MCP_SCOPES.TOOLS_CALL)) {
             return toolErrorResult('insufficient_scope: mcp:tools:call required');
           }
-          // Re-check the grant at call time so a permission change between
-          // list and call can't be exploited.
-          const instance = installedIntegrationById(tool._integration.instanceId);
-          if (
-            !instance ||
-            instance.enabled === false ||
-            !userMayUse(instance, user) ||
-            (reachable && !reachable.has(tool.id)) ||
-            (tool._peopleDirectory && !mayUseDirectory(user, tool._peopleDirectory.id))
-          ) {
-            return toolErrorResult('access_denied: tool not permitted for this caller');
+          // A caller without resolved permissions runs nothing.
+          const resolved = requestRunContext(user, { toolGrant });
+          if (!resolved.ok) {
+            auditRefusal({
+              principal: user,
+              resource: 'tool',
+              resourceId: tool.id,
+              code: resolved.code,
+              origin: 'mcp',
+              summary: `Refused tool ${tool.id}: ${resolved.message}`
+            });
+            return toolErrorResult(ACCESS_DENIED_TOOL);
           }
+          const run = resolved.context;
           try {
-            // The tool runner sets the authenticated caller's identity and a
+            // The tool runner re-checks the grant at call time, so a permission
+            // change between list and call can't be exploited: the tool is one
+            // this server offered the caller, its installation is enabled, the
+            // caller's groups grant it, and a people directory is one the caller
+            // may use. It sets the authenticated caller's identity and a
             // tracking chatId after the arguments, which lose every key of
             // iHub's context first: integration tools (iFinder, Entra, Jira,
             // ...) run *as the user*. A gated tool waits for a person's
@@ -382,10 +393,12 @@ export async function buildMcpServer({ user, platform }) {
               toolId: tool.id,
               toolDef: tool,
               args: args || {},
+              ...(extra?.signal ? { signal: extra.signal } : {}),
               toolContext: {
                 origin: 'mcp',
                 approval: 'refuse',
                 argsFrom: 'caller',
+                run,
                 principal: user,
                 chatId: `mcp-${Date.now()}`,
                 platform: configCache.getPlatform?.() || platform
@@ -393,6 +406,12 @@ export async function buildMcpServer({ user, platform }) {
             });
             return toolSuccessResult(result);
           } catch (err) {
+            if (
+              err instanceof ToolCallRefusedError &&
+              err.code === TOOL_REFUSAL_CODES.NOT_GRANTED
+            ) {
+              return toolErrorResult(ACCESS_DENIED_TOOL);
+            }
             if (
               err instanceof ToolCallRefusedError &&
               err.code === APPROVAL_ERROR_CODES.APPROVAL_REQUIRED_NO_USER
@@ -426,7 +445,7 @@ export async function buildMcpServer({ user, platform }) {
             extractText(app.description) || extractText(app.name) || `iHub app: ${app.id}`,
           ...jsonSchemaToInputSchema(buildAppInputSchema(app))
         },
-        async args => {
+        async (args, extra) => {
           // Re-check scope + permission at call time so a token that loses the
           // scope, or a user removed from the app's groups, between list and
           // call can't still invoke it (mirrors the tools handler above).
@@ -434,6 +453,14 @@ export async function buildMcpServer({ user, platform }) {
             return toolErrorResult('insufficient_scope: mcp:apps:invoke required');
           }
           if (!isAppAllowed(app, user, expose)) {
+            auditRefusal({
+              principal: user,
+              resource: 'app',
+              resourceId: app.id,
+              code: RUN_REFUSAL_CODES.APP_NOT_PERMITTED,
+              origin: 'mcp',
+              summary: `Refused to run app ${app.id}: the caller may no longer open it`
+            });
             return toolErrorResult('access_denied: app not permitted for this caller');
           }
           try {
@@ -443,6 +470,7 @@ export async function buildMcpServer({ user, platform }) {
               args: args || {},
               user,
               language: platform?.defaultLanguage || 'en',
+              ...(extra?.signal ? { abortSignal: extra.signal } : {}),
               onOutputs: produced => {
                 outputs = produced;
               }
@@ -477,7 +505,7 @@ export async function buildMcpServer({ user, platform }) {
             `iHub workflow: ${wf.id}`,
           ...jsonSchemaToInputSchema(paramsSchema)
         },
-        async args => {
+        async (args, extra) => {
           // Re-check scope + permission at call time so a token that loses the
           // scope, or a user removed from the workflow's groups, between list
           // and call can't still run it (mirrors the tools handler above).
@@ -487,22 +515,28 @@ export async function buildMcpServer({ user, platform }) {
           if (!isWorkflowAllowed(wf, user, expose)) {
             return toolErrorResult('access_denied: workflow not permitted for this caller');
           }
+          const toolDef = workflowToolDef(wf.id, wf);
+          const { context: run } = requestRunContext(user, { toolGrant: [toolDef.id] });
+          if (!run) {
+            return toolErrorResult('access_denied: workflow not permitted for this caller');
+          }
           try {
             // The workflow runs as the authenticated caller (its per-user
             // OAuth MCP calls use the caller's own token); the arguments can
             // never name another user.
             const { input: workflowArgs, context } = await workflowFileInput(args, user);
-            const toolDef = workflowToolDef(wf.id, wf);
             const result = await toolRunner.execute(null, {
               toolId: toolDef.id,
               toolDef,
               args: workflowArgs,
+              ...(extra?.signal ? { signal: extra.signal } : {}),
               toolContext: {
                 origin: 'mcp',
                 // The client starts the workflow by name, as a person does on
                 // the workflow page: no tool approval.
                 approval: 'caller',
                 argsFrom: 'caller',
+                run,
                 principal: user,
                 chatId: context.chatId || `mcp-${Date.now()}`,
                 fileData: context.fileData || undefined

@@ -2,13 +2,14 @@
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
 import path from 'node:path';
-import ChatService from '../chat/ChatService.js';
 import { isValidId } from '../../utils/pathSecurity.js';
 import configCache from '../../configCache.js';
 import logger from '../../utils/logger.js';
 import { findByIdCaseInsensitive } from '../../utils/resourceLookup.js';
-
-const chatService = new ChatService();
+import { appRunSpec, runService } from '../run/RunService.js';
+import { HeadlessHost } from '../run/hosts/HeadlessHost.js';
+import { requestRunContext } from '../run/principalResolver.js';
+import { auditRefusal } from '../run/runAudit.js';
 
 /**
  * Validate a caller-supplied app id and resolve the app from the config cache.
@@ -38,13 +39,18 @@ export function resolveInvokableApp(appId) {
 }
 
 /**
- * Run an iHub app headlessly on the shared agent loop and return its answer.
+ * Run an iHub app headlessly on the run service and return its answer.
  *
- * Shared by every server-side caller that has no browser to stream to: the
- * MCP gateway (`tools/call`), the A2A endpoint (`message/send`,
- * `message/stream`) and the app-as-tool bridge. Prompt templating, variables,
- * model selection, tools and structured output are the app's; interactive
- * tools are refused because no user can answer.
+ * Shared by the server-side callers that have no browser to stream to: the
+ * MCP gateway (`tools/call`) and the A2A endpoint (`message/send`,
+ * `message/stream`). The call builds a run spec: the caller's principal,
+ * resolved with its permissions, with the origin `person` (the request comes
+ * from a person or from a program acting for one), and runs it with a
+ * headless host (`services/run/RunService.js`). Prompt templating, variables,
+ * model selection and tools are the app's; a call that needs approval and a
+ * question to the user are refused, because nobody can answer. A caller
+ * without resolved permissions, or one who may not open the app, is refused
+ * before the model is called.
  *
  * @param {Object} params
  * @param {string} params.appId - App id; validated and resolved against the config cache
@@ -65,7 +71,8 @@ export function resolveInvokableApp(appId) {
  *   then carries them as `fileData`); `files` mint and use a chat of their own
  * @returns {Promise<{text: string, result: Object}>} Assistant text ('' when none) and the raw
  *   result, which carries the `generatedFiles` and `images` the app produced
- * @throws {Error} Invalid input, unknown app, request preparation or provider failure (`err.code`)
+ * @throws {Error} Invalid input, unknown app, a refused caller, request preparation or provider
+ *   failure (`err.code`)
  */
 export async function invokeApp({
   appId,
@@ -101,20 +108,43 @@ export async function invokeApp({
     list = [...list.slice(0, -1), ingested.message];
   }
 
-  const result = await chatService.invokeAppInternal({
-    appId: app.id, // trusted value from configCache, not user input
-    user,
-    messages: list,
-    variables,
-    modelOverride: modelId, // undefined → RequestBuilder picks app.preferredModel
-    language: language || configCache.getPlatform()?.defaultLanguage || 'en',
-    runId: effectiveRunId,
-    ...(chatId ? { chatId } : {}),
-    timeoutMs,
-    ...(maxWallClockMs ? { maxWallClockMs } : {}),
-    ...(abortSignal ? { abortSignal } : {}),
-    ...(onTextDelta ? { onTextDelta } : {})
+  // Inbound requests act for a person: the origin is `person`, and the
+  // principal keeps the flags it has on the request. A caller without
+  // resolved permissions is refused before anything runs.
+  const resolved = requestRunContext(user, {
+    // The caller's run id: the parent of this run in the ledger.
+    parentRunId: effectiveRunId,
+    budget: { timeoutMs, ...(maxWallClockMs ? { maxWallClockMs } : {}) }
   });
+  if (!resolved.ok) {
+    // No run starts, so the run service never sees the refusal: audit it here.
+    auditRefusal({
+      principal: user,
+      resource: 'app',
+      resourceId: app.id,
+      code: resolved.code,
+      origin: origin === 'a2a' ? 'a2a' : 'mcp',
+      parentRunId: effectiveRunId,
+      summary: `Refused to run app ${app.id}: ${resolved.message}`
+    });
+    const err = new Error(resolved.message);
+    err.code = resolved.code;
+    throw err;
+  }
+  const result = await runService.run(
+    appRunSpec({
+      context: resolved.context,
+      appId: app.id, // trusted value from configCache, not user input
+      messages: list,
+      variables,
+      modelId, // undefined → RequestBuilder picks app.preferredModel
+      language: language || configCache.getPlatform()?.defaultLanguage || 'en',
+      ...(chatId ? { chatId } : {}),
+      signal: abortSignal,
+      caller: origin === 'a2a' ? 'a2a' : 'mcp'
+    }),
+    new HeadlessHost({ onTextDelta })
+  );
 
   if (result.status !== 'ok') {
     const err = new Error(result.error?.message || 'App invocation failed');
@@ -143,10 +173,10 @@ export async function invokeApp({
  * `tools/call` is request-response, so we reuse `RequestBuilder` (which
  * already handles prompt templating, system prompt, variables, model
  * selection, API key resolution, and token budgeting) and run the turn
- * headlessly on the shared agent loop (`ChatService.invokeAppInternal`):
- * tools execute server-side, structured output applies, interactive tools
- * are refused because no user can answer, and the model calls go through
- * `LLMClient` (throttling, retries, `LLMError` taxonomy, run ledger).
+ * headlessly on the run service (`invokeApp`): tools execute server-side,
+ * interactive tools are refused because no user can answer, and the model
+ * calls go through `LLMClient` (throttling, retries, `LLMError` taxonomy, run
+ * ledger).
  *
  * @param {Object} params
  * @param {string} params.appId - App id; validated against the configCache app list
@@ -155,6 +185,7 @@ export async function invokeApp({
  * @param {Object} params.user - Acting user (req.user-like), used for permissions and the ledger
  * @param {string} [params.language] - Response language; defaults to the platform default
  * @param {number} [params.timeoutMs=60000] - Hard timeout for the model call
+ * @param {AbortSignal} [params.abortSignal] - The client's cancellation of the call
  * @param {(outputs: {generatedFiles: Array<Object>, images: Array<Object>, provenance: (Object|null)}) => void} [params.onOutputs] -
  *   Receives the provenance object of the answer and the files and pictures the app produced (`{ id, name, mimeType, bytes, data }` /
  *   `{ mimeType, data, name? }`, `data` base64); the return value stays the text
@@ -167,6 +198,7 @@ export async function invokeAppNonStreaming({
   user,
   language,
   timeoutMs = 60000,
+  abortSignal,
   onOutputs
 }) {
   const message = args?.message;
@@ -211,7 +243,8 @@ export async function invokeAppNonStreaming({
     language,
     timeoutMs,
     files,
-    origin: 'mcp'
+    origin: 'mcp',
+    ...(abortSignal ? { abortSignal } : {})
   });
   if (typeof onOutputs === 'function') {
     onOutputs({

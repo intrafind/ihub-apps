@@ -1211,18 +1211,23 @@ callers with the matching scope.
   tool's existing JSON schema parameters.
 - **iHub app** → MCP tool with id `app__<appId>` and `inputSchema`
   derived from the app's `variables` array. App invocation runs
-  headlessly through `ChatService.invokeAppInternal()`
-  (`server/services/mcp/appInvoker.js`): `RequestBuilder` prepares the
-  request exactly as for the web UI (prompt templating, system prompt,
-  variables, model selection), the turn runs on the shared
-  [agent loop](agent-loop.md) with every model call through `LLMClient`
-  (API-key resolution, throttling, retries), and the assistant text is
-  returned as a text content block, followed by a `resource` block for each
-  generated file and an `image` block for each generated picture (see
-  [Files](#files-through-mcp)). Tools configured on the app
-  execute server-side and structured output applies; interactive tools
-  (`ask_user`) are refused with a `NO_USER_AVAILABLE` result because no
-  user can answer over `tools/call`.
+  headlessly on the run service (`server/services/run/RunService.js`,
+  called by `server/services/mcp/appInvoker.js`), as the caller:
+  `RequestBuilder` prepares the request exactly as for the web UI (prompt
+  templating, system prompt, variables, model selection), the turn runs on
+  the shared [agent loop](agent-loop.md) with every model call through
+  `LLMClient` (API-key resolution, throttling, retries), and the assistant
+  text is returned as a text content block, followed by a `resource` block
+  for each generated file and an `image` block for each generated picture
+  (see [Files](#files-through-mcp)). Tools configured on the app execute
+  server-side. Nobody can answer over `tools/call`: a tool call that needs
+  a person's approval is refused with `APPROVAL_REQUIRED_NO_USER` and never
+  waits as a pending approval, and interactive tools (`ask_user`) are
+  refused with a `NO_USER_AVAILABLE` result. A caller without resolved
+  permissions, or one whose groups do not grant the app, is refused before
+  the model is called; the refusal is written to the audit log (action
+  `execute`, resource `app`, result `failure`). When the client cancels the
+  `tools/call`, the app's run is aborted.
 - **iHub workflow** → MCP tool with id `workflow__<workflowId>` and
   `inputSchema` derived from the start node's `inputVariables`. Dispatch
   goes through the existing `runTool('workflow_<id>', args)` path.
@@ -1279,10 +1284,16 @@ enabled installed integration the caller's groups grant
 (`permissions.integrations`: `*`, an installation id, a definition id or a
 `type:<type>` key), under the tool ids they have in a chat (`iFinder_search`,
 `jira_getTicket`, `<installation>__<action>`). When the tool is called, the
-installation is checked again (it must still exist and be enabled) and so is the
-user's grant as the session saw it; a gateway session builds its tool list and
-permissions once, so a grant that is withdrawn keeps working until that session
-ends. Disabling or removing an installation takes effect on the next call.
+tool runner checks the call again before it runs: the tool is one this gateway
+session offered the caller, the installation still exists and is enabled, the
+user's groups grant it as the session saw them, and a people directory is one
+the caller may use. A gateway session builds its tool list and permissions once,
+so a grant that is withdrawn keeps working until that session ends. Disabling or
+removing an installation takes effect on the next call. A refused call answers
+`access_denied: tool not permitted for this caller` and is written to the audit
+log (action `execute`, resource `tool`, result `failure`, source `mcp`). When
+the client cancels a `tools/call`, the call's abort signal reaches the
+integration, as a user's Stop does in a chat.
 A tool whose approval policy needs a person (`always`, or `writes` for a write
 action) is refused for a gateway call, because nobody there can approve it.
 There is no separate tool grant and no carrier app.

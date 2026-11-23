@@ -11,9 +11,8 @@
  * - `a2a`: `message/send` and `message/stream` through `dispatchA2A`, the
  *   function behind `POST /a2a`.
  *
- * Both run the app on the real loop. The tests of these surfaces
- * (`mcpServerService.test.js`, `a2aHandler.test.js`) replace
- * `ChatService.invokeAppInternal`; here it is the product's.
+ * Both run the app on the run service and the real loop, as the product does
+ * (`services/run/RunService.js`).
  *
  * Not recorded: the bearer token check in front of both (`middleware/mcpAuth.js`).
  * The principal is built as that middleware builds it for a signed-in user,

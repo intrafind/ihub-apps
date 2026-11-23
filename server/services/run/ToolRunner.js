@@ -17,6 +17,14 @@
  * (`utils/toolDisplay.js`) and nothing else; the runner logs every call with
  * those fields.
  *
+ * A call of a run on the run service carries its frozen run context
+ * (`toolContext.run`, `RunContext.js`). The runner then re-checks the grant on
+ * every call, whatever was checked when the tools were listed: the tool is one
+ * the run was granted, an integration's installation is still enabled and the
+ * principal's groups still grant it (and the run may reach it), a people
+ * directory is one the principal may use, an app is one the principal may open.
+ * A refused call never reaches a tool and is written to the audit log.
+ *
  * The legacy workflow executors (`PromptNodeExecutor`, `ToolNodeExecutor`) are
  * frozen and still call `runTool` themselves; they are the entries of
  * `server/tests/run/runToolAllowList.json`.
@@ -32,6 +40,8 @@ import { RESERVED_TOOL_CONTEXT_KEYS } from '../../utils/toolCallContext.js';
 import { APPROVAL_ERROR_CODES } from '../../../shared/toolApproval.js';
 import { repairToolArguments } from '../loop/toolArgs.js';
 import { runTool as defaultRunTool } from '../tools/runTool.js';
+import { canUserAccessResource } from '../../utils/authorization.js';
+import { isRunContext } from './RunContext.js';
 
 const COMPONENT = 'ToolRunner';
 
@@ -53,7 +63,11 @@ export const TOOL_REFUSAL_CODES = Object.freeze({
   /** The caller did not say who decides the approval of the call. */
   APPROVAL_UNDECIDED: 'TOOL_APPROVAL_UNDECIDED',
   /** The tool needs a person's approval and nobody here can give it. */
-  APPROVAL_REQUIRED_NO_USER: APPROVAL_ERROR_CODES.APPROVAL_REQUIRED_NO_USER
+  APPROVAL_REQUIRED_NO_USER: APPROVAL_ERROR_CODES.APPROVAL_REQUIRED_NO_USER,
+  /** The call names a run context that `createRunContext` did not build. */
+  RUN_CONTEXT_INVALID: 'RUN_CONTEXT_INVALID',
+  /** The tool is outside the grant of the run, or the principal may no longer use it. */
+  NOT_GRANTED: 'TOOL_NOT_GRANTED'
 });
 
 /**
@@ -270,6 +284,9 @@ export class ToolRunner {
    * @param {Function} [request.toolContext.onMcpAppResult] - receives an MCP App's raw result
    * @param {Object} [request.toolContext.platform] - platform configuration for the approval
    *   policy (defaults to the cached one)
+   * @param {Readonly<Object>} [request.toolContext.run] - the run context of a run on the run
+   *   service (`RunContext.js`): its grant is re-checked for its principal, which a
+   *   `principal` of the caller must be (by id); without one the tool runs as the run's
    * @returns {Promise<unknown>} The tool's result
    * @throws {ToolCallRefusedError} When a check refuses the call
    */
@@ -295,6 +312,25 @@ export class ToolRunner {
         `Tool '${toolId}' was called without saying who decides its approval.`
       );
     }
+    // A call of a run on the run service: the grant is checked again on every
+    // call, for the run's principal.
+    const run = context.run ?? null;
+    if (run !== null) {
+      if (!isRunContext(run)) {
+        throw new ToolCallRefusedError(
+          TOOL_REFUSAL_CODES.RUN_CONTEXT_INVALID,
+          `Tool '${toolId}' was called with a run context the run service did not build.`
+        );
+      }
+      // The caller's principal, when it names one, is the run's: never another identity.
+      if (context.principal && String(context.principal.id) !== String(run.principal.id)) {
+        throw new ToolCallRefusedError(
+          TOOL_REFUSAL_CODES.RUN_CONTEXT_INVALID,
+          `Tool '${toolId}' was called for another principal than its run's.`
+        );
+      }
+      await this._checkGrant(toolId, toolDef, run, context.origin);
+    }
 
     // Page reads are capped per turn (`websearch.maxPageReads`): past the cap
     // the gate answers the call itself instead of fetching the page.
@@ -312,7 +348,7 @@ export class ToolRunner {
       toolId,
       toolDef,
       args: resolveArguments(call, args, toolId),
-      toolContext: context
+      toolContext: run && !context.principal ? { ...context, principal: run.principal } : context
     });
 
     logger.info('Tool call', {
@@ -323,7 +359,7 @@ export class ToolRunner {
       ...toolDisplayOf(toolDef)
     });
 
-    if (isAppTool(toolId)) return this._invokeApp(toolId, params, signal);
+    if (isAppTool(toolId)) return this._invokeApp(toolId, params, signal, run);
 
     const options = {};
     if (signal) options.signal = signal;
@@ -356,11 +392,24 @@ export class ToolRunner {
    * permission, feature and nesting guards live there. The caller's abort
    * signal ends the app's run too.
    *
+   * The arguments the app gets as its message and variables are the model's
+   * own: iHub's context (the scopes the person picked, the turn's skill log,
+   * the timezone) travels beside them, never as a variable of the app (#3925).
+   *
    * @private
    */
-  async _invokeApp(toolId, params, signal) {
+  async _invokeApp(toolId, params, signal, run) {
     const invoke = this.invokeAppTool || (await import('../chat/appToolsGateway.js')).invokeAppTool;
-    const { chatId, user, appConfig, language, ...args } = params;
+    const {
+      chatId,
+      user,
+      appConfig,
+      language,
+      integrationScopes,
+      turnSkills: _turnSkills,
+      clientTimezone,
+      ...args
+    } = params;
     return invoke({
       toolId,
       args,
@@ -368,8 +417,88 @@ export class ToolRunner {
       chatId,
       language,
       callerAppId: appConfig?.id,
+      ...(integrationScopes ? { integrationScopes } : {}),
+      ...(clientTimezone ? { clientTimezone } : {}),
+      ...(run ? { parentContext: run } : {}),
       ...(signal ? { abortSignal: signal } : {})
     });
+  }
+
+  /**
+   * Whether the call may run in its run: refused with `TOOL_NOT_GRANTED` (and
+   * audited) when the tool is outside the run's grant, or when the principal
+   * may no longer use what the tool reaches. Loaded on demand: a call of an
+   * integration or a people directory needs their services.
+   *
+   * @private
+   */
+  async _checkGrant(toolId, toolDef, run, origin) {
+    const principal = run.principal;
+    let reason = null;
+    if (!Array.isArray(run.toolGrant) || !run.toolGrant.includes(toolId)) {
+      reason = 'the tool is not granted to this run';
+    } else if (isAppTool(toolId)) {
+      if (!canUserAccessResource(principal, 'apps', toolId.slice(APP_TOOL_PREFIX.length))) {
+        reason = 'the principal may not open this app';
+      }
+    } else if (toolDef._integration) {
+      reason = await this._integrationRefusal(toolDef, run);
+    }
+    if (!reason && toolDef._peopleDirectory) {
+      const { mayUseDirectoryTool } = await import('../peopleDirectory/PeopleDirectoryService.js');
+      if (!mayUseDirectoryTool(principal, toolDef._peopleDirectory)) {
+        reason = 'the principal may not use this people directory';
+      }
+    }
+    if (!reason) return;
+    logger.warn('Refused a tool call outside the grant of its run', {
+      component: COMPONENT,
+      toolId,
+      origin: origin || null,
+      userId: principal?.id || null,
+      reason
+    });
+    const { auditRefusal } = await import('./runAudit.js');
+    auditRefusal({
+      principal,
+      resource: 'tool',
+      resourceId: toolId,
+      code: TOOL_REFUSAL_CODES.NOT_GRANTED,
+      origin,
+      // The run that made the call; the run that started it beside it.
+      runId: run.runId,
+      parentRunId: run.parentRunId,
+      summary: `Refused tool ${toolId}: ${reason}`
+    });
+    throw new ToolCallRefusedError(
+      TOOL_REFUSAL_CODES.NOT_GRANTED,
+      `Tool '${toolId}' is not permitted for this caller.`
+    );
+  }
+
+  /**
+   * Why an integration's call may not run: its installation is gone or
+   * disabled, the principal's groups no longer grant it, or the run may not
+   * reach it. Null when it may.
+   *
+   * @private
+   */
+  async _integrationRefusal(toolDef, run) {
+    // The installation as the tool listing and the integration runner see it:
+    // through the service, with the always-installed built-ins (`ihub`) that
+    // the file may lack or hold switched off.
+    const [{ default: installedIntegrationService }, { userMayUse }] = await Promise.all([
+      import('../integrations/InstalledIntegrationService.js'),
+      import('../integrations/integrationTools.js')
+    ]);
+    const instanceId = toolDef._integration.instanceId;
+    const instance = installedIntegrationService.get(instanceId);
+    if (!instance || instance.enabled === false) return 'the installation is gone or disabled';
+    if (!userMayUse(instance, run.principal)) return "the principal's groups do not grant it";
+    if (Array.isArray(run.integrationGrant) && !run.integrationGrant.includes(instanceId)) {
+      return 'the run may not reach this installation';
+    }
+    return null;
   }
 }
 

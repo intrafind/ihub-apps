@@ -45,6 +45,31 @@ back from wherever it was.
 - The notice of a scheduled run that waits for your approval stays until you close it; the other
   notices still close by themselves after 12 seconds.
 
+## An App Call Without Resolved Permissions Is Refused
+
+An app that calls another app as a tool, an MCP `tools/call` of an app and an A2A task of an app
+run only for a caller whose permissions are resolved and whose groups grant the app. Before, a
+caller that carried no resolved permissions (an internal or hand-built principal rather than a
+signed-in user) could call any app as a tool, including apps no group of it grants.
+
+- Such a call now answers "You do not have permission to access app …" and no model is called.
+- A refused app call is written to the audit log: action `execute`, resource `app`, result
+  `failure`. So is a tool call inside such a run, or over MCP, that is outside the tools the run
+  offered, or whose installation was disabled or removed after the tools were listed (resource
+  `tool`). A grant withdrawn from a group applies from the next MCP session or app run on, not to
+  one that is already running.
+- An app called as a tool from a chat now works within the scopes you picked in that chat, where it
+  uses the same integration: it searches only there, and a scope you may not use in the called app
+  refuses the call. Your timezone and your scope choices no longer reach its prompt as text.
+- Signed-in users, personal API keys and OAuth clients keep the access their groups and clients
+  give them.
+
+## Cancelling an MCP Tool Call Stops It
+
+When an MCP client cancels a `tools/call`, the integration tool, app or workflow it started now
+stops as well, as it does when you press Stop in a chat. Before, it went on running on the server
+until it finished.
+
 ## Chat: A Finished Answer Is Stored Before the Chat Says It Is Done
 
 Right after an answer finished, the chat could briefly have no answer stored: opening the chat

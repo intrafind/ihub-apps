@@ -17,17 +17,18 @@
  *    registers the same synthetic tools and calls `invokeAppTool()` directly.
  *
  * Each tool's parameters are derived from `app.variables` and its description
- * is the localized app description. Invocation routes through
- * `ChatService.invokeAppInternal()`, which runs the standard chat pipeline
- * (model resolution, system prompt, tool loop) against an in-memory sink.
+ * is the localized app description. A call builds a run spec and runs the app
+ * on the run service (`services/run/RunService.js`) with a headless host: the
+ * standard chat preparation (model resolution, system prompt, tools), the
+ * agent loop, and nobody who can answer an approval or a question.
  *
  * Guard rails:
  *  - `features.appAsTool` must be enabled.
- *  - Principals that carry resolved `permissions` (regular chat users) may
- *    only invoke apps they are allowed to access — the same check
- *    `chatAuthRequired` applies on the HTTP route. Bare agent principals
- *    (no `permissions` object) are operator-configured and skip this check.
- *  - App→App nesting is disallowed: the callee runs with
+ *  - The principal must carry resolved `permissions` and may only invoke apps
+ *    it is allowed to access — the same check `chatAuthRequired` applies on
+ *    the HTTP route. A principal without resolved permissions (a bare object,
+ *    or none at all) is refused: nothing runs on a guess.
+ *  - App→App nesting is disallowed: the callee runs one level deep with
  *    `isInvokedViaAppAsTool: true`, which suppresses further `app__*` tools
  *    (see `getToolsForApp`) and is rejected outright by `invokeAppTool()`.
  */
@@ -36,10 +37,14 @@ import configCache from '../../configCache.js';
 import { areAppFeaturesEnabled, isFeatureEnabled } from '../../featureRegistry.js';
 import { areAppIntegrationsEnabled } from '../../integrationRegistry.js';
 import logger from '../../utils/logger.js';
-import ChatService from './ChatService.js';
 import { getLocalizedString } from '../../utils/localize.js';
 import { canUserAccessResource } from '../../utils/authorization.js';
 import { findByIdCaseInsensitive } from '../../utils/resourceLookup.js';
+import { appRunSpec, runService, RUN_REFUSAL_CODES } from '../run/RunService.js';
+import { HeadlessHost } from '../run/hosts/HeadlessHost.js';
+import { childRunContext, MAX_RUN_DEPTH, RUN_CONTEXT_ERROR_CODES } from '../run/RunContext.js';
+import { resolveRequestPrincipal } from '../run/principalResolver.js';
+import { auditRefusal } from '../run/runAudit.js';
 
 /**
  * Prefix of the tool an app becomes when another app may call it
@@ -49,8 +54,6 @@ export const APP_TOOL_ID_PREFIX = 'app__';
 
 /** Most sources an app invoked as a tool hands back to its caller. */
 const MAX_FORWARDED_SOURCES = 50;
-
-const chatService = new ChatService();
 
 function getAppById(appId) {
   const apps = configCache.getApps(true);
@@ -101,18 +104,17 @@ function localizedDescription(app, language = 'en') {
 }
 
 /**
- * Whether the principal is allowed to invoke the given app. Principals with
- * resolved permissions (regular users, incl. materialized anonymous users)
- * get the same check the chat HTTP route applies. Principals WITHOUT a
- * permissions object (bare agent principals) pass — which apps an agent may
- * call is operator-configured on the workflow node.
+ * Whether the principal is allowed to invoke the given app: the check the
+ * chat HTTP route applies. Fails closed: a principal without resolved
+ * permissions (none at all, or a bare object such as the removed Agent
+ * Factory's agent principal) may invoke no app.
  *
- * @param {Object} user
+ * @param {Object|null|undefined} user
  * @param {string} appId
  * @returns {boolean}
  */
 export function isAppInvocationAllowed(user, appId) {
-  if (!user || !user.permissions) return true;
+  if (!user?.permissions) return false;
   return canUserAccessResource(user, 'apps', appId);
 }
 
@@ -136,9 +138,10 @@ function isAppAvailable(app) {
  * @param {string[]} appIds
  * @param {string} language
  * @param {Object} [options]
- * @param {Object} [options.user] - When given (and it carries resolved
- *   permissions), apps the user may not access are omitted so the LLM never
- *   sees tools it cannot call.
+ * @param {Object} [options.user] - When given, apps the user may not access
+ *   are omitted so the LLM never sees tools it cannot call; a user without
+ *   resolved permissions gets none. Left out (the frozen legacy prompt node),
+ *   nothing is filtered here and the call is refused at invocation.
  * @returns {Promise<Array>} tool descriptors
  */
 export async function getAppAsTools(appIds, language = 'en', { user } = {}) {
@@ -150,11 +153,11 @@ export async function getAppAsTools(appIds, language = 'en', { user } = {}) {
       continue;
     }
     if (!isAppAvailable(app)) continue;
-    if (user && !isAppInvocationAllowed(user, app.id)) {
+    if (user !== undefined && !isAppInvocationAllowed(user, app.id)) {
       logger.info('App-as-tool: app filtered by user permissions', {
         component: 'AppToolsGateway',
         appId: app.id,
-        userId: user.id
+        userId: user?.id || null
       });
       continue;
     }
@@ -166,6 +169,9 @@ export async function getAppAsTools(appIds, language = 'en', { user } = {}) {
     tools.push({
       id: `${APP_TOOL_ID_PREFIX}${app.id}`,
       name: `App: ${appName}`,
+      // The title of the call's row in the chat: the app's localized name alone
+      // (`toolDisplayOf`, decided on the server).
+      appName,
       description: localizedDescription(app, language),
       parameters: buildToolParameters(app),
       // No `sideEffect`: what the app does depends on the tools it calls itself,
@@ -209,14 +215,19 @@ export function stripAppToolsForAgent(tools, user) {
  *
  * @param {Object} opts
  * @param {string} opts.toolId
- * @param {Object} opts.args
- * @param {Object} opts.user
+ * @param {Object} opts.args - the model's arguments: `message` and the app's variables
+ * @param {Object} opts.user - the caller's principal, with resolved permissions
  * @param {string} opts.chatId
  * @param {string} [opts.executionId]
  * @param {AbortSignal} [opts.abortSignal]
  * @param {string} [opts.modelOverride]
  * @param {string} [opts.language]    caller's language, applied to the callee run
  * @param {string} [opts.callerAppId] id of the app making the call (audit only)
+ * @param {Object<string, string>} [opts.integrationScopes] - the scopes the person picked for
+ *   the calling chat; the called app works in them where it uses the same integrations
+ * @param {string} [opts.clientTimezone] - the person's timezone
+ * @param {Readonly<Object>} [opts.parentContext] - the run context of the calling run, when it
+ *   runs on the run service
  */
 export async function invokeAppTool({
   toolId,
@@ -227,7 +238,10 @@ export async function invokeAppTool({
   abortSignal,
   modelOverride,
   language,
-  callerAppId
+  callerAppId,
+  integrationScopes,
+  clientTimezone,
+  parentContext = null
 }) {
   if (!toolId || !toolId.startsWith(APP_TOOL_ID_PREFIX)) {
     throw new Error(`Invalid app tool id: ${toolId}`);
@@ -237,7 +251,7 @@ export async function invokeAppTool({
   // App→App nesting guard. `getToolsForApp` / `stripAppToolsForAgent` already
   // suppress `app__*` tools for nested principals; this rejects anything that
   // slips through (e.g. a hallucinated tool call).
-  if (user?.isInvokedViaAppAsTool === true) {
+  if (user?.isInvokedViaAppAsTool === true || (parentContext?.depth ?? 0) >= MAX_RUN_DEPTH) {
     return {
       error: true,
       message:
@@ -261,18 +275,38 @@ export async function invokeAppTool({
   }
 
   // Enforce the calling user's app permissions — invoking an app through a
-  // tool must not grant more access than opening it directly would.
+  // tool must not grant more access than opening it directly would, and a
+  // caller without resolved permissions gets nothing.
+  // Both refusals are written to the audit log: no run starts, so the run
+  // service never sees them.
+  const refuse = (code, message) => {
+    auditRefusal({
+      principal: user,
+      resource: 'app',
+      resourceId: app.id,
+      code,
+      origin: 'subagent',
+      parentRunId: executionId || chatId,
+      summary: `Refused to run app ${app.id}: ${message}`
+    });
+    return { error: true, message };
+  };
   if (!isAppInvocationAllowed(user, app.id)) {
-    return { error: true, message: `You do not have permission to access app ${app.id}` };
+    return refuse(
+      user?.permissions
+        ? RUN_REFUSAL_CODES.APP_NOT_PERMITTED
+        : RUN_CONTEXT_ERROR_CODES.PRINCIPAL_UNRESOLVED,
+      `You do not have permission to access app ${app.id}`
+    );
   }
+
+  const resolved = resolveRequestPrincipal(user, { origin: parentContext?.origin ?? 'person' });
+  if (!resolved.ok) return refuse(resolved.code, resolved.message);
 
   const messageBody = args.message || JSON.stringify(args);
   const messages = [{ role: 'user', content: messageBody }];
   const variables = { ...args };
   delete variables.message;
-
-  // Mark the principal so nested calls strip further app__ tools.
-  const nestedUser = { ...user, isInvokedViaAppAsTool: true };
 
   logger.info('Invoking app via App-as-tool gateway', {
     component: 'AppToolsGateway',
@@ -284,30 +318,35 @@ export async function invokeAppTool({
   });
 
   try {
-    const result = await chatService.invokeAppInternal({
-      appId: app.id,
-      user: nestedUser,
-      messages,
-      variables,
-      abortSignal,
-      runId: executionId || chatId,
-      ...(language ? { language } : {}),
-      // Propagate the calling agent's model into the app so the operator's
-      // model choice flows through the whole call tree instead of every
-      // app silently running on whatever bedrock-nova-* the app config
-      // shipped with. App authors can still override per-app if needed
-      // by leaving their own modelId in the config and not setting one
-      // on the calling profile, but with a modelId set here it wins.
-      ...(modelOverride ? { modelOverride } : {})
+    // The callee runs one level deep, as the caller, marked so it is offered
+    // no further app tools.
+    const context = childRunContext(parentContext, {
+      principal: { ...resolved.principal, isInvokedViaAppAsTool: true },
+      parentRunId: executionId || chatId
     });
+    const result = await runService.run(
+      appRunSpec({
+        context,
+        appId: app.id,
+        messages,
+        variables,
+        ...(language ? { language } : {}),
+        signal: abortSignal,
+        integrationScopes,
+        clientTimezone,
+        // Propagate the calling agent's model into the app so the operator's
+        // model choice flows through the whole call tree; with a modelId set
+        // here it wins over the app's preferred model.
+        ...(modelOverride ? { modelId: modelOverride } : {}),
+        caller: 'subagent'
+      }),
+      new HeadlessHost()
+    );
 
-    // Return a SLIM payload to the caller. The internal result from
-    // `invokeAppInternal` can carry adapter-specific debug fields, full raw
-    // responses with chain-of-thought, and other large extras. Callers invoke
-    // this gateway from inside an LLM tool loop, so whatever we return
-    // gets JSON.stringify'd into a tool message and fed back to the model.
-    // Returning the unfiltered object blows up the caller's context (the
-    // user observed 10KB+ of Gemini thought text leaking in). Keep only:
+    // Return a SLIM payload to the caller. The run's result can carry the full
+    // tool calls and other large extras. Callers invoke this gateway from
+    // inside an LLM tool loop, so whatever we return gets JSON.stringify'd
+    // into a tool message and fed back to the model. Keep only:
     //   - content: the actual answer the app produced
     //   - sources: what the app found, for the caller's sources panel
     //   - usage: token counts (optional, useful for audit)

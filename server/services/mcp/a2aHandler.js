@@ -7,6 +7,7 @@ import configCache from '../../configCache.js';
 import { MCP_SCOPES } from './scopes.js';
 import { invokeApp } from './appInvoker.js';
 import { toolRunner, workflowToolDef } from '../run/ToolRunner.js';
+import { requestRunContext } from '../run/principalResolver.js';
 import { isValidId } from '../../utils/pathSecurity.js';
 import logger from '../../utils/logger.js';
 import { getLocalizedString } from '../../utils/localize.js';
@@ -698,6 +699,10 @@ async function runTask({
       outputs = { generatedFiles: run?.generatedFiles || [], images: run?.images || [] };
     } else {
       const toolDef = workflowToolDef(skill._id);
+      // The task may run the workflow its skill names, and nothing else; a
+      // caller without resolved permissions runs nothing.
+      const run = requestRunContext(user, { toolGrant: [toolDef.id] });
+      if (!run.ok) throw new A2aError(A2A_ERRORS.INTERNAL, run.message);
       const output = await toolRunner.execute(null, {
         toolId: toolDef.id,
         toolDef,
@@ -708,6 +713,7 @@ async function runTask({
           // workflow page: no tool approval.
           approval: 'caller',
           argsFrom: 'caller',
+          run: run.context,
           principal: user,
           chatId: inbound?.chatId || `a2a-${task.id}`,
           language,

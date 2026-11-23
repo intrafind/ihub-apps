@@ -460,6 +460,20 @@ describe('tool runner checks (S10)', () => {
     assert.equal(request.args.message, 'How do I file a claim?');
     assert.equal('user' in request.args, false);
     assert.equal('chatId' in request.args, false);
+    // iHub's context travels beside the arguments, never as an app variable (#3925).
+    assert.deepEqual(Object.keys(request.args), ['message']);
+    assert.deepEqual(request.integrationScopes, { search: 'profile-a' });
+    assert.equal(request.parentContext, undefined, 'a chat turn has no run context yet');
+    const withTimezone = spyRunner();
+    await withTimezone.runner.execute(null, {
+      toolId: 'app__specialist',
+      toolDef: { id: 'app__specialist' },
+      args: { message: 'hi', tone: 'formal' },
+      toolContext: chatContext({ clientTimezone: 'Europe/Berlin' })
+    });
+    const [timed] = withTimezone.appCalls;
+    assert.deepEqual(timed.args, { message: 'hi', tone: 'formal' });
+    assert.equal(timed.clientTimezone, 'Europe/Berlin');
   });
 
   it('abort-signal: the caller abort signal and the MCP App sink reach the tool', async () => {

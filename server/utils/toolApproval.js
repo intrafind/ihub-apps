@@ -49,6 +49,8 @@ import logger from './logger.js';
 import { actionReviewState } from './actionFingerprint.js';
 import { redact } from '../middleware/auditLogger.js';
 import { categoryOf } from '../services/tools/toolCategory.js';
+import { isRunContext } from '../services/run/RunContext.js';
+import { principalTypeOf } from '../services/run/principalTypes.js';
 import {
   APPROVAL_MODES,
   DATA_FLOWS,
@@ -490,21 +492,23 @@ export function directCallNeedsApproval(toolDef, platform, { getInstallation } =
 }
 
 /**
- * Whether a request's principal is a program rather than a person at a
- * screen: an OAuth client, a personal API key, a third-party app acting with
- * a user's token (`oauth_*`), an agent. Such a caller cannot approve.
+ * Whether nobody can answer for a run or a request: no person at a screen.
  *
- * @param {Object|null} user
+ * Given a run context (`services/run/RunContext.js`), its `unattended` decides:
+ * true for every origin other than `person` and for every principal that is
+ * not a person's account. Given a request's principal, the same rule for a
+ * request of a person: a program (an OAuth client, a personal API key, a
+ * third-party app acting with a user's token, `oauth_*`) is unattended, and
+ * so are a missing principal and a legacy agent principal (`isAgent`), which
+ * no run carries since the Agent Factory was removed.
+ *
+ * @param {Object|null} subject - a run context, or a request's principal
  * @returns {boolean}
  */
-export function isUnattendedCaller(user) {
-  if (!user) return true;
-  return (
-    user.isOAuthClient === true ||
-    user.isPersonalApiKey === true ||
-    user.isAgent === true ||
-    (typeof user.authMode === 'string' && user.authMode.startsWith('oauth_'))
-  );
+export function isUnattendedCaller(subject) {
+  if (!subject) return true;
+  if (isRunContext(subject)) return subject.unattended === true;
+  return subject.isAgent === true || principalTypeOf(subject) !== 'user';
 }
 
 /**

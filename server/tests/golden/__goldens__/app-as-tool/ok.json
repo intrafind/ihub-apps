@@ -55,7 +55,7 @@
         "execution": "server",
         "name": "app__specialist",
         "step": 1,
-        "title": "App: Claims specialist",
+        "title": "Claims specialist",
         "toolId": "app__specialist"
       },
       "runId": "chat-<id:1>",
@@ -265,6 +265,7 @@
         "toolSchemas": [
           {
             "_appId": "specialist",
+            "appName": "Claims specialist",
             "approval": "never",
             "approvalSource": "default",
             "dataFlow": "internal",
@@ -288,7 +289,7 @@
             "sideEffectSource": "default"
           }
         ],
-        "toolSchemasHash": "31f55c3f2507ddf7a9721e7c19011afb00b8177cc6caf05ef143eb23f31c1808"
+        "toolSchemasHash": "087f8a73a1ea87d16985dc401562415ac5af994a0c62191a067a230765c694c7"
       },
       "runId": "chat-<id:1>",
       "type": "request/header"
@@ -357,7 +358,7 @@
         "name": "app__specialist",
         "parallelGroup": 0,
         "step": 1,
-        "title": "App: Claims specialist",
+        "title": "Claims specialist",
         "toolId": "app__specialist"
       },
       "runId": "chat-<id:1>",
@@ -814,7 +815,7 @@
         "segment": "seg-<id:4>",
         "step": 2,
         "toolExecution": "server",
-        "toolSchemasHash": "31f55c3f2507ddf7a9721e7c19011afb00b8177cc6caf05ef143eb23f31c1808"
+        "toolSchemasHash": "087f8a73a1ea87d16985dc401562415ac5af994a0c62191a067a230765c694c7"
       },
       "runId": "chat-<id:1>",
       "type": "request/header"

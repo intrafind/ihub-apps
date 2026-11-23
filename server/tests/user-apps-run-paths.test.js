@@ -28,10 +28,12 @@ import { randomUUID } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 
 import configCache from '../configCache.js';
-import ChatService from '../services/chat/ChatService.js';
 import RequestBuilder from '../services/chat/RequestBuilder.js';
 import { beginTranscriptionTurn } from '../services/chat/transcriptionTurn.js';
 import { getAppAsTools, invokeAppTool } from '../services/chat/appToolsGateway.js';
+import { RunService, appRunSpec } from '../services/run/RunService.js';
+import { HeadlessHost } from '../services/run/hosts/HeadlessHost.js';
+import { requestRunContext } from '../services/run/principalResolver.js';
 import * as tasks from '../services/scheduler/tasks/taskService.js';
 import { executeTaskRun } from '../services/scheduler/tasks/taskExecution.js';
 import { getScheduledTaskRepository } from '../services/scheduler/tasks/ScheduledTaskRepository.js';
@@ -570,13 +572,20 @@ describe('every other run path answers for a personal app as for an unknown ID (
       assert.equal(result.error, true, name);
       assert.equal(JSON.stringify(result).includes(SECRET), false, name);
     }
-    const direct = await new ChatService().invokeAppInternal({
-      appId: record.id,
-      user: user('anna'),
-      messages: [{ role: 'user', content: 'hello' }]
-    });
+    // The run service the tool runs through, asked directly with the owner's context.
+    const context = requestRunContext(user('anna'));
+    assert.equal(context.ok, true, context.message);
+    const direct = await new RunService().run(
+      appRunSpec({
+        context: context.context,
+        appId: record.id,
+        messages: [{ role: 'user', content: 'hello' }]
+      }),
+      new HeadlessHost()
+    );
     assert.equal(direct.status, 'error');
     assert.equal(direct.error.code, 'APP_NOT_FOUND');
+    assert.equal(JSON.stringify(direct).includes(SECRET), false);
     assert.equal(harness.turns.length, 0);
   });
 
@@ -675,9 +684,10 @@ describe('the ratchet of raw app lookups', () => {
       'server/routes/scheduledTasks.js',
       'server/routes/voiceRoutes.js',
       'server/routes/workflow/workflowRoutes.js',
-      'server/services/chat/ChatService.js',
       'server/services/chat/RequestBuilder.js',
-      'server/services/chat/appToolsGateway.js'
+      'server/services/chat/appToolsGateway.js',
+      // Moved from ChatService.invokeAppInternal with the run service.
+      'server/services/run/assemble/fromApp.js'
     ]);
     const total = Object.values(lookups()).reduce((sum, entry) => sum + entry.calls, 0);
     assert.equal(total, 15);

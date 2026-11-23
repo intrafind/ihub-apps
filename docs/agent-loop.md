@@ -384,8 +384,9 @@ they were never enforced; profiles that set `maxTokensPerRun` or
 `ChatService` (`server/services/chat/ChatService.js`) is the chat adapter:
 `prepareChatRequest()` resolves app, model, messages and tools through
 `RequestBuilder`; `runTurn()` runs one `kind: 'chat'` segment and projects it
-onto the chat SSE dialect; `invokeAppInternal()` runs an app headlessly for the
-app-as-tool gateway and MCP `tools/call`. There is no chat-specific model loop:
+onto the chat SSE dialect. An app that runs without a client (called as a tool,
+through MCP `tools/call` or by an A2A agent) runs on the [run service](#run-service).
+There is no chat-specific model loop:
 budgets, tool execution, argument repair, compaction and abort handling are the
 loop's.
 
@@ -396,7 +397,7 @@ Chat policies:
 | `budgets.maxToolRounds`  | 50 (`CHAT_MAX_TOOL_ROUNDS`); the last round is a forced tool-less final answer (a cap of 1 gets one extra tool-less call)         |
 | `tools.parallel`         | **false**: one call at a time. With the feature `parallelToolCalls` on and a model that does not opt out (`parallelToolCalls: false` in the model file): **true** with `parallelMode: 'readOnly'` and `maxParallel: 4` (`chatToolPolicies`), for a chat turn and for an app that runs as a tool. See [Read-only tool calls side by side](tool-calling.md#read-only-tool-calls-side-by-side-preview) |
 | `tools.choice`           | the app's `toolChoice` (default `auto`) |
-| `budgets.maxWallClockMs` | headless invocations only (`invokeAppInternal`, default 180 s)                        |
+| `budgets.maxWallClockMs` | runs without a client only (the [run service](#run-service), default 180 s)           |
 | `timeoutMs`              | hard timeout per model call (the chat route's `DEFAULT_TIMEOUT`)                      |
 | `context`                | `chatContextPolicies(model)`: threshold at 50 % of the model's `contextWindow` (at least 16,000), `strategy: 'digest'` |
 
@@ -425,18 +426,58 @@ emits the run frames itself: `run/started`, `run/paused`, `stream/error`
 (payload from `chatErrors.describeChatError()`) and `run/ended`.
 
 **Headless mode.** `runTurn({ streaming: false })` — a POST without an open SSE
-connection — and `invokeAppInternal()` (app-as-tool gateway, MCP `tools/call`)
-register the question seam with `headless: true`: tools still execute, but
-nobody can answer a question, so `ask_user` gets a `NO_USER_AVAILABLE` error
-result instead of pausing the segment. The non-SSE POST answers with
-`{ messageId, model, content, finishReason, usage }`; `invokeAppInternal()`
-runs a `kind: 'subagent'` segment and returns
-`{ status, finalMessage, toolCalls, sources, usage, finishReason, model }`.
+connection — registers the question seam with `headless: true`: tools still
+execute, but nobody can answer a question, so `ask_user` gets a
+`NO_USER_AVAILABLE` error result instead of pausing the segment. The non-SSE
+POST answers with `{ messageId, model, content, finishReason, usage }`.
+
+### Run service
+
+`RunService.run(spec, host)` (`server/services/run/RunService.js`) runs an app
+without a client: an app called as a tool (`appToolsGateway.js`), an app called
+through MCP `tools/call` or by an A2A agent (`mcp/appInvoker.js`). The caller
+builds a run spec (`appRunSpec`) with a frozen run context (`RunContext.js`)
+and hands a host (`hosts/HeadlessHost.js`) that receives what the run
+produces.
+
+- **Context.** `createRunContext` freezes the context all the way down (the
+  principal, its groups and permission sets, the grant): a seam that tries to
+  change `ctx.meta.run` throws a `TypeError`. A context cannot be built for a
+  principal without resolved permissions; `principalResolver.resolvePrincipal`
+  refuses one (`PRINCIPAL_UNRESOLVED`) and takes the admin flags away for every
+  origin other than `person`. `unattended` is true for every origin other than
+  `person` and for every principal that is not a person's account (an OAuth
+  client, a personal API key, a service account); `isUnattendedCaller` in
+  `utils/toolApproval.js` reads it.
+- **Refusals.** Before the model is called the service refuses a spec without a
+  context it built (`RUN_CONTEXT_INVALID`) and an app the principal may not open
+  (`APP_NOT_PERMITTED`), and writes each refusal to the audit log. The callers
+  that refuse before they reach the service (the app-as-tool gateway, the MCP
+  and A2A app invoker, the MCP handler) write theirs too
+  (`PRINCIPAL_UNRESOLVED`, `APP_NOT_PERMITTED`).
+- **Seams.** `seamProfiles.build({ interactions: 'none', host, bindings })`
+  returns the seams in order: `approval` (headless, fallback `deny`),
+  `question` (headless), `passthrough`, `image-lift`, then the host's
+  (`headless-tool-outputs`, `app-invoke-collector`). A call that needs approval
+  is refused with `APPROVAL_REQUIRED_NO_USER` and never becomes a pending
+  approval.
+- **Grant.** The run is granted the tools it offers its model, the tools tool
+  search can load and the web search fallback; every call goes through the
+  tool runner with `toolContext.run`, which re-checks the grant.
+- **Policies.** Those of a chat turn (`chatToolPolicies`, `chatContextPolicies`,
+  50 rounds), a wall-clock deadline of 180 s and 120 s per model call unless the
+  context's `budget` says otherwise (the MCP gateway: 60 s per model call).
+- **Result.** A `kind: 'subagent'` segment; the host returns
+  `{ status, finalMessage, toolCalls, sources, usage, finishReason, model, generatedFiles, images }`.
+- **Nesting.** An app called as a tool runs one level below its caller
+  (`childRunContext`, `depth` 1) and is offered no app tools of its own; the
+  caller's integration scopes apply where the called app uses the same
+  integrations (`assemble/fromApp.js`).
 
 ### Tool runner
 
-Every tool call of a chat turn, of an app that runs as a tool, of the
-passthrough seam, of the MCP gateway (`tools/call` of an integration tool and
+Every tool call of a chat turn, of an app that runs as a tool (on the
+[run service](#run-service)), of the passthrough seam, of the MCP gateway (`tools/call` of an integration tool and
 of a workflow) and of an inbound A2A task that starts a workflow goes through
 `ToolRunner.execute(call, { toolId, toolDef, args, signal, toolContext })`
 (`server/services/run/ToolRunner.js`). The runner applies the checks below,
@@ -470,15 +511,36 @@ fails for any other `runTool(` call outside `server/services/run/`.
 | `trusted-context`: the caller's context is set after the arguments | Each path its own set | One builder; each caller passes the set it passed before |
 | `language`: a model may name the language of its call; for an external caller, the language the caller vouches for wins when it sets one | Chat, app as a tool (default); A2A (fixed); the MCP gateway set none, so a client's `language` argument reached the tool | The same, by `argsFrom` and `toolContext.language` (the MCP gateway still sets none) |
 | `argument-repair`: raw model arguments are repaired | The loop, the legacy prompt node | The loop; the runner for a caller that hands only the raw call |
-| `app-tool-routing`: an `app__` call goes to the app-as-tool gateway (permission, feature and nesting guards) | `runTool` (chat, without the abort signal), the legacy prompt node (with it) | The runner, with the caller's abort signal: a stopped answer stops the app it called |
+| `app-tool-routing`: an `app__` call goes to the app-as-tool gateway (permission, feature and nesting guards) | `runTool` (chat, without the abort signal), the legacy prompt node (with it) | The runner, with the caller's abort signal: a stopped answer stops the app it called. The model's arguments become the app's message and variables; the scopes, the timezone and the calling run travel beside them, never as an app variable (#3925) |
 | `abort-signal`: the caller's abort signal reaches integration tools | Chat, app as a tool | Every caller that has one; the passthrough seam passes it now |
 | `display`: the display fields come from `toolDisplayOf` | Loop events of chat and app as a tool | The same events; every call through the runner is logged with them, MCP and A2A included |
 | `tool-exists`, `workflow-access`, `system-skill-permission`, `skill-usable` | `runTool` and the workflow runner, on every path | Unchanged, reached through the runner on every path |
 
-Two checks stay with the MCP gateway: the token scope (`mcp:tools:call`,
-`mcp:workflows:run`) and the call-time re-check of the grant (the
-installation is enabled, the caller's groups grant it, it is reachable from
-the exposed apps, the people directory).
+A call of a run on the run service carries its run context
+(`toolContext.run`); the runner then uses the context's principal as the
+identity and re-checks the grant on every call. A refusal throws
+`TOOL_NOT_GRANTED` and is written to the audit log (action `execute`, resource
+`tool`, result `failure`; `details.runId` is the run that made the call,
+`details.parentRunId` the run that started it). The context carries the
+principal's permissions as they were when the run started: a grant withdrawn
+from a group applies to the next run (or MCP session), while a disabled or
+removed installation is refused on the next call. The rows below are tested in
+`server/tests/run/toolRunner.grant.test.js`. Callers with a run context: an app
+that runs as a tool (and its passthrough calls), the MCP gateway (`tools/call`
+of an integration and of a workflow) and an A2A task that starts a workflow.
+Chat turns and scheduled runs get the same checks when they move onto the run
+service.
+
+| Check (test in `server/tests/run/toolRunner.grant.test.js`) | Before | With a run context |
+| --- | --- | --- |
+| `run-context-valid`: the run context is one the run service built | - | A copy or a look-alike is refused (`RUN_CONTEXT_INVALID`) |
+| `tool-grant`: the tool is one the run was granted | The MCP gateway (the tool was registered for the session) | Every call; no grant grants nothing |
+| `integration-grant`: the installation still exists and is enabled, the principal's groups grant it, the run may reach it | The MCP gateway at call time; `runIntegrationTool` | The runner, before the tool and before the approval check; it reads the installation as the tool listing does (`installedIntegrationService.get`), so an always-installed built-in such as `ihub` counts as installed and enabled |
+| `app-grant`: the principal may open the app of an `app__` call | The gateway (`isAppInvocationAllowed`, which let a principal without permissions through) | The runner, and the gateway, which now fails closed |
+| `directory-grant`: a people directory is one the principal may use | The MCP gateway; the directory runner | The runner, on the frozen run principal (fails closed for an unknown directory) |
+
+One check stays with the MCP gateway: the token scope (`mcp:tools:call`,
+`mcp:workflows:run`).
 
 ### Degenerate runs
 

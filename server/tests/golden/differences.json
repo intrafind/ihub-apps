@@ -4,7 +4,7 @@
       "id": "fail-open-removal",
       "title": "An app call by a principal without resolved permissions is refused",
       "state": "proposed",
-      "decision": "Proposed: unify to refusal. Today a caller without a permissions object may call any app as a tool (appToolsGateway.js). The run service resolves a grant for every caller and refuses a caller that has none. No option to keep the old behaviour: it is a security weakness.",
+      "decision": "Unify to refusal. Before, isAppInvocationAllowed (appToolsGateway.js) let every caller through that carried no permissions object, so such a caller could call an app no group grants. Now the gateway fails closed, and the run service refuses any run whose context has no principal with resolved permissions (no run context can be built for one) and any app the principal may not open, with an entry in the audit log. In the golden the caller gets the refusal a user who may not open the app gets (\"You do not have permission to access app restricted\"); no run starts, so the record has no ledger, model request, offered tool or usage record any more, and the case title says what it pins now. No option to keep the old behaviour: it is a security weakness.",
       "goldens": ["app-as-tool/user-without-permissions.json"],
       "parts": [
         "ledger",
@@ -34,7 +34,7 @@
       "id": "tool-result-truncation",
       "title": "One rule for how a long tool result is cut, on every surface",
       "state": "proposed",
-      "decision": "Proposed: unify to the rule of the chat turn (the result goes to the model whole, and the compaction condenses it later). Today an app call through the gateway or as a tool also caps the results it collects for its caller at a fixed size. The cap of the collected copy stays as an option of the headless host; the model sees the same text on every surface.",
+      "decision": "Proposed: unify to the rule of the chat turn (the result goes to the model whole, and the compaction condenses it later). Today an app call through the gateway or as a tool also caps the results it collects for its caller at a fixed size. The cap of the collected copy stays as an option of the headless host; the model sees the same text on every surface. Moved to chat-on-run-service (it was attributed to run-service-headless): run-service-headless changes none of these goldens; the cap stays in the headless host as it was. The chat turns and the inference API, whose goldens this row names, move onto the run service in chat-on-run-service, which delivers the one rule.",
       "goldens": [
         "chat/compaction.json",
         "chat/compaction-post-stream.json",
@@ -44,7 +44,7 @@
         "inference-app/responses-non-stream.json"
       ],
       "parts": ["envelopes", "httpResponse", "ledger", "result", "toolCalls"],
-      "pr": "run-service-headless",
+      "pr": "chat-on-run-service",
       "signedBy": null,
       "signedOn": null
     },
@@ -52,14 +52,14 @@
       "id": "headless-approval-policy",
       "title": "One policy for a call that needs approval where nobody can approve",
       "state": "proposed",
-      "decision": "Proposed: unify to \"refuse and tell the model\", with the code APPROVAL_REQUIRED_NO_USER, for every run without a person who can answer (app as a tool, MCP, A2A, the inference API). A scheduled task keeps its own route as an option: its run waits for the owner, and a refusal of the owner ends the run as cancelled.",
+      "decision": "Proposed: unify to \"refuse and tell the model\", with the code APPROVAL_REQUIRED_NO_USER, for every run without a person who can answer (app as a tool, MCP, A2A, the inference API). A scheduled task keeps its own route as an option: its run waits for the owner, and a refusal of the owner ends the run as cancelled. Moved to chat-on-run-service (it was attributed to run-service-headless): for the app as a tool and MCP the goldens already record the refusal with APPROVAL_REQUIRED_NO_USER (app-as-tool/approval-denied.json, mcp/approval-refused.json), and run-service-headless keeps it without changing them. The inference API and the scheduled task move onto the run service in chat-on-run-service, which settles the rest of the row.",
       "goldens": [
         "app-as-tool/approval-denied.json",
         "mcp/approval-refused.json",
         "scheduled-task/approval-denied-headless.json"
       ],
       "parts": ["approvals", "ledger", "modelRequests", "result", "toolCalls"],
-      "pr": "run-service-headless",
+      "pr": "chat-on-run-service",
       "signedBy": null,
       "signedOn": null
     },
@@ -67,7 +67,7 @@
       "id": "tool-error-text",
       "title": "The text a model gets for a failed or refused tool call is the same on every surface",
       "state": "proposed",
-      "decision": "Proposed: unify to the text of the chat turn. Today the chat turn, the app call and the gateway word the same refusal differently (a tool that is not registered, a refused approval, a refused question). The codes stay as they are; only the message text changes.",
+      "decision": "Proposed: unify to the text of the chat turn. Today the chat turn, the app call and the gateway word the same refusal differently (a tool that is not registered, a refused approval, a refused question). The codes stay as they are; only the message text changes. Moved to chat-on-run-service (it was attributed to run-service-headless): run-service-headless leaves every text this row names as it was, and none of these goldens changes. The chat turn moves onto the run service in chat-on-run-service, where the texts of the chat, the app call and the gateway become one.",
       "goldens": [
         "app-as-tool/depth-1.json",
         "app-as-tool/approval-denied.json",
@@ -79,7 +79,7 @@
         "chat/approval-deny-post-stream.json"
       ],
       "parts": ["envelopes", "httpResponse", "ledger", "result", "toolCalls"],
-      "pr": "run-service-headless",
+      "pr": "chat-on-run-service",
       "signedBy": null,
       "signedOn": null
     },
@@ -191,11 +191,22 @@
     },
     {
       "id": "app-as-tool-display-fields",
-      "title": "The tool row of an app call has the display fields of a sub-agent",
+      "title": "The tool row of an app call is titled with the name of the app",
       "state": "proposed",
-      "decision": "Proposed: unify to the display fields a sub-agent has. Today the row of app__<id> has the title \"App: <name of the app>\" (in the golden: \"App: Claims specialist\") and the activity kind of an ordinary tool call (tool). It gets the localized name of the app alone as its title and the activity kind of a sub-agent, both decided on the server.",
+      "decision": "Unify to the title a sub-agent has, decided on the server: the row of app__<id> is titled with the localized name of the app alone (in the golden \"Claims specialist\" instead of \"App: Claims specialist\"), on tool/started and on the ledger's tool/call. The tool definition carries the name for that (appName), so the tool definitions the ledger records gain the field and their hash (toolSchemasHash) changes; what the model is sent does not change (modelRequests and toolSchemas are the same). The activity kind stays tool: the chat has no sub-agent row yet, and the pull request that adds it gives the app call that kind.",
       "goldens": ["app-as-tool/ok.json"],
       "parts": ["envelopes", "ledger"],
+      "pr": "run-service-headless",
+      "signedBy": null,
+      "signedOn": null
+    },
+    {
+      "id": "app-as-tool-caller-context",
+      "title": "An app called as a tool works in the scopes the person picked and no longer gets iHub's context as variables",
+      "state": "proposed",
+      "decision": "Proposed: unify to the rule of a chat turn (#3925). Before, the tool runner handed an app__<id> call every key of the call except chatId, user, appConfig and language as arguments, so the integration scopes the person picked in the calling chat, the turn's skill log and the person's timezone became variables of the called app, and a call without a message sent all three to the called app's model as its message (JSON of the arguments); the called app ran without a scope binding. Now the model's arguments alone become the app's message and variables; the scopes and the timezone travel beside them: the called app works in the picked scopes where it uses the same integration (resolveChatScopes; a scope the person may not use in the called app refuses the call, as it refuses a chat turn), and its tools get the timezone. No golden records it: app-as-tool/ok.json calls with a message and without scopes, so its model requests are the same; server/tests/appToolsGateway.test.js pins the new behaviour. No option to keep the old behaviour: it leaked the caller's context into another app's prompt.",
+      "goldens": ["app-as-tool/ok.json"],
+      "parts": ["modelRequests"],
       "pr": "run-service-headless",
       "signedBy": null,
       "signedOn": null
