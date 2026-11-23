@@ -47,6 +47,7 @@ import {
   fetchInstalledIntegrations,
   fetchIntegrationDefinitionFile,
   markInstalledIntegrationActionsReviewed,
+  saveIntegrationInstructions,
   setInstalledIntegrationApproval,
   setInstalledIntegrationEnabled,
   testInstalledIntegration
@@ -63,6 +64,7 @@ import {
 import ActionReviewBadge from '../components/integrations/ActionReviewBadge';
 import IntegrationActionDrawer from '../components/integrations/IntegrationActionDrawer';
 import IntegrationInstructionsCard from '../components/integrations/IntegrationInstructionsCard';
+import { instructionsPayload, instructionsStartText } from '../utils/integrationInstructions';
 import { useOptionalAuth } from '../../../shared/contexts/authContextValue';
 import { fetchAdminApps, fetchAdminGroups, getAdminApiErrorMessage } from '../../../api/adminApi';
 import { groupsGranting } from '../utils/groupIntegrationAccess';
@@ -278,7 +280,22 @@ function InstallationPageContent({ instanceId }) {
     () => Boolean(instance) && !deepEqual(approvalDraft, normalizeApproval(instance.approval)),
     [approvalDraft, instance]
   );
-  const { blocker, markSaved } = useUnsavedChanges(false, settingsDirty || approvalDirty);
+  // The text of 'Instructions for the model' being edited, null while it is only shown. It
+  // lives here, not in the card: the Overview unmounts when another tab is shown. `Boolean`
+  // of the error keeps the section dirty after a refused save, so the bar stays for a retry
+  // even when the text is typed back to what it started from (the write may have gone
+  // through and only its answer been lost).
+  const [instructionsDraft, setInstructionsDraft] = useState(null);
+  const [instructionsError, setInstructionsError] = useState(null);
+  const instructionsStart = instructionsStartText(detail?.instructions, lang);
+  const instructionsDirty =
+    Boolean(instance) &&
+    instructionsDraft !== null &&
+    (instructionsDraft !== instructionsStart || Boolean(instructionsError));
+  const { blocker, markSaved } = useUnsavedChanges(
+    false,
+    settingsDirty || approvalDirty || instructionsDirty
+  );
 
   // The Settings editor hands its save over through this ref and its failure through the
   // state; both reach the page's one save bar as the 'settings' section.
@@ -426,6 +443,36 @@ function InstallationPageContent({ instanceId }) {
       setApprovalError(null);
     },
     error: approvalError
+  });
+
+  const saveInstructions = async () => {
+    setBusy(true);
+    setInstructionsError(null);
+    try {
+      await saveIntegrationInstructions(
+        instance.id,
+        instructionsPayload(detail?.instructions, lang, instructionsDraft)
+      );
+      setInstructionsDraft(null);
+      await load();
+      return true;
+    } catch (err) {
+      setInstructionsError(getAdminApiErrorMessage(err));
+      return false;
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  useSaveSection('instructions', {
+    dirty: instructionsDirty,
+    saving: busy && instructionsDirty,
+    save: saveInstructions,
+    discard: () => {
+      setInstructionsDraft(null);
+      setInstructionsError(null);
+    },
+    error: instructionsError
   });
 
   const runTest = async () => {
@@ -904,6 +951,17 @@ function InstallationPageContent({ instanceId }) {
                     instanceId={instance.id}
                     instructions={detail.instructions}
                     disabled={isMigrationBlocked(instance)}
+                    draft={instructionsDraft}
+                    onDraftChange={setInstructionsDraft}
+                    onEdit={() => {
+                      setInstructionsError(null);
+                      setInstructionsDraft(instructionsStart);
+                    }}
+                    onCancel={() => {
+                      setInstructionsDraft(null);
+                      setInstructionsError(null);
+                    }}
+                    saving={busy && instructionsDirty}
                     onSaved={load}
                   />
                 )}
