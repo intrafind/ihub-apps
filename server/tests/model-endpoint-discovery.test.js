@@ -485,7 +485,9 @@ test('discoverModels maps endpoint failures onto messageKeys', async () => {
     [fakeResponse(401, ''), 'k', 'authenticationFailed'],
     [fakeResponse(403, ''), 'k', 'accessDenied'],
     [fakeResponse(404, ''), 'k', 'notFound'],
-    [fakeResponse(500, ''), 'k', 'upstreamError'],
+    [fakeResponse(500, ''), 'k', 'serverError'],
+    [fakeResponse(503, ''), 'k', 'serverError'],
+    [fakeResponse(418, ''), 'k', 'upstreamError'],
     [fakeResponse(301, '', { location: 'https://elsewhere/v1/models' }), 'k', 'redirected'],
     [fakeResponse(200, '<html>login</html>'), 'k', 'invalidResponse'],
     [
@@ -503,6 +505,52 @@ test('discoverModels maps endpoint failures onto messageKeys', async () => {
       err =>
         err instanceof ModelDiscoveryError && err.messageKey === messageKey && err.status === 502,
       messageKey
+    );
+  }
+});
+
+test('a failed discovery names the upstream status and the host, never the path or query', async () => {
+  const { fetch } = fakeFetch(fakeResponse(502, ''));
+  await assert.rejects(
+    discoverModels(
+      { url: 'https://llm.example.com:8443/secret-path/v1?token=abc', provider: 'openai' },
+      { fetch }
+    ),
+    err => {
+      assert.equal(err.messageKey, 'serverError');
+      assert.equal(err.details.upstreamStatus, 502);
+      assert.equal(err.details.host, 'llm.example.com:8443');
+      assert.doesNotMatch(JSON.stringify(err.details), /secret-path|token=abc/);
+      return true;
+    }
+  );
+});
+
+test('an untrusted TLS certificate maps to certificateUntrusted with its code', async () => {
+  const cases = [
+    [{ code: 'UNABLE_TO_VERIFY_LEAF_SIGNATURE' }, 'UNABLE_TO_VERIFY_LEAF_SIGNATURE'],
+    [{ code: 'SELF_SIGNED_CERT_IN_CHAIN' }, 'SELF_SIGNED_CERT_IN_CHAIN'],
+    // undici: `fetch failed` with the socket error as its cause
+    [{ cause: { code: 'DEPTH_ZERO_SELF_SIGNED_CERT' } }, 'DEPTH_ZERO_SELF_SIGNED_CERT'],
+    // Only the message names it
+    [
+      { message: 'request failed, reason: unable to verify the first certificate' },
+      'CERT_UNTRUSTED'
+    ]
+  ];
+  for (const [props, code] of cases) {
+    const failure = Object.assign(new Error(props.message || 'fetch failed'), props);
+    const { fetch } = fakeFetch(failure);
+    await assert.rejects(
+      discoverModels({ url: 'https://ca.internal/v1', provider: 'openai' }, { fetch }),
+      err => {
+        assert.equal(err.messageKey, 'certificateUntrusted');
+        assert.equal(err.details.errorCode, code);
+        assert.equal(err.details.host, 'ca.internal');
+        assert.match(err.details.remediation, /SSL domain whitelist/);
+        return true;
+      },
+      code
     );
   }
 });

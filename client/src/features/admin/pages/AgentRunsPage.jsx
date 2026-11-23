@@ -10,7 +10,6 @@ import { DataTable } from '../components/data-table';
 import StatusBadge from '../../workflows/components/StatusBadge';
 
 import { getAdminApiErrorMessage } from '../../../api/adminApi';
-import AdminLoadError from '../components/AdminLoadError';
 const ACTIVE_POLL_MS = 5000;
 const IDLE_POLL_MS = 30000;
 
@@ -120,13 +119,14 @@ export default function AgentRunsPage() {
             ? t('admin.agents.runs.pageTitleFor', 'Agent Runs — {{profileId}}', { profileId })
             : t('admin.agents.runs.pageTitle', 'Agent Runs')}
         </h1>
-        {error && <AdminLoadError message={error} framed={false} className="mb-3" action={null} />}
+        {/* The table shows a load error itself, never as "No runs yet" (the page polls on). */}
         <DataTable
           columns={columns}
           data={runs}
           getRowId={r => r.executionId}
           actions={actions}
           loading={loading}
+          error={error}
           defaultSort={{ column: 'startedAt', direction: 'desc' }}
           empty={{
             icon: 'clock',

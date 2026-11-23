@@ -4,7 +4,7 @@
 import { useState } from 'react';
 import MimeTypeSelector from '../MimeTypeSelector';
 import { updateIn } from '../../utils/nestedUpdate';
-import { CHECKBOX_CLASS } from '../formStyles';
+import { CHECKBOX_CLASS, INPUT_CLASS } from '../formStyles';
 
 // The file-based upload types (image/file/audio/video) only differ in the
 // MimeTypeSelector category, translation keys, size defaults/bounds, and an
@@ -22,8 +22,6 @@ const UPLOAD_TYPE_CONFIGS = {
     extraToggle: {
       field: 'resizeImages',
       label: ['admin.apps.edit.resizeImages', 'Resize Images'],
-      checkboxClassName:
-        'h-3 w-3 text-indigo-600 focus:ring-indigo-500 border-gray-300 dark:border-gray-600 rounded-sm',
       labelClassName: 'ml-2 block text-xs text-gray-700 dark:text-gray-300'
     }
   },
@@ -112,8 +110,6 @@ const UPLOAD_TYPE_CONFIGS = {
         'admin.apps.edit.extractAudioFromVideo',
         'Extract audio track (for transcription / audio models)'
       ],
-      checkboxClassName:
-        'h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 dark:border-gray-600 rounded-sm',
       labelClassName: 'ml-2 block text-xs font-medium text-gray-700 dark:text-gray-300'
     }
   }
@@ -138,22 +134,30 @@ function UploadTypeCard({ app, onChange, uploadKey, t, parseNumberOrUndefined })
     <div>
       <div className="flex items-center mb-2">
         <input
+          id={`upload-${uploadKey}-enabled`}
           type="checkbox"
           checked={typeConfig.enabled || false}
           onChange={e => handleEnabledChange(e.target.checked)}
           className={CHECKBOX_CLASS}
         />
-        <label className="ml-2 block text-sm font-medium text-gray-900 dark:text-gray-100">
+        <label
+          htmlFor={`upload-${uploadKey}-enabled`}
+          className="ml-2 block text-sm font-medium text-gray-900 dark:text-gray-100"
+        >
           {t(...config.enableLabel)}
         </label>
       </div>
       {typeConfig.enabled && (
         <div className="ml-6 space-y-3">
           <div>
-            <label className="block text-xs font-medium text-gray-700 dark:text-gray-300">
+            <label
+              htmlFor={`upload-${uploadKey}-max-size`}
+              className="block text-xs font-medium text-gray-700 dark:text-gray-300"
+            >
               {t(...config.maxSizeLabel)}
             </label>
             <input
+              id={`upload-${uploadKey}-max-size`}
               type="number"
               min="1"
               max={config.maxFileSizeUpperBound}
@@ -163,10 +167,12 @@ function UploadTypeCard({ app, onChange, uploadKey, t, parseNumberOrUndefined })
                   maxFileSizeMB: parseNumberOrUndefined(e.target.value, Number.parseInt)
                 })
               }
-              className="mt-1 block w-20 rounded-md border border-admin-control-border dark:border-admin-control-border-dark shadow-xs focus:border-admin-accent focus:ring-admin-accent text-xs"
+              className={`${INPUT_CLASS} mt-1 max-w-28`}
             />
             {config.maxSizeHelp && (
-              <p className="mt-1 text-xs text-gray-500">{t(...config.maxSizeHelp)}</p>
+              <p className="mt-1 text-xs text-gray-600 dark:text-gray-400">
+                {t(...config.maxSizeHelp)}
+              </p>
             )}
           </div>
           {config.selects?.map(select => (
@@ -187,7 +193,7 @@ function UploadTypeCard({ app, onChange, uploadKey, t, parseNumberOrUndefined })
                       e.target.value === select.options[0][0] ? undefined : e.target.value
                   })
                 }
-                className="mt-1 block w-full max-w-sm rounded-md border border-admin-control-border dark:border-admin-control-border-dark shadow-xs focus:border-admin-accent focus:ring-admin-accent text-xs"
+                className={`${INPUT_CLASS} mt-1 max-w-sm`}
               >
                 {select.options.map(([value, key, fallback]) => (
                   <option key={value} value={value}>
@@ -195,26 +201,31 @@ function UploadTypeCard({ app, onChange, uploadKey, t, parseNumberOrUndefined })
                   </option>
                 ))}
               </select>
-              <p className="mt-1 text-xs text-gray-500">{t(...select.help)}</p>
+              <p className="mt-1 text-xs text-gray-600 dark:text-gray-400">{t(...select.help)}</p>
             </div>
           ))}
           {config.extraToggle && (
             <div className="flex items-center">
               <input
+                id={`upload-${uploadKey}-${config.extraToggle.field}`}
                 type="checkbox"
                 checked={typeConfig[config.extraToggle.field] !== false}
                 onChange={e => updateTypeConfig({ [config.extraToggle.field]: e.target.checked })}
-                className={config.extraToggle.checkboxClassName}
+                className={CHECKBOX_CLASS}
               />
-              <label className={config.extraToggle.labelClassName}>
+              <label
+                htmlFor={`upload-${uploadKey}-${config.extraToggle.field}`}
+                className={config.extraToggle.labelClassName}
+              >
                 {t(...config.extraToggle.label)}
               </label>
             </div>
           )}
           <div>
-            <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-2">
+            {/* Names a group of checkboxes, not one control: a heading, not a <label>. */}
+            <p className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-2">
               {t(...config.formatsLabel)}
-            </label>
+            </p>
             <MimeTypeSelector
               categoryType={config.categoryType}
               selectedFormats={typeConfig.supportedFormats || config.defaultFormats}
@@ -255,12 +266,16 @@ export default function UploadConfigSection({ app, onChange, t, parseNumberOrUnd
           <div className="space-y-6">
             <div className="flex items-center">
               <input
+                id="app-enable-upload"
                 type="checkbox"
                 checked={app.upload?.enabled || false}
                 onChange={e => onChange('upload', { ...app.upload, enabled: e.target.checked })}
                 className={CHECKBOX_CLASS}
               />
-              <label className="ml-2 block text-sm text-gray-900 dark:text-gray-100">
+              <label
+                htmlFor="app-enable-upload"
+                className="ml-2 block text-sm text-gray-900 dark:text-gray-100"
+              >
                 {t('admin.apps.edit.enableUpload', 'Enable Upload')}
               </label>
             </div>
@@ -269,6 +284,7 @@ export default function UploadConfigSection({ app, onChange, t, parseNumberOrUnd
               <div className="space-y-4 pl-6">
                 <div className="flex items-center">
                   <input
+                    id="app-allow-multiple"
                     type="checkbox"
                     checked={app.upload?.allowMultiple || false}
                     onChange={e =>
@@ -276,7 +292,10 @@ export default function UploadConfigSection({ app, onChange, t, parseNumberOrUnd
                     }
                     className={CHECKBOX_CLASS}
                   />
-                  <label className="ml-2 block text-sm text-gray-900 dark:text-gray-100">
+                  <label
+                    htmlFor="app-allow-multiple"
+                    className="ml-2 block text-sm text-gray-900 dark:text-gray-100"
+                  >
                     {t('admin.apps.edit.allowMultiple', 'Allow Multiple Files')}
                   </label>
                 </div>

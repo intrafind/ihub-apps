@@ -56,6 +56,20 @@ export const featureRegistry = [
     default: true
   },
   {
+    // The conversation in the app editors (`POST /api/admin/apps/_revise`, `POST /api/apps/_revise`).
+    // It hides or shows the conversation only: the routes are gated by `appGenerator`, so
+    // "Improve with AI" on the instructions keeps working with this one off.
+    id: 'appBuilderChat',
+    name: { en: 'Change apps in a conversation', de: 'Apps im Gespräch ändern' },
+    description: {
+      en: 'People who edit an app tell an AI model in a conversation what to change, answer its questions and apply the change it proposes, next to the test chat of the app. Each turn of the conversation is a model call that counts against the usage limit of the person who asked; a person can ask for 60 turns per hour. Needs App Drafts with AI. Turn it off to hide the conversation; the form and "Improve with AI" stay available',
+      de: 'Personen, die eine App bearbeiten, sagen einem KI-Modell im Gespräch, was es ändern soll, beantworten seine Rückfragen und übernehmen die vorgeschlagene Änderung, neben dem Test-Chat der App. Jeder Gesprächsschritt ist ein Modellaufruf, der auf das Nutzungslimit der anfragenden Person angerechnet wird; eine Person kann 60 Schritte pro Stunde anfragen. Erfordert App-Entwürfe mit KI. Ausschalten blendet das Gespräch aus; das Formular und „Mit KI verbessern“ bleiben verfügbar'
+    },
+    category: 'preview',
+    default: false,
+    preview: true
+  },
+  {
     id: 'integrations',
     name: { en: 'Integrations', de: 'Integrationen' },
     description: {

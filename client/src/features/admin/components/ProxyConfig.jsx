@@ -8,6 +8,7 @@ import { makeAdminApiCall } from '../../../api/adminApi';
 import AdminLoadGate from './AdminLoadGate';
 import { useAdminConfigLoad } from '../hooks/useAdminConfigLoad';
 import { useDirtyReport } from '../hooks/useDirtyReport';
+import { useSaveSection } from './SaveSections';
 import AdminLoadError from './AdminLoadError';
 
 const EMPTY_CONFIG = {
@@ -50,7 +51,7 @@ function ProxyConfig({ onDirtyChange }) {
   // Whether the configuration loaded at least once; before that (or after a
   // failed load) the editor never counts as holding unsaved changes.
   const [hasLoaded, setHasLoaded] = useState(false);
-  useDirtyReport(hasLoaded ? savedConfig : null, config, onDirtyChange);
+  const isDirty = useDirtyReport(hasLoaded ? savedConfig : null, config, onDirtyChange);
   const [provenance, setProvenance] = useState({});
   const [effective, setEffective] = useState(null);
   const [unresolvedPlaceholders, setUnresolvedPlaceholders] = useState({});
@@ -219,8 +220,9 @@ function ProxyConfig({ onDirtyChange }) {
     setNewPattern('');
   };
 
+  /** Saves the section. Resolves false when it did not save, so the page's bar stops and stays. */
   const handleSave = async () => {
-    if (!ready) return;
+    if (!ready) return false;
     if (invalidPatterns.length > 0) {
       setMessage({
         type: 'error',
@@ -230,7 +232,7 @@ function ProxyConfig({ onDirtyChange }) {
           { patterns: invalidPatterns.join(', ') }
         )
       });
-      return;
+      return false;
     }
     setSaving(true);
     setMessage('');
@@ -244,6 +246,7 @@ function ProxyConfig({ onDirtyChange }) {
         type: 'success',
         text: t('admin.system.proxy.configSaved', 'Proxy configuration saved successfully')
       });
+      return true;
     } catch (error) {
       setMessage({
         type: 'error',
@@ -251,10 +254,28 @@ function ProxyConfig({ onDirtyChange }) {
           error.message ||
           t('admin.system.proxy.configSaveError', 'Failed to save proxy configuration')
       });
+      return false;
     } finally {
       setSaving(false);
     }
   };
+
+  // The page's bar saves and discards the section. Discard also drops what was typed but not
+  // added yet and the result of a connectivity test, which was about the discarded edit.
+  useSaveSection('proxy', {
+    dirty: isDirty,
+    saving,
+    error: message?.type === 'error' ? message.text : null,
+    save: handleSave,
+    discard: () => {
+      setConfig(savedConfig);
+      setNewNoProxy('');
+      setNewPattern('');
+      setMessage('');
+      setTestResult(null);
+      setTestError('');
+    }
+  });
 
   const handleTest = async () => {
     setTesting(true);
@@ -689,24 +710,6 @@ function ProxyConfig({ onDirtyChange }) {
           </dl>
         </div>
       )}
-
-      {/* Save */}
-      <div className="flex justify-end mb-8">
-        <button
-          onClick={handleSave}
-          disabled={saving}
-          className={`inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-xs text-white ${
-            saving
-              ? 'bg-gray-400 cursor-not-allowed'
-              : 'bg-blue-600 hover:bg-blue-700 focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-blue-500'
-          }`}
-        >
-          <Icon name="CheckIcon" className="w-4 h-4 mr-2" />
-          {saving
-            ? t('admin.system.proxy.savingConfig', 'Saving…')
-            : t('admin.system.proxy.saveConfig', 'Save proxy settings')}
-        </button>
-      </div>
 
       {/* Connectivity test */}
       <div className="border-t border-gray-200 dark:border-gray-700 pt-6">

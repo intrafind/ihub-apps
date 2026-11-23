@@ -130,7 +130,7 @@ describe('setup strip', () => {
     renderPage({ models: [model('local-vllm')] });
     const strip = await screen.findByTestId('models-setup');
     expect(
-      within(strip).queryByRole('button', { name: 'Add a provider key' })
+      within(strip).queryByRole('button', { name: 'Connect a model provider' })
     ).not.toBeInTheDocument();
     fireEvent.click(within(strip).getByRole('button', { name: 'Import models' }));
     expect(screen.getByTestId('import-dialog')).toBeInTheDocument();
@@ -145,8 +145,8 @@ describe('setup strip', () => {
       'step'
     );
 
-    fireEvent.click(within(strip).getByRole('button', { name: 'Add a provider key' }));
-    expect(screen.getByTestId('location')).toHaveTextContent('/admin/providers');
+    fireEvent.click(within(strip).getByRole('button', { name: 'Connect a model provider' }));
+    expect(screen.getByTestId('location')).toHaveTextContent('/admin/providers/connect');
   });
 
   test('with a usable key, the next step is importing models', async () => {

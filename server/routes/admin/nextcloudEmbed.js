@@ -10,6 +10,7 @@ import { createOAuthClient } from '../../utils/oauthClientManager.js';
 import logger from '../../utils/logger.js';
 import { oauthClientsFile } from '../../utils/contentsPath.js';
 import { updatePlatform } from '../../utils/platformConfigStore.js';
+import { canonicalizeOrigin } from '../../utils/hostOrigins.js';
 
 /**
  * Merge updates into the platform configuration and publish them.
@@ -27,31 +28,6 @@ async function savePlatformConfig(updates) {
   const { data: merged } = await updatePlatform(updates);
   await configCache.refreshCacheEntry('config/platform.json');
   return merged;
-}
-
-/**
- * Validate a single `allowedHostOrigins` entry. We accept only well-formed
- * `http`/`https` origins (scheme + host, optionally + port — no path, no
- * query, no fragment) so a misconfigured entry can't widen the
- * postMessage / CSP `frame-ancestors` allowlist in unexpected ways.
- *
- * Returns the canonicalized origin (no trailing slash) or null when invalid.
- */
-function canonicalizeOrigin(raw) {
-  if (typeof raw !== 'string') return null;
-  const trimmed = raw.trim();
-  if (trimmed.length === 0 || trimmed.length > 2048) return null;
-  let url;
-  try {
-    url = new URL(trimmed);
-  } catch {
-    return null;
-  }
-  if (url.protocol !== 'http:' && url.protocol !== 'https:') return null;
-  if (url.username || url.password) return null;
-  if (url.pathname && url.pathname !== '/') return null;
-  if (url.search || url.hash) return null;
-  return url.origin;
 }
 
 export default function registerAdminNextcloudEmbedRoutes(app) {

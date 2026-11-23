@@ -43,6 +43,8 @@ function BuilderBasicsStep({ draft, onChange, isNew, errors }) {
         required
         name="name"
         error={errors.name ? t(errors.name.key, errors.name.defaultValue) : null}
+        // No error summary here: the line announces itself.
+        announceError
         placeholder={{ en: 'Orders (ERP)', de: 'Bestellungen (ERP)' }}
       />
       <DynamicLanguageEditor

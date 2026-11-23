@@ -156,6 +156,35 @@ function deriveName({ name, uri, mimeType, index }) {
 }
 
 /**
+ * Whether `compact` (no whitespace) is base64 or base64url text: alphabet
+ * characters, then at most two `=`. A plain loop, not a regular expression:
+ * over a payload of tens of megabytes V8 runs a pattern on a backtracking stack
+ * it may fail to grow under memory pressure, which surfaces as "Maximum call
+ * stack size exceeded" instead of a verdict.
+ *
+ * @param {string} compact
+ * @returns {boolean}
+ */
+function isBase64Text(compact) {
+  let end = compact.length;
+  while (end > 0 && compact.length - end < 2 && compact.charCodeAt(end - 1) === 61) end -= 1;
+  if (end === 0) return false;
+  for (let index = 0; index < end; index += 1) {
+    const code = compact.charCodeAt(index);
+    const alphabet =
+      (code >= 65 && code <= 90) || // A-Z
+      (code >= 97 && code <= 122) || // a-z
+      (code >= 48 && code <= 57) || // 0-9
+      code === 43 || // +
+      code === 47 || // /
+      code === 45 || // -
+      code === 95; // _
+    if (!alphabet) return false;
+  }
+  return true;
+}
+
+/**
  * Decode base64 without first allocating the decoded buffer of a payload that
  * is over the cap or not base64 at all.
  *
@@ -167,10 +196,11 @@ export function decodeBase64Capped(value, maxBytes = MAX_GENERATED_FILE_BYTES) {
   if (typeof value !== 'string') return { ok: false, reason: 'invalid' };
   const compact = value.replace(/^data:[^,]*;base64,/i, '').replaceAll(/\s+/g, '');
   if (!compact) return { ok: false, reason: 'empty' };
-  if (!/^[A-Za-z0-9+/_-]+={0,2}$/.test(compact)) return { ok: false, reason: 'invalid' };
+  // The size first: a payload over the cap is refused before anything walks it.
   const padding = compact.endsWith('==') ? 2 : compact.endsWith('=') ? 1 : 0;
   const estimate = Math.floor((compact.length * 3) / 4) - padding;
   if (estimate > maxBytes) return { ok: false, reason: 'too-large', bytes: estimate };
+  if (!isBase64Text(compact)) return { ok: false, reason: 'invalid' };
   const buffer = Buffer.from(compact, 'base64');
   if (buffer.length === 0) return { ok: false, reason: 'empty' };
   if (buffer.length > maxBytes) return { ok: false, reason: 'too-large', bytes: buffer.length };

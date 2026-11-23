@@ -30,7 +30,8 @@ const NO_SERVER_ANSWER = Object.freeze({ fields: {}, general: null });
  * @param {(id: string) => boolean} options.isTaken - Whether an app has this ID.
  * @param {(id: string) => void} [options.markTaken] - Remembers an ID the server refused.
  * @param {(payload: object, options: { origin: string }) => Promise<object>} options.createApp
- * @param {(id: string, payload: object) => void} options.onCreated
+ * @param {(id: string, payload: object, info: { origin: string }) => void} options.onCreated -
+ *   `origin` is how the app was started (`generated` for a draft from a description).
  * @param {(field: string) => string} [options.labelOf] - A field's label.
  * @param {(error: unknown) => string} [options.detailOf] - The server's own sentence.
  * @returns {object} See the return statement.
@@ -145,7 +146,7 @@ export function useCreateSubmit({
         }
         try {
           const created = await createApp(payload, { origin: current.start });
-          onCreated(created?.id || payload.id, payload);
+          onCreated(created?.id || payload.id, payload, { origin: current.start });
           return;
         } catch (error) {
           const failure = readCreateFailure(error, { id: payload.id, labelOf, detailOf });

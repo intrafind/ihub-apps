@@ -311,7 +311,10 @@ export default function registerOAuthRoutes(app) {
         // Consume the authorization code (single-use). In cluster mode this may
         // resolve against the worker that minted it, so it is asynchronous.
         const codeData = await consumeCode(sanitizedCode);
-        if (!codeData) {
+        // The store also holds codes of other flows (`purpose` names them), for
+        // example the embed sign-in code. They are for their own endpoint, never
+        // for a token request.
+        if (!codeData || codeData.purpose) {
           return sendOAuthError(
             res,
             400,

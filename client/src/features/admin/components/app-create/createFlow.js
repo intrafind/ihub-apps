@@ -45,27 +45,61 @@ function shownText(text) {
 }
 
 /**
- * The model that would prepare a draft: the standard chat model, else the
- * first chat model, among the models the list holds. This is the server's
- * rule (`selectGuideModel`, `server/utils/appUsageGuide.js`) applied to
- * `GET /api/models`, which lists the models the caller may use. Image models
- * and iAssistant conversations cannot answer a one-off request.
+ * Whether a model can prepare a draft at all: a chat model that answers a
+ * one-off request. Image models and iAssistant conversations cannot.
+ *
+ * @param {object|null|undefined} model
+ * @returns {boolean}
+ */
+export function canDraft(model) {
+  return (
+    !!model &&
+    (model.modelType || 'chat') === 'chat' &&
+    !model.supportsImageGeneration &&
+    String(model.provider || '').toLowerCase() !== 'iassistant-conversation'
+  );
+}
+
+/**
+ * The model that would prepare a draft: the model an administrator chose
+ * (`platformConfig.appGenerator.modelId`) when the list holds it and it can
+ * draft, else the standard chat model, else the first chat model, among the
+ * models the list holds. This is the server's rule (`selectDraftModel`,
+ * `server/services/appGenerator.js`) applied to `GET /api/models`, which lists
+ * the models the caller may use: a configured model the caller may not use is
+ * not in the list, and the server falls back to the automatic choice as well.
  *
  * It only says that a model is set up. A model with a wrong key passes; the
  * draft request then answers with its own message.
  *
  * @param {object[]|null|undefined} models
+ * @param {string} [configuredId] - The model an administrator chose; empty for the automatic choice.
  * @returns {object|null} The model, or null when no model can draft.
+ * @example
+ * pickDraftModel([{ id: 'a', default: true }, { id: 'b' }]); // → { id: 'a', … }
+ * pickDraftModel([{ id: 'a', default: true }, { id: 'b' }], 'b'); // → { id: 'b' }
  */
-export function pickDraftModel(models) {
-  const usable = (Array.isArray(models) ? models : []).filter(
-    model =>
-      model &&
-      (model.modelType || 'chat') === 'chat' &&
-      !model.supportsImageGeneration &&
-      String(model.provider || '').toLowerCase() !== 'iassistant-conversation'
+export function pickDraftModel(models, configuredId = '') {
+  const usable = (Array.isArray(models) ? models : []).filter(canDraft);
+  const configured = configuredId ? usable.find(model => model.id === configuredId) : null;
+  return configured || usable.find(model => model.default) || usable[0] || null;
+}
+
+/**
+ * What the admin setting "Model for drafts" offers (Admin → Features → App
+ * Drafts with AI): the enabled models that can draft, and the model the
+ * automatic choice picks among them. The admin model list holds every model;
+ * an administrator may use them all, so the automatic choice shown is the one
+ * an administrator gets. Someone limited to fewer models may get another.
+ *
+ * @param {object[]|null|undefined} models - `GET /api/admin/models` items.
+ * @returns {{ options: object[], automatic: object|null }}
+ */
+export function draftModelChoices(models) {
+  const options = (Array.isArray(models) ? models : []).filter(
+    model => canDraft(model) && model.enabled !== false
   );
-  return usable.find(model => model.default) || usable[0] || null;
+  return { options, automatic: pickDraftModel(options) };
 }
 
 /**

@@ -26,6 +26,12 @@
   "GET /a2a/skills/:skillId/.well-known/agent-card.json": {
     "skipped": "an external specification"
   },
+  "GET /api/admin/access/:type/:id": {
+    "skipped": "its parent path is not a readable list"
+  },
+  "GET /api/admin/access/:type/:id/verdict": {
+    "skipped": "its parent path is not a readable list"
+  },
   "GET /api/admin/agents/inboxes": {
     "status": 200,
     "shape": {
@@ -290,6 +296,20 @@
         "en": "string"
       },
       "type": "string"
+    }
+  },
+  "GET /api/admin/apps/:appId/_dependants": {
+    "status": 200,
+    "shape": {
+      "apps": [],
+      "groups": [
+        {
+          "id": "string",
+          "name": "string"
+        }
+      ],
+      "prompts": [],
+      "workflows": []
     }
   },
   "GET /api/admin/apps/:appId/inheritance": {
@@ -1508,6 +1528,14 @@
   "GET /api/admin/document-templates/:id/files/:slot": {
     "skipped": "its parent path is not a readable list"
   },
+  "GET /api/admin/embed-auth/config": {
+    "status": 200,
+    "shape": {
+      "active": "boolean",
+      "allowedHostOrigins": [],
+      "enabled": "boolean"
+    }
+  },
   "GET /api/admin/eu-ai-act/acknowledgements/_export": {
     "status": 200,
     "type": "text/csv"
@@ -1722,6 +1750,21 @@
         "lastModified": "string",
         "version": "string"
       }
+    }
+  },
+  "GET /api/admin/groups/:groupId/members": {
+    "status": 200,
+    "shape": {
+      "items": [
+        {
+          "active": "boolean",
+          "authMethods": "array",
+          "email": "string",
+          "id": "string",
+          "name": "string",
+          "username": "string"
+        }
+      ]
     }
   },
   "GET /api/admin/groups/resources": {
@@ -2322,6 +2365,17 @@
       "supportsImageGeneration": "boolean",
       "supportsTools": "string",
       "url": "string"
+    }
+  },
+  "GET /api/admin/models/:modelId/_dependants": {
+    "status": 200,
+    "shape": {
+      "agents": [],
+      "apps": [],
+      "groups": [],
+      "isDefault": "boolean",
+      "nextDefaultModelId": "string",
+      "workflows": []
     }
   },
   "GET /api/admin/models/:modelId/tts/voices": {
@@ -3365,12 +3419,14 @@
           "aiAcknowledgement": "object",
           "aiDisclosure": "object",
           "anonymousAuth": "object",
+          "appGenerator": "object",
           "artifacts": "object",
           "audit": "object",
           "auth": "object",
           "chats": "object",
           "cloudStorage": "object",
           "defaultLanguage": "object",
+          "embedAuth": "object",
           "ldapAuth": "object",
           "llm": "object",
           "localAuth": "object",
@@ -4521,6 +4577,7 @@
         },
         "enabled": "boolean",
         "generator": "boolean",
+        "generatorEnabled": "boolean",
         "maxApps": "number",
         "used": "number"
       }
@@ -4617,6 +4674,7 @@
         "enabled": "boolean",
         "providers": []
       },
+      "embedSignIn": "boolean",
       "gateUI": {
         "appName": "string",
         "logoUrl": "string",
@@ -7047,6 +7105,9 @@
       "items": [],
       "nextCursor": "null"
     }
+  },
+  "GET /embed-auth/complete": {
+    "skipped": "not an API answer"
   },
   "GET /manifest.json": {
     "skipped": "not an API answer"

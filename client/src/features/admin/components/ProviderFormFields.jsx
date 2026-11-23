@@ -8,13 +8,8 @@ import {
   IFINDER_GATEWAY
 } from '../../../../../shared/llmProviders.js';
 import { apiTypeLabel } from '../utils/modelImport';
-
-const INPUT =
-  'w-full px-3 py-2 border border-admin-control-border dark:border-admin-control-border-dark rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white';
-const READ_ONLY =
-  'w-full px-3 py-2 border border-admin-control-border dark:border-admin-control-border-dark rounded-lg bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 cursor-not-allowed';
-const LABEL = 'block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2';
-const HINT = 'mt-1 text-xs text-gray-500 dark:text-gray-400';
+import { HELP_CLASS, INPUT_CLASS, LABEL_CLASS } from './formStyles';
+import RequiredMark from './RequiredMark';
 
 /**
  * Name, ID, description and — for LLM providers — API type and base URL of a
@@ -48,8 +43,9 @@ function ProviderFormFields({
     <>
       <div className="mb-6 grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div>
-          <label htmlFor="provider-name" className={LABEL}>
-            {t('admin.providers.fields.name', 'Name')} <span className="text-red-500">*</span>
+          <label htmlFor="provider-name" className={LABEL_CLASS}>
+            {t('admin.providers.fields.name', 'Name')}
+            <RequiredMark />
           </label>
           <input
             id="provider-name"
@@ -58,13 +54,13 @@ function ProviderFormFields({
             onChange={e => onChange('name', e.target.value)}
             placeholder="T-Systems LLM Hub"
             required
-            className={INPUT}
+            className={INPUT_CLASS}
           />
         </div>
         <div>
-          <label htmlFor="provider-id" className={LABEL}>
-            {t('admin.providers.fields.id', 'ID')}{' '}
-            {isNew && <span className="text-red-500">*</span>}
+          <label htmlFor="provider-id" className={LABEL_CLASS}>
+            {t('admin.providers.fields.id', 'ID')}
+            {isNew && <RequiredMark />}
           </label>
           <input
             id="provider-id"
@@ -74,10 +70,11 @@ function ProviderFormFields({
             placeholder="t-systems-llm-hub"
             disabled={!isNew}
             required={isNew}
-            className={isNew ? INPUT : READ_ONLY}
+            aria-describedby={isNew ? 'provider-id-hint' : undefined}
+            className={INPUT_CLASS}
           />
           {isNew && (
-            <p className={HINT}>
+            <p id="provider-id-hint" className={HELP_CLASS}>
               {t(
                 'admin.providers.create.idHelp',
                 'Unique identifier (lowercase, use hyphens instead of spaces)'
@@ -88,7 +85,7 @@ function ProviderFormFields({
       </div>
 
       <div className="mb-6">
-        <label htmlFor="provider-description" className={LABEL}>
+        <label htmlFor="provider-description" className={LABEL_CLASS}>
           {t('admin.providers.fields.description', 'Description')}
         </label>
         <textarea
@@ -96,14 +93,14 @@ function ProviderFormFields({
           value={data.description}
           onChange={e => onChange('description', e.target.value)}
           rows={2}
-          className={`${INPUT} resize-none`}
+          className={`${INPUT_CLASS} resize-none`}
         />
       </div>
 
       {isLlm && (
         <div className="mb-6 grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
-            <label htmlFor="provider-api-type" className={LABEL}>
+            <label htmlFor="provider-api-type" className={LABEL_CLASS}>
               {t('admin.providers.fields.apiType', 'API type')}
             </label>
             {apiTypeLocked ? (
@@ -112,14 +109,14 @@ function ProviderFormFields({
                 type="text"
                 value={apiTypeLabel(t, data.id)}
                 disabled
-                className={READ_ONLY}
+                className={INPUT_CLASS}
               />
             ) : (
               <select
                 id="provider-api-type"
                 value={data.apiType || 'openai'}
                 onChange={e => onChange('apiType', e.target.value)}
-                className={INPUT}
+                className={INPUT_CLASS}
               >
                 {apiTypes.map(type => (
                   <option key={type} value={type}>
@@ -128,7 +125,7 @@ function ProviderFormFields({
                 ))}
               </select>
             )}
-            <p className={HINT}>
+            <p className={HELP_CLASS}>
               {apiTypeLocked
                 ? t(
                     'admin.providers.hints.apiTypeBuiltIn',
@@ -141,7 +138,7 @@ function ProviderFormFields({
             </p>
           </div>
           <div>
-            <label htmlFor="provider-base-url" className={LABEL}>
+            <label htmlFor="provider-base-url" className={LABEL_CLASS}>
               {t('admin.providers.fields.baseUrl', 'Base URL')}
             </label>
             <input
@@ -150,9 +147,9 @@ function ProviderFormFields({
               value={data.baseUrl || ''}
               onChange={e => onChange('baseUrl', e.target.value)}
               placeholder="https://llm-server.llmhub.t-systems.net/v2"
-              className={INPUT}
+              className={INPUT_CLASS}
             />
-            <p className={HINT}>
+            <p className={HELP_CLASS}>
               {t(
                 'admin.providers.hints.baseUrl',
                 'Optional. The API base the provider’s models are listed from when importing models.'
@@ -161,14 +158,14 @@ function ProviderFormFields({
           </div>
           {!apiTypeLocked && (
             <div className="sm:col-span-2">
-              <label htmlFor="provider-gateway" className={LABEL}>
+              <label htmlFor="provider-gateway" className={LABEL_CLASS}>
                 {t('admin.providers.fields.gateway', 'Model gateway')}
               </label>
               <select
                 id="provider-gateway"
                 value={data.gateway || ''}
                 onChange={e => changeGateway(e.target.value)}
-                className={INPUT}
+                className={INPUT_CLASS}
               >
                 <option value="">
                   {t('admin.providers.gateway.none', 'None (regular endpoint)')}
@@ -177,7 +174,7 @@ function ProviderFormFields({
                   {t('admin.providers.gateway.ifinder', 'iFinder Model Gateway')}
                 </option>
               </select>
-              <p className={HINT}>
+              <p className={HELP_CLASS}>
                 {t(
                   'admin.providers.hints.gateway',
                   'Choose iFinder Model Gateway when the base URL is a gateway. Models are then listed from /v1/gateway/models and called through /v1/gateway/proxy. The API key is the gateway project key.'

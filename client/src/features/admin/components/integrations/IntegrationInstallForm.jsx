@@ -5,8 +5,10 @@ import { use, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import Icon from '../../../../shared/components/Icon';
 import LoadingSpinner from '../../../../shared/components/LoadingSpinner';
+import ImplicitSubmit from '../../../../shared/components/ImplicitSubmit';
 import IntegrationTestResults from '../IntegrationTestResults';
 import { GrantedGroups } from './editors/InstallationEditorParts';
+import { useInstallationEditorSave } from './editors/useInstallationEditor';
 import { groupsGranting } from '../../utils/groupIntegrationAccess';
 import ConfigFieldInput, { pickText } from './ConfigFieldInput';
 import ActionToggleList from './ActionToggleList';
@@ -385,8 +387,8 @@ function IntegrationInstallForm({
     }
   };
 
-  const save = async event => {
-    event?.preventDefault();
+  /** @returns {Promise<boolean>} whether the installation was stored */
+  const save = async () => {
     setSaving(true);
     setError(null);
     try {
@@ -394,12 +396,21 @@ function IntegrationInstallForm({
       const saved = isEdit
         ? await updateInstalledIntegration(instanceId, payload)
         : await installIntegration(payload);
-      onSaved?.(saved);
+      await onSaved?.(saved);
+      return true;
     } catch (err) {
       applyError(err);
+      return false;
     } finally {
       setSaving(false);
     }
+  };
+  // On the installation's page the page's save bar saves; the dialog keeps its own button.
+  const { managed } = useInstallationEditorSave({ error }, save);
+  const barSaves = managed && !inDialog;
+  const submit = event => {
+    event.preventDefault();
+    void save();
   };
 
   if (loading) {
@@ -430,7 +441,7 @@ function IntegrationInstallForm({
     );
 
   const body = (
-    <form id={formId} onSubmit={save} className={inDialog ? 'space-y-6' : 'space-y-5'}>
+    <form id={formId} onSubmit={submit} className={inDialog ? 'space-y-6' : 'space-y-5'}>
       {inDialog && definition.description && (
         <p className="text-sm text-gray-600 dark:text-gray-400">{definition.description}</p>
       )}
@@ -750,19 +761,23 @@ function IntegrationInstallForm({
           </div>
         )}
       </div>
-      <div className="flex gap-2">
-        <button type="button" className={SECONDARY_BUTTON_CLASS} onClick={onCancel}>
-          {t('common.cancel', 'Cancel')}
-        </button>
-        <button
-          type="submit"
-          form={formId}
-          className={PRIMARY_BUTTON_CLASS}
-          disabled={saving || testing || !definition.supported}
-        >
-          {submitLabel(t, { saving, isEdit })}
-        </button>
-      </div>
+      {barSaves ? (
+        <ImplicitSubmit form={formId} disabled={saving || testing || !definition.supported} />
+      ) : (
+        <div className="flex gap-2">
+          <button type="button" className={SECONDARY_BUTTON_CLASS} onClick={onCancel}>
+            {t('common.cancel', 'Cancel')}
+          </button>
+          <button
+            type="submit"
+            form={formId}
+            className={PRIMARY_BUTTON_CLASS}
+            disabled={saving || testing || !definition.supported}
+          >
+            {submitLabel(t, { saving, isEdit })}
+          </button>
+        </div>
+      )}
     </div>
   );
 

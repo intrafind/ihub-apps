@@ -296,9 +296,17 @@ function LoadingSpinner() {
  * ChangeHistoryDrawer - A right-side drawer (the shared `Drawer`) that displays the
  * change history for a given admin resource, allowing snapshot inspection and rollback.
  * `readOnly` hides the rollback for a resource the server cannot roll back
- * (projects).
+ * (projects). `onRestored` runs after a rollback went through, so the page can
+ * load the restored version (a deleted item's page loads it in place of its 404).
  */
-function ChangeHistoryDrawer({ isOpen, onClose, resource, resourceId, readOnly = false }) {
+function ChangeHistoryDrawer({
+  isOpen,
+  onClose,
+  resource,
+  resourceId,
+  readOnly = false,
+  onRestored
+}) {
   const { t } = useTranslation();
 
   // State
@@ -387,6 +395,7 @@ function ChangeHistoryDrawer({ isOpen, onClose, resource, resourceId, readOnly =
       setRollbackModalOpen(false);
       // Refresh snapshots after rollback
       await fetchSnapshots();
+      onRestored?.();
     } catch (err) {
       setRollbackError(
         err.message || t('admin.changeHistory.rollbackError', 'Failed to rollback.')
@@ -394,7 +403,7 @@ function ChangeHistoryDrawer({ isOpen, onClose, resource, resourceId, readOnly =
     } finally {
       setRollbackLoading(false);
     }
-  }, [selectedSnapshot, resource, resourceId, fetchSnapshots, t]);
+  }, [selectedSnapshot, resource, resourceId, fetchSnapshots, onRestored, t]);
 
   // Fetch snapshots when drawer opens
   useEffect(() => {
