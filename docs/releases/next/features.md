@@ -70,5 +70,6 @@ When you change something on an admin edit page, a bar at the bottom of the scre
 - **Prompt variables** on the Prompts list are saved with the bar.
 - **Provenance settings** still ask for confirmation before a change that needs it; **Cancel** in the confirmation ends the save and keeps your edits.
 - **Logging: the privacy settings** no longer write the whole logging block when you save them.
+- **The instructions for the model** on an installation's Overview are saved with the same bar as its Settings and the approval, in that order. **Edit instructions** no longer has its own Save; **Cancel** closes the editor, and the text survives a switch to another tab. **Use the integration’s own** still acts at once.
 - **The Installation page** keeps a pending approval edit when you save the Settings with Enter. Discard no longer jumps back to the Overview tab.
 - Credentials (a dialog) and the translation overrides keep their own Save.

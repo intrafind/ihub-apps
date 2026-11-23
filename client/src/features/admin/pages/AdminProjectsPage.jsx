@@ -597,7 +597,7 @@ function AdminProjectsPage() {
             }}
           />
         )}
-        <SaveSectionsBar />
+        <SaveSectionsBar leaveGuard />
       </div>
     </SaveSectionsProvider>
   );

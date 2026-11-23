@@ -4,12 +4,12 @@
 /**
  * The page of one installation has ONE save bar (`SaveSectionsBar`) for everything it edits:
  * the Settings editor (a dedicated editor or the generic form) and the tool approval of the
- * Overview.
+ * Overview, and the 'Instructions for the model' of the Overview.
  *
  *   - no bar until something changed; it stays while another tab is open;
- *   - one Save runs the Settings first, then the approval; a failure stops there, names the
- *     error and keeps what did not save (retry saves only that);
- *   - Discard resets both;
+ *   - one Save runs the Settings first, then the approval, then the instructions; a failure
+ *     stops there, names the error and keeps what did not save (retry saves only that);
+ *   - Discard resets all of them;
  *   - the editors and the approval card draw no Save or Cancel of their own;
  *   - the install DIALOG (not on this page) keeps its own Install button.
  */
@@ -554,5 +554,235 @@ describe('installation page: one save bar', () => {
     );
     await screen.findByLabelText(/Portal URL/);
     expect(screen.getByRole('button', { name: 'Save' })).toBeInTheDocument();
+  });
+});
+
+describe('installation page: the instructions for the model', () => {
+  const DEFINITION_TEXT = 'Start with search.';
+  const instructionsCard = () => screen.getByTestId('installation-instructions');
+  const textarea = () => within(instructionsCard()).getByRole('textbox');
+  const openEditor = async () => {
+    renderAt('/admin/integrations/ifinder');
+    await screen.findByRole('heading', { level: 1, name: 'Our iFinder' });
+    fireEvent.click(within(instructionsCard()).getByRole('button', { name: 'Edit instructions' }));
+  };
+
+  beforeEach(() => {
+    stored = {
+      ...IFINDER_DETAIL,
+      instructions: { text: DEFINITION_TEXT, source: 'definition', own: null }
+    };
+    mockApi.saveIntegrationInstructions.mockImplementation(async (id, own) => {
+      stored = {
+        ...stored,
+        instructions: own
+          ? { text: own.en, source: 'admin', own }
+          : { text: DEFINITION_TEXT, source: 'definition', own: null }
+      };
+      return {};
+    });
+  });
+
+  test('no bar while the text is only shown or opened without a change; the card has no Save', async () => {
+    await openEditor();
+
+    expect(textarea()).toHaveValue(DEFINITION_TEXT);
+    expect(within(instructionsCard()).queryByRole('button', { name: 'Save' })).toBeNull();
+    expect(screen.queryByRole('button', SAVE)).not.toBeInTheDocument();
+
+    // Cancel closes the editor; the text is shown again.
+    fireEvent.click(within(instructionsCard()).getByRole('button', { name: 'Cancel' }));
+    expect(within(instructionsCard()).getByText(DEFINITION_TEXT)).toBeInTheDocument();
+  });
+
+  test('a change shows the bar; Discard puts the shown text back and sends nothing', async () => {
+    await openEditor();
+
+    fireEvent.change(textarea(), { target: { value: 'Always link the dataset.' } });
+    expect(await screen.findByRole('button', SAVE)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Discard' }));
+
+    expect(within(instructionsCard()).getByText(DEFINITION_TEXT)).toBeInTheDocument();
+    expect(within(instructionsCard()).queryByRole('textbox')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', SAVE)).not.toBeInTheDocument();
+    expect(mockApi.saveIntegrationInstructions).not.toHaveBeenCalled();
+  });
+
+  test('typing the text back leaves nothing to save', async () => {
+    await openEditor();
+    fireEvent.change(textarea(), { target: { value: 'Something else' } });
+    await screen.findByRole('button', SAVE);
+
+    fireEvent.change(textarea(), { target: { value: DEFINITION_TEXT } });
+
+    await waitFor(() => expect(screen.queryByRole('button', SAVE)).not.toBeInTheDocument());
+  });
+
+  test('the edit and the bar survive a tab switch (the Overview unmounts)', async () => {
+    await openEditor();
+    fireEvent.change(textarea(), { target: { value: 'Always link the dataset.' } });
+    await screen.findByRole('button', SAVE);
+
+    fireEvent.click(screen.getByRole('tab', { name: /Settings/ }));
+    await screen.findByTestId('ifinder-editor');
+    expect(screen.getByRole('button', SAVE)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('tab', { name: /Overview/ }));
+    expect(textarea()).toHaveValue('Always link the dataset.');
+    expect(screen.getByRole('button', SAVE)).toBeInTheDocument();
+  });
+
+  test('one Save stores the Settings, the approval and the instructions, in that order', async () => {
+    renderAt('/admin/integrations/ifinder?tab=settings');
+    await screen.findByTestId('ifinder-editor');
+    fireEvent.change(baseUrlOf(), { target: { value: 'https://edited.example.com' } });
+    fireEvent.click(screen.getByRole('tab', { name: /Overview/ }));
+    fireEvent.change(approvalSelect(), { target: { value: 'always' } });
+    fireEvent.click(within(instructionsCard()).getByRole('button', { name: 'Edit instructions' }));
+    fireEvent.change(textarea(), { target: { value: 'Line one.\nLine two.' } });
+
+    fireEvent.click(await screen.findByRole('button', SAVE));
+
+    await waitFor(() => expect(mockApi.saveIntegrationInstructions).toHaveBeenCalledTimes(1));
+    expect(mockApi.saveIntegrationInstructions).toHaveBeenCalledWith('ifinder', {
+      en: 'Line one.\nLine two.'
+    });
+    const order = fn => fn.mock.invocationCallOrder[0];
+    expect(order(mockApi.updateInstalledIntegration)).toBeLessThan(
+      order(mockApi.setInstalledIntegrationApproval)
+    );
+    expect(order(mockApi.setInstalledIntegrationApproval)).toBeLessThan(
+      order(mockApi.saveIntegrationInstructions)
+    );
+    await waitFor(() => expect(screen.queryByRole('button', SAVE)).not.toBeInTheDocument());
+    // The saved text is shown, from the reloaded installation.
+    expect(await within(instructionsCard()).findByText(/Line one\./)).toBeInTheDocument();
+    expect(within(instructionsCard()).getByText('Your text')).toBeInTheDocument();
+    // The editor is closed again: it shows the text, it does not hold a draft.
+    expect(within(instructionsCard()).queryByRole('textbox')).not.toBeInTheDocument();
+    expectNoMissingKeys();
+  });
+
+  test('an edit of another language keeps the stored texts of the others', async () => {
+    stored = {
+      ...stored,
+      instructions: { text: 'Deutsch', source: 'admin', own: { de: 'Deutsch' } }
+    };
+    await openEditor();
+    // The editor starts from the text shown, since there is none stored for English yet.
+    expect(textarea()).toHaveValue('Deutsch');
+    fireEvent.change(textarea(), { target: { value: 'English text' } });
+
+    fireEvent.click(await screen.findByRole('button', SAVE));
+
+    await waitFor(() =>
+      expect(mockApi.saveIntegrationInstructions).toHaveBeenCalledWith('ifinder', {
+        de: 'Deutsch',
+        en: 'English text'
+      })
+    );
+  });
+
+  test('an empty text goes back to the integration’s own', async () => {
+    stored = {
+      ...stored,
+      instructions: { text: 'Mine', source: 'admin', own: { en: 'Mine' } }
+    };
+    await openEditor();
+    fireEvent.change(textarea(), { target: { value: '  ' } });
+
+    fireEvent.click(await screen.findByRole('button', SAVE));
+
+    await waitFor(() =>
+      expect(mockApi.saveIntegrationInstructions).toHaveBeenCalledWith('ifinder', null)
+    );
+  });
+
+  test('a refused save names the error in the bar and keeps the text; the retry sends only the instructions', async () => {
+    mockApi.saveIntegrationInstructions.mockRejectedValueOnce(new Error('Instructions refused'));
+    renderAt('/admin/integrations/ifinder?tab=settings');
+    await screen.findByTestId('ifinder-editor');
+    fireEvent.change(baseUrlOf(), { target: { value: 'https://edited.example.com' } });
+    fireEvent.click(screen.getByRole('tab', { name: /Overview/ }));
+    fireEvent.click(within(instructionsCard()).getByRole('button', { name: 'Edit instructions' }));
+    fireEvent.change(textarea(), { target: { value: 'Always link.' } });
+
+    fireEvent.click(await screen.findByRole('button', SAVE));
+
+    expect(await screen.findByTestId('save-bar-message')).toHaveTextContent('Instructions refused');
+    expect(textarea()).toHaveValue('Always link.');
+    expect(mockApi.updateInstalledIntegration).toHaveBeenCalledTimes(1);
+
+    fireEvent.click(screen.getByRole('button', SAVE));
+    await waitFor(() => expect(mockApi.saveIntegrationInstructions).toHaveBeenCalledTimes(2));
+    // The Settings were stored the first time: they are not sent again.
+    expect(mockApi.updateInstalledIntegration).toHaveBeenCalledTimes(1);
+    await waitFor(() => expect(screen.queryByRole('button', SAVE)).not.toBeInTheDocument());
+  });
+
+  test('after a refused save the bar stays when the text is typed back; Discard ends it', async () => {
+    // The write may have gone through and only its answer been lost.
+    mockApi.saveIntegrationInstructions.mockRejectedValueOnce(new Error('Answer lost'));
+    await openEditor();
+    fireEvent.change(textarea(), { target: { value: 'Changed' } });
+    fireEvent.click(await screen.findByRole('button', SAVE));
+    await screen.findByText('Answer lost');
+
+    fireEvent.change(textarea(), { target: { value: DEFINITION_TEXT } });
+
+    expect(screen.getByRole('button', SAVE)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Discard' }));
+    expect(screen.queryByRole('button', SAVE)).not.toBeInTheDocument();
+  });
+
+  test('a failed Settings save stops before the instructions', async () => {
+    mockApi.updateInstalledIntegration.mockRejectedValueOnce(new Error('Portal is down'));
+    renderAt('/admin/integrations/ifinder?tab=settings');
+    await screen.findByTestId('ifinder-editor');
+    fireEvent.change(baseUrlOf(), { target: { value: 'https://edited.example.com' } });
+    fireEvent.click(screen.getByRole('tab', { name: /Overview/ }));
+    fireEvent.click(within(instructionsCard()).getByRole('button', { name: 'Edit instructions' }));
+    fireEvent.change(textarea(), { target: { value: 'Always link.' } });
+
+    fireEvent.click(await screen.findByRole('button', SAVE));
+
+    expect(await screen.findAllByText('Portal is down')).not.toHaveLength(0);
+    expect(mockApi.saveIntegrationInstructions).not.toHaveBeenCalled();
+    expect(textarea()).toHaveValue('Always link.');
+  });
+
+  test('Enter in the text is a new line: the textarea is in no form that could submit it', async () => {
+    await openEditor();
+
+    expect(textarea().closest('form')).toBeNull();
+  });
+
+  test('"Use the integration’s own" acts at once, like the other single actions', async () => {
+    stored = {
+      ...stored,
+      instructions: { text: 'Mine', source: 'admin', own: { en: 'Mine' } }
+    };
+    renderAt('/admin/integrations/ifinder');
+    await screen.findByRole('heading', { level: 1, name: 'Our iFinder' });
+
+    fireEvent.click(
+      within(instructionsCard()).getByRole('button', { name: 'Use the integration’s own' })
+    );
+
+    await waitFor(() =>
+      expect(mockApi.saveIntegrationInstructions).toHaveBeenCalledWith('ifinder', null)
+    );
+    expect(await within(instructionsCard()).findByText(DEFINITION_TEXT)).toBeInTheDocument();
+    expect(screen.queryByRole('button', SAVE)).not.toBeInTheDocument();
+  });
+
+  test('leaving the page with an unsaved text asks first', async () => {
+    await openEditor();
+    fireEvent.change(textarea(), { target: { value: 'Changed' } });
+
+    fireEvent.click(screen.getByRole('link', { name: 'Integrations' }));
+
+    expect(await screen.findByText('Leave without saving?')).toBeInTheDocument();
   });
 });

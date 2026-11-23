@@ -21,7 +21,7 @@ import fs from 'fs';
 import path from 'path';
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import '@testing-library/jest-dom';
-import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
+import { MemoryRouter, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
 import i18next from 'i18next';
 import en from '../../../shared/i18n/en.json';
 
@@ -379,6 +379,97 @@ describe('the tab "Personal apps" of Admin → Apps', () => {
     expect(read('pages/AdminAppsPage.jsx')).toContain(
       '<WaitingAppsNotice refreshKey={waitingRefresh} />'
     );
+  });
+});
+
+describe('the tab "Personal apps" keeps its unsaved settings', () => {
+  const everyone = () =>
+    screen.getByRole('checkbox', {
+      name: new RegExp(`^${text('admin.userApps.settings.allowEveryone')}`)
+    });
+  const bar = () => screen.queryByRole('region', { name: SAVE_BAR });
+
+  /** The apps page with a button that leaves it, as a sidebar link would. */
+  function GoAway() {
+    const navigate = useNavigate();
+    return (
+      <button type="button" onClick={() => navigate('/admin/groups')}>
+        go away
+      </button>
+    );
+  }
+  const renderWithExit = () =>
+    renderAt(
+      '/admin/apps?tab=personal',
+      <Route
+        path="*"
+        element={
+          <>
+            <AdminAppsPage />
+            <GoAway />
+          </>
+        }
+      />
+    );
+
+  it('keeps the edit and the bar when the admin switches to the Apps tab and back', async () => {
+    renderAppsPage('/admin/apps?tab=personal');
+    await screen.findByText(text('admin.userApps.settings.shareWith'));
+    expect(bar()).toBeNull();
+
+    fireEvent.click(everyone());
+    expect(bar()).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('tab', { name: 'Apps' }));
+    expect(screen.getByTestId('location')).not.toHaveTextContent('tab=personal');
+    // The settings are out of sight, the edit is not gone: the bar still carries it.
+    expect(
+      screen.queryByRole('checkbox', {
+        name: new RegExp(`^${text('admin.userApps.settings.allowEveryone')}`)
+      })
+    ).toBeNull();
+    expect(bar()).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('tab', { name: /Personal apps/ }));
+    expect(everyone()).toBeChecked();
+    expect(mockApi.saveUserAppSettings).not.toHaveBeenCalled();
+  });
+
+  it('saves the edit from the Apps tab, with the one bar of the page', async () => {
+    renderAppsPage('/admin/apps?tab=personal');
+    await screen.findByText(text('admin.userApps.settings.shareWith'));
+    fireEvent.click(everyone());
+    fireEvent.click(screen.getByRole('tab', { name: 'Apps' }));
+
+    await act(async () => {
+      fireEvent.click(saveButton());
+    });
+
+    expect(mockApi.saveUserAppSettings).toHaveBeenCalledWith({ sharing: { allowEveryone: true } });
+    expect(bar()).toBeNull();
+    // Only the page's bar exists: the tab's own is not drawn a second time.
+    expect(screen.queryAllByRole('region', { name: SAVE_BAR })).toHaveLength(0);
+  });
+
+  it('asks before the admin leaves the page with the edit', async () => {
+    renderWithExit();
+    await screen.findByText(text('admin.userApps.settings.shareWith'));
+    fireEvent.click(everyone());
+
+    fireEvent.click(screen.getByRole('button', { name: 'go away' }));
+
+    expect(screen.getByRole('alertdialog')).toBeInTheDocument();
+    expect(screen.getByTestId('location')).toHaveTextContent('/admin/apps');
+  });
+
+  it('lets the admin leave when nothing changed', async () => {
+    renderWithExit();
+    await screen.findByText(text('admin.userApps.settings.shareWith'));
+
+    fireEvent.click(screen.getByRole('button', { name: 'go away' }));
+
+    expect(screen.queryByRole('alertdialog')).toBeNull();
+    expect(screen.getByTestId('location')).toHaveTextContent('/admin/groups');
   });
 });
 

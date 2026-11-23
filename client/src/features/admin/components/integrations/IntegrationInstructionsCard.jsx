@@ -7,14 +7,7 @@ import Badge from '../../../../shared/components/Badge';
 import Icon from '../../../../shared/components/Icon';
 import { saveIntegrationInstructions } from '../../../../api/integrationsAdminApi';
 import { getAdminApiErrorMessage } from '../../../../api/adminApi';
-import {
-  CALLOUT_CLASS,
-  HELP_CLASS,
-  INPUT_CLASS,
-  PRIMARY_BUTTON_CLASS,
-  SECONDARY_BUTTON_CLASS
-} from '../formStyles';
-import { baseLanguage, textInLanguage, withLanguageText } from './actionTestForm';
+import { CALLOUT_CLASS, HELP_CLASS, INPUT_CLASS, SECONDARY_BUTTON_CLASS } from '../formStyles';
 
 /**
  * Where the integration's instructions come from, as the admin reads it.
@@ -45,29 +38,46 @@ function instructionsSourceLabel(t, source) {
  * The admin can replace it for the current language or go back to the
  * definition's.
  *
+ * The text being edited belongs to the page, not to this card: the Overview unmounts when
+ * another tab is shown, and the page's one save bar saves and discards the edit together with
+ * the settings and the approval. Going back to the integration's own text acts at once, like
+ * the other single actions of the page.
+ *
  * @param {Object} props
  * @param {string} props.instanceId
  * @param {{text: string, source: string|null, own: Object|string|null}} props.instructions
  * @param {boolean} [props.disabled] - the installation cannot be changed now
- * @param {() => Promise<void>|void} props.onSaved - reload after a save
+ * @param {string|null} props.draft - The text being edited; null while the card only shows it
+ * @param {(text: string) => void} props.onDraftChange
+ * @param {() => void} props.onEdit - Start editing, from the text shown now
+ * @param {() => void} props.onCancel - Leave editing and drop the draft
+ * @param {boolean} [props.saving] - The page's save is running
+ * @param {() => Promise<void>|void} props.onSaved - reload after going back to the own text
  * @returns {JSX.Element}
  */
-function IntegrationInstructionsCard({ instanceId, instructions, disabled = false, onSaved }) {
-  const { t, i18n } = useTranslation();
-  const lang = baseLanguage(i18n.language);
+function IntegrationInstructionsCard({
+  instanceId,
+  instructions,
+  disabled = false,
+  draft,
+  onDraftChange,
+  onEdit,
+  onCancel,
+  saving = false,
+  onSaved
+}) {
+  const { t } = useTranslation();
   const id = useId();
-  const [editing, setEditing] = useState(false);
-  const [draft, setDraft] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
   const current = instructions || { text: '', source: null, own: null };
+  const editing = draft !== null && draft !== undefined;
 
-  const save = async value => {
+  const restoreOwn = async () => {
     setBusy(true);
     setError(null);
     try {
-      await saveIntegrationInstructions(instanceId, value);
-      setEditing(false);
+      await saveIntegrationInstructions(instanceId, null);
       await onSaved?.();
     } catch (err) {
       setError(getAdminApiErrorMessage(err));
@@ -100,23 +110,19 @@ function IntegrationInstructionsCard({ instanceId, instructions, disabled = fals
       </p>
       {error && <p className={`mb-2 ${CALLOUT_CLASS.danger}`}>{error}</p>}
       {editing ? (
-        <form
-          onSubmit={event => {
-            event.preventDefault();
-            void save(withLanguageText(current.own, lang, draft));
-          }}
-        >
+        <div>
           <label htmlFor={`${id}-text`} className="sr-only">
             {t('admin.integrations.instructions.title', 'Instructions for the model')}
           </label>
+          {/* A textarea: Enter is a new line here, and nothing around it submits. */}
           <textarea
             id={`${id}-text`}
             className={INPUT_CLASS}
             rows={5}
             value={draft}
-            disabled={busy}
+            disabled={saving}
             aria-describedby={`${id}-help`}
-            onChange={e => setDraft(e.target.value)}
+            onChange={e => onDraftChange(e.target.value)}
           />
           <p className={HELP_CLASS}>
             {t(
@@ -125,19 +131,16 @@ function IntegrationInstructionsCard({ instanceId, instructions, disabled = fals
             )}
           </p>
           <div className="mt-2 flex gap-2">
-            <button type="submit" className={PRIMARY_BUTTON_CLASS} disabled={busy}>
-              {t('common.save', 'Save')}
-            </button>
             <button
               type="button"
               className={SECONDARY_BUTTON_CLASS}
-              disabled={busy}
-              onClick={() => setEditing(false)}
+              disabled={saving}
+              onClick={onCancel}
             >
               {t('common.cancel', 'Cancel')}
             </button>
           </div>
-        </form>
+        </div>
       ) : (
         <>
           {current.text ? (
@@ -153,11 +156,8 @@ function IntegrationInstructionsCard({ instanceId, instructions, disabled = fals
             <button
               type="button"
               className={SECONDARY_BUTTON_CLASS}
-              disabled={disabled || busy}
-              onClick={() => {
-                setDraft(textInLanguage(current.own, lang) || current.text || '');
-                setEditing(true);
-              }}
+              disabled={disabled || busy || saving}
+              onClick={onEdit}
             >
               <Icon name="pencil" size="sm" />
               {t('admin.integrations.instructions.edit', 'Edit instructions')}
@@ -166,8 +166,8 @@ function IntegrationInstructionsCard({ instanceId, instructions, disabled = fals
               <button
                 type="button"
                 className={SECONDARY_BUTTON_CLASS}
-                disabled={disabled || busy}
-                onClick={() => void save(null)}
+                disabled={disabled || busy || saving}
+                onClick={() => void restoreOwn()}
               >
                 {t('admin.integrations.instructions.reset', 'Use the integration’s own')}
               </button>
