@@ -106,6 +106,8 @@ function indentOf(line) {
 const LIST_ITEM_RE = /^[ \t]*([-*+]|\d{1,9}[.)])( +|\t|$)/;
 /** What stands in for inline code: not a space, so no phrase is found across it. */
 const CODE = ' \u0000 ';
+/** The text without the targets of its links, `[text](target)` becoming `[text] `. */
+const withoutLinkTargets = text => text.replace(/\]\([^)]*\)/g, '] ');
 const headingText = text =>
   text
     .replace(/\[([^\]]*)\]\([^)]*\)/g, '$1')
@@ -132,10 +134,7 @@ function proseWithHeadings(markdown) {
 
   const endParagraph = () => {
     if (paragraph.length === 0) return;
-    const text = paragraph
-      .join(' ')
-      .replace(/`[^`]*`/g, CODE)
-      .replace(/\]\([^)]*\)/g, '] ');
+    const text = withoutLinkTargets(paragraph.join(' ').replace(/`[^`]*`/g, CODE));
     blocks.push({ heading, text });
     paragraph = [];
   };
@@ -203,7 +202,7 @@ function proseWithHeadings(markdown) {
       endParagraph();
       // The heading names the place, so it keeps the words of its inline code.
       heading = headingText(headingMatch[1]);
-      blocks.push({ heading, text: lineText });
+      blocks.push({ heading, text: withoutLinkTargets(lineText) });
       listIndent = 0;
       continue;
     }
@@ -219,7 +218,7 @@ function proseWithHeadings(markdown) {
     }
     if (/^ {0,3}(?:\||>)/.test(line) && !item) {
       endParagraph(); // a table row or a quoted line stands alone
-      blocks.push({ heading, text: lineText });
+      blocks.push({ heading, text: withoutLinkTargets(lineText) });
       continue;
     }
     if (lineText.trim()) paragraph.push(lineText.trim());
@@ -583,6 +582,21 @@ describe('the wording lint itself', () => {
     ].join('\n');
     expect(findHits(words, { docs: [['guide/page.md', page]] })).toEqual({
       'sub-task': ['docs:guide/page.md', 'docs:guide/page.md#How it works']
+    });
+  });
+
+  test('skips link targets in headings, table rows and quoted lines', () => {
+    const page = [
+      '# See [Tasks](sub-task.md)',
+      '',
+      '| a | [Tasks](sub-task.md) |',
+      '',
+      '> See [Tasks](sub-task.md).'
+    ];
+    expect(findHits(words, { docs: [['p.md', page.join('\n')]] })).toEqual({});
+    const text = ['# Page', '', '| a | [sub-task](x.md) |'].join('\n');
+    expect(findHits(words, { docs: [['p.md', text]] })).toEqual({
+      'sub-task': ['docs:p.md#Page']
     });
   });
 
