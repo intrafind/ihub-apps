@@ -448,7 +448,7 @@ Models → Providers → Add provider**:
 | ----- | ----------- |
 | Name, ID, Description | Plain text. The ID cannot be changed later, and cannot be the name of an API type (`openai`, `openai-responses`, …) |
 | API type | The API the endpoint speaks: `openai` (OpenAI-compatible — LLM Hub, LM Studio, …), `local` (vLLM, through the vLLM adapter), `mistral`, `openai-responses`, `anthropic` or `google` |
-| Base URL | Optional. The API base the provider's models are listed from when you import them. Chat requests do not use it: they go to each model's own **API URL** |
+| Base URL | Optional. The API base the provider's models are listed from when you import them. Chat requests do not use it: they go to each model's own **API URL**, which is built from the base URL when the model is created. Changing the base URL moves the linked models along (see below) |
 | API key | Stored encrypted on the provider and used by all of its models |
 
 Models link to the provider with `providerId`; their `provider` is the provider's API type. The
@@ -523,9 +523,15 @@ The built-in providers ship with their public API base, so importing from them n
 | OpenRouter | `https://openrouter.ai/api/v1`                     |
 
 To list models from a proxy or a regional endpoint, change the provider's base URL under
-**Admin → Models → Providers**. The base URL is only used to list and import models. Models you
-imported earlier keep their own **API URL**, so chat requests still go to the old address until
-you change each model's **API URL** or import the models again. **Local LLM** has no base URL:
+**Admin → Models → Providers**. Each model stores its own **API URL**, built from the base URL
+when it was imported or connected. When you save a new base URL, every model linked to the
+provider whose **API URL** starts with the old base URL is moved along: the old base is replaced
+by the new one and the rest of the URL is kept (`https://old.example.com/v1/chat/completions`
+becomes `https://new.example.com/v1/chat/completions`). Each moved model gets an entry in its
+change history and in the audit log. The provider page then says how many linked models now use
+the new address and lists any linked model it left alone because its **API URL** does not start
+with the old base URL (an address set by hand); change those under **Admin → Models** if they
+should move too. Models of other providers are never changed. **Local LLM** has no base URL:
 enter your server's address, such as `http://localhost:8080/v1`.
 
 [OpenRouter](https://openrouter.ai) ships as a provider (ID `openrouter`, OpenAI-compatible, base URL `https://openrouter.ai/api/v1`). Choose **OpenRouter** in the provider list, enter your OpenRouter key and load the models. When a provider has no key stored yet, the dialog asks for one: it is used for the listing and saved encrypted on the provider when you import. Leave it empty to use the provider's environment variable (`OPENROUTER_API_KEY`). The key and base URL can also be set under **Admin → Models → Providers**.

@@ -193,6 +193,18 @@ group **Model** limits the models users may pick in that app. It does not depend
   user, a model or any other group, and they do not get **Restrict access…**: those stay with
   administrators with full admin rights.
 
+### When two administrators edit groups at the same time
+
+The group editor saves a group only if the groups have not changed since you opened it. When
+another administrator (or the **Connect a provider** flow) saved the groups in between, the editor
+says **Changed by someone else** and saves nothing. Your edits stay on the page: click **Reload**
+to load the current version, then make your changes again.
+
+For scripts: `GET /api/admin/groups` answers with an `ETag`, the revision of `groups.json`. Send it
+as `If-Match` with `PUT /api/admin/groups/{groupId}`; when the groups changed since, the answer is
+`412` `PRECONDITION_FAILED` and nothing is written. A successful save answers with the new `ETag`.
+Without `If-Match` a save behaves as before.
+
 ## When someone does not see an app
 
 Start with **Why can't someone see this?** on the app's page or in the model editor. Pick a group

@@ -53,3 +53,29 @@ group and a new user also opened with errors.
   cloned workflow keeps its name. The provider form no longer has the **Provider Enabled**
   checkbox, which had no effect, and the Providers list no longer shows a **Disabled** badge for it.
 - A model save the server refuses brings its error into view.
+
+## Models Follow a Change of Their Provider's Base URL
+
+Changing a provider's **Base URL** under **Admin → Models → Providers** left its models on the
+old address: each model keeps its own **API URL**, built from the base URL when it was imported
+or connected, so chat requests still went to the old endpoint.
+
+- Saving a new base URL now moves every model linked to the provider whose **API URL** starts
+  with the old base URL to the new one; the rest of the URL is kept. Each moved model gets an
+  entry in its change history and in the audit log.
+- The provider page says how many linked models now use the new address and lists any linked
+  model it left alone because its **API URL** points elsewhere, with a link to change it.
+
+## Group Saves No Longer Overwrite Each Other
+
+When two administrators saved the same group at nearly the same time, or the **Connect a
+provider** flow granted its models to a group while someone edited it, one of the changes was
+lost without a word.
+
+- The group editor now saves only if the groups have not changed since it opened. Otherwise it
+  says **Changed by someone else**, saves nothing and keeps your edits; **Reload** loads the
+  current version.
+- The **Connect a provider** flow reads the groups again and retries once when another save got
+  there first, so it keeps the other change and still grants its models.
+- For scripts: `GET /api/admin/groups` returns an `ETag`; send it as `If-Match` with
+  `PUT /api/admin/groups/{groupId}` to get `412` instead of overwriting a newer change.

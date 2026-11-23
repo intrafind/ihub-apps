@@ -1,13 +1,14 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
 import DualModeEditor from '../../../shared/components/DualModeEditor';
 import GroupFormEditor from '../components/GroupFormEditor';
 import { getAdminApiErrorMessage, makeAdminApiCall } from '../../../api/adminApi';
+import { etagOf, isConfigConflict } from '../../../api/adminConfigRevision';
 import { getSchemaByType } from '../../../utils/schemaService';
 import AdminLoadError from '../components/AdminLoadError';
 import GroupMembersSection from '../components/GroupMembersSection';
@@ -27,6 +28,11 @@ function AdminGroupEditPage() {
   const location = useLocation();
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState(null);
+  // The save was refused (412) because groups.json changed after this form loaded it.
+  const [conflict, setConflict] = useState(false);
+  // The revision (`ETag`) of groups.json this form was loaded from; a save sends it as
+  // `If-Match`, so it cannot overwrite a change someone else saved in between.
+  const revisionRef = useRef(null);
   // Bumped by Discard, so editors that keep their own view state start over.
   const [editorGeneration, setEditorGeneration] = useState(0);
   const [resources, setResources] = useState({
@@ -57,6 +63,7 @@ function AdminGroupEditPage() {
   const loadResource = useCallback(async id => {
     const response = await makeAdminApiCall('/admin/groups');
     const data = response.data;
+    revisionRef.current = etagOf(response);
 
     const groupData = data.groups[id];
     if (!groupData) {
@@ -93,14 +100,16 @@ function AdminGroupEditPage() {
     const method = id === 'new' ? 'POST' : 'PUT';
     const url = id === 'new' ? '/admin/groups' : `/admin/groups/${id}`;
 
-    await makeAdminApiCall(url, {
+    const headers = { 'Content-Type': 'application/json' };
+    if (method === 'PUT' && revisionRef.current) headers['If-Match'] = revisionRef.current;
+    const response = await makeAdminApiCall(url, {
       method,
-      headers: {
-        'Content-Type': 'application/json'
-      },
+      headers,
       // `null` clears limits saved before; the server drops empty parts.
       body: { ...data, usageLimits: normalizeUsageLimits(data.usageLimits) }
     });
+    // A later save from this form builds on what it just wrote.
+    revisionRef.current = etagOf(response) ?? revisionRef.current;
   }, []);
 
   const {
@@ -111,6 +120,7 @@ function AdminGroupEditPage() {
     loading,
     error,
     save,
+    reload,
     blocker
   } = useAdminResourceEditor({ resourceId: groupId, loadResource, makeDefault, saveResource });
 
@@ -167,6 +177,7 @@ function AdminGroupEditPage() {
     try {
       setSaving(true);
       setSaveError(null);
+      setConflict(false);
       await save();
       // A new group opens on its own page, where its members are added; an
       // edited one goes back to the list.
@@ -183,15 +194,34 @@ function AdminGroupEditPage() {
         setSaveError(t(FIELD_KEYS.idTaken));
         return;
       }
+      // Someone else saved the groups after this page loaded them: nothing was written, and
+      // the page keeps the admin's edits until they reload.
+      if (isConfigConflict(err)) {
+        setConflict(true);
+        return;
+      }
       setSaveError(getAdminApiErrorMessage(err));
     } finally {
       setSaving(false);
     }
   };
 
+  /** Load the group as it is stored now (dropping this form's edits) after a conflict. */
+  const handleReloadAfterConflict = async () => {
+    try {
+      await reload();
+      setConflict(false);
+      setSaveError(null);
+      setEditorGeneration(generation => generation + 1);
+    } catch (err) {
+      setSaveError(getAdminApiErrorMessage(err));
+    }
+  };
+
   const handleDiscard = () => {
     setGroup(initialData);
     setSaveError(null);
+    setConflict(false);
     setEditorGeneration(generation => generation + 1);
   };
 
@@ -274,6 +304,37 @@ function AdminGroupEditPage() {
           </div>
         </div>
       </div>
+
+      {conflict && (
+        <div
+          role="alert"
+          className="mb-6 bg-yellow-50 dark:bg-yellow-900/30 border border-yellow-200 dark:border-yellow-800 rounded-md p-4"
+        >
+          <div className="flex">
+            <div className="shrink-0">
+              <Icon name="warning" size="md" className="text-yellow-500" />
+            </div>
+            <div className="ml-3">
+              <h3 className="text-sm font-medium text-yellow-800 dark:text-yellow-200">
+                {t('admin.groups.edit.conflict.title', 'Changed by someone else')}
+              </h3>
+              <p className="mt-2 text-sm text-yellow-700 dark:text-yellow-300">
+                {t(
+                  'admin.groups.edit.conflict.message',
+                  'The groups were changed by someone else after you opened this page. Nothing was saved. Reload to see the current version, then make your changes again.'
+                )}
+              </p>
+              <button
+                type="button"
+                onClick={handleReloadAfterConflict}
+                className="mt-3 inline-flex items-center px-3 py-1.5 border border-yellow-300 dark:border-yellow-700 text-sm font-medium rounded-md text-yellow-800 dark:text-yellow-100 bg-white dark:bg-yellow-900/50 hover:bg-yellow-100 dark:hover:bg-yellow-900 focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-yellow-500"
+              >
+                {t('admin.groups.edit.conflict.reload', 'Reload')}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {saveError && (
         <div className="mb-6 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded-md p-4">
