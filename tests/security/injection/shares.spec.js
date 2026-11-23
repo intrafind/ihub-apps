@@ -5,19 +5,21 @@ import { chromium, expect, request as playwrightRequest, test } from '@playwrigh
 import {
   API_ORIGIN,
   BASE_URL,
+  canaryLog,
   carries,
   chatTurn,
   createShare,
   publishHostileArtifact,
   recordBrowserRequests,
   recordForeignRequests,
+  resetCanary,
   sendInUi,
   signedIn,
   signInPage,
   signInVictimPage,
   waitForSeededProjects
 } from './helpers.mjs';
-import { ADMIN, APPS, BOB } from './scenario.mjs';
+import { ADMIN, APPS, BOB, CANARY_HOST } from './scenario.mjs';
 import { HOSTILE_ARTIFACTS, PLANTED_PROMPT } from './hostileArtifacts.mjs';
 import { EMBED_PARTNER_ORIGIN } from './seed.mjs';
 
@@ -48,8 +50,19 @@ import { EMBED_PARTNER_ORIGIN } from './seed.mjs';
  *   iHub's; the last tests of this file pin both halves (see "known limitation").
  */
 
+/** The attacker's hosts: the one the browser never resolves, and the suite's real canary. */
+const ATTACKER_HOSTS = new Set(['canary.invalid', CANARY_HOST]);
+
 /** A request to any host but the attacker's (which `hits` and the CSP reports account for). */
-const notAttacker = request => new URL(request.url).hostname !== 'canary.invalid';
+const notAttacker = request => !ATTACKER_HOSTS.has(new URL(request.url).hostname);
+
+/** The paths the page tried to reach on the attacker's host (what it attempted, refused or not). */
+const attemptedPaths = foreign =>
+  foreign.filter(request => !notAttacker(request)).map(request => new URL(request.url).pathname);
+
+/** The paths of the attacker's host the page's own CSP reported refusing. */
+const refusedPaths = probe =>
+  new Set(probe.violations.map(report => new URL(report.split(' ').pop()).pathname));
 
 const stealing = HOSTILE_ARTIFACTS.filter(artifact => artifact.stealing && !artifact.navigates);
 const navigating = HOSTILE_ARTIFACTS.filter(artifact => artifact.navigates);
@@ -165,6 +178,7 @@ test.describe('opened in the app by the admin it was shared with', () => {
     hits = await recordBrowserRequests(page);
     foreign = recordForeignRequests(page);
     turns = [];
+    await resetCanary();
     page.on('request', request => {
       if (request.method() === 'POST' && /\/api\/apps\/[^/]+\/chat\//.test(request.url())) {
         turns.push(request.url());
@@ -188,6 +202,12 @@ test.describe('opened in the app by the admin it was shared with', () => {
         expect(foreign.filter(notAttacker), 'requests to a host that is not the attacker').toEqual(
           []
         );
+        // Independent of the interception: every attempt to the attacker has a CSP report.
+        const refused = refusedPaths(probe);
+        expect(
+          attemptedPaths(foreign).filter(path => !refused.has(path)),
+          'attempts to the attacker the page\u2019s CSP did not refuse'
+        ).toEqual([]);
         expect(turns, 'a chat turn the artifact started').toEqual([]);
         expect(carries(await iframe.getAttribute('srcdoc'), token)).toBe(false);
         // Not navigated away: the artifact's attempt on the top page is refused too.
@@ -226,24 +246,35 @@ test.describe('opened in the app by the admin it was shared with', () => {
   // (`navigate-to` is not implemented by browsers). What leaves is what the artifact
   // itself holds, for example what a viewer types into a fake form in it; every
   // credential of iHub's is behind the opaque origin. If a mitigation closes this, the
-  // `toBeGreaterThan(0)` below fails: flip it to `toEqual([])`, and drop this comment.
+  // navigation below is never seen and the test fails: flip it to expect none, and drop
+  // this comment.
   for (const hostile of navigating) {
     test(`known limitation: ${hostile.id} can only navigate its own frame away, with no credential`, async () => {
       const entry = entryOf(hostile.id);
       await openPreview(page, entry.chatShare.id);
+      // The attacker's own server is the evidence: what arrived there, not what a
+      // browser-side observer happened to see of a frame that was only just created.
+      const arrived = async () =>
+        (await canaryLog()).filter(
+          item =>
+            item.listener === 'canary' &&
+            /^\/steal-(navigate|meta-refresh|link-click)$/.test(item.path)
+        );
       await expect
-        .poll(() => hits.length, { message: 'the frame navigated away', timeout: 15_000 })
+        .poll(async () => (await arrived()).length, {
+          message: 'the attacker received the frame\u2019s navigation',
+          timeout: 15_000
+        })
         .toBeGreaterThan(0);
+      const [request] = await arrived();
 
-      expect(hits.every(url => /\/steal-(navigate|meta-refresh|link-click)\b/.test(url))).toBe(
-        true
+      expect(carries([await canaryLog(), hits, foreign], token), 'the viewer token left').toBe(
+        false
       );
-      expect(carries(hits, token), 'the viewer token is in what left').toBe(false);
       expect(foreign.filter(notAttacker), 'any other request to a host but iHub').toEqual([]);
       if (hostile.stealing) {
         // What it carried: its probe, in which every credential read had failed.
-        const sent = new URL(hits[0]).searchParams.get('d');
-        const probe = JSON.parse(sent);
+        const probe = JSON.parse(request.query.d);
         for (const key of ['localStorage', 'sessionStorage', 'cookie', 'parentLocalStorage']) {
           expect(probe[key], key).toBe('threw:SecurityError');
         }
@@ -352,7 +383,13 @@ test.describe('embedded in another site', () => {
       await expect(iframe).toHaveAttribute('sandbox', 'allow-scripts');
       const frame = await (await iframe.elementHandle()).contentFrame();
       if (id === 'steal-html') {
-        expectNothingReachable(await readProbe(frame), token);
+        const probe = await readProbe(frame);
+        expectNothingReachable(probe, token);
+        const refused = refusedPaths(probe);
+        expect(
+          attemptedPaths(foreign).filter(path => !refused.has(path)),
+          'attempts to the attacker the page\u2019s CSP did not refuse'
+        ).toEqual([]);
       }
       await page.waitForTimeout(1_500);
       expect(hits, 'requests the embedded artifact made to the attacker').toEqual([]);
