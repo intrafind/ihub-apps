@@ -178,9 +178,13 @@ function AdminPromptEditPage() {
         </div>
       }
       breadcrumbs={[
-        { label: 'Admin', href: '/admin' },
-        { label: 'Prompts', href: '/admin/prompts' },
-        { label: isNewPrompt ? 'New Prompt' : (promptData?.name?.en ?? promptId) }
+        { label: t('documentTitle.admin', 'Admin'), href: '/admin' },
+        { label: t('admin.nav.prompts', 'Prompts'), href: '/admin/prompts' },
+        {
+          label: isNewPrompt
+            ? t('admin.breadcrumbs.newPrompt', 'New Prompt')
+            : (promptData?.name?.en ?? promptId)
+        }
       ]}
       blocker={blocker}
       extra={

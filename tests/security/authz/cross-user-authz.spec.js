@@ -16,6 +16,9 @@
  *   anonymous - anonymous access on (the platform default); `AUTHZ_ANONYMOUS=0`
  *            runs the same suite with it off
  *   admin  - the seeded default admin, for the sanity checks
+ *   mallory, dave - only in `user-apps-authz.spec.js`: who may do what on a
+ *            personal app alice shares (here her personal app is shared with
+ *            nobody, so bob and carol are strangers to it like everyone else)
  *
  * The matrix (`RESOURCES` in `resources.js`): every non-admin route with a path
  * parameter that reaches one of alice's resources, attacked by bob, carol and
@@ -23,8 +26,10 @@
  * (or the per-route expectation), with nothing of alice's in the body, and alice's
  * resources read back unchanged afterwards (`aliceSnapshot`). Next to it: list,
  * search and count endpoints (`LISTS`), group-gated config (`GROUP_GATED`, carol),
- * the `/api/inference/v1`, `/mcp` and `/a2a` surfaces, and admin sanity checks
- * (so the suite cannot pass because everything answers 404).
+ * an app that is not published (`UNPUBLISHED_APP`: an unknown app to everyone but
+ * an admin in the interactive chat), the `/api/inference/v1`, `/mcp` and `/a2a`
+ * surfaces, and admin sanity checks (so the suite cannot pass because everything
+ * answers 404).
  *
  * To add a resource: create it in `seedAlice`, put what must not change into
  * `aliceSnapshot`, add its routes to `RESOURCES` and its list endpoint to `LISTS`.
@@ -47,11 +52,19 @@ import {
   RESOURCES,
   SECRET,
   SKIP,
+  UNPUBLISHED_APP,
   aliceSnapshot,
   callerScoped,
   seedAlice
 } from './resources.js';
-import { AUTHZ_USERS, SECRET_APP_ID, SECRET_MODEL_ID } from './principals.js';
+import {
+  AUTHZ_USERS,
+  SECRET_APP_ID,
+  SECRET_MODEL_ID,
+  UNKNOWN_APP_ID,
+  UNPUBLISHED_APP_ID,
+  UNPUBLISHED_APP_MARKER
+} from './principals.js';
 
 const ctx = {};
 let ids;
@@ -199,6 +212,9 @@ const LISTS = [
   // The usage attack put alice's prompt id into the caller's own recents.
   { url: '/api/prompts/preferences', bob: 'secretOnly', carol: 'secretOnly' },
   { url: '/api/user-skills', carol: false },
+  { url: '/api/apps?scope=personal' },
+  { url: '/api/apps?scope=mine' },
+  { url: '/api/apps?scope=shared' },
   { url: '/api/projects' },
   { url: '/api/projects/_catalog' },
   { url: '/api/projects/_collections' },
@@ -241,7 +257,8 @@ function aliceMarkers() {
     'inferenceFileId',
     'keyId',
     'requestId',
-    'jobId'
+    'jobId',
+    'privateUserAppId'
   ];
   return [SECRET, ...keys.map(key => ids[key]).filter(Boolean)];
 }
@@ -294,6 +311,7 @@ test('the owner sees her items in the same lists (the list checks are not vacuou
     ['/api/prompts?scope=mine', ids.promptId],
     ['/api/user-skills', ids.skillId],
     ['/api/projects', ids.projectId],
+    ['/api/apps?scope=mine', ids.privateUserAppId],
     ['/api/scheduled-tasks', ids.taskId],
     ['/api/workflows/my-executions', ids.executionId],
     ['/api/interactions/pending', ids.interactionId],
@@ -351,6 +369,93 @@ test('carol cannot use the app, model, prompt, skill, page or workflow her group
     expect(await (await ctx.carol.get(url)).text(), `carol ${url}`).not.toContain(id);
     expect(await (await ctx.alice.get(url)).text(), `alice ${url}`).toContain(id);
   }
+});
+
+/** Status and body of an answer, with the app id and what differs per request blanked. */
+function answerShape(res, appId) {
+  const body = res.text
+    .split(appId)
+    .join('<app>')
+    .replace(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/g, '<uuid>')
+    .replace(/file_[0-9a-f]+/g, '<file>')
+    .replace(/"(timestamp|createdAt|updatedAt)":"[^"]*"/g, '"$1":"<time>"');
+  return `${res.status} ${body}`;
+}
+
+test('an unpublished app is an unknown app to users and API keys; an admin can try it', async ({}, testInfo) => {
+  const keys = {
+    bobKey: await bearerContext(await newKey(ctx.bob)),
+    // An admin's personal API key acts as its owner, never as an admin.
+    adminKey: await bearerContext(await newKey(ctx.admin))
+  };
+  const attackers = { bob: ctx.bob, carol: ctx.carol, anonymous: ctx.anonymous, ...keys };
+  const failures = [];
+  const seen = [];
+  for (const entry of UNPUBLISHED_APP) {
+    for (const [who, context] of Object.entries(attackers)) {
+      const unknown = await send(context, await entry.request(UNKNOWN_APP_ID, context));
+      const res = await send(context, await entry.request(UNPUBLISHED_APP_ID, context));
+      seen.push(`${who.padEnd(9)} ${String(res.status).padEnd(4)} ${entry.route}`);
+      if (res.timedOut || unknown.timedOut) {
+        failures.push(`${who} ${entry.route} -> no complete answer`);
+      } else if (answerShape(res, UNPUBLISHED_APP_ID) !== answerShape(unknown, UNKNOWN_APP_ID)) {
+        failures.push(
+          `${who} ${entry.route} -> ${answerShape(res, UNPUBLISHED_APP_ID).slice(0, 200)} ` +
+            `but an unknown app gets ${answerShape(unknown, UNKNOWN_APP_ID).slice(0, 200)}`
+        );
+      }
+      if (res.text.includes(UNPUBLISHED_APP_MARKER)) {
+        failures.push(`${who} ${entry.route} -> the answer holds the unpublished app's text`);
+      }
+    }
+  }
+  await testInfo.attach('observed.txt', { body: seen.join('\n'), contentType: 'text/plain' });
+  if (process.env.AUTHZ_PRINT) console.log(seen.join('\n'));
+  expect(failures).toEqual([]);
+
+  // No list holds it, for the admin either.
+  for (const [who, context] of Object.entries({
+    ...attackers,
+    alice: ctx.alice,
+    admin: ctx.admin
+  })) {
+    const list = await send(context, { method: 'GET', url: '/api/apps' });
+    expect(list.text, `${who} GET /api/apps`).not.toContain(UNPUBLISHED_APP_ID);
+    expect(list.text, `${who} GET /api/apps`).not.toContain(UNPUBLISHED_APP_MARKER);
+  }
+
+  // The admin, signed in, opens it and gets an answer in the interactive chat
+  // (so the checks above are not about a route that answers 404 to everyone).
+  const opened = await ctx.admin.get(`/api/apps/${UNPUBLISHED_APP_ID}`);
+  expect(opened.status()).toBe(200);
+  expect((await opened.json()).id).toBe(UNPUBLISHED_APP_ID);
+  const turn = await send(ctx.admin, {
+    method: 'POST',
+    url: `/api/apps/${UNPUBLISHED_APP_ID}/chat/${randomUUID()}`,
+    data: { messages: [{ role: 'user', content: 'hello', messageId: 'a1' }] },
+    headers: { accept: 'text/event-stream' },
+    timeout: 30_000
+  });
+  expect(turn.status).toBe(200);
+  expect(turn.text).toContain('E2E reply');
+
+  // Every other way of running an app answers the admin as for an unknown id.
+  const elsewhere = UNPUBLISHED_APP.filter(entry =>
+    [
+      'GET /api/scheduled-tasks/_apps/:appId/tools',
+      'POST /api/inference/v1/chat/completions'
+    ].includes(entry.route)
+  );
+  expect(elsewhere.length).toBe(2);
+  for (const entry of elsewhere) {
+    const unknown = await send(ctx.admin, await entry.request(UNKNOWN_APP_ID, ctx.admin));
+    const res = await send(ctx.admin, await entry.request(UNPUBLISHED_APP_ID, ctx.admin));
+    expect(DENY, `admin ${entry.route}`).toContain(res.status);
+    expect(answerShape(res, UNPUBLISHED_APP_ID), `admin ${entry.route}`).toBe(
+      answerShape(unknown, UNKNOWN_APP_ID)
+    );
+  }
+  for (const context of Object.values(keys)) await context.dispose();
 });
 
 test('the OpenAI-compatible API refuses carol the secret model and app', async () => {

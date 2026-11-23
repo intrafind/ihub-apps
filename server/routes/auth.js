@@ -28,6 +28,7 @@ import { logAudit } from '../services/AuditLogService.js';
 import { buildLoginGroupDetails } from '../utils/loginGroupDetails.js';
 import { setAuthCookie, getClearAuthCookieOptions } from '../utils/cookieSettings.js';
 import { appendQueryParams } from '../utils/appendQueryParams.js';
+import { isValidReturnUrl } from '../utils/oauthReturnUrl.js';
 import { buildPublicBaseUrl } from '../utils/publicBaseUrl.js';
 import { clearOidcLogoutHint, readOidcLogoutHint } from '../utils/oidcLogoutHint.js';
 import {
@@ -37,6 +38,49 @@ import {
   settleLoginAttempt
 } from '../utils/loginLockout.js';
 import { pickRequestLanguage, resolveUiText } from '../utils/uiTextRefs.js';
+
+/**
+ * Reduce a client-supplied `returnUrl` to a same-origin path (with query and
+ * fragment) that is safe to hand to `res.redirect()`, or `/` when it is not.
+ *
+ * A same-origin absolute URL is kept as its path, so the redirect can never
+ * leave the site. Backslashes are read as slashes (browsers do), and the shared
+ * `isValidReturnUrl` check refuses control characters and the protocol-relative
+ * `//host` form that would otherwise survive a `startsWith('/')` test.
+ *
+ * @param {string} rawReturnUrl - Value of the `returnUrl` query parameter
+ * @param {import('express').Request} req - Request, for the host to compare with
+ * @returns {string} A path starting with a single `/`
+ */
+export function sameOriginReturnPath(rawReturnUrl, req) {
+  let candidate = rawReturnUrl.replaceAll('\\', '/');
+  if (/^https?:\/\//i.test(candidate)) {
+    try {
+      const parsed = new URL(candidate);
+      if (parsed.host !== req.get('host')) {
+        logger.warn('[Security] Blocked open redirect attempt', {
+          component: 'Auth',
+          returnUrl: rawReturnUrl
+        });
+        return '/';
+      }
+      candidate = `${parsed.pathname}${parsed.search}${parsed.hash}`;
+    } catch (error) {
+      logger.error('[Security] Invalid return URL', { component: 'Auth', error });
+      return '/';
+    }
+  } else if (!candidate.startsWith('/')) {
+    candidate = '/' + candidate;
+  }
+  if (candidate.startsWith('//') || !isValidReturnUrl(candidate, req)) {
+    logger.warn('[Security] Blocked open redirect attempt', {
+      component: 'Auth',
+      returnUrl: rawReturnUrl
+    });
+    return '/';
+  }
+  return candidate;
+}
 
 /**
  * Sanitize and validate authentication input
@@ -482,7 +526,7 @@ export default function registerAuthRoutes(app) {
         // No return URL provided, use default
         returnUrl = '/';
       } else if (typeof rawReturnUrl === 'string') {
-        returnUrl = rawReturnUrl;
+        returnUrl = sameOriginReturnPath(rawReturnUrl, req);
       } else {
         // Reject array or non-string values to prevent type confusion attacks
         logger.warn('[Security] Invalid return URL type', {
@@ -492,42 +536,9 @@ export default function registerAuthRoutes(app) {
         throw refusal(400, 'Invalid return URL');
       }
 
-      // Only allow relative URLs (starting with /) and same-origin URLs
-      try {
-        // Normalize backslashes to prevent bypass via \evil.com interpreted as /evil.com
-        returnUrl = returnUrl.replaceAll('\\', '/');
-
-        // If returnUrl is an absolute URL, validate it's same origin
-        if (returnUrl.startsWith('http://') || returnUrl.startsWith('https://')) {
-          const returnUrlObj = new URL(returnUrl);
-          const currentHost = req.get('host');
-
-          // Only allow same-origin redirects
-          if (returnUrlObj.host !== currentHost) {
-            logger.warn('[Security] Blocked open redirect attempt', {
-              component: 'Auth',
-              returnUrl
-            });
-            returnUrl = '/';
-          }
-        } else if (!returnUrl.startsWith('/')) {
-          // Ensure relative URLs start with /
-          returnUrl = '/' + returnUrl;
-        }
-
-        // Remove any attempts to use protocol-relative URLs (//example.com)
-        if (returnUrl.startsWith('//')) {
-          returnUrl = '/';
-        }
-      } catch (error) {
-        logger.error('[Security] Invalid return URL', { component: 'Auth', returnUrl, error });
-        returnUrl = '/';
-      }
-
-      // Redirect to the validated return URL with success indicator, in the query
+      // Redirect to the validated return path with success indicator, in the query
       // and not inside a #fragment (the auth gate reads it from location.search).
-      // returnUrl has been validated above: same-origin check, no //, no backslash -- lgtm[js/server-side-unvalidated-url-redirection]
-      res.redirect(appendQueryParams(returnUrl, { ntlm: 'success' })); // lgtm[js/server-side-unvalidated-url-redirection]
+      res.redirect(appendQueryParams(returnUrl, { ntlm: 'success' }));
     } catch (error) {
       // A browser navigation, not an API call: answer with the app and the
       // reason instead of an error document the user would be stranded on.

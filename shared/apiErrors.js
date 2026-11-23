@@ -461,6 +461,33 @@ export const ADMIN_GUARD_ERROR_CODES = Object.freeze({
   ADMIN_CHECK_FAILED: 503
 });
 
+/** Codes of the app draft generator (`POST /api/admin/apps/_generate`, `server/services/appGenerator.js`). */
+export const APP_GENERATOR_ERROR_CODES = Object.freeze({
+  /** No chat model the caller may use can write the draft. */
+  APP_GENERATOR_NO_MODEL: 503,
+  /** The model's answer is not JSON, is cut off, or leaves nothing usable (`details.reason`). */
+  APP_GENERATOR_INVALID_ANSWER: 502
+});
+
+/**
+ * Codes of personal apps (feature `userApps`: `server/routes/userAppRoutes.js`,
+ * `server/services/userApps`).
+ */
+export const USER_APP_ERROR_CODES = Object.freeze({
+  /** The feature is off; the user routes answer nothing else. */
+  USER_APPS_DISABLED: 403,
+  /** The store of personal apps cannot be reached. */
+  USER_APPS_UNAVAILABLE: 503,
+  /** The caller owns as many apps as `limits.maxAppsPerUser` allows. */
+  QUOTA_USER_APPS: 409,
+  /** The caller has as many open offers as `limits.maxOpenOffersPerUser` allows. */
+  QUOTA_USER_APP_OFFERS: 409,
+  /** The app would use what the caller or its owner may not use (`details: { capability, reason }`). */
+  USER_APP_CAPABILITY_DENIED: 403,
+  /** The caller's access changed while the write waited for the lock. */
+  USER_APP_ACCESS_CHANGED: 403
+});
+
 /** Every code, with its default HTTP status. */
 export const API_ERROR_CODES = Object.freeze({
   ...GENERIC_ERROR_CODES,
@@ -486,7 +513,9 @@ export const API_ERROR_CODES = Object.freeze({
   ...VOICE_ERROR_CODES,
   ...MISC_ERROR_CODES,
   ...WATERMARK_ERROR_CODES,
-  ...ADMIN_GUARD_ERROR_CODES
+  ...ADMIN_GUARD_ERROR_CODES,
+  ...APP_GENERATOR_ERROR_CODES,
+  ...USER_APP_ERROR_CODES
 });
 
 /**

@@ -12,6 +12,9 @@ on:
       - 'shared/docsFrontMatter.js'
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
   build-docs:
     runs-on: ubuntu-latest

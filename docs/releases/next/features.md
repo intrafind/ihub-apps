@@ -1,22 +1,19 @@
 # Features — Unreleased
 
-## Chats Send Far Less Data to the Browser
+## Personal Apps: Blocked Owners Are Locked Out, and Other Changes
 
-Chats that create documents, run searches or condense earlier results load and stream noticeably
-less data. The browser now receives only what the chat displays, not the full content the model
-wrote into a tool call.
+Changes to the preview feature **Personal apps** since 5.7.4:
 
-- A generated file (PDF, Word, PowerPoint, Excel, code, ZIP) is stored with the chat as soon as the
-  tool finishes. The chat shows its card right away and loads the file only when it is opened or
-  downloaded; before, the whole file was streamed into the chat. A file that cannot be stored — in
-  a chat that is not stored, with artifacts turned off, or over the artifact size limit — is still
-  sent with its card, so it stays downloadable while the page is open.
-- The details of a tool call show each value cut to 160 characters. The full Markdown of a PDF, the
-  slides of a presentation or the HTML of a web page are no longer sent along with it. Search
-  queries, links and document ids stay complete, and an interactive MCP App view still receives
-  its whole input.
-- The notes of a condensed search show the facts found and what was not found. The instructions
-  meant for the model and the repeated list of calls are left out, and the notes are cut at 2,000
-  characters.
-- Sources found by several searches are sent only once when a chat is opened.
-- The `/v1` APIs and the run log still receive the full data.
+- **A blocked owner can no longer change their apps.** When an administrator switches off all
+  apps of one person, that person can no longer edit, share or delete them, and the people the
+  apps are shared with as **Can edit** cannot edit them either. The editor shows the app
+  read-only with the reason. Administrators keep every ability they had.
+- **Changes by people with Can edit count like the owner's.** The owner's tool approval settings
+  apply to the app whoever saved its current content.
+- **A published app remembers its personal app.** The company app that publishing writes records
+  the personal app it came from (`sourceUserAppId`). Only a company app with that entry counts as
+  the published version of the personal app; if the file is replaced by another app, the
+  personal app becomes editable again. Apps published with 5.7.4 get the entry on the first
+  start after the update, so they stay published.
+- **Copy an existing app** on the personal **New app** page no longer lists apps connected to
+  the iAssistant, because a copy would lose the connection.

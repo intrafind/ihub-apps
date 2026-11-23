@@ -328,6 +328,149 @@ describe('run evidence', () => {
   });
 });
 
+describe('personal apps', () => {
+  const person = id => ({ id, name: id });
+  const content = text => ({
+    name: { en: 'Helper' },
+    description: { en: 'Helps' },
+    system: { en: text },
+    icon: 'sparkles',
+    color: '#4F46E5',
+    variables: [],
+    starterPrompts: [],
+    capabilities: { upload: false, webSearch: false, skills: false, integrations: [] }
+  });
+
+  let storage;
+  let repository;
+  let cleanUpUserAppsOfUser;
+  let revisionsNamespace;
+
+  beforeEach(async () => {
+    const { startTestStorage } = await import('./helpers/testStorage.js');
+    const { UserAppRepository, USER_APP_REVISIONS_NAMESPACE } =
+      await import('../services/userApps/UserAppRepository.js');
+    ({ cleanUpUserAppsOfUser } = await import('../services/userApps/userAppUserCleanup.js'));
+    storage = await startTestStorage({ prefix: 'ihub-user-deletion-apps-' });
+    revisionsNamespace = USER_APP_REVISIONS_NAMESPACE;
+    repository = new UserAppRepository({
+      documents: storage.provider.documents,
+      locks: storage.provider.locks,
+      snapshotOf: user => ({ userId: user.id, groups: [] })
+    });
+  });
+
+  afterEach(async () => {
+    await storage.stop();
+  });
+
+  const create = (owner, text = 'Be kind.') =>
+    repository.create({
+      owner: person(owner),
+      ownerPrincipal: { userId: owner, groups: [] },
+      content: content(text),
+      language: 'en'
+    });
+
+  /** Every stored content state, kept ones of deleted apps included. */
+  const storedStates = async () =>
+    (await storage.provider.documents.list(revisionsNamespace, { limit: 200, includeData: true }))
+      .items;
+
+  it('go with their owner, with every stored content state, and only theirs', async () => {
+    const mine = await create('alice');
+    await repository.update(mine.id, content('Be brief.'), { actor: person('alice') });
+    await repository.setMembers(mine.id, [{ type: 'user', id: 'bob', role: 'user' }], {
+      actor: person('alice')
+    });
+    // An app alice deleted earlier: its newest state is kept for 90 days.
+    const earlier = await create('alice', 'Old text.');
+    await repository.delete(earlier.id);
+    const bobs = await create('bob');
+    // A user whose id starts with hers must keep theirs.
+    const lookalike = await create('alice-2');
+    expect(await repository.listDeletedStates('alice')).toHaveLength(1);
+
+    const outcome = await cleanUpUserAppsOfUser('alice', { repository });
+
+    expect(outcome).toEqual({
+      removed: 1,
+      statesRemoved: 1,
+      membershipsDropped: 0,
+      offersCleared: 0
+    });
+    expect(await repository.get(mine.id)).toBeNull();
+    expect(await repository.listRevisions(mine.id)).toEqual([]);
+    expect(await repository.listDeletedStates('alice')).toEqual([]);
+    expect(await repository.listSharedWith(['user:bob'])).toEqual([]);
+    expect(await repository.get(bobs.id)).not.toBeNull();
+    expect(await repository.get(lookalike.id)).not.toBeNull();
+    // What is left in the store belongs to the two other owners.
+    expect((await storedStates()).map(doc => doc.data.ownerId).sort()).toEqual(['alice-2', 'bob']);
+  });
+
+  it('drops the memberships of the user and clears offers made to them', async () => {
+    const shared = await create('bob');
+    await repository.setMembers(
+      shared.id,
+      [
+        { type: 'user', id: 'alice', role: 'editor' },
+        { type: 'user', id: 'carol', role: 'user' }
+      ],
+      { actor: person('bob') }
+    );
+    const offered = await create('bob');
+    await repository.setOffer(offered.id, person('alice'), { actor: person('bob') });
+    // An offer to someone else is not hers to clear.
+    const other = await create('bob');
+    await repository.setOffer(other.id, person('carol'), { actor: person('bob') });
+
+    const outcome = await cleanUpUserAppsOfUser('alice', { repository });
+
+    expect(outcome).toMatchObject({ removed: 0, membershipsDropped: 1, offersCleared: 1 });
+    expect((await repository.get(shared.id)).members.map(member => member.id)).toEqual(['carol']);
+    expect((await repository.get(offered.id)).pendingOwner).toBeNull();
+    expect((await repository.get(other.id)).pendingOwner.id).toBe('carol');
+    expect(await repository.listSharedWith(['user:alice'])).toEqual([]);
+    expect(await repository.countOpenOffers('bob')).toBe(1);
+  });
+
+  it('leaves an app alone whose offer was accepted since the listing', async () => {
+    const app = await create('alice');
+    const offered = await repository.setOffer(app.id, person('bob'), { actor: person('alice') });
+    // The accept lands between the listing of her apps and the delete under the lock.
+    const listOwned = repository.listOwned.bind(repository);
+    repository.listOwned = async ownerId => {
+      const owned = await listOwned(ownerId);
+      await repository.acceptOffer(app.id, {
+        receiver: person('bob'),
+        ownerPrincipal: { userId: 'bob', groups: [] },
+        expectedRevision: offered.revision
+      });
+      return owned;
+    };
+
+    const outcome = await cleanUpUserAppsOfUser('alice', { repository });
+
+    expect(outcome.removed).toBe(0);
+    const kept = await repository.get(app.id);
+    expect(kept.owner.id).toBe('bob');
+    expect(await repository.listRevisions(app.id)).toHaveLength(1);
+  });
+
+  it('runs as a step of the user cleanup, and does nothing without a store', async () => {
+    const step = USER_CLEANUP_STEPS.find(entry => entry.name === 'userApps');
+    expect(step.kind).toBe('content');
+    const { UserAppRepository } = await import('../services/userApps/UserAppRepository.js');
+    expect(await cleanUpUserAppsOfUser('alice', { repository: new UserAppRepository() })).toEqual({
+      removed: 0,
+      statesRemoved: 0,
+      membershipsDropped: 0,
+      offersCleared: 0
+    });
+  });
+});
+
 describe('the cleanup', () => {
   const step = (name, run) => ({ name, run: jest.fn(run) });
 
@@ -347,6 +490,7 @@ describe('the cleanup', () => {
       'aiAcknowledgements',
       'integrationPreferences',
       'userProjects',
+      'userApps',
       'userSkills',
       'integrationRequests',
       'shortLinks'
@@ -372,6 +516,7 @@ describe('the cleanup', () => {
       'runEvidence',
       'userPrompts',
       'aiAcknowledgements',
+      'userApps',
       'userSkills',
       'integrationRequests',
       'shortLinks'

@@ -30,6 +30,13 @@ spec:
       # tolerations: [{ key: dedicated, operator: Equal, value: loadtest, effect: NoSchedule }]
       # The runner talks to iHub over HTTP only; it needs no Kubernetes API access.
       automountServiceAccountToken: false
+      # The image runs as `node` (uid/gid 1000, tests/load/Dockerfile).
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+        seccompProfile: { type: RuntimeDefault }
       containers:
         - name: runner
           image: ghcr.io/intrafind/ihub-apps:loadtest-runner # tests/load/Dockerfile
@@ -45,5 +52,18 @@ spec:
             - configMapRef: { name: loadtest-run-overrides, optional: true }
           # JOB_COMPLETION_INDEX (set by Kubernetes) is the shard index.
           resources:
-            requests: { cpu: '1', memory: 1Gi }
-            limits: { cpu: '2', memory: 2Gi }
+            requests: { cpu: '1', memory: 1Gi, ephemeral-storage: 128Mi }
+            limits: { cpu: '2', memory: 2Gi, ephemeral-storage: 1Gi }
+          # The runner writes only its shard files, to the results directory.
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: { drop: [ALL] }
+          volumeMounts:
+            - { name: results, mountPath: /loadtest/results }
+            - { name: tmp, mountPath: /tmp }
+      volumes:
+        - name: results
+          emptyDir: { sizeLimit: 512Mi }
+        - name: tmp
+          emptyDir: { sizeLimit: 128Mi }

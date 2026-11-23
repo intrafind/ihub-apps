@@ -16,6 +16,7 @@ import useChats, {
 import useFavorites from '../hooks/useFavorites';
 import Icon from './Icon';
 import ConfirmDialog from './ConfirmDialog';
+import CreateMenu from './CreateMenu';
 import IHubLogo from './IHubLogo';
 import { getLocalizedContent } from '../../utils/localizeContent';
 import { resolveTranslationRefs } from '../../utils/translationRefs';
@@ -640,6 +641,8 @@ export default function AppSidebar({ mobileOpen = false, onMobileClose = () => {
           <Icon name="plus" size="md" />
         </Link>
 
+        <CreateMenu variant="rail" />
+
         <button
           title={searchLabel}
           aria-label={searchLabel}
@@ -842,6 +845,7 @@ export default function AppSidebar({ mobileOpen = false, onMobileClose = () => {
           <Icon name="plus" size="sm" />
           {t('sidebar.newChat', 'New chat')}
         </Link>
+        <CreateMenu variant="expanded" onNavigate={onMobileClose} />
         <button
           onClick={() => {
             setSearchOpen(s => !s);

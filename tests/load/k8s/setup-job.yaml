@@ -11,6 +11,12 @@ spec:
       restartPolicy: Never
       # The runner talks to iHub over HTTP only; it needs no Kubernetes API access.
       automountServiceAccountToken: false
+      # The image runs as `node` (uid/gid 1000, tests/load/Dockerfile).
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        seccompProfile: { type: RuntimeDefault }
       containers:
         - name: setup
           image: ghcr.io/intrafind/ihub-apps:loadtest-runner # tests/load/Dockerfile
@@ -19,5 +25,15 @@ spec:
             - configMapRef: { name: loadtest-config }
             - secretRef: { name: loadtest-secrets }
           resources:
-            requests: { cpu: 250m, memory: 256Mi }
-            limits: { cpu: '1', memory: 1Gi }
+            requests: { cpu: 250m, memory: 256Mi, ephemeral-storage: 64Mi }
+            limits: { cpu: '1', memory: 1Gi, ephemeral-storage: 256Mi }
+          # setup.mjs only talks to iHub over HTTP; it writes no files.
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: { drop: [ALL] }
+          volumeMounts:
+            - { name: tmp, mountPath: /tmp }
+      volumes:
+        - name: tmp
+          emptyDir: { sizeLimit: 64Mi }

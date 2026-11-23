@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
 import { useEffect, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   downloadAsMarkdown,
   downloadAsHTML,
@@ -19,6 +20,7 @@ import {
  * header (slightly more padding).
  */
 function ArtifactDownloadMenu({ runId, name, size = 'sm', onError }) {
+  const { t } = useTranslation();
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const ref = useRef(null);
@@ -57,7 +59,7 @@ function ArtifactDownloadMenu({ runId, name, size = 'sm', onError }) {
         onClick={() => setOpen(v => !v)}
         disabled={busy}
         className={triggerClass}
-        title="Download as…"
+        title={t('admin.artifacts.downloadAs', 'Download as…')}
       >
         {busy ? '…' : '⬇ download ▾'}
       </button>
