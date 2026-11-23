@@ -2478,7 +2478,9 @@ Taken when revising after the critiques:
   for a chat-based app builder; its plan is
   [03-chat-based-app-builder.md](03-chat-based-app-builder.md), and the implementation plan
   checked against the shipped code (2026-11-23) is
-  [04-chat-builder-implementation-plan.md](04-chat-builder-implementation-plan.md).
+  [04-chat-builder-implementation-plan.md](04-chat-builder-implementation-plan.md). Notes on the
+  server part as built, with where it departs from the plan:
+  [05-chat-builder-server-implementation.md](05-chat-builder-server-implementation.md).
 - "Only these groups" when creating or publishing (open decision 1), and marketplace access for
   content admins.
 - Drafts of an already published app (open decision 6).
