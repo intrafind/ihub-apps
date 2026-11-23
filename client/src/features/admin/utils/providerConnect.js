@@ -13,7 +13,8 @@
  *      `PUT /admin/providers/{id}` stores the key on a shipped one
  *   3. `POST /admin/models` once per picked model (linked via `providerId`,
  *      no key of its own; the chosen default carries `default: true`)
- *   4. `PUT /admin/groups/{id}` adds the model ids to the chosen groups
+ *   4. `PUT /admin/groups/{id}` adds the model ids to the chosen groups, with
+ *      `If-Match` from a fresh read of the groups (one re-read and retry on 412)
  *
  * Everything here is free of React so the step rules can be unit tested;
  * the page only renders state and calls {@link runConnectPlan}.
@@ -28,11 +29,17 @@ import {
   providerEnvKeyName
 } from '../../../../../shared/llmProviders.js';
 import { buildImportedModelConfig, isValidId, slugify } from './modelImport';
+import { etagOf, isConfigConflict } from '../../../api/adminConfigRevision';
 import { DEFAULT_MODEL_TOKEN } from '../../../../../shared/modelPermissions.js';
+import {
+  DEFAULT_BEDROCK_REGION,
+  bedrockEndpointRegion,
+  isValidBedrockRegion
+} from '../../../../../shared/bedrockRegions.js';
 
 /**
- * Wizard steps in order. `bedrock` has no model listing, so its flow stops
- * after the connection (see {@link stepsForTile}).
+ * Wizard steps in order. Every tile walks all of them; Bedrock lists its
+ * models per AWS region instead of per URL (see {@link buildDiscoveryRequest}).
  */
 export const CONNECT_STEPS = Object.freeze([
   'vendor',
@@ -79,7 +86,9 @@ export const SELF_HOSTED_SERVERS = Object.freeze([
  *   it exists the key is stored on it instead of creating a new one.
  * - `apiType`: the API type a new provider declares.
  * - `newProvider`: id and name a new provider gets (editable in step 2).
- * - `discovery: false`: the endpoint has no model listing iHub can read.
+ * - `shippedOnly`: the flow never creates this provider; the tile is offered
+ *   only while the shipped entry exists (Bedrock).
+ * - `region`: the endpoint is chosen by AWS region, not by URL (Bedrock).
  *
  * Labels and descriptions are translated in the page by tile id; the English
  * text here is the fallback.
@@ -145,7 +154,8 @@ export const CONNECT_TILES = Object.freeze([
     description: 'Foundation models through the Bedrock Converse API.',
     providerId: 'bedrock',
     apiType: 'bedrock',
-    discovery: false,
+    shippedOnly: true,
+    region: true,
     keyPlaceholder: '',
     keyUrl: 'https://console.aws.amazon.com/bedrock/home#/api-keys'
   },
@@ -206,7 +216,7 @@ export function getAvailableTiles(providers) {
   const ids = new Set((providers || []).map(p => p.id));
   return CONNECT_TILES.filter(tile => {
     if (!SUPPORTED_API_TYPES.has(tile.apiType)) return false;
-    if (tile.discovery === false) return ids.has(tile.providerId);
+    if (tile.shippedOnly) return ids.has(tile.providerId);
     return true;
   });
 }
@@ -217,15 +227,13 @@ export function findTile(tileId) {
 }
 
 /**
- * Steps a tile walks through. Without a listing (Bedrock) there is nothing to
- * test, pick or default: the key is stored and the flow ends on "done", which
- * points at the Marketplace for Bedrock model configs.
+ * Steps a tile walks through: all of them, for every tile (Bedrock included,
+ * whose models are listed per region).
  *
- * @param {Object|undefined} tile
+ * @param {Object|undefined} _tile
  * @returns {string[]}
  */
-export function stepsForTile(tile) {
-  if (tile?.discovery === false) return ['vendor', 'connection', 'done'];
+export function stepsForTile(_tile) {
   return [...CONNECT_STEPS];
 }
 
@@ -260,8 +268,28 @@ export function initialConnectionForm(tile, existing) {
     apiKey: '',
     serverKind: server?.id || '',
     apiType: server?.apiType || tile.apiType,
-    gatewayApiType: tile.gateway ? GATEWAY_API_TYPES[0] : undefined
+    gatewayApiType: tile.gateway ? GATEWAY_API_TYPES[0] : undefined,
+    // Bedrock: the region the adapter uses today: the provider's, else the server's
+    // AWS_REGION (`effectiveRegion`, sent by GET /admin/providers), else the default.
+    region: tile.region
+      ? existing?.config?.region || existing?.effectiveRegion || DEFAULT_BEDROCK_REGION
+      : ''
   };
+}
+
+/**
+ * Why the AWS region of a region tile (Bedrock) cannot be used, if it cannot.
+ *
+ * @param {Object} tile
+ * @param {Object} form
+ * @returns {'required'|'invalid'|null}
+ */
+export function regionProblem(tile, form) {
+  if (!tile.region) return null;
+  const region = (form.region || '').trim();
+  if (!region) return 'required';
+  if (!isValidBedrockRegion(region)) return 'invalid';
+  return null;
 }
 
 /**
@@ -343,9 +371,10 @@ export function effectiveApiType(tile, form) {
  * @returns {boolean}
  */
 export function canTestConnection(tile, form, target, providers) {
-  if (tile.discovery === false) {
-    // Bedrock: only the key is asked for; a key already stored may be kept.
-    return target.mode === 'existing' && Boolean(form.apiKey.trim() || target.provider.apiKeySet);
+  if (tile.region) {
+    // Bedrock: a region instead of a URL. The key may be typed, stored or set
+    // as BEDROCK_API_KEY on the server; the test says which is missing.
+    return target.mode === 'existing' && regionProblem(tile, form) === null;
   }
   if (!form.url.trim()) return false;
   if (target.mode === 'new') {
@@ -358,11 +387,19 @@ export function canTestConnection(tile, form, target, providers) {
 /**
  * Body for `POST /admin/models/_discover`. For an existing provider the
  * server uses its stored key (or environment variable) unless a new one was
- * typed; the key typed here is never stored by this call.
+ * typed; the key typed here is never stored by this call. Bedrock sends the
+ * AWS region instead of a URL.
  */
 export function buildDiscoveryRequest(tile, form, target) {
   const url = form.url.trim();
   const apiKey = form.apiKey.trim();
+  if (tile.region && target.mode === 'existing') {
+    return {
+      providerId: target.provider.id,
+      region: form.region.trim(),
+      ...(apiKey ? { apiKey } : {})
+    };
+  }
   if (target.mode === 'existing') {
     return { url, providerId: target.provider.id, ...(apiKey ? { apiKey } : {}) };
   }
@@ -372,6 +409,24 @@ export function buildDiscoveryRequest(tile, form, target) {
     ...(apiKey ? { apiKey } : {}),
     ...(tile.gateway ? { gateway: tile.gateway } : {})
   };
+}
+
+/**
+ * The URL the connection test calls, for display while it runs: the URL
+ * typed, or for Bedrock the control plane of the region chosen.
+ *
+ * @param {Object} tile
+ * @param {Object} form
+ * @returns {string}
+ */
+export function connectionUrl(tile, form) {
+  if (tile.region) {
+    const region = (form.region || '').trim();
+    return isValidBedrockRegion(region)
+      ? `https://bedrock.${bedrockEndpointRegion(region)}.amazonaws.com`
+      : '';
+  }
+  return form.url || '';
 }
 
 /** Host of a URL for display (`api.openai.com`), or the input when it is not one. */
@@ -543,20 +598,33 @@ export function planGroupUpdates(groupsFile, access, modelIds) {
  * (`discovery.baseUrl`), the key (the server encrypts it) and, for a
  * self-hosted server without key, `requiresApiKey: false` so its models
  * count as keyless. Existing provider: `PUT` of the entry as listed, plus the
- * new key and `enabled: true`.
+ * new key and `enabled: true`. For Bedrock the region the models were listed
+ * in is stored on the provider (`config.region`) only when the provider has
+ * none yet: each imported model carries that region itself
+ * ({@link buildModelConfigs}), so a second run in another region does not move
+ * the models imported before.
  *
  * @param {Object} tile
  * @param {Object} form
  * @param {{ mode: string, provider?: Object }} target
- * @param {Object|null} discovery - `_discover` response (null for Bedrock)
+ * @param {Object|null} discovery - `_discover` response
  * @returns {{ method: 'POST'|'PUT', path: string, body: Object }|null}
  */
 export function buildProviderWrite(tile, form, target, discovery) {
   const apiKey = form.apiKey.trim();
   if (target.mode === 'existing') {
-    const { apiKeySet: _set, apiKeyMasked: _masked, ...entry } = target.provider;
-    if (!apiKey && entry.enabled !== false) return null;
+    const {
+      apiKeySet: _set,
+      apiKeyMasked: _masked,
+      effectiveRegion: _effective,
+      ...entry
+    } = target.provider;
+    const region = tile.region ? discovery?.region || form.region.trim() : '';
+    // The provider's region is the one of every Bedrock model without its own: set it once.
+    const setsRegion = Boolean(region) && !entry.config?.region;
+    if (!apiKey && entry.enabled !== false && !setsRegion) return null;
     const body = { ...entry, enabled: true };
+    if (setsRegion) body.config = { ...entry.config, region };
     // The server keeps the stored key for the masked placeholder.
     body.apiKey = apiKey || (target.provider.apiKeySet ? '••••••••' : undefined);
     if (body.apiKey === undefined) delete body.apiKey;
@@ -589,7 +657,8 @@ export function buildProviderWrite(tile, form, target, discovery) {
  * Model configs for `POST /admin/models`, one per pick. Each is linked to the
  * provider (`providerId` for a custom one, the API type for a shipped one) and
  * carries no key: it uses the provider's (AI-PM6). Its inference URL is built
- * from the endpoint the provider holds. The chosen default carries
+ * from the endpoint the provider holds; a Bedrock model carries the region it
+ * was listed in (`config.region`). The chosen default carries
  * `default: true`; the server clears the flag on every other model.
  *
  * @param {Object} params
@@ -609,7 +678,8 @@ export function buildModelConfigs({ discovery, picks, providerId, defaultId }) {
       apiType: discovery.apiType,
       providerId,
       modelsUrl: discovery.modelsUrl,
-      enabled: true
+      enabled: true,
+      region: discovery.region
     });
     if (pick.id === defaultId) config.default = true;
     return config;
@@ -623,6 +693,12 @@ export function buildModelConfigs({ discovery, picks, providerId, defaultId }) {
  * import dialog. Every piece is a valid configuration on its own, so a partial
  * outcome can be finished from the provider and model pages.
  *
+ * Group writes replace a group's model list, so they are guarded: each
+ * `PUT /admin/groups/{id}` sends the `ETag` of the groups read it was planned
+ * from (and then of the previous group write) as `If-Match`. When another admin
+ * saved the groups in between, the server answers 412; the groups are then read
+ * and planned again, and the write is retried once from that fresh read.
+ *
  * @param {Object} params
  * @param {(path: string, options?: Object) => Promise<Object>} params.api - `makeAdminApiCall`
  * @param {(err: unknown) => string} params.errorMessage - `getAdminApiErrorMessage`
@@ -630,10 +706,11 @@ export function buildModelConfigs({ discovery, picks, providerId, defaultId }) {
  * @param {Object[]} params.modelConfigs
  * @param {Array<{ groupId: string, models: string[] }>} params.groupUpdates - The plan made
  *   from the groups as the flow loaded them
- * @param {(createdIds: string[]) => Promise<Array<{ groupId: string, models: string[] }>>} [params.replanGroups]
- *   Plans the group writes again from the groups as they are now, right before writing
- *   them, so an edit another admin made to those groups while the flow was open is kept.
- *   When it fails, the plan from `groupUpdates` is used.
+ * @param {(createdIds: string[]) => Promise<{ updates: Array<{ groupId: string, models: string[] }>, revision: string|null }>} [params.replanGroups]
+ *   Reads the groups again and plans the group writes from them as they are now, right before
+ *   writing them, so an edit another admin made to those groups while the flow was open is kept.
+ *   `revision` is the `ETag` of that read. When it fails, the plan from `groupUpdates` is used,
+ *   without `If-Match`.
  * @returns {Promise<{ providerError: string|null, models: Array<{ id: string, ok: boolean, error?: string }>, groups: Array<{ groupId: string, ok: boolean, error?: string }> }>}
  */
 export async function runConnectPlan({
@@ -662,27 +739,56 @@ export async function runConnectPlan({
     }
   }
   const created = new Set(outcome.models.filter(m => m.ok).map(m => m.id));
-  let updates = groupUpdates;
+  let queue = groupUpdates;
+  let revision = null;
   if (replanGroups && groupUpdates.length > 0) {
     try {
-      updates = await replanGroups([...created]);
+      ({ updates: queue, revision } = await replanGroups([...created]));
     } catch {
-      updates = groupUpdates;
+      queue = groupUpdates;
+      revision = null;
     }
   }
-  for (const update of updates) {
-    // Grant only what exists: a model that failed to be created is not listed.
-    const models = update.models.filter(
-      id => created.has(id) || !modelConfigs.some(c => c.id === id)
-    );
+
+  // Grant only what exists: a model that failed to be created is not listed.
+  const grantable = update =>
+    update.models.filter(id => created.has(id) || !modelConfigs.some(c => c.id === id));
+  const writeGroup = async update => {
+    const response = await api(`/admin/groups/${encodeURIComponent(update.groupId)}`, {
+      method: 'PUT',
+      ...(revision ? { headers: { 'If-Match': revision } } : {}),
+      body: { permissions: { models: grantable(update) } }
+    });
+    // The next group write builds on the file as this one left it.
+    revision = etagOf(response);
+  };
+
+  queue = [...queue];
+  while (queue.length > 0) {
+    const update = queue.shift();
     try {
-      await api(`/admin/groups/${encodeURIComponent(update.groupId)}`, {
-        method: 'PUT',
-        body: { permissions: { models } }
-      });
+      await writeGroup(update);
       outcome.groups.push({ groupId: update.groupId, ok: true });
     } catch (err) {
-      outcome.groups.push({ groupId: update.groupId, ok: false, error: errorMessage(err) });
+      if (!replanGroups || !isConfigConflict(err)) {
+        outcome.groups.push({ groupId: update.groupId, ok: false, error: errorMessage(err) });
+        continue;
+      }
+      // Someone saved the groups since they were read: read them again, plan this group and
+      // the ones still to write from that read, and retry this one once.
+      try {
+        const fresh = await replanGroups([...created]);
+        revision = fresh.revision;
+        const pending = new Set([update.groupId, ...queue.map(u => u.groupId)]);
+        const replanned = fresh.updates.filter(u => pending.has(u.groupId));
+        const retry = replanned.find(u => u.groupId === update.groupId);
+        queue = replanned.filter(u => u.groupId !== update.groupId);
+        // Nothing left to grant: the group got the models (or `*`) meanwhile.
+        if (retry) await writeGroup(retry);
+        outcome.groups.push({ groupId: update.groupId, ok: true });
+      } catch (retryErr) {
+        outcome.groups.push({ groupId: update.groupId, ok: false, error: errorMessage(retryErr) });
+      }
     }
   }
   return outcome;

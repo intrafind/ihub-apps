@@ -53,6 +53,8 @@ import { HEX_COLOR_PATTERN, VARIABLE_NAME_PATTERN } from '../../shared/validatio
 import { USER_APP_ICON_PATTERN, USER_APP_LIMITS } from '../../shared/userAppContent.js';
 import { isFeatureEnabled } from '../featureRegistry.js';
 import { isWebSearchAvailableTo } from './tools/webSearchResolver.js';
+import { stripHiddenCharacters } from '../../shared/visibleText.js';
+import { revisionBaseLanguage } from '../../shared/appRevision.js';
 
 export { appGeneratorSettings, integrationsFromAnswer } from '../../shared/appGenerator.js';
 
@@ -133,13 +135,14 @@ function isPlainObject(value) {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
 }
 
-/** `de` for `de-DE`; `en` for anything that is not a language tag. */
-function baseLanguage(tag) {
-  const base = String(tag ?? '')
-    .split(/[-_]/)[0]
-    .trim()
-    .toLowerCase();
-  return /^[a-z]{2}$/.test(base) ? base : 'en';
+/**
+ * `de` for `de-DE`; `en` for anything that is not a language tag.
+ *
+ * @param {string} tag
+ * @returns {string}
+ */
+export function baseLanguage(tag) {
+  return revisionBaseLanguage(tag);
 }
 
 // ---------------------------------------------------------------------------
@@ -355,14 +358,20 @@ export function parseGeneratedAnswer(text, finishReason = null) {
 /**
  * The text of a value the model wrote as a string or as a localized object:
  * the requested language first, then its base, English, any language.
+ *
+ * Characters a reader cannot see are removed first (`shared/visibleText.js`):
+ * the author reviews the draft before it is saved, and must see everything the
+ * model of the app will read. A text made only of them counts as empty.
  */
 function textOf(value, language) {
-  if (typeof value === 'string') return value.trim();
+  if (typeof value === 'string') return stripHiddenCharacters(value).trim();
   if (typeof value === 'number' && Number.isFinite(value)) return String(value);
   if (!isPlainObject(value)) return '';
   const candidates = [value[language], value[baseLanguage(language)], value.en];
   for (const key of Object.keys(value)) candidates.push(value[key]);
-  const text = candidates.find(candidate => typeof candidate === 'string' && candidate.trim());
+  const text = candidates
+    .map(candidate => (typeof candidate === 'string' ? stripHiddenCharacters(candidate) : ''))
+    .find(candidate => candidate.trim());
   return text ? text.trim() : '';
 }
 
@@ -386,14 +395,15 @@ function firstSentence(text) {
  *   or a localized object becomes `{ [language]: text }`, cut to its limit.
  * - `id` is derived from the name and is free; the model's is not read.
  * - `category`, `color`, `icon`: kept when valid, else the default.
- * - `variables`: at most 8, with a valid and unique name; only `name`,
+ * - `variables`: at most `limits.variables` (8 for a draft), with a valid and unique name; only `name`,
  *   `label`, `type`, `required`, `defaultValue`, `predefinedValues`. A default
  *   that does not fit the type or the options is left out.
  * - The lines of the message template that use a dropped field are removed;
  *   instructions that still name one get the warning `PLACEHOLDER_WITHOUT_FIELD`.
  * - An input field no text uses gets its line in the message template.
  * - `allowEmptyContent` is `true` only when the message template uses a field.
- * - `starterPrompts`: at most 4, `title` and `message` only.
+ * - `starterPrompts`: at most `limits.starterPrompts` (4 for a draft), `title` and
+ *   `message` only.
  * - `websearch` and `integrations` are never set; they are `suggestions`.
  * - `enabled` is `false`.
  * - Every other key (`type`, `upload`, `preferredModel`, `toolChoice`, …) is
@@ -417,6 +427,11 @@ function firstSentence(text) {
  *   `installed[].actions` when the answer names none), because a personal app
  *   cannot store a binding without them. An integration without actions is
  *   not suggested.
+ * @param {object} [options.limits=DRAFT_LIMITS] - The caps of every text and list, by the
+ *   names of {@link DRAFT_LIMITS}. A draft keeps the default; a revision of an admin app
+ *   passes the admin revision limits (`REVISE_CONTENT_LIMITS.admin` in
+ *   `shared/appRevision.js`), so a change does not cut the app's content to the size
+ *   of a personal app.
  * @returns {{ app: object, suggestions: { websearch: boolean, integrations: Array<{ id: string, label: string, actions: string[] }> }, warnings: Array<{ code: string, field: string }> }}
  * @throws {ServiceError} `APP_GENERATOR_INVALID_ANSWER` with `details.reason`
  *   `incomplete` when the answer is no object or lacks a name or instructions.
@@ -429,7 +444,8 @@ export function sanitizeGeneratedApp(
     installed = [],
     isTaken,
     description = '',
-    personal = null
+    personal = null,
+    limits = DRAFT_LIMITS
   } = {}
 ) {
   if (!isPlainObject(raw)) {
@@ -439,7 +455,11 @@ export function sanitizeGeneratedApp(
   const warnings = [];
   const warn = (code, field) => warnings.push({ code, field });
 
-  /** A text of the answer, cut to `limit`; empty when the answer has none. */
+  /**
+   * A text of the answer without hidden characters ({@link textOf} removes
+   * them), cut to `limit`; empty when the answer has none. The length is
+   * counted after the strip, as the personal-app schema counts it.
+   */
   const limited = (value, limit, field) => {
     const text = textOf(value, language);
     if (text.length <= limit) return text;
@@ -447,8 +467,8 @@ export function sanitizeGeneratedApp(
     return text.slice(0, limit).trim();
   };
 
-  const name = limited(raw.name, DRAFT_LIMITS.name, 'name');
-  const system = limited(raw.system, DRAFT_LIMITS.system, 'system');
+  const name = limited(raw.name, limits.name, 'name');
+  const system = limited(raw.system, limits.system, 'system');
   if (!name || !system) {
     throw invalidAnswer(
       'incomplete',
@@ -456,9 +476,9 @@ export function sanitizeGeneratedApp(
     );
   }
 
-  let shortDescription = limited(raw.description, DRAFT_LIMITS.description, 'description');
+  let shortDescription = limited(raw.description, limits.description, 'description');
   if (!shortDescription) {
-    shortDescription = firstSentence(description).slice(0, DRAFT_LIMITS.description).trim() || name;
+    shortDescription = firstSentence(description).slice(0, limits.description).trim() || name;
     warn('DESCRIPTION_ADDED', 'description');
   }
 
@@ -497,11 +517,11 @@ export function sanitizeGeneratedApp(
   }
 
   // A template that only passes the message on adds nothing: the message is always sent.
-  const template = limited(raw.prompt, DRAFT_LIMITS.prompt, 'prompt');
+  const template = limited(raw.prompt, limits.prompt, 'prompt');
   if (template && template !== `{{${CONTENT_VARIABLE}}}`) app.prompt = { [lang]: template };
   const placeholder = limited(
     raw.messagePlaceholder,
-    DRAFT_LIMITS.messagePlaceholder,
+    limits.messagePlaceholder,
     'messagePlaceholder'
   );
   if (placeholder) app.messagePlaceholder = { [lang]: placeholder };
@@ -510,7 +530,8 @@ export function sanitizeGeneratedApp(
     language,
     lang,
     warn,
-    limited
+    limited,
+    limits
   });
   app.variables = variables;
 
@@ -528,7 +549,7 @@ export function sanitizeGeneratedApp(
       warn('PLACEHOLDER_WITHOUT_FIELD', 'system');
     }
   }
-  app.starterPrompts = sanitizeStarterPrompts(raw.starterPrompts, { warn, limited, lang });
+  app.starterPrompts = sanitizeStarterPrompts(raw.starterPrompts, { warn, limited, lang, limits });
 
   // A field no text uses is asked for and then ignored: give it a line in the message template.
   for (const variable of unusedVariables(app)) {
@@ -611,11 +632,11 @@ function fittingDefault(text, { type, options, lang }) {
 }
 
 /**
- * The input fields of a draft: at most eight, each with a valid and unique
+ * The input fields of a draft: at most `limits.variables`, each with a valid and unique
  * name. `dropped` holds the names of the fields that were left out and whose
  * placeholder therefore has no field: a usable name that is not kept.
  */
-function sanitizeVariables(value, { language, lang, warn, limited }) {
+function sanitizeVariables(value, { language, lang, warn, limited, limits }) {
   if (!Array.isArray(value)) return { variables: [], dropped: [] };
   const variables = [];
   const names = new Set();
@@ -624,7 +645,7 @@ function sanitizeVariables(value, { language, lang, warn, limited }) {
     const field = `variables[${index}]`;
     const name = isPlainObject(entry) && typeof entry.name === 'string' ? entry.name : '';
     if (
-      variables.length >= DRAFT_LIMITS.variables ||
+      variables.length >= limits.variables ||
       !VARIABLE_NAME_PATTERN.test(name) ||
       // `{{content}}` is the user's message; a field of that name could never be told apart.
       name === CONTENT_VARIABLE ||
@@ -637,7 +658,7 @@ function sanitizeVariables(value, { language, lang, warn, limited }) {
     }
     names.add(name);
 
-    const options = sanitizeOptions(entry.predefinedValues, { limited, lang, field });
+    const options = sanitizeOptions(entry.predefinedValues, { limited, lang, field, limits });
     let type = entry.type;
     if (!VARIABLE_TYPES.includes(type) || (type === 'select' && options.length === 0)) {
       if (type !== undefined) warn('FIELD_TYPE_REPLACED', `${field}.type`);
@@ -647,14 +668,14 @@ function sanitizeVariables(value, { language, lang, warn, limited }) {
     const variable = {
       name,
       label: {
-        [lang]: limited(entry.label, DRAFT_LIMITS.variableLabel, `${field}.label`) || name
+        [lang]: limited(entry.label, limits.variableLabel, `${field}.label`) || name
       },
       type,
       required: entry.required === true
     };
     const fallback =
       typeof entry.defaultValue === 'boolean' ? String(entry.defaultValue) : entry.defaultValue;
-    const proposed = textOf(fallback, language).slice(0, DRAFT_LIMITS.variableDefault);
+    const proposed = textOf(fallback, language).slice(0, limits.variableDefault);
     if (proposed) {
       const defaultValue = fittingDefault(proposed, { type, options, lang });
       if (defaultValue) variable.defaultValue = { [lang]: defaultValue };
@@ -668,39 +689,39 @@ function sanitizeVariables(value, { language, lang, warn, limited }) {
 }
 
 /** The options of a dropdown: `{ value, label }`, each value once. */
-function sanitizeOptions(value, { limited, lang, field }) {
+function sanitizeOptions(value, { limited, lang, field, limits }) {
   if (!Array.isArray(value)) return [];
   const options = [];
   const values = new Set();
   for (const [index, entry] of value.entries()) {
-    if (options.length >= DRAFT_LIMITS.options) break;
+    if (options.length >= limits.options) break;
     const source = isPlainObject(entry) ? entry : { value: entry };
     const optionValue =
       typeof source.value === 'string'
-        ? source.value.trim().slice(0, DRAFT_LIMITS.optionValue)
+        ? stripHiddenCharacters(source.value).trim().slice(0, limits.optionValue)
         : typeof source.value === 'number' && Number.isFinite(source.value)
           ? String(source.value)
           : '';
     if (!optionValue || values.has(optionValue)) continue;
     values.add(optionValue);
     const label =
-      limited(source.label, DRAFT_LIMITS.optionLabel, `${field}.predefinedValues[${index}]`) ||
-      optionValue.slice(0, DRAFT_LIMITS.optionLabel);
+      limited(source.label, limits.optionLabel, `${field}.predefinedValues[${index}]`) ||
+      optionValue.slice(0, limits.optionLabel);
     options.push({ value: optionValue, label: { [lang]: label } });
   }
   return options;
 }
 
-/** The conversation starters of a draft: at most four, title and message only. */
-function sanitizeStarterPrompts(value, { warn, limited, lang }) {
+/** The conversation starters of a draft: at most `limits.starterPrompts`, title and message only. */
+function sanitizeStarterPrompts(value, { warn, limited, lang, limits }) {
   if (!Array.isArray(value)) return [];
   const starters = [];
   value.forEach((entry, index) => {
     const field = `starterPrompts[${index}]`;
     const source = isPlainObject(entry) ? entry : {};
-    const title = limited(source.title, DRAFT_LIMITS.starterTitle, `${field}.title`);
-    const message = limited(source.message, DRAFT_LIMITS.starterMessage, `${field}.message`);
-    if (starters.length >= DRAFT_LIMITS.starterPrompts || !title || !message) {
+    const title = limited(source.title, limits.starterTitle, `${field}.title`);
+    const message = limited(source.message, limits.starterMessage, `${field}.message`);
+    if (starters.length >= limits.starterPrompts || !title || !message) {
       warn('STARTER_DROPPED', field);
       return;
     }
@@ -713,8 +734,12 @@ function sanitizeStarterPrompts(value, { warn, limited, lang }) {
 // The draft
 // ---------------------------------------------------------------------------
 
-/** The category IDs of the installation's app list (`ui.json`), without "all". */
-function appCategoryIds() {
+/**
+ * The category IDs of the installation's app list (`ui.json`), without "all".
+ *
+ * @returns {string[]}
+ */
+export function appCategoryIds() {
   const list = configCache.getUI()?.data?.appsList?.categories?.list;
   return (Array.isArray(list) ? list : [])
     .map(category => category?.id)
@@ -729,8 +754,14 @@ function appCategoryIds() {
  * For a personal app (`personal` set) the list holds only the installations an
  * admin allowed for personal apps, each with only the allowed actions, and
  * nothing while the feature `integrations` is off.
+ *
+ * @param {object} user - The caller.
+ * @param {string} language - The language of labels and descriptions.
+ * @param {{ settings: object }|null} [personal] - Set for a personal app, with the
+ *   effective `platform.userApps` settings.
+ * @returns {Promise<ReturnType<typeof describeInstalledIntegrations>>}
  */
-async function installationsFor(user, language, personal = null) {
+export async function installationsFor(user, language, personal = null) {
   try {
     if (personal && !isFeatureEnabled('integrations', configCache.getFeatures() || {})) return [];
     const resolved = await installedIntegrationService.resolveAllEnabled(language);
@@ -758,8 +789,13 @@ async function installationsFor(user, language, personal = null) {
   }
 }
 
-/** Whether a search engine is available to the caller; a failed lookup reads as no. */
-function searchFor(user) {
+/**
+ * Whether a search engine is available to the caller; a failed lookup reads as no.
+ *
+ * @param {object} user
+ * @returns {boolean}
+ */
+export function searchFor(user) {
   try {
     return isWebSearchAvailableTo(user) === true;
   } catch {
@@ -806,6 +842,60 @@ export function selectDraftModel({ models, configuredId, mayUse }) {
 }
 
 /**
+ * The model that prepares a draft or a revision for one caller: the model of
+ * `platform.appGenerator.modelId` when the caller may use it, else the
+ * automatic choice ({@link selectDraftModel}). A configured model that is not
+ * usable is logged (a warning: the installation's problem), one the caller may
+ * not use too (info: expected for callers outside its groups).
+ *
+ * `POST /api/admin/apps/_generate`, `POST /api/apps/_generate` and both
+ * `_revise` routes pick their model here, so they always agree.
+ *
+ * @param {object} user - The caller.
+ * @returns {object} The model config.
+ * @throws {ServiceError} `APP_GENERATOR_NO_MODEL` (503) without a chat model the caller may use.
+ * @example
+ * pickDraftModel(req.user).id; // → 'gpt-4o-mini'
+ */
+export function pickDraftModel(user) {
+  const { modelId: configuredId } = appGeneratorSettings(configCache.getPlatform());
+  const { model, configured } = selectDraftModel({
+    models: configCache.getModels().data,
+    configuredId,
+    mayUse: candidate => canUserAccessResource(user, 'models', candidate.id)
+  });
+  if (configured === 'unavailable') {
+    // A setting that names no usable model is the installation's problem, not the caller's.
+    logger.warn(
+      'The configured app-draft model is not an enabled chat model; using the automatic choice',
+      {
+        component: COMPONENT,
+        configuredModelId: configuredId,
+        modelId: model?.id ?? null
+      }
+    );
+  } else if (configured === 'forbidden') {
+    // Expected for callers outside the groups of that model; not an error.
+    logger.info(
+      'The caller may not use the configured app-draft model; using the automatic choice',
+      {
+        component: COMPONENT,
+        configuredModelId: configuredId,
+        modelId: model?.id ?? null
+      }
+    );
+  }
+  if (!model) {
+    throw new ServiceError(
+      'APP_GENERATOR_NO_MODEL',
+      'No chat model you may use is available to prepare a draft'
+    );
+  }
+
+  return model;
+}
+
+/**
  * Have a chat model the caller may use prepare the draft of an app. Nothing
  * is stored.
  *
@@ -847,40 +937,7 @@ export async function generateAppDraft({
   record = {},
   personal = null
 }) {
-  const { modelId: configuredId } = appGeneratorSettings(configCache.getPlatform());
-  const { model, configured } = selectDraftModel({
-    models: configCache.getModels().data,
-    configuredId,
-    mayUse: candidate => canUserAccessResource(user, 'models', candidate.id)
-  });
-  if (configured === 'unavailable') {
-    // A setting that names no usable model is the installation's problem, not the caller's.
-    logger.warn(
-      'The configured app-draft model is not an enabled chat model; using the automatic choice',
-      {
-        component: COMPONENT,
-        configuredModelId: configuredId,
-        modelId: model?.id ?? null
-      }
-    );
-  } else if (configured === 'forbidden') {
-    // Expected for callers outside the groups of that model; not an error.
-    logger.info(
-      'The caller may not use the configured app-draft model; using the automatic choice',
-      {
-        component: COMPONENT,
-        configuredModelId: configuredId,
-        modelId: model?.id ?? null
-      }
-    );
-  }
-  if (!model) {
-    throw new ServiceError(
-      'APP_GENERATOR_NO_MODEL',
-      'No chat model you may use is available to prepare a draft'
-    );
-  }
-
+  const model = pickDraftModel(user);
   record.modelId = model.id;
 
   const defaultLanguage = configCache.getPlatform()?.defaultLanguage || 'en';

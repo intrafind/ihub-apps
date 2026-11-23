@@ -4,6 +4,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { getAdminApiErrorMessage, makeAdminApiCall } from '../../../../api/adminApi';
+import { etagOf } from '../../../../api/adminConfigRevision';
 import { findIdProblems, suggestModelId, translateDiscoveryError } from '../../utils/modelImport';
 import {
   KEEP_DEFAULT,
@@ -264,24 +265,20 @@ export default function useProviderConnect({ initialTileId = null } = {}) {
   const providerId = target.mode === 'existing' ? target.provider.id : form?.id;
 
   /**
-   * Save everything: provider (or its key), the models, the group grants.
-   * For a tile without a listing (Bedrock) only the provider is written.
+   * Save everything: provider (its key, and for Bedrock its region), the
+   * models, the group grants.
    */
   const finish = async () => {
     setRunning(true);
-    const noListing = tile.discovery === false;
     const defaultId = defaultChoice && defaultChoice !== KEEP_DEFAULT ? defaultChoice : null;
-    const modelConfigs = noListing
-      ? []
-      : buildModelConfigs({ discovery, picks, providerId, defaultId });
-    const groupUpdates =
-      noListing || !groupsFile
-        ? []
-        : planGroupUpdates(
-            groupsFile,
-            access,
-            modelConfigs.map(c => c.id)
-          );
+    const modelConfigs = buildModelConfigs({ discovery, picks, providerId, defaultId });
+    const groupUpdates = groupsFile
+      ? planGroupUpdates(
+          groupsFile,
+          access,
+          modelConfigs.map(c => c.id)
+        )
+      : [];
     const result = await runConnectPlan({
       api: makeAdminApiCall,
       errorMessage: getAdminApiErrorMessage,
@@ -290,9 +287,13 @@ export default function useProviderConnect({ initialTileId = null } = {}) {
       groupUpdates,
       // The group lists as they are now, not as the flow loaded them minutes ago: the
       // write replaces a group's model list, and another admin may have changed it.
+      // Its ETag goes out as If-Match, so a save made after this read is not overwritten.
       replanGroups: async createdIds => {
         const fresh = await makeAdminApiCall('/admin/groups');
-        return planGroupUpdates(fresh.data, access, createdIds);
+        return {
+          updates: planGroupUpdates(fresh.data, access, createdIds),
+          revision: etagOf(fresh)
+        };
       }
     });
     setOutcome({ ...result, defaultId });
@@ -302,7 +303,7 @@ export default function useProviderConnect({ initialTileId = null } = {}) {
 
   const goNext = () => {
     if (!canAdvance || !tile) return;
-    // The last step before "done" saves; Bedrock saves straight from the connection.
+    // The last step before "done" saves.
     const upcoming = nextStep(tile, step);
     if (upcoming === 'done') {
       void finish();

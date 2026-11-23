@@ -4,7 +4,16 @@
 import { useTranslation } from 'react-i18next';
 import { GATEWAY_API_TYPES } from '../../../../../../shared/llmProviders.js';
 import { apiTypeLabel } from '../../utils/modelImport';
-import { SELF_HOSTED_SERVERS, envVarFor, newProviderIdProblem } from '../../utils/providerConnect';
+import {
+  BEDROCK_REGION_SUGGESTIONS,
+  DEFAULT_BEDROCK_REGION
+} from '../../../../../../shared/bedrockRegions.js';
+import {
+  SELF_HOSTED_SERVERS,
+  envVarFor,
+  newProviderIdProblem,
+  regionProblem
+} from '../../utils/providerConnect';
 import { FIELD, HINT, LABEL, STEP_INTRO, STEP_TITLE } from './connectStyles';
 import { tileName } from './VendorStep';
 
@@ -73,6 +82,13 @@ function ConnectionStep({ tile, form, target, providers, onChange }) {
     )
   }[idProblem];
   const hint = urlHint(t, tile, form);
+  const regionProblemText = {
+    required: null,
+    invalid: t(
+      'admin.providers.connect.connection.regionInvalid',
+      'Enter an AWS region code such as eu-central-1, or global.'
+    )
+  }[regionProblem(tile, form)];
 
   return (
     <div className="space-y-4">
@@ -83,10 +99,10 @@ function ConnectionStep({ tile, form, target, providers, onChange }) {
           })}
         </h2>
         <p className={STEP_INTRO}>
-          {tile.discovery === false
+          {tile.region
             ? t(
                 'admin.providers.connect.connection.introBedrock',
-                'Enter a Bedrock API key. It is stored encrypted on the AWS Bedrock provider. The region comes from AWS_REGION (default eu-central-1) or from each model.'
+                'The AWS region iHub lists and calls the models in, and a Bedrock API key. Both are stored on the AWS Bedrock provider (the key encrypted) when you finish.'
               )
             : t(
                 'admin.providers.connect.connection.intro',
@@ -178,7 +194,49 @@ function ConnectionStep({ tile, form, target, providers, onChange }) {
         </div>
       )}
 
-      {tile.discovery !== false && (
+      {tile.region && (
+        <div>
+          <label htmlFor="connect-region" className={LABEL}>
+            {t('admin.providers.connect.connection.region', 'AWS region')}{' '}
+            <span className="text-red-500">*</span>
+          </label>
+          <input
+            id="connect-region"
+            type="text"
+            list="connect-region-suggestions"
+            autoComplete="off"
+            spellCheck={false}
+            value={form.region}
+            onChange={e => onChange('region', e.target.value)}
+            placeholder={DEFAULT_BEDROCK_REGION}
+            aria-invalid={Boolean(regionProblemText)}
+            aria-describedby={
+              regionProblemText
+                ? 'connect-region-problem connect-region-hint'
+                : 'connect-region-hint'
+            }
+            className={FIELD}
+          />
+          <datalist id="connect-region-suggestions">
+            {BEDROCK_REGION_SUGGESTIONS.map(region => (
+              <option key={region} value={region} />
+            ))}
+          </datalist>
+          {regionProblemText && (
+            <p id="connect-region-problem" className="mt-1 text-xs text-red-600 dark:text-red-400">
+              {regionProblemText}
+            </p>
+          )}
+          <p id="connect-region-hint" className={HINT}>
+            {t(
+              'admin.providers.connect.connection.regionHint',
+              'An AWS region code such as eu-central-1, or "global" for the global cross-region inference profiles. Models that need an inference profile are offered with the profile of this region (eu. for eu-central-1).'
+            )}
+          </p>
+        </div>
+      )}
+
+      {!tile.region && (
         <div>
           <label htmlFor="connect-url" className={LABEL}>
             {t('admin.models.import.url', 'Endpoint URL')} <span className="text-red-500">*</span>
@@ -212,7 +270,6 @@ function ConnectionStep({ tile, form, target, providers, onChange }) {
       <div>
         <label htmlFor="connect-key" className={LABEL}>
           {t('admin.models.import.apiKey', 'API key')}
-          {tile.discovery === false && !keyStored && <span className="text-red-500"> *</span>}
         </label>
         <input
           id="connect-key"

@@ -27,6 +27,7 @@ import { insertSupportMarkers } from '../../../../shared/sources/index.js';
 import { generatedFilesOf } from '../../../../shared/generatedFiles.js';
 import { buildMcpAppViews } from './mcpApps/mcpAppViewList';
 import { buildAuthPrompts } from '../integrations/connect/authPrompts';
+import { failureDiagnostics } from './utils/failureCause';
 import {
   interactionToCheckpoint,
   isCheckpointInteraction,
@@ -94,8 +95,15 @@ function last(list, predicate) {
   return null;
 }
 
-/** The answer text with the run's sources and, for a failed run, its error appended. */
-function contentOf(run, extras, fallbackErrorMessage) {
+/**
+ * The answer text with the run's sources and, for a failed run, its error appended.
+ *
+ * A failed model call whose cause the server named (`error.failureCause`) is
+ * told in the caller's translation of that cause (`errorMessageFor`), and its
+ * facts are kept on the message (`extras.failureDiagnostics`) for the admin
+ * test panel; any other failure keeps the server's message.
+ */
+function contentOf(run, extras, fallbackErrorMessage, errorMessageFor) {
   // Everything the run found (`sources/added`, folded by the reducer). Google's
   // answer text carries no links: its grounding supports say which passage
   // each source backs, and the markers go there — the stored answer gets the
@@ -106,7 +114,10 @@ function contentOf(run, extras, fallbackErrorMessage) {
   if (sources?.items?.length || sources?.queries?.length) extras.sources = sources;
   if (run.error) {
     // A failed run: the error text is appended to whatever streamed.
-    content = `${content}\n\n${run.error.message || fallbackErrorMessage}`;
+    const errorText = errorMessageFor?.(run.error) || run.error.message || fallbackErrorMessage;
+    content = `${content}\n\n${errorText}`;
+    const diagnostics = failureDiagnostics(run.error);
+    if (diagnostics) extras.failureDiagnostics = diagnostics;
   }
   return content;
 }
@@ -228,6 +239,9 @@ function addCompletionMetadata(extras, run, finished) {
  * @param {Object|null} run - RunState from the run reducer
  * @param {Object} [options]
  * @param {string} [options.fallbackErrorMessage] - Used when a stream/error frame has no message
+ * @param {(error: Object) => (string|null)} [options.errorMessageFor] - The translated
+ *   message of a failure with a server-named cause (`failureCauseMessage`); null keeps
+ *   the server's message
  * @returns {{ content: string, loading: boolean, extras: Object }}
  */
 export function projectRunToMessage(run, options = {}) {
@@ -239,7 +253,7 @@ export function projectRunToMessage(run, options = {}) {
   // The run behind the message: feedback and human events are recorded on it.
   if (run.runId) extras.runId = run.runId;
 
-  const content = contentOf(run, extras, fallbackErrorMessage);
+  const content = contentOf(run, extras, fallbackErrorMessage, options.errorMessageFor);
 
   // ── reasoning / media ────────────────────────────────────────────────
   if (run.thinking?.length) extras.thoughts = run.thinking;

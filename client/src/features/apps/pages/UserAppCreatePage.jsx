@@ -33,10 +33,18 @@ import { CALLOUT_CLASS } from '../../admin/components/formStyles';
 import { useUnsavedChanges } from '../../admin/hooks/useUnsavedChanges';
 import { contentLanguage } from '../../admin/utils/appDraft';
 import { userAppSource } from '../builder/userAppSource';
+import {
+  CONVERSATION_VIEW,
+  VIEW_PARAM,
+  useAppBuilderFeatures
+} from '../../admin/components/app-conversation/useAppBuilderChat';
 
 /** Where the page lives and where it leads. Nothing below this file names a path. */
 const APPS_PATH = '/apps';
-const editPath = id => `${APPS_PATH}/${encodeURIComponent(id)}/edit?created=1`;
+const editPath = (id, { conversation = false } = {}) =>
+  `${APPS_PATH}/${encodeURIComponent(id)}/edit?created=1${
+    conversation ? `&${VIEW_PARAM}=${CONVERSATION_VIEW}` : ''
+  }`;
 
 /** The tab keeps the draft of a personal app apart from a draft of the admin page. */
 export const USER_APP_DRAFT_STORAGE_KEY = 'ihub.userAppCreate.draft';
@@ -116,17 +124,24 @@ function UserAppCreatePage({ source = userAppSource }) {
 
   const { blocker, markSaved } = useUnsavedChanges(false, state.dirty);
 
+  // After a create from a description the editor opens with the conversation
+  // (owner decision 4 of the chat builder plan), where the draft can be refined.
+  const features = useAppBuilderFeatures();
+  const conversationAfterDraft = features.chat && config?.generator === true;
+
   const onCreated = useCallback(
-    id => {
+    (id, _payload, { origin } = {}) => {
       // The draft became an app: nothing of it is kept for the tab.
       forget();
       markSaved();
       // The new app belongs in the apps list and the sidebar, and counts against the limit.
       invalidateAppsCache();
       invalidateUserAppsConfig();
-      navigate(editPath(id), { replace: true });
+      navigate(editPath(id, { conversation: origin === 'generated' && conversationAfterDraft }), {
+        replace: true
+      });
     },
-    [forget, markSaved, navigate]
+    [forget, markSaved, navigate, conversationAfterDraft]
   );
   const labelOf = useCallback(field => t(FIELD_LABEL_KEYS[field]), [t]);
   const detailOf = useCallback(error => apiErrorMessage(error, t, ''), [t]);

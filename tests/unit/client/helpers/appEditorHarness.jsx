@@ -40,11 +40,19 @@ function httpError(status, detail = 'Request failed', code = undefined) {
  * @param {object[]} [options.adminModels] - What `GET /admin/models` lists (a full
  *   admin). Without it the request is refused with 403, as for a content admin,
  *   and the editor falls back to the models the author may use (`fetchModels`).
- * @returns {{request: Function, calls: object[], writes: () => object[], state: object, failures: object}}
+ * @param {boolean} [options.etags=false] - Answer the app's revision as `ETag` and honour
+ *   `If-Match` on PUT and `_toggle` (412 `PRECONDITION_FAILED` on a mismatch, nothing
+ *   written), as `PUT /api/admin/apps/{id}` and `POST /api/admin/apps/{id}/_toggle` do.
+ *   `state.revision` counts the writes, toggles included; `bumpRevision()` stands for a
+ *   save from somewhere else.
+ * @returns {{request: Function, calls: object[], writes: () => object[], state: object,
+ *   failures: object, revise: object[], bumpRevision: () => void}} `revise` holds the
+ *   answers of `POST /admin/apps/_revise`, taken in order (an Error is thrown).
  */
-function createAppServer({ app, access, adminModels }) {
+function createAppServer({ app, access, adminModels, etags = false }) {
   const state = {
     app,
+    revision: 1,
     access: access || {
       type: 'apps',
       id: app.id,
@@ -55,24 +63,43 @@ function createAppServer({ app, access, adminModels }) {
   };
   const calls = [];
   const failures = {};
+  const revise = [];
   const appUrl = `/admin/apps/${app.id}`;
   const accessUrl = `/admin/content-access/apps/${app.id}`;
+  const etag = () => (etags ? { etag: `"${state.revision}"` } : {});
 
   const request = async config => {
     const method = String(config.method || 'GET').toUpperCase();
     const { url, data } = config;
-    calls.push({ method, url, data });
+    const ifMatch = config.headers?.['If-Match'];
+    calls.push({ method, url, data, ifMatch });
     const failure = failures[`${method} ${url}`];
     if (failure) throw failure;
 
-    if (url === appUrl && method === 'GET') return { data: state.app, headers: {} };
+    if (url === appUrl && method === 'GET') return { data: state.app, headers: etag() };
     if (url === appUrl && method === 'PUT') {
+      if (etags && ifMatch && ifMatch !== `"${state.revision}"`) {
+        throw httpError(412, 'The app was changed since it was read.', 'PRECONDITION_FAILED');
+      }
       state.app = data;
-      return { data: { id: app.id }, headers: {} };
+      state.revision += 1;
+      return { data: { id: app.id }, headers: etag() };
+    }
+    if (url === '/admin/apps/_revise' && method === 'POST') {
+      const answer = revise.shift();
+      if (!answer) throw httpError(500, 'No revise answer queued');
+      if (answer instanceof Error) throw answer;
+      return { data: typeof answer === 'function' ? answer(data) : answer, headers: {} };
     }
     if (url === `${appUrl}/_toggle` && method === 'POST') {
+      // The toggle rewrites the app file: its revision changes like on a PUT, and the
+      // answer for one app carries the new one.
+      if (etags && ifMatch && ifMatch !== `"${state.revision}"`) {
+        throw httpError(412, 'The app was changed since it was read.', 'PRECONDITION_FAILED');
+      }
       state.app = { ...state.app, enabled: data.enabled };
-      return { data: { enabled: data.enabled, ids: [app.id] }, headers: {} };
+      state.revision += 1;
+      return { data: { enabled: data.enabled, ids: [app.id] }, headers: etag() };
     }
     if (url === '/admin/models' && method === 'GET') {
       if (!adminModels) throw httpError(403, 'Admin access required', 'FORBIDDEN');
@@ -100,7 +127,11 @@ function createAppServer({ app, access, adminModels }) {
     calls,
     writes: () => calls.filter(call => call.method !== 'GET'),
     state,
-    failures
+    failures,
+    revise,
+    bumpRevision: () => {
+      state.revision += 1;
+    }
   };
 }
 
@@ -170,6 +201,12 @@ function MockDualModeEditor({
         onChange={event =>
           onChange({ ...value, name: { ...value.name, [nameLanguage]: event.target.value } })
         }
+      />
+      {/* A setting outside the content keys a conversation changes. */}
+      <input
+        aria-label="Preferred model"
+        value={value?.preferredModel ?? ''}
+        onChange={event => onChange({ ...value, preferredModel: event.target.value })}
       />
       {groups && mode === 'form' && (
         <MockEditorGroup id="instructions" groups={groups}>
