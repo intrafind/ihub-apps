@@ -1,5 +1,6 @@
 # Fixes — Unreleased
 
+
 ## The Admin Area Is Fully Translated into German
 
 The admin area is fully translated into German. Many labels, hints, breadcrumbs, dialogs and
