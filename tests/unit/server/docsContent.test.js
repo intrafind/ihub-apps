@@ -19,9 +19,11 @@ import {
   firstHeading,
   listDocPages,
   loadDocsToc,
+  normalizeDocMeta,
   parseSummary,
   splitFrontMatter
 } from '../../../server/utils/docsLibrary.js';
+import { parseFrontMatter } from '../../../server/utils/frontMatter.js';
 import { splitDocsFrontMatter } from '../../../shared/docsFrontMatter.js';
 import { appRoutes, matchRoute, routesInSource } from '../../utils/appRoutes.js';
 
@@ -153,26 +155,31 @@ describe('docs pages', () => {
 });
 
 /**
- * The `adminPage` a page's front-matter names, as written (`null` when it has none). Read from
- * the text: `splitFrontMatter` drops a value that is not shaped like an admin path, and such a
- * page would then pass for having no button at all.
+ * The `adminPage` a page's front-matter names, as written (`null` when it has none). Parsed as the
+ * viewer parses it, but before `normalizeDocMeta` drops a value that is not shaped like an admin
+ * path: such a page would otherwise pass for having no button at all.
  */
 function rawAdminPage(markdown) {
   const { block } = splitDocsFrontMatter(markdown);
-  const match = /^adminPage:[ \t]*(.*)$/m.exec(block ?? '');
-  return match ? match[1].trim().replace(/^(['"])(.*)\1$/, '$2') : null;
+  if (block === null) return null;
+  const { data } = parseFrontMatter(`---\n${block}---\n`);
+  return data && Object.hasOwn(data, 'adminPage') ? data.adminPage : null;
 }
 
 /**
  * Why the viewer's "Open in admin" button of a page would not open an admin page, or `null` when
- * it does. The button is built from `adminPage` alone, so a page that was removed or renamed in
- * `client/src/App.jsx` leaves a button that lands on "not found".
+ * it does. The button is built from `adminPage` alone, so a value the viewer drops leaves no
+ * button, and a page that was removed or renamed in `client/src/App.jsx` leaves a button that
+ * lands on "not found".
  */
 function adminPageProblem(adminPage, routes) {
-  if (!/^\/admin(?:\/|$)/.test(adminPage)) return `"${adminPage}" is not a path under /admin`;
-  const route = matchRoute(adminPage, routes);
-  if (!route) return `no route in client/src/App.jsx opens ${adminPage}`;
-  if (route.redirectTo) return `${adminPage} only redirects; name ${route.redirectTo} instead`;
+  if (normalizeDocMeta({ adminPage }).adminPage === undefined) {
+    return `"${adminPage}" is not a path under /admin`;
+  }
+  const target = adminPage.trim();
+  const route = matchRoute(target, routes);
+  if (!route) return `no route in client/src/App.jsx opens ${target}`;
+  if (route.redirectTo) return `${target} only redirects; name ${route.redirectTo} instead`;
   return null;
 }
 
@@ -225,6 +232,10 @@ describe("adminPage in a page's front-matter", () => {
     expect(adminPageProblem('admin/models', sample)).toBe(
       '"admin/models" is not a path under /admin'
     );
+    // The viewer drops a value with a query or a fragment, so the page would have no button.
+    for (const adminPage of ['/admin/models/new?tab=details', '/admin/models#top']) {
+      expect(adminPageProblem(adminPage, sample)).toBe(`"${adminPage}" is not a path under /admin`);
+    }
   });
 
   test('is read as written, quoted or not, and also when the viewer would drop it', () => {
@@ -233,6 +244,11 @@ describe("adminPage in a page's front-matter", () => {
     expect(rawAdminPage('---\nadminPage: admin apps\n---\n\n# A\n')).toBe('admin apps');
     expect(rawAdminPage('---\naudience: admin\n---\n\n# A\n')).toBeNull();
     expect(rawAdminPage('# A\n\nadminPage: /admin/apps\n')).toBeNull();
+    // YAML, not the line: a trailing comment is not part of the value, a quoted key is the key.
+    expect(rawAdminPage('---\nadminPage: /admin/apps # the app list\n---\n\n# A\n')).toBe(
+      '/admin/apps'
+    );
+    expect(rawAdminPage('---\n"adminPage": /admin/apps\n---\n\n# A\n')).toBe('/admin/apps');
   });
 });
 

@@ -385,4 +385,14 @@ describe('AppTestPanel restarting after a save', () => {
     fireEvent.click(screen.getByRole('button', { name: TEST.restart }));
     await waitFor(async () => expect((await chat()).dataset.focusOnStart).toBe('true'));
   });
+
+  test('beside the app conversation, opening leaves the focus in the composer; Restart still gives it to the chat', async () => {
+    wideWindow();
+    renderPanel({ focusChatOnOpen: false });
+    const chat = () => screen.findByTestId('app-chat');
+    expect((await chat()).dataset.focusOnStart).toBe('false');
+
+    fireEvent.click(screen.getByRole('button', { name: TEST.restart }));
+    await waitFor(async () => expect((await chat()).dataset.focusOnStart).toBe('true'));
+  });
 });
