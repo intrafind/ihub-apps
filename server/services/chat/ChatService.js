@@ -251,7 +251,12 @@ export function withAppPrompt(messages, variables, promptTemplate) {
 function ledgerError(error) {
   if (!error) return {};
   return {
-    error: { code: String(error.code || 'ERROR'), message: String(error.message || error) }
+    // `storedMessage`: a failed model call's sentence without its raw text
+    // (see chatErrors.js); the ledger is replayed to whoever reattaches.
+    error: {
+      code: String(error.code || 'ERROR'),
+      message: String(error.storedMessage || error.message || error)
+    }
   };
 }
 
@@ -1253,7 +1258,7 @@ class ChatService {
         finishReason: outcome.finishReason,
         // A continued run's end counts what it used before the pause too.
         usage: carriedUsage ? addUsage(carriedUsage, outcome.usage) : outcome.usage,
-        error: outcome.error || (outcome.errorInfo ? outcome.errorInfo : undefined),
+        error: outcome.errorInfo || outcome.error || undefined,
         knowledgeSources: outcome.knowledgeSources,
         answerBasis: outcome.answerBasis,
         limitReachedIn: outcome.limitReachedIn,
@@ -1670,9 +1675,9 @@ class ChatService {
         buildLogData(streaming, {
           responseType: 'error',
           error: {
-            message: errorInfo.message,
+            message: errorInfo.logMessage,
             code: errorInfo.code,
-            details: errorInfo.details,
+            details: errorInfo.logDetails,
             isContextWindowError: errorInfo.isContextWindowError
           },
           response: content

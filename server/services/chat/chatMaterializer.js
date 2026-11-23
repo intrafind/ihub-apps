@@ -233,7 +233,8 @@ function failedError(info) {
   const failure = info.failure;
   return {
     code: String(info.code || 'ERROR'),
-    message: String(info.message || info),
+    // `storedMessage`: the sentence without the raw failure text (see chatErrors.js).
+    message: String(info.storedMessage || info.message || info),
     ...(typeof failure?.failureCause === 'string' ? { failureCause: failure.failureCause } : {}),
     ...(Number.isInteger(failure?.upstreamStatus) ? { upstreamStatus: failure.upstreamStatus } : {})
   };

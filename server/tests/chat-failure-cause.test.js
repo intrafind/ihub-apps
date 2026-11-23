@@ -149,3 +149,90 @@ test('describeChatError keeps its message and adds the failure; a user never get
     host: 'llm.corp.local:8443'
   });
 });
+
+/** What undici throws when the model host does not resolve. */
+function dnsError() {
+  const socketError = Object.assign(new Error('getaddrinfo ENOTFOUND llm.corp.local'), {
+    code: 'ENOTFOUND',
+    hostname: 'llm.corp.local'
+  });
+  return toLLMError(Object.assign(new TypeError('fetch failed'), { cause: socketError }), {
+    model
+  });
+}
+
+/** Translations the way `ErrorHandler.getLocalizedError` returns them, with the params shown. */
+async function getLocalizedError(key, params) {
+  return `${key} ${JSON.stringify(params)}`;
+}
+
+test('a user never gets the raw failure text; an administrator does, live only', async () => {
+  const err = dnsError();
+  const forUser = await describeChatError(err, { model, language: 'en', getLocalizedError });
+  for (const text of [forUser.message, forUser.storedMessage, JSON.stringify(forUser.details)]) {
+    assert.equal(String(text).includes('llm.corp.local'), false, text);
+    assert.equal(String(text).includes('ENOTFOUND'), false, text);
+  }
+  assert.match(forUser.message, /^dnsResolutionFailedNoHost /);
+  assert.equal(forUser.details, undefined);
+  assert.match(forUser.logMessage + forUser.logDetails, /ENOTFOUND llm\.corp\.local/);
+
+  const forAdmin = await describeChatError(err, {
+    model,
+    language: 'en',
+    getLocalizedError,
+    revealEndpoint: true
+  });
+  assert.match(forAdmin.message, /llm\.corp\.local/, 'the live message names the host');
+  assert.match(forAdmin.details, /ENOTFOUND/);
+  assert.equal(forAdmin.storedMessage, forUser.message, 'the stored message never does');
+});
+
+test('a network error drops the socket text for a user', async () => {
+  const socketError = Object.assign(new Error('read ECONNRESET 10.0.0.7:8443'), {
+    code: 'ECONNRESET'
+  });
+  const err = toLLMError(Object.assign(new TypeError('fetch failed'), { cause: socketError }), {
+    model
+  });
+  const forUser = await describeChatError(err, { model, language: 'en', getLocalizedError });
+  assert.match(forUser.message, /^networkErrorNoDetail /);
+  assert.equal(forUser.message.includes('10.0.0.7'), false);
+  const forAdmin = await describeChatError(err, {
+    model,
+    language: 'en',
+    getLocalizedError,
+    revealEndpoint: true
+  });
+  assert.match(
+    forAdmin.message,
+    /^networkError {.*"error":/,
+    'an administrator keeps the raw text'
+  );
+});
+
+test('without translations a user still gets no raw text', async () => {
+  const forUser = await describeChatError(dnsError(), { model, language: 'en' });
+  assert.equal(forUser.message, 'The model call failed.');
+  assert.equal(forUser.storedMessage, 'The model call failed.');
+});
+
+test('a provider error body stays out of details for a user; a usage limit keeps its figures', async () => {
+  const err = new LLMError('openai API service error.', {
+    code: LLM_ERROR_CODES.PROVIDER_ERROR,
+    providerCode: 'SERVICE_ERROR',
+    status: 500,
+    details: '{"error":{"message":"internal: shard db-7.corp failed"}}'
+  });
+  const forUser = await describeChatError(err, { model, language: 'en', getLocalizedError });
+  assert.equal(forUser.message, 'openai API service error.', 'the translated sentence stays');
+  assert.equal(forUser.details, undefined);
+  assert.match(forUser.logDetails, /db-7\.corp/);
+
+  const quota = new LLMError('quota', {
+    code: LLM_ERROR_CODES.QUOTA_EXCEEDED,
+    details: { scope: 'check', window: 'day', limit: 10 }
+  });
+  const quotaForUser = await describeChatError(quota, { model, language: 'en' });
+  assert.deepEqual(quotaForUser.details, { scope: 'check', window: 'day', limit: 10 });
+});

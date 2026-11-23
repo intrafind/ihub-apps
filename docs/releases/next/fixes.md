@@ -90,6 +90,10 @@ runs the same chat) only said "openai API service error" or showed a raw network
   not offer, too many requests, an endpoint that cannot be reached or that answers too slowly.
   Where only an administrator can fix it, users are asked to tell one; they never see the host
   that was called.
+- The raw error text of the failure (such as `getaddrinfo ENOTFOUND llm.internal`, or the error
+  body the provider sent) no longer reaches users who are not administrators, neither in the chat
+  nor in the stored conversation. Administrators still see it while the chat is open; it is not
+  stored with the conversation, and the server log keeps it as before.
 - In the **Test** panel, administrators also see the HTTP status, the host and the error code with
   a line on what to check, and for an untrusted certificate a link to the SSL settings under
   **Security**, as in the model test.
