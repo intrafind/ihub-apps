@@ -51,5 +51,5 @@ group and a new user also opened with errors.
   linked to an app that no longer exists says so.
 - **Groups can be cloned** like models and prompts (without their external group mappings). A
   cloned workflow keeps its name. The provider form no longer has the **Provider Enabled**
-  checkbox, which had no effect.
+  checkbox, which had no effect, and the Providers list no longer shows a **Disabled** badge for it.
 - A model save the server refuses brings its error into view.

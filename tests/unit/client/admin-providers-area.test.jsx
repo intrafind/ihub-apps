@@ -59,7 +59,8 @@ const providers = [
     apiType: 'openai',
     enabled: true
   },
-  { id: 'bedrock', name: 'AWS Bedrock', description: '', category: 'llm', enabled: true },
+  // `enabled: false` changes nothing on the server (it reads every provider): no badge for it.
+  { id: 'bedrock', name: 'AWS Bedrock', description: '', category: 'llm', enabled: false },
   { id: 'old-key', name: 'Old generic key', description: '', category: 'custom', enabled: true }
 ];
 const models = [
@@ -135,6 +136,13 @@ test('marks only the provider that sets its own timeouts', async () => {
   expect(
     within(await rowOf('OpenAI')).queryByText('Sets its own timeouts')
   ).not.toBeInTheDocument();
+});
+
+test('a provider stored with enabled: false gets no "Disabled" badge, since the flag has no effect', async () => {
+  renderPage();
+  const row = await rowOf('AWS Bedrock');
+  expect(within(row).queryByText('Disabled')).not.toBeInTheDocument();
+  expect(screen.queryByText('Disabled')).not.toBeInTheDocument();
 });
 
 test('Import opens the models page with the provider preselected, where the API type allows it', async () => {
