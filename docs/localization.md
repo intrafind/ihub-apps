@@ -141,6 +141,26 @@ channel.addEventListener('message', event => {
 
 **Accepted language codes** follow the BCP 47 basic form: `en`, `de`, `en-US`, `pt-BR`. Invalid values are ignored with a console warning. Messages with any other `type` are passed through silently, so unrelated cross-product events on the same channel will not affect the language.
 
+## German Terms in the Admin Area
+
+The German admin area uses one term per concept. Use the same terms in overrides and in new
+built-in texts, so a label, its hint and the documentation agree:
+
+| Concept | German term | Not |
+|---|---|---|
+| Model provider (OpenAI, Anthropic, a local endpoint) | Anbieter (Admin → Modelle → Anbieter) | Provider |
+| Sign-in provider (OIDC, LDAP) | OIDC-Anbieter, LDAP-Anbieter, Identitätsanbieter | OIDC-Provider, Identity Provider |
+| Function a model can call | Tool (Tool-Aufruf, Tool-Nutzung) | Werkzeug |
+| Person who signs in | Benutzer | Nutzer |
+| Agent inbox | Posteingang | Inbox |
+
+German text addresses the reader formally ("Wählen Sie …", never "Wähle …" or "du").
+
+Every key the frontend asks for with a literal key, `t('admin.some.key', 'Default')`, must exist
+in both `shared/i18n/en.json` and `shared/i18n/de.json`; the unit test
+`tests/unit/client/translation-keys-exist.test.jsx` fails on a missing key with its file and line.
+An override in `contents/locales/` can only change keys that exist there.
+
 ## Editing Overrides in the Admin UI
 
 **Admin → Customization → Localization** has a *Translation overrides* section. Search by key or

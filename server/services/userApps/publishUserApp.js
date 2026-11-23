@@ -33,10 +33,11 @@ import { ServiceError } from '../../utils/ServiceError.js';
 import { resolveOwnerPrincipal } from '../scheduler/tasks/ownerPrincipal.js';
 import { cleanAppForSave, newAppDefaults } from '../../../shared/appDefaults.js';
 import { appIdProblem, slugifyAppId, uniqueAppId } from '../../../shared/appId.js';
+import { isUserAppId } from '../../../shared/userAppContent.js';
 import { getUserAppRepository } from './UserAppRepository.js';
 import { asServiceError } from './UserAppService.js';
 import { INTEGRATION_CAPABILITY_PREFIX, effectiveUserApp, isRunnerOwner } from './ceiling.js';
-import { effectiveUserAppState, lookupUserAppOwner } from './userAppAccess.js';
+import { effectiveUserAppState, isCompanyAppOf, lookupUserAppOwner } from './userAppAccess.js';
 import { userAppCatalog } from './userAppResolution.js';
 import { currentUserAppSettings } from './userAppSettings.js';
 
@@ -229,6 +230,8 @@ export function toAdminApp(record, { effective, id, enabled, category }) {
   app.features = { ...(app.features || {}), projects: false, userProjects: false };
   app.toolApproval = { default: 'writes' };
   if (typeof category === 'string' && category !== '') app.category = category;
+  // The stamp that makes this file the record's company app (`isCompanyAppOf`).
+  if (isUserAppId(record?.id)) app.sourceUserAppId = record.id;
   return cleanAppForSave(app);
 }
 
@@ -672,7 +675,9 @@ export function promoteUserApp(
 }
 
 /**
- * The company app of a promoted record as the config cache knows it.
+ * The company app of a promoted record as the config cache knows it. A file
+ * under `publishedAs.appId` without the record's stamp (`sourceUserAppId`)
+ * counts as no company app.
  *
  * @param {Object} record - Stored personal app.
  * @returns {{app: Object|null, exists: boolean, visible: boolean}} `visible`:
@@ -682,9 +687,11 @@ export function promoteUserApp(
 export function companyAppOf(record) {
   const appId = record?.state === 'promoted' ? record.publishedAs?.appId : null;
   if (!appId) return { app: null, exists: false, visible: false };
-  const app = findByIdCaseInsensitive(configCache.getApps(true)?.data || [], appId) || null;
+  const found = findByIdCaseInsensitive(configCache.getApps(true)?.data || [], appId) || null;
+  // An app under this ID that the publish did not stamp is somebody else's.
+  if (!isCompanyAppOf(found, record)) return { app: null, exists: false, visible: false };
   const visible = Boolean(findByIdCaseInsensitive(configCache.getApps()?.data || [], appId));
-  return { app, exists: Boolean(app), visible };
+  return { app: found, exists: true, visible };
 }
 
 /**

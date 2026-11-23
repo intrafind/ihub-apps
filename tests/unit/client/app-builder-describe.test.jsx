@@ -110,7 +110,6 @@ function draftResult(overrides = {}) {
     },
     warnings: [],
     model: { id: 'gemini-flash', name: 'Gemini Flash' },
-    brief: 'standard',
     ...overrides
   };
 }
@@ -646,7 +645,7 @@ describe('DescribeStart: the description box of the Start screen', () => {
       expect(generate).toHaveBeenCalledTimes(2);
 
       // The first, cancelled request answers while the second one runs.
-      await settle(() => calls[0].resolve(draftResult({ brief: 'customised' })));
+      await settle(() => calls[0].resolve(draftResult({ model: { id: 'stale', name: 'Stale' } })));
       expect(onDraft).not.toHaveBeenCalled();
       expect(screen.getByRole('button', { name: TEXT.start.generating })).toBeInTheDocument();
 
@@ -883,15 +882,6 @@ describe('DraftExtras: the draft notice of the Essentials screen', () => {
   });
 
   describe('what the notice says about the draft', () => {
-    it('names a brief an administrator changed, and says nothing about the standard one', async () => {
-      const first = await renderWithDraft(draftResult({ brief: 'standard' }));
-      expect(screen.queryByText(TEXT.draft.briefCustomised)).not.toBeInTheDocument();
-
-      fireEvent.click(regenerateButton());
-      await settle(() => first.calls[1].resolve(draftResult({ brief: 'customised' })));
-      expect(screen.getByText(TEXT.draft.briefCustomised)).toBeVisible();
-    });
-
     it.each([
       ['FIELD_DROPPED', true],
       ['STARTER_DROPPED', true],

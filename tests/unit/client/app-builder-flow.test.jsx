@@ -933,8 +933,7 @@ describe('describe start', () => {
     },
     suggestions: { websearch: true, integrations: [{ id: 'jira', label: 'Jira', actions: [] }] },
     warnings: [],
-    model: { id: 'gemini-flash', name: 'Gemini Flash' },
-    brief: 'standard'
+    model: { id: 'gemini-flash', name: 'Gemini Flash' }
   };
 
   it('sends the description in the content language and opens the draft on Essentials', async () => {

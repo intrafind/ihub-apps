@@ -943,6 +943,7 @@ describe('sanitizeGeneratedApp: a hostile answer', () => {
     parentId: 'chat',
     inheritanceLevel: 3,
     overriddenFields: ['system'],
+    sourceUserAppId: 'uap_0123456789abcdef0123456789abcdef',
     // And a key the schema does not know.
     tools: ['everything'],
     constructor: { prototype: { polluted: true } }
@@ -1021,6 +1022,7 @@ describe('sanitizeGeneratedApp: a hostile answer', () => {
       'inheritanceLevel',
       'overriddenFields',
       'allowInheritance',
+      'sourceUserAppId',
       'requiredFeatures',
       'tools'
     ]) {

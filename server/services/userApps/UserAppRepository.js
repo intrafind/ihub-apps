@@ -678,6 +678,33 @@ export class UserAppRepository {
   }
 
   /**
+   * Every promoted record that names its company app (`publishedAs.appId`),
+   * with no bound on the walk: the upgrade pass of the company app stamps
+   * (`companyAppStamps.js`) must see all of them, or it would record itself
+   * as done with records left unstamped.
+   *
+   * @returns {Promise<Object[]>}
+   * @throws {StorageError} When the store cannot be listed.
+   */
+  async listPromoted() {
+    if (!this.isAvailable()) return [];
+    const docs = await collect(
+      this.documents,
+      USER_APPS_NAMESPACE,
+      { includeData: true },
+      Number.POSITIVE_INFINITY
+    );
+    return docs
+      .map(doc => doc.data)
+      .filter(
+        record =>
+          record?.state === 'promoted' &&
+          typeof record.publishedAs?.appId === 'string' &&
+          record.publishedAs.appId !== ''
+      );
+  }
+
+  /**
    * Change a record under its lock. For the changes that are not content,
    * members or an offer: switching an app off and on, the marks of a publish,
    * a release.
@@ -1081,9 +1108,6 @@ export class UserAppRepository {
             membersUpdatedBy:
               droppedOwn || downgraded > 0 ? newOwner : record.membersUpdatedBy || null,
             pendingOwner: null,
-            // The receiver read this content before accepting: it counts as
-            // theirs for the approval mode until somebody else changes it.
-            contentConfirmedBy: { id: newOwner.id, contentHash: record.contentHash || null },
             ...(typeof release === 'function' && release(record)
               ? { state: 'active', publishedAs: null }
               : {}),

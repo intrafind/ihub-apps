@@ -98,7 +98,8 @@ describes them. The differences for a personal app:
   empty**. Link apps and the Marketplace are not offered.
 - **Copy an existing app** lists the apps the person has access to: the company apps they may
   use, and the personal apps they own or that are shared with them. Left out are apps a personal
-  app cannot become (link apps, websites shown inside iHub, apps that are switched off) and apps
+  app cannot become (link apps, websites shown inside iHub, apps connected to the iAssistant,
+  apps that are switched off) and apps
   whose content the person cannot read (a personal app that is switched off or whose sharing is
   suspended, an app that was published and is now a company app for them, an app only offered
   to them). The copy takes the texts in every language, the icon, the colour, the message
@@ -244,9 +245,9 @@ an app you do not own differently:
   Approving a call applies to that one call. **Approve & allow for this chat** is not offered.
 - In the owner's own chats the app asks before it changes something, and the owner can allow a
   tool for the rest of the chat. A stricter approval setting of the installation still applies.
-  This holds only while the current instructions are the owner's own (the owner saved them, or
-  accepted the app with them): after a "Can edit" member changed them, the owner is asked before
-  every tool call too, until the owner saves the app.
+  This holds whoever saved the current instructions: the owner does not confirm changes, so a
+  change a "Can edit" member makes runs under the owner's approval settings. Give "Can edit" only
+  to people whose changes you would run yourself.
 
 A research turn with three searches and two page reads therefore shows five cards to a person
 who does not own the app. This is intended; see [Three limits](#three-limits-to-know-first).
@@ -397,7 +398,7 @@ restart.
 | `capabilities.webSearch`         | **Web search**                                                                 | `false`     | Personal apps may use web search.                                                                                                                   |
 | `capabilities.skills`            | **Skills**                                                                     | `false`     | Personal apps may use skills.                                                                                                                       |
 | `capabilities.integrations`      | **Connected systems**, **Choose…**                                             | `[]`        | The connected systems personal apps may use, each with the functions you tick. A function you do not tick cannot be used. The system installation `ihub` cannot be allowed. |
-| `blockedOwners`                  | **People whose apps are switched off**                                         | `[]`        | User IDs. The apps of these people stop for everyone, and they cannot create new ones.                                                              |
+| `blockedOwners`                  | **People whose apps are switched off**                                         | `[]`        | User IDs. The apps of these people stop for everyone, they cannot create new ones, and they cannot change, share or delete the ones they own.     |
 
 Three things to know about what personal apps may use:
 
@@ -425,7 +426,7 @@ may use and when it was last used. The filters are **All**, **Published, not swi
 | **Take over as app…**               | Full administrator | Makes a company app without the owner; see below.                                                                                                                              |
 | **Give back to the owner**          | Full administrator | Makes a published personal app editable again. The company app stays. Unpublish or delete the company app first.                                                               |
 | **Delete**                          | Full administrator | Removes the app for everyone.                                                                                                                                                  |
-| **Switch off all apps of this person** | Full administrator | On the user's page under **Admin → Users**. The person's apps stop for everyone, and the person cannot create new ones. **Switch on again** in the settings panel undoes it. |
+| **Switch off all apps of this person** | Full administrator | On the user's page under **Admin → Users**. The person's apps stop for everyone, and the person cannot create new ones. The person can still see their apps but can no longer change, share, delete, hand over or publish them. **Switch on again** in the settings panel undoes it. |
 | Switch a published app on           | Content admin      | In the admin editor of the company app, with **Publish**.                                                                                                                      |
 
 - **Administrators never edit a personal app.** To change one, take it over as a company app, or
@@ -442,6 +443,10 @@ may use and when it was last used. The filters are **All**, **Published, not swi
   company app yet, for example "3 of 5 members cannot use the company app." They keep the
   personal app until you give their groups access to the company app.
 - Deleting the company app gives the personal app back to its owner, who can edit it again.
+  A published company app records the personal app it came from (`sourceUserAppId` in its
+  file). An app that carries no such entry, or another app's, does not count as the company
+  app: an app created by hand under the same ID also gives the personal app back. Keep the
+  entry when you edit the app file by hand.
 - With the feature off, the list, **Switch off**, **Delete**, **Take over as app…** and the
   settings still work. Nobody can chat with a personal app, administrators included. Offers
   cannot be made or withdrawn; an open offer lapses after 30 days.

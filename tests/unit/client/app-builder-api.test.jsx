@@ -64,7 +64,7 @@ const sentBody = () => JSON.parse(requests[0].data);
 
 describe('generateAppDraft', () => {
   it('posts the description and the language to the draft route and returns the answer', async () => {
-    const answer = { app: { id: 'x' }, suggestions: {}, warnings: [], brief: 'standard' };
+    const answer = { app: { id: 'x' }, suggestions: {}, warnings: [] };
     respond = () => ({ data: answer, status: 200 });
     const result = await generateAppDraft({ description: 'An assistant.', language: 'de' });
     expect(result).toEqual(answer);

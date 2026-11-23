@@ -29,10 +29,12 @@ import installedIntegrationService from '../integrations/InstalledIntegrationSer
 import { isWebSearchAvailableTo } from '../tools/webSearchResolver.js';
 import { isUserAppId } from '../../../shared/userAppContent.js';
 import { MAX_SHARED_LISTED, getUserAppRepository } from './UserAppRepository.js';
+import { companyAppStampsSettled } from './companyAppStamps.js';
 import { effectiveUserApp, isRunnerOwner } from './ceiling.js';
 import {
   canHoldUserApps,
   effectiveGroups,
+  isCompanyAppOf,
   lookupUserAppOwner,
   ownerLookupFromRequest,
   ownerSnapshotNeedsRefresh,
@@ -60,13 +62,37 @@ export function isConfigAppId(id) {
   return Boolean(findByIdCaseInsensitive(configCache.getApps(true)?.data || [], id));
 }
 
-/** The company app a promoted record points to, as far as the config cache knows it. */
+/**
+ * Whether a promoted record still has its company app: a config app under
+ * `publishedAs.appId` that carries the record's ID in `sourceUserAppId`.
+ * False for a record that is not promoted.
+ *
+ * @param {Object|null|undefined} record - Stored personal app.
+ * @returns {boolean}
+ */
+export function hasCompanyApp(record) {
+  const appId = record?.state === 'promoted' ? record.publishedAs?.appId : null;
+  if (typeof appId !== 'string' || appId === '') return false;
+  return isCompanyAppOf(
+    findByIdCaseInsensitive(configCache.getApps(true)?.data || [], appId),
+    record
+  );
+}
+
+/**
+ * The company app a promoted record points to, as far as the config cache
+ * knows it. A config app under `publishedAs.appId` that does not carry the
+ * record's ID in `sourceUserAppId` is not its company app: `exists` is false
+ * and the record is released on read, as if the company app were deleted.
+ */
 function companyAppOf(record, user) {
   const appId = record?.publishedAs?.appId;
   if (record?.state !== 'promoted' || !appId) {
     return { exists: true, visible: null, usable: false };
   }
-  const exists = isConfigAppId(appId);
+  const file = findByIdCaseInsensitive(configCache.getApps(true)?.data || [], appId) || null;
+  if (!isCompanyAppOf(file, record)) return { exists: false, visible: null, usable: false };
+  const exists = true;
   const visible = findByIdCaseInsensitive(configCache.getApps()?.data || [], appId) || null;
   return {
     exists,
@@ -316,8 +342,8 @@ async function removeLapsedOffer(repo, record, { req, user }) {
 }
 
 /**
- * Store the release of a promoted record whose company app no longer exists
- * (design 8.2, "Released by itself"): `state: 'active'`, `publishedAs: null`.
+ * Store the release of a promoted record whose company app no longer exists,
+ * or no longer carries the record's ID (design 8.2, "Released by itself"): `state: 'active'`, `publishedAs: null`.
  * Derived only, the release would come undone as soon as any app with that
  * ID existed again, and the record would point at somebody else's app. The
  * revision stays: the record already reads as active. Never throws.
@@ -331,8 +357,7 @@ async function storeRelease(repo, record) {
       current => ({ ...current, state: 'active', publishedAs: null }),
       {
         bumpRevision: false,
-        authorize: loaded =>
-          loaded.state === 'promoted' && !isConfigAppId(loaded.publishedAs?.appId)
+        authorize: loaded => loaded.state === 'promoted' && !hasCompanyApp(loaded)
       }
     );
     return released?.state === 'active' ? released : null;
@@ -348,6 +373,9 @@ async function storeRelease(repo, record) {
 
 async function inspect(appId, user, { req, repository, catalogs }) {
   if (!isUserAppId(appId)) return { status: 'notPersonal' };
+  // Whether a promoted record is released depends on the stamp of its company
+  // app; the upgrade pass that stamps the apps of 5.7.4 comes first.
+  await companyAppStampsSettled();
   const repo = repository || getUserAppRepository();
 
   // A config app has the ID: the file was placed by hand or by an import.

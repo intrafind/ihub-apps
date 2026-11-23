@@ -155,8 +155,7 @@ const generated = () => ({
     ]
   },
   warnings: [],
-  model: { id: 'gemini-flash', name: 'Gemini Flash' },
-  brief: 'standard'
+  model: { id: 'gemini-flash', name: 'Gemini Flash' }
 });
 
 /** A draft as the Essentials screen leaves it: the texts the author owes are filled. */

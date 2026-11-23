@@ -13,9 +13,6 @@ notes say that the quality of AI drafts was not measured with real models.
 - A running iHub with at least one real chat model, signed in as an administrator or a content
   admin.
 - The feature **App Drafts with AI** switched on (**Admin → Platform → Features**).
-- An unchanged library prompt **App Generator**. With a changed one the draft notice reads "An
-  administrator changed how drafts are prepared on this installation.", and the run tests that
-  prompt instead of the shipped behaviour.
 - About 30 minutes per model. A person can prepare 30 drafts per hour, and failed drafts count.
 
 Run all ten descriptions against one model. If you can, run them again against a second, small

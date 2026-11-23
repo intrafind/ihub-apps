@@ -32,6 +32,7 @@ import {
   groupsWith,
   member,
   setConfig,
+  stampCompanyApp,
   shape
 } from './helpers/userAppsHarness.js';
 import { createBody, startUserAppRoutesApi } from './helpers/userAppRoutesApi.js';
@@ -58,11 +59,15 @@ const switchedOff = record => ({
   disabled: { at: '2026-11-20T10:00:00.000Z', by: { id: 'root', name: 'Ada Admin' }, reason: 'x' }
 });
 
-const promoted = record => ({
-  ...record,
-  state: 'promoted',
-  publishedAs: { appId: ADMIN_APP, at: '2026-11-20T10:00:00.000Z', by: record.owner }
-});
+const promoted = record => {
+  // The company app carries the record's ID, as a publish writes it.
+  stampCompanyApp(ADMIN_APP, record.id);
+  return {
+    ...record,
+    state: 'promoted',
+    publishedAs: { appId: ADMIN_APP, at: '2026-11-20T10:00:00.000Z', by: record.owner }
+  };
+};
 
 /** An installation personal apps may bind, which the group `narrow` is not granted. */
 const JIRA = { id: 'jira', definition: 'jira', enabled: true };
@@ -1119,13 +1124,7 @@ describe('POST /api/apps/_generate', () => {
     on();
     const res = await generate('anna');
     assert.equal(res.status, 200, res.text);
-    assert.deepEqual(Object.keys(res.body).sort(), [
-      'app',
-      'brief',
-      'model',
-      'suggestions',
-      'warnings'
-    ]);
+    assert.deepEqual(Object.keys(res.body).sort(), ['app', 'model', 'suggestions', 'warnings']);
     assert.deepEqual(res.body.app.name, { en: 'Mail summary' });
     // Nothing of an admin app: the free admin ID would tell which app IDs exist.
     for (const key of ['id', 'category', 'order', 'enabled']) {

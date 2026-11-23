@@ -65,7 +65,7 @@ function Option({ checked, onChange, children, ...rest }) {
  * @param {object} props
  * @param {object} [props.source] - What the create page offers. `source.suggestions` says
  *   whether web search and connected systems may be offered; without a source both may.
- * @param {{ app: object, suggestions?: { websearch?: boolean, integrations?: Array<{ id: string, label?: string, actions?: string[] }> }, warnings?: Array<{ code: string }>, brief?: string }} props.result
+ * @param {{ app: object, suggestions?: { websearch?: boolean, integrations?: Array<{ id: string, label?: string, actions?: string[] }> }, warnings?: Array<{ code: string }> }} props.result
  *   The body of `POST /api/admin/apps/_generate` the current draft came from.
  * @param {object} [props.draft] - The draft as the author edited it. Its instructions decide
  *   whether the input fields can be removed; without it the instructions of `result.app` do.
@@ -195,7 +195,6 @@ function DraftExtras({
         <Icon name="sparkles" size="sm" className="mt-0.5 shrink-0" aria-hidden="true" />
         <span id={introId}>{t('admin.apps.create.draft.intro')}</span>
       </p>
-      {result?.brief === 'customised' && <p>{t('admin.apps.create.draft.briefCustomised')}</p>}
       {leftOut && <p>{t('admin.apps.create.draft.leftOut')}</p>}
 
       <div>

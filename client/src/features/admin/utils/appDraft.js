@@ -39,12 +39,16 @@ import { removeVariables } from '../../../../../shared/appPlaceholders.js';
 /** The texts of a copy that the Essentials screen edits. */
 const ESSENTIAL_TEXT_FIELDS = ['name', 'description', 'system'];
 
-/** What a copy does not take over: the lineage nothing reads, and the list position. */
+/**
+ * What a copy does not take over: the lineage nothing reads, the personal app
+ * a published app came from, and the list position.
+ */
 const NOT_COPIED_KEYS = [
   'parentId',
   'inheritanceLevel',
   'overriddenFields',
   'allowInheritance',
+  'sourceUserAppId',
   'order'
 ];
 
@@ -241,8 +245,8 @@ export function draftFromTemplate(template, { language, isTaken } = {}) {
 /**
  * The draft of a copy ("Duplicate", "Copy an existing app"): everything the
  * source has, in every language, except its lineage (`parentId`,
- * `inheritanceLevel`, `overriddenFields`, `allowInheritance`) and its
- * position in the list. Every language of the name gets the "(copy)" label,
+ * `inheritanceLevel`, `overriddenFields`, `allowInheritance`,
+ * `sourceUserAppId`) and its position in the list. Every language of the name gets the "(copy)" label,
  * and the app is not published.
  *
  * The ID is a free one derived from the copy's name, like the ID of every

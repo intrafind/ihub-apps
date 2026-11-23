@@ -98,7 +98,7 @@ it was resolved. Decisions that need the owner are repeated in section 10.
 | D7 | Where generation runs | On the server: `POST /api/admin/apps/_generate`. The browser no longer parses model output. | PM had the endpoint under Next. Engineer, QE, security and admin need it now; it also makes the failure paths testable in CI. |
 | D8 | What a draft may switch on | Web search and connected systems are returned as suggestions and shown as unticked checkboxes. Input fields stay in the draft and are listed with a ticked checkbox. That checkbox is locked when the instructions use the fields. | UX, PM and UI designer: apply them and show removable chips. Security and admin: people confirm what is pre-ticked. The stricter rule was chosen. This changes today's behaviour, where both are applied silently (`AppCreationWizard.jsx:720-735`). |
 | D9 | Which model drafts | A chat model the caller may use, the standard model first. This is the rule the usage-guide generator already uses (`selectGuideModel`, `server/utils/appUsageGuide.js:246-255`). | Admin: a setting that names the generator model. Engineer: standard model, else the first enabled one regardless of the caller's permissions. The existing rule was reused; a setting is owner question Q8. |
-| D10 | The generator prompt | A library prompt `app-generator` that an admin changed wins. An unchanged library copy, a disabled one or a missing one is replaced by a brief the server owns. That brief asks for one language and plain wording. The server appends the output rules in every case. The response and the audit entry say which brief was used. | Security: move the prompt out of the library now. Admin: hide `category: system` prompts from users. Both change what `GET /api/prompts` returns and affect customised copies: owner question Q5. The first plan used the shipped library text whenever it existed. That text asks for English and German, shows `preferredModel: "gpt-4"` and a German example in the *du* form, which contradicts the appended rules. The server brief removes the contradiction without a migration: owner question Q18. |
+| D10 | The generator prompt | A library prompt `app-generator` that an admin changed wins. An unchanged library copy, a disabled one or a missing one is replaced by a brief the server owns. That brief asks for one language and plain wording. The server appends the output rules in every case. The response and the audit entry say which brief was used. **Update 2026-11-22:** the owner decided to remove the App Generator prompt completely (section "The App Generator prompt is removed"). Drafts always use the server's brief; the library prompt, the response field `brief` and the audit detail `brief` are gone. | Security: move the prompt out of the library now. Admin: hide `category: system` prompts from users. Both change what `GET /api/prompts` returns and affect customised copies: owner question Q5. The first plan used the shipped library text whenever it existed. That text asks for English and German, shows `preferredModel: "gpt-4"` and a German example in the *du* form, which contradicts the appended rules. The server brief removes the contradiction without a migration: owner question Q18. |
 | D11 | Kill switch | A feature `appGenerator` in `server/featureRegistry.js`, default on. Off: no description box, and the endpoint answers 403 `FEATURE_DISABLED`. | None. Additive. |
 | D12 | Templates | Six small template files written for the gallery, in `server/appTemplates/`, served by `GET /api/admin/app-templates`. Each holds only content fields (texts, input fields, conversation starters, icon, colour, category), in en and de. | PM: the gallery is Next because it needs content work. Engineer: serve six shipped default apps as they are. The critics showed that the shipped files do not fit: one binds a knowledge project, one has English-only instructions, four change upload, user settings or input mode, and one message template is a block of tags. The content work is six short files whose text is taken from the shipped apps and simplified. Owner question Q19. |
 | D13 | "Copy an existing app" | The picker lists enabled apps through the existing `GET /api/admin/apps/templates`, which is the owner's decision of 2026-11-17 (Rework:46). It sits under "Other ways to start". The row action "Duplicate" works on every app, published or not. | Engineer and admin: list disabled apps in the picker too. Not done, to keep the owner's decision; the row action covers the admin's archive. |
@@ -762,7 +762,6 @@ quickstart's glossary maps the two.
 | `draft.also` | Also in this draft | Außerdem in diesem Entwurf |
 | `draft.inputFields` | Input fields: {{names}} | Eingabefelder: {{names}} |
 | `draft.fieldsLocked` | The instructions use these fields. You can remove them in the editor. | Die Anweisungen verwenden diese Felder. Entfernen können Sie sie im Editor. |
-| `draft.briefCustomised` | An administrator changed how drafts are prepared on this installation. | Ein Administrator hat angepasst, wie Entwürfe auf dieser Installation vorbereitet werden. |
 | `draft.suggestions` | The app could also use | Die App könnte außerdem verwenden |
 | `draft.suggestionsHelp` | Nothing here is switched on unless you tick it. | Nichts davon ist eingeschaltet, solange Sie es nicht ankreuzen. |
 | `draft.webSearch` | Web search: the app can search the internet. | Websuche: Die App kann im Internet suchen. |
@@ -1204,7 +1203,7 @@ message.
 What the server does, in `server/services/appGenerator.js`:
 
 1. Picks the model with `selectGuideModel(models, m => canUserAccessResource(user, 'models', m.id))`.
-2. Chooses the brief, in `server/services/appGeneratorBrief.js`:
+2. Chooses the brief, in `server/services/appGeneratorBrief.js` (**Update 2026-11-22:** the owner decided to remove the App Generator prompt completely (section "The App Generator prompt is removed"). Since then the server's brief is always used, and the steps below about the library prompt, `SHIPPED_BRIEF_HASHES` and `brief` no longer apply):
    - The library prompt `app-generator` exists, is enabled, and its text differs from every
      released version of the shipped file: an admin customised it. It is used, and `brief` is
      `customised`.
@@ -1263,7 +1262,7 @@ What the server does, in `server/services/appGenerator.js`:
    the sanitiser: it is logged with the issue paths, never the model text, and answered as
    `APP_GENERATOR_INVALID_ANSWER`.
 8. Writes an audit entry with the existing action `execute` and resource `app`. `details` holds
-   `{ purpose: 'app-generator', modelId, usage, descriptionLength, brief }`. The action
+   `{ purpose: 'app-generator', modelId, usage, descriptionLength, brief }` (`brief` was dropped on 2026-11-22). The action
    `generate` of the first plan is not in the audit schema's list
    (`server/validators/auditEntrySchema.js:13-37`), so every draft would have logged a validation
    warning. Neither the description nor the answer is logged above debug level, and nothing
@@ -1679,7 +1678,8 @@ Rules that keep the slices apart:
   and a system message without "both English and German" and without "gpt-4". A library prompt
   with one changed sentence gives `brief: "customised"` and that sentence in the system message.
   The output rules follow in both cases. The hash of the current shipped file is in
-  `SHIPPED_BRIEF_HASHES`.
+  `SHIPPED_BRIEF_HASHES`. (Replaced on 2026-11-22: drafts always use the server's brief; the
+  tests assert that and nothing else.)
 - 503 `APP_GENERATOR_NO_MODEL` without a usable model; 502 `APP_GENERATOR_INVALID_ANSWER` for
   prose; 403 `FEATURE_DISABLED` with the feature off; `QUOTA_EXCEEDED` from the client is passed
   on with status 429; every error body is `application/problem+json`.
@@ -1748,7 +1748,7 @@ Rules that keep the slices apart:
   suggestion adds exactly that one.
 - Unticking "Input fields" removes the fields and the template lines that use them. When the
   instructions use a field, the checkbox is disabled and `draft.fieldsLocked` is shown.
-- `brief: "customised"` shows `draft.briefCustomised`; `standard` shows nothing.
+- ~~`brief: "customised"` shows `draft.briefCustomised`; `standard` shows nothing.~~ Dropped on 2026-11-22 with the prompt.
 - Every row of the first table of section 4.4 has a test: the code (and `details.limiter` for the
   two 429 rows) gives its own message. `AUTH_FAILED`, `QUOTA_EXCEEDED` and `CONTENT_POLICY` do not
   say "try again in a moment". The description is kept; a retry clears the old error; "Start
@@ -1901,7 +1901,7 @@ For the ticket update on #3741 after the implementation.
 | AI-UX3, AI-UI4 to AI-UI6: one long page, save at the bottom, Enabled inside the form | S7, S8 |
 | AI-UX8 icon as free text | S3 |
 | AI-ADMIN2/4/5/6: ID from the name, land on the new item, "(copy)" | S1, S3 |
-| AI-B8 generator prompt can be deleted | S2 (the server's brief is the default). Still open: the prompt is listed for users, and a customised copy still steers every draft (Q5). |
+| AI-B8 generator prompt can be deleted | S2 (the server's brief is the default). Closed on 2026-11-22: the prompt is removed, a migration deletes stored copies (Q5). |
 | AI-B2 remnant: the bulk toggle sends `*` | S3 (explicit IDs, every name listed) |
 | W2: placeholder detection, the half "a field that no text uses" | S1, S2, S8 |
 | Still open | AI-B9 (model list of the creator, Q7), AI-B12 (used-by on delete), AI-PM1 and decision 1 (audience), AI-PM4, AI-PM5 |
@@ -2243,20 +2243,20 @@ plan assumes and what a wrong assumption costs.
 | Q2 | May apps created in the UI start not published, and may content admins open and test an unpublished app in the interactive chat? | Yes. Built (D5, D6). It changes no permission list and no API default. | Flip `UI_CREATES_PUBLISHED`, do not merge S5; half a day. |
 | Q3 | `POST /api/completions`: cap `maxTokens` and allow only models the caller may use? Is the admin rate limit on it acceptable? | The limit is added now (D24). Cap and model check wait. | If the limit is unwanted: remove one line. While cap and check wait, a content admin can run the most expensive configured model through this endpoint, up to the admin budget. That budget does not count failed requests. |
 | Q4 | Is "Instructions" / „Anweisungen" acceptable where the Review recommended "System prompt" (open decision 11)? | Yes, with "system prompt" once in the help text. | Four strings and the docs glossary. |
-| Q5 | May the App Generator prompt leave the user prompt library (a server default, hidden from `GET /api/prompts`), with customised copies kept but disabled? | Not now. A customised library copy still wins and is marked as such in the draft notice and the audit log. | Users keep seeing "App Generator" in their prompt list, and any content admin can still add a sentence to every later draft (AI-B8). Doing it later needs a migration and a release note. |
+| Q5 | May the App Generator prompt leave the user prompt library (a server default, hidden from `GET /api/prompts`), with customised copies kept but disabled? | Not now. A customised library copy still wins and is marked as such in the draft notice and the audit log. | Users keep seeing "App Generator" in their prompt list, and any content admin can still add a sentence to every later draft (AI-B8). Doing it later needs a migration and a release note. **Update 2026-11-22:** the owner decided to remove the App Generator prompt completely (section "The App Generator prompt is removed"). Migration V261 deletes `contents/prompts/app-generator.json`, shipped or customised; a breaking-changes entry says so. |
 | Q6 | May `POST /api/admin/apps` refuse the IDs `new`, `templates`, `integration-status` and IDs that start with `_`? | No. Only the client refuses them. | A script can still create an app that the admin UI cannot open. The check is a narrow breaking change. |
 | Q7 | May content admins see every configured model (name, provider, status), including models their groups cannot use? | No. Pickers show what the creator may use. | AI-B9 stays: an app can name a model its audience cannot use, and nothing warns. |
 | Q8 | Should an admin be able to name the model that drafts apps? | No setting. The standard model the caller may use drafts. | Where the standard model is a small local one, many drafts end in "cannot be used". A setting is additive later; the manual run of 7.5 shows how urgent it is. |
 | Q9 | May app files carry `createdBy`, `createdAt`, `updatedBy`, `updatedAt` (privacy, works council), with list columns and a "Mine" filter? | No stored fields. The audit entry of create carries the origin. | With many builders the list cannot be filtered or cleaned up by creator. Adding the fields later is additive; apps created until then show no creator. |
 | Q10 | May the schema refuse unknown iframe sandbox tokens and over-long fields? | No. Tight caps apply to generated drafts only. | Hand-written configs stay unbounded. A hard refusal can block saving an old app. |
-| Q11 | Remove or deprecate `POST /api/completions` and `GET /api/admin/prompts/app-generator`, which lose their only client caller? | They stay registered and unchanged. | Unused API surface, one of them a general LLM proxy. Removal needs `Deprecation` and `Sunset` headers. |
+| Q11 | Remove or deprecate `POST /api/completions` and `GET /api/admin/prompts/app-generator`, which lose their only client caller? | They stay registered and unchanged. | Unused API surface, one of them a general LLM proxy. Removal needs `Deprecation` and `Sunset` headers. **Update 2026-11-22:** the owner removed `GET /api/admin/prompts/app-generator` together with the prompt, without a shim; `POST /api/completions` stays. |
 | Q12 | Optional `If-Match` on `PUT /api/admin/apps/{id}` now? | Next. | With several editors the last save wins, as today. |
 | Q13 | Remove the inheritance fields from schema and docs? | Kept; the docs say "stored, not applied"; new copies do not write them. | None now. Removal is a migration and a breaking change. |
 | Q14 | Rename "Starter prompts" in the end-user chat to "Conversation starters" as well? | Admin side only. | Two names for one thing across the two surfaces until it is decided. |
 | Q15 | Should "Copy an existing app" also list unpublished apps? | No: enabled apps, as decided on 2026-11-17. The row action covers the rest. | An author looks for an archived app in the picker and has to use the list. |
 | Q16 | May a workflow run the app-builder spec on pull requests? | Yes; the file is part of the pull request and needs a maintainer's approval there. | Without it the spec runs only when a developer runs it. |
 | Q17 | May usage counters (created, tested, published) be collected at customer installations? | No. Click counts in the spec, the audit log, and five moderated sessions before release. | Nobody can say later whether more apps were built. |
-| Q18 | May the server use its own brief for drafts whenever the library prompt "App Generator" is unchanged, although the library still shows the old text? | Yes (D10). The shipped text asks for two languages and names a model, which contradicts the output rules. | An admin reads the library entry and believes it steers drafts. If unwanted: the server uses the library text again; one function. The clean end state (replace the library file) needs a migration. |
+| Q18 | May the server use its own brief for drafts whenever the library prompt "App Generator" is unchanged, although the library still shows the old text? | Yes (D10). The shipped text asks for two languages and names a model, which contradicts the output rules. | An admin reads the library entry and believes it steers drafts. If unwanted: the server uses the library text again; one function. The clean end state (replace the library file) needs a migration. **Update 2026-11-22:** the owner decided to remove the App Generator prompt completely (section "The App Generator prompt is removed"). |
 | Q19 | Are six templates written for the gallery acceptable, instead of the shipped default apps as they are? Who maintains them? | Yes (D12); the team that maintains `server/defaults/apps`. | Two sets of similar texts to keep up to date. If the owner prefers the shipped apps: a projection over them and a different list of six, with the language and binding problems of section 5.2 to solve. |
 | Q20 | May a content admin learn that every signed-in user can use an app (`audience.allSignedIn`), although the group that grants it is not shown to them? | Yes. Without it the publish dialog cannot name the audience. | The dialog for content admins falls back to "Other people may be able to use it; ask an administrator", and principle 6 does not hold for them. |
 | Q21 | Is a fixed limit of 30 drafts per person per hour acceptable, without a setting? | Yes; the value is a code default. | A workshop where one account drafts for a group hits it. A setting in `platform.json` is additive later. |
@@ -2293,7 +2293,7 @@ plan assumes and what a wrong assumption costs.
 | Which models do customers use, and do they honour `responseFormat: json`? | OpenAI-compatible endpoints; at least one ignores it, so the parser accepts prose and fences. | More unusable answers. |
 | Which browsers are a release requirement? | Chromium as the gate; Firefox and Safari by hand. | A wider test matrix. |
 | Is the main Playwright suite out of CI on purpose? | Never decided. | None here. |
-| Do customers edit the generator prompt on purpose? | Some do; their copy keeps winning. | Q5. |
+| Do customers edit the generator prompt on purpose? | Some do; their copy kept winning until 2026-11-22, when the owner removed the prompt. | Q5. |
 | Does anyone rely on `parentId` of cloned apps, or script the endpoints that lose their caller? | Possibly; existing data and endpoints are untouched. | None now. |
 | May content admins see the instructions of every app? | Unchanged: they can today. | A permission project. |
 | Is a second person's approval needed before publishing? Are creators told when their app is unpublished or deleted? What happens to apps of people who left? | No workflow, no notification, nothing automatic. | Customer process. |
@@ -2340,7 +2340,7 @@ plan assumes and what a wrong assumption costs.
 
 Taken when revising after the critiques:
 
-- The server uses its own brief when the library prompt is unchanged (D10, Q18).
+- The server uses its own brief when the library prompt is unchanged (D10, Q18). Since 2026-11-22 it always does: the prompt is removed.
 - `audience.allSignedIn` is shown to content admins (Q20).
 - A copy loses the other languages of a text the author rewrites on Essentials. The risk critic
   proposed only a note that other languages keep the source text. The stricter rule was chosen,
@@ -2530,7 +2530,7 @@ Taken when revising after the critiques:
   unknown value answers 400.
 - **The Review's finding AI-B8 asks that the generator prompt cannot be broken from the library.**
   This plan goes one step further than the first version: an unchanged library copy is no longer
-  used at all (D10). A customised copy still is; Q5.
+  used at all (D10). A customised copy still is; Q5. (Since 2026-11-22 no copy is used: the prompt is removed.)
 - **The Rework's "Now" phase (PR #3796) gave the bulk toggles a confirmation that names the first
   five apps.** The apps list now names every app and sends explicit IDs. Models and prompts keep
   the merged behaviour.
@@ -2850,10 +2850,27 @@ that question says.
 | `POST /api/admin/apps` | New optional query parameter `origin`; an unknown value answers 400. No snapshot change. A POST without `enabled` still creates an enabled app. | Additive; no existing caller sends the parameter. |
 | `GET` / `PUT /api/admin/content-access/{type}/{id}` | New fields `audience` and, on some rows, `implicit`. | Additive. Owner: Q20. |
 | `POST /api/admin/apps/_generate`, `GET /api/admin/app-templates`, feature `appGenerator` | New. | Additive. |
-| `GET /api/admin/prompts/app-generator`, `POST /api/completions` | Unchanged, but the client no longer calls them. | Q11. |
-| Library prompt "App Generator" | An unchanged copy no longer steers drafts; a changed copy does and is marked. The file and the library entry are not touched. | Owner: Q18. |
+| `GET /api/admin/prompts/app-generator`, `POST /api/completions` | The client no longer calls them. `GET /api/admin/prompts/app-generator` was removed on 2026-11-22 with the prompt. | Q11. |
+| Library prompt "App Generator" | Removed on 2026-11-22: the shipped file, the library entry, `GET /api/admin/prompts/app-generator`, and stored copies (migration V261). Drafts always use the server's brief. | Owner: Q5, Q18. |
 | Apps created in the admin UI | Start not published. | Owner: Q2. |
 | AI draft | Web search and connected systems are suggestions the author ticks; 30 drafts per person per hour; drafts count against the person's usage limit. | Stricter than today, on purpose (D8, D24). |
 | "Publish all" / "Unpublish all" | Lists every app; sends explicit IDs; covers the rows shown when a filter is active. | Behaviour of one button. |
 | Removed from the UI | The wizard, the template window, "Save & Exit", the `enabled` checkbox in the form, the App ID input in the editor, "Clone" writing `parentId`. | Release entry. Owner: Q22 for the ID input. |
 | Labels | The renames of section 4. Two key names change (`admin.apps.edit.skills` and `.workflows` as texts become `skillsTitle` and `workflowsTitle`). "Add Language" reads "Add a translation" on every admin page that uses the language component. | An installation that overrides these keys gets the default text. |
+
+## The App Generator prompt is removed (2026-11-22)
+
+The owner decided on 2026-11-22 to remove the prompt `app-generator` completely. Nobody used it
+directly; apps are built with the app builder, whose drafts use the server's brief. This settles
+Q5 and Q18 and closes AI-B8.
+
+- `server/defaults/prompts/app-generator.json` is deleted, so new installations do not ship it.
+- Migration `V261__remove_app_generator_prompt.js` deletes `contents/prompts/app-generator.json`
+  on existing installations, whether shipped or customised. V231 stays as it was.
+- Drafts (`POST /api/admin/apps/_generate`, `POST /api/apps/_generate`) always use
+  `STANDARD_BRIEF`. `chooseBrief`, `SHIPPED_BRIEF_HASHES`, `hashBriefPrompt`,
+  `APP_GENERATOR_PROMPT_ID` and `APP_GENERATOR_BRIEFS` are gone. The response field `brief`, the
+  audit detail `brief` and the client note `draft.briefCustomised` are gone too; the endpoints
+  had not shipped, so no compatibility is kept.
+- `GET /api/admin/prompts/app-generator` and `buildAppGeneratorBrief` are removed (no client
+  caller). The release notes carry a breaking-changes entry.

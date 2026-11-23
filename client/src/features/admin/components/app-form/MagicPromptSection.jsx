@@ -82,7 +82,10 @@ function MagicPromptSection({ app, onChange, availableModels = [] }) {
                     onChange={e => handleMagicPromptChange({ prompt: e.target.value })}
                     rows={3}
                     className="mt-1 block w-full rounded-md border border-admin-control-border dark:border-admin-control-border-dark shadow-xs focus:border-admin-accent focus:ring-admin-accent sm:text-sm"
-                    placeholder="Enter instructions for the magic prompt feature..."
+                    placeholder={t(
+                      'admin.apps.edit.magicPromptInstructionsPlaceholder',
+                      'Enter instructions for the magic prompt feature…'
+                    )}
                   />
                   <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
                     {t(

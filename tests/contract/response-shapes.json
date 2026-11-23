@@ -2827,7 +2827,6 @@
           "icon": "string",
           "id": "string",
           "name": "object",
-          "outputSchema?": "object",
           "prompt": "object"
         }
       ]
@@ -2836,29 +2835,23 @@
   "GET /api/admin/prompts/:promptId": {
     "status": 200,
     "shape": {
+      "appId": "string",
+      "category": "string",
+      "description": {
+        "de": "string",
+        "en": "string"
+      },
+      "enabled": "boolean",
+      "icon": "string",
       "id": "string",
-      "integrations": [
-        {
-          "actions": "array",
-          "id": "string"
-        }
-      ],
-      "language": "string",
-      "prompt": "string"
-    }
-  },
-  "GET /api/admin/prompts/app-generator": {
-    "status": 200,
-    "shape": {
-      "id": "string",
-      "integrations": [
-        {
-          "actions": "array",
-          "id": "string"
-        }
-      ],
-      "language": "string",
-      "prompt": "string"
+      "name": {
+        "de": "string",
+        "en": "string"
+      },
+      "prompt": {
+        "de": "string",
+        "en": "string"
+      }
     }
   },
   "GET /api/admin/prompts/user-settings": {
@@ -3275,6 +3268,7 @@
           "settings": "object",
           "skillSettings": "object",
           "skills": "object",
+          "sourceUserAppId": "object",
           "startForm": "object",
           "starterPrompts": "object",
           "system": "object",
@@ -6316,7 +6310,6 @@
           "icon": "null|string",
           "id": "string",
           "name": "object|string",
-          "outputSchema?": "object",
           "owner": "null|object",
           "permissions": "object",
           "promotedTo?": "null",
@@ -6336,6 +6329,7 @@
   "GET /api/prompts/:promptId": {
     "status": 200,
     "shape": {
+      "appId": "string",
       "category": "string",
       "description": {
         "de": "string",
@@ -6347,23 +6341,6 @@
       "name": {
         "de": "string",
         "en": "string"
-      },
-      "outputSchema": {
-        "properties": {
-          "category": "object",
-          "color": "object",
-          "description": "object",
-          "icon": "object",
-          "id": "object",
-          "name": "object",
-          "prompt": "object",
-          "sendChatHistory": "object",
-          "system": "object",
-          "variables": "object",
-          "websearch": "object"
-        },
-        "required": ["string"],
-        "type": "string"
       },
       "owner": "null",
       "permissions": {

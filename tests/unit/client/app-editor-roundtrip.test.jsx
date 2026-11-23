@@ -344,7 +344,9 @@ const everyFieldApp = {
   allowInheritance: true,
   parentId: 'chat',
   inheritanceLevel: 2,
-  overriddenFields: ['system', 'variables']
+  overriddenFields: ['system', 'variables'],
+  // A published personal app: the editor keeps where it came from.
+  sourceUserAppId: 'uap_0123456789abcdef0123456789abcdef'
 };
 
 /** An app as the wizard that is being replaced created it from a template. */

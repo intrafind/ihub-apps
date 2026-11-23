@@ -13,7 +13,13 @@ import { after, before, beforeEach, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 
 import { OFFER_TTL_MS } from '../services/userApps/userAppAccess.js';
-import { ADMIN_APP, groupsWith, member, setConfig } from './helpers/userAppsHarness.js';
+import {
+  ADMIN_APP,
+  groupsWith,
+  member,
+  setConfig,
+  stampCompanyApp
+} from './helpers/userAppsHarness.js';
 import { startUserAppRoutesApi } from './helpers/userAppRoutesApi.js';
 
 let api;
@@ -140,11 +146,10 @@ describe('an offer', () => {
       change: r => ({ ...r, disabled: { at: 'x', by: { id: 'root' }, reason: 'x' } })
     });
     const gone = await sharedApp({
-      change: r => ({
-        ...r,
-        state: 'promoted',
-        publishedAs: { appId: ADMIN_APP, at: 'x', by: r.owner }
-      })
+      change: r => {
+        stampCompanyApp(ADMIN_APP, r.id);
+        return { ...r, state: 'promoted', publishedAs: { appId: ADMIN_APP, at: 'x', by: r.owner } };
+      }
     });
     for (const who of ['anna', 'root']) {
       assert.deepEqual(problem(await offer(who, off.id, 'dave')), {

@@ -61,7 +61,7 @@ import {
   ownerSnapshotNeedsRefresh,
   userAppOwnerSnapshot
 } from './userAppAccess.js';
-import { isConfigAppId, userAppCatalog, userAppStanding } from './userAppResolution.js';
+import { hasCompanyApp, userAppCatalog, userAppStanding } from './userAppResolution.js';
 import {
   allowedUserAppShareTargets,
   currentUserAppSettings,
@@ -388,7 +388,9 @@ export class UserAppService {
    */
   async remove(record, { context }) {
     const removed = await stored(() =>
-      this.repository.delete(record.id, { authorize: context.authorize('own') })
+      this.repository.delete(record.id, {
+        authorize: loaded => context.authorize('own')(loaded) && context.authorize('delete')(loaded)
+      })
     );
     if (!removed) throw new ServiceError('NOT_FOUND', NOT_FOUND_MESSAGE);
     return removed;
@@ -658,8 +660,7 @@ export class UserAppService {
             userAppStanding(loaded, user, { settings: currentUserAppSettings() }).permissions
               .canAcceptOffer === true,
           // The same write stores the release of such a record.
-          release: loaded =>
-            loaded.state === 'promoted' && !isConfigAppId(loaded.publishedAs?.appId)
+          release: loaded => loaded.state === 'promoted' && !hasCompanyApp(loaded)
         }),
       { max: context.settings.limits.maxAppsPerUser }
     );

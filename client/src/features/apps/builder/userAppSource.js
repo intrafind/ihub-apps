@@ -179,7 +179,7 @@ const fetchTemplates = () => plain(() => fetchUserAppTemplates());
  * signal cancels the request, and the server then stops the model call.
  *
  * @param {{ description: string, language?: string, signal?: AbortSignal }} request
- * @returns {Promise<{ app: object, suggestions: object, warnings: object[], model: object, brief: string }>}
+ * @returns {Promise<{ app: object, suggestions: object, warnings: object[], model: object }>}
  */
 const generateDraft = ({ description, language, signal }) =>
   plain(() => generateUserApp({ description, language, signal }));

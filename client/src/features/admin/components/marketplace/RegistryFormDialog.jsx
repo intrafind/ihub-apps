@@ -235,7 +235,7 @@ function RegistryFormDialog({ registry, onSave, onCancel }) {
               type="text"
               value={form.name}
               onChange={e => set('name', e.target.value)}
-              placeholder="My Registry"
+              placeholder={t('admin.marketplace.registry.namePlaceholder', 'My Registry')}
               className="w-full px-3 py-2 border border-admin-control-border dark:border-admin-control-border-dark rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm"
             />
             {errors.name && <p className="text-red-500 text-xs mt-1">{errors.name}</p>}
@@ -296,7 +296,7 @@ function RegistryFormDialog({ registry, onSave, onCancel }) {
           {form.auth.type === 'bearer' && (
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                Token
+                {t('admin.marketplace.registry.auth.token', 'Token')}
               </label>
               <input
                 type="password"
@@ -312,7 +312,7 @@ function RegistryFormDialog({ registry, onSave, onCancel }) {
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                  Username
+                  {t('admin.marketplace.registry.auth.username', 'Username')}
                 </label>
                 <input
                   type="text"
@@ -323,7 +323,7 @@ function RegistryFormDialog({ registry, onSave, onCancel }) {
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                  Password
+                  {t('admin.marketplace.registry.auth.password', 'Password')}
                 </label>
                 <input
                   type="password"
@@ -340,7 +340,7 @@ function RegistryFormDialog({ registry, onSave, onCancel }) {
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                  Header Name
+                  {t('admin.marketplace.registry.auth.headerName', 'Header Name')}
                 </label>
                 <input
                   type="text"
@@ -351,7 +351,7 @@ function RegistryFormDialog({ registry, onSave, onCancel }) {
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                  Header Value
+                  {t('admin.marketplace.registry.auth.headerValue', 'Header Value')}
                 </label>
                 <input
                   type="password"
