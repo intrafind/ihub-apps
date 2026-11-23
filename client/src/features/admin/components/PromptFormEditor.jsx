@@ -1,19 +1,17 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
-import { useState, useEffect, useMemo } from 'react';
+import { useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { getLocalizedContent } from '../../../utils/localizeContent';
 import DynamicLanguageEditor from '../../../shared/components/DynamicLanguageEditor';
 import SearchableAppsSelector from '../../apps/components/SearchableAppsSelector';
 import Icon from '../../../shared/components/Icon';
 import AdminFormErrorSummary from './AdminFormErrorSummary';
+import RequiredMark from './RequiredMark';
 import { FormValidationProvider } from '../../../shared/contexts/formValidationContext';
-import {
-  validateWithSchema,
-  errorsToFieldErrors,
-  isFieldRequired
-} from '../../../utils/schemaValidation';
+import { FIELD_KEYS, hasLocalizedText, isBlank, schemaFieldErrors } from '../utils/fieldErrors';
+import useFieldErrorVisibility from '../hooks/useFieldErrorVisibility';
 import { usePlatformConfig } from '../../../shared/contexts/PlatformConfigContext';
 import {
   CONTENT_VARIABLE,
@@ -24,74 +22,104 @@ import {
 } from '../../../../../shared/promptVariables.js';
 import { CHECKBOX_CLASS, INPUT_CLASS } from './formStyles';
 
+const NO_IDS = Object.freeze([]);
+
+/** The prompt fields with texts of their own, by schema rule (`fieldErrors.js`). */
+const PROMPT_FIELD_RULES = Object.freeze({
+  id: { empty: FIELD_KEYS.idRequired, pattern: FIELD_KEYS.idFormat },
+  name: { empty: FIELD_KEYS.nameRequired },
+  description: { empty: FIELD_KEYS.descriptionRequired },
+  prompt: { empty: FIELD_KEYS.promptRequired }
+});
+
+/**
+ * Every problem of a prompt, in the admin's language, by field path.
+ *
+ * @param {Object} prompt - The prompt as the form holds it.
+ * @param {Object|null} schema - The prompt JSON schema; without it only the ID
+ *   and the name are checked.
+ * @param {function} t - The translation function.
+ * @param {Object} options
+ * @param {boolean} options.isNewPrompt
+ * @param {string[]} options.takenIds - IDs of the existing prompts.
+ * @returns {Object<string, string>}
+ */
+export function promptFieldErrors(prompt, schema, t, { isNewPrompt, takenIds }) {
+  const errors = schema
+    ? schemaFieldErrors(prompt, schema, t, {
+        rules: PROMPT_FIELD_RULES,
+        localizedFields: ['name', 'description', 'prompt']
+      })
+    : {};
+  if (!schema) {
+    if (isBlank(prompt.id)) errors.id = t(FIELD_KEYS.idRequired);
+    if (!hasLocalizedText(prompt.name)) errors.name = t(FIELD_KEYS.nameRequired);
+  }
+  if (isNewPrompt && !errors.id && takenIds.includes(prompt.id)) {
+    errors.id = t(FIELD_KEYS.idTaken);
+  }
+  return errors;
+}
+
 /**
  * Form-based editor for prompt configuration
  * @param {Object} props
  * @param {Object} props.value - Prompt configuration data
  * @param {Function} props.onChange - Callback when data changes
- * @param {Object} props.errors - Validation errors object
+ * @param {Function} [props.onValidationChange] - Receives `{ isValid, errors, displayed }`
+ * @param {Object} [props.errors] - Messages by field from outside the form; always shown
  * @param {boolean} props.isNewPrompt - Whether this is a new prompt
  * @param {Array} props.apps - Available apps for linking
  * @param {Array} props.categories - Available categories
+ * @param {boolean} [props.showAllErrors] - Show every problem, not only those of touched fields
+ *   (after a save attempt)
+ * @param {string[]} [props.takenIds] - IDs of the existing prompts; a new prompt must not reuse one
+ * @param {number} [props.summaryFocusKey] - A new value moves the focus to the error summary
  */
 function PromptFormEditor({
   value: data,
   onChange,
   onValidationChange,
-  errors = {},
+  errors: serverErrors = {},
   isNewPrompt = false,
   apps = [],
   categories = [],
-  jsonSchema
+  jsonSchema,
+  showAllErrors = false,
+  takenIds = NO_IDS,
+  summaryFocusKey = 0
 }) {
   const { t, i18n } = useTranslation();
   const currentLanguage = i18n.language;
-  const [validationErrors, setValidationErrors] = useState({});
 
-  // Validation function
-  const validatePrompt = promptData => {
-    let errors = {};
+  // Every problem of the prompt, in the admin's language. Shown only for the
+  // fields the admin has touched, and all of them after a save attempt.
+  const allErrors = useMemo(
+    () => promptFieldErrors(data, jsonSchema, t, { isNewPrompt, takenIds }),
+    [data, jsonSchema, t, isNewPrompt, takenIds]
+  );
+  const { visibleErrors, controlHandlers } = useFieldErrorVisibility(allErrors, {
+    showAll: showAllErrors
+  });
+  const errors = { ...visibleErrors, ...serverErrors };
+  const errorsShown = Object.keys(errors).length > 0;
+  // Reported when the problems change, not on every render.
+  const errorsKey = JSON.stringify(allErrors);
 
-    // Use schema validation if available
-    if (jsonSchema) {
-      const validation = validateWithSchema(promptData, jsonSchema);
-      if (!validation.isValid) {
-        errors = errorsToFieldErrors(validation.errors);
-      }
-    } else {
-      // Fallback to basic validation if no schema
-      if (!promptData.id) {
-        errors.id = 'Prompt ID is required';
-      }
-      if (!promptData.name) {
-        errors.name = 'Prompt name is required';
-      }
-    }
-
-    setValidationErrors(errors);
-
-    const isValid = Object.keys(errors).length === 0;
-    if (onValidationChange) {
-      onValidationChange({
-        isValid,
-        errors: Object.entries(errors).map(([field, message]) => ({
-          field,
-          message,
-          severity: 'error'
-        }))
-      });
-    }
-
-    return isValid;
-  };
-
-  // Validate on data changes
   useEffect(() => {
-    if (data) {
-      validatePrompt(data);
-    }
+    if (!onValidationChange) return;
+    onValidationChange({
+      isValid: Object.keys(allErrors).length === 0,
+      errors: Object.entries(allErrors).map(([field, message]) => ({
+        field,
+        message,
+        severity: 'error'
+      })),
+      // The form shows its errors itself; the editor around it only marks them.
+      displayed: errorsShown
+    });
     // eslint-disable-next-line @eslint-react/exhaustive-deps
-  }, [data, jsonSchema]);
+  }, [errorsKey, errorsShown]);
 
   const handleChange = (field, value) => {
     onChange({ ...data, [field]: value });
@@ -164,24 +192,44 @@ function PromptFormEditor({
     { value: 'textarea', label: t('admin.prompts.variableTypes.textarea', 'Textarea') }
   ];
 
-  const mergedErrors = { ...errors, ...validationErrors };
   const errorLabels = {
     id: t('admin.prompts.fields.id', 'Prompt ID'),
     name: t('admin.prompts.fields.name', 'Name'),
     description: t('admin.prompts.fields.description', 'Description'),
     icon: t('admin.prompts.fields.icon', 'Icon'),
     order: t('admin.prompts.fields.order', 'Order'),
-    prompt: t('admin.prompts.fields.prompt', 'Prompt')
+    prompt: t('admin.prompts.fields.prompt', 'Prompt'),
+    variables: t('admin.prompts.edit.variables', 'Variables')
   };
+  // A field of a variable is named "Variable 2 — Name", not by its path.
+  const variablePartLabels = {
+    name: t('admin.prompts.edit.variableName', 'Name'),
+    type: t('admin.prompts.edit.variableType', 'Type'),
+    label: t('admin.prompts.edit.variableLabel', 'Label'),
+    defaultValue: t('admin.prompts.edit.variableDefault', 'Default Value')
+  };
+  const summaryErrors = Object.entries(errors).map(([field, message]) => {
+    const match = /^variables\.(\d+)(?:\.(\w+))?/.exec(field);
+    if (!match) return { field, message };
+    const variable = t('admin.prompts.edit.variable', 'Variable {{index}}', {
+      index: Number(match[1]) + 1
+    });
+    const part = variablePartLabels[match[2]];
+    return { field, message, label: part ? `${variable} — ${part}` : variable };
+  });
 
   return (
-    <FormValidationProvider errors={mergedErrors}>
-      <div className="space-y-8">
-        <AdminFormErrorSummary
-          errors={mergedErrors}
-          labels={errorLabels}
-          title={t('admin.prompts.edit.fixErrors', 'Please fix the following errors')}
-        />
+    <FormValidationProvider errors={errors}>
+      <div className="space-y-8" {...controlHandlers}>
+        {/* One summary, after a save attempt; before it only touched fields say what is wrong. */}
+        {showAllErrors && (
+          <AdminFormErrorSummary
+            errors={summaryErrors}
+            labels={errorLabels}
+            title={t('admin.prompts.edit.fixErrors', 'Please fix the following errors')}
+            focusKey={summaryFocusKey}
+          />
+        )}
         {/* Basic Information */}
         <div className="bg-white dark:bg-gray-800 shadow-sm px-4 py-5 sm:rounded-lg sm:p-6">
           <div className="md:grid md:grid-cols-3 md:gap-6">
@@ -202,7 +250,7 @@ function PromptFormEditor({
                     className="block text-sm font-medium text-gray-700 dark:text-gray-300"
                   >
                     {t('admin.prompts.edit.id', 'ID')}
-                    {isFieldRequired('id', jsonSchema) && <span className="text-red-500"> *</span>}
+                    <RequiredMark />
                   </label>
                   <input
                     type="text"
@@ -210,18 +258,20 @@ function PromptFormEditor({
                     value={data.id || ''}
                     onChange={e => handleChange('id', e.target.value)}
                     disabled={!isNewPrompt}
-                    required={isFieldRequired('id', jsonSchema)}
+                    required
+                    aria-invalid={errors.id ? true : undefined}
+                    aria-describedby={errors.id ? 'id-error' : undefined}
                     className={`${INPUT_CLASS} mt-1 block ${
-                      validationErrors.id || errors.id
+                      errors.id
                         ? 'border-red-500 dark:border-red-400 text-red-900 placeholder-red-300'
                         : ''
                     }`}
                     placeholder="unique-prompt-id"
                     autoComplete="off"
                   />
-                  {(validationErrors.id || errors.id) && (
-                    <p className="mt-2 text-sm text-red-600 dark:text-red-400">
-                      {validationErrors.id || errors.id}
+                  {errors.id && (
+                    <p id="id-error" className="mt-2 text-sm text-red-600 dark:text-red-400">
+                      {errors.id}
                     </p>
                   )}
                   <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
@@ -391,7 +441,8 @@ function PromptFormEditor({
             <div className="mt-5 md:col-span-2 md:mt-0">
               <div className="space-y-6">
                 <DynamicLanguageEditor
-                  label={`${t('admin.prompts.edit.name', 'Name')} *`}
+                  label={t('admin.prompts.edit.name', 'Name')}
+                  name="name"
                   value={data.name || { en: '' }}
                   onChange={value => handleChange('name', value)}
                   required={true}
@@ -406,8 +457,10 @@ function PromptFormEditor({
 
                 <DynamicLanguageEditor
                   label={t('admin.prompts.edit.description', 'Description')}
+                  name="description"
                   value={data.description || { en: '' }}
                   onChange={value => handleChange('description', value)}
+                  required={true}
                   type="textarea"
                   placeholder={{
                     en: 'Brief description of the prompt',
@@ -419,7 +472,8 @@ function PromptFormEditor({
                 />
 
                 <DynamicLanguageEditor
-                  label={`${t('admin.prompts.edit.prompt', 'Prompt')} *`}
+                  label={t('admin.prompts.edit.prompt', 'Prompt')}
+                  name="prompt"
                   value={data.prompt || { en: '' }}
                   onChange={value => handleChange('prompt', value)}
                   required={true}
@@ -503,16 +557,28 @@ function PromptFormEditor({
                     <div className="grid grid-cols-2 gap-4">
                       <div>
                         <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                          {t('admin.prompts.edit.variableName', 'Name')} *
+                          {t('admin.prompts.edit.variableName', 'Name')}
+                          <RequiredMark />
                         </label>
                         <input
                           type="text"
+                          data-field={`variables.${index}.name`}
                           value={variable.name || ''}
                           onChange={e => handleVariableChange(index, 'name', e.target.value)}
-                          className={`${INPUT_CLASS} mt-1 block`}
+                          className={`${INPUT_CLASS} mt-1 block ${
+                            errors[`variables.${index}.name`]
+                              ? 'border-red-500 dark:border-red-400 text-red-900'
+                              : ''
+                          }`}
+                          aria-invalid={errors[`variables.${index}.name`] ? true : undefined}
                           placeholder="variable_name"
                           autoComplete="off"
                         />
+                        {errors[`variables.${index}.name`] && (
+                          <p className="mt-2 text-sm text-red-600 dark:text-red-400">
+                            {errors[`variables.${index}.name`]}
+                          </p>
+                        )}
                       </div>
                       <div>
                         <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">

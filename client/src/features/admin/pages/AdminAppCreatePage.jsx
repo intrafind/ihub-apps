@@ -227,6 +227,7 @@ function AdminAppCreatePage() {
             source={source}
             enabled={featureFlags.isEnabled('appGenerator', true)}
             models={resources.models}
+            configuredModelId={platformConfig?.appGenerator?.modelId || ''}
             modelSetupHref={isFullAdmin ? MODELS_PATH : null}
             language={language}
             description={state.description}

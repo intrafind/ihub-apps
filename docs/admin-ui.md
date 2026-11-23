@@ -200,7 +200,9 @@ palette, from the last step of the setup wizard and from **Duplicate**.
 **Step 1, Start,** offers the following ways to begin:
 
 - **Describe the app.** Write two or three sentences under **What should your app do?** and click
-  **Prepare draft**. The AI model named beside the button prepares a draft. The box is missing
+  **Prepare draft**. The AI model named beside the button prepares a draft: the one chosen under
+  **Platform → Features → Model for drafts** if you may use it, otherwise the standard chat model
+  among the models you may use. The box is missing
   when no AI model is available to you (a notice says so) or when the feature
   **App Drafts with AI** is switched off.
 - **Templates.** Six short starting points, such as **Text Summarizer** or **Email Composer**.
@@ -451,6 +453,14 @@ See [Marketplace](marketplace.md) for statuses, updates, private registries and 
 ## Features
 
 **Platform → Features** switches platform features on and off — among them the preview features Agent Skills, Workflows and Integrations, plus Marketplace, App Drafts with AI (the description box of **New app**; see [Creating an app](#creating-an-app)), Chat History (keeping chats in a history; every chat is stored either way), Scheduled Tasks, Prompt Library, Usage Tracking, Tools, Projects, User Projects (preview), Compare Mode, Chat Sharing, Short Links, Feedback and Export. The corresponding admin pages and user features appear or disappear with them.
+
+Below the switch **App Drafts with AI**, **Model for drafts** chooses the AI model that prepares
+app drafts, for admin apps and personal apps (`platform.appGenerator.modelId`). It lists the
+enabled chat models; **Automatic (recommended)** names the model it currently picks for an
+administrator: the standard chat model. A chosen model is used only for authors whose groups may
+use it; everyone else gets the automatic choice among the models they may use. A chosen model that
+was later disabled or deleted is marked **(not available)**, and drafts use the automatic choice
+until you pick another one. The setting is saved with **Save Changes**.
 
 ![Platform features with preview toggles](assets/screenshots/admin-features.png)
 

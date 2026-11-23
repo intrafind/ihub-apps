@@ -26,8 +26,10 @@ import { languageNamer } from '../../../shared/utils/languageName';
  * @param {Object<string,string>} [props.labels] Optional `{ fieldId: 'Human label' }` map
  * @param {Object<string,string>} [props.languageDisplayNames] Optional override of language
  *   code → name. Without it a language is named in the UI language (`Intl.DisplayNames`).
+ * @param {number} [props.focusKey] When it changes to a value above 0, the banner takes the
+ *   focus (after a failed save attempt), so keyboard and screen-reader users land on it.
  */
-function AdminFormErrorSummary({ errors, title, labels = {}, languageDisplayNames }) {
+function AdminFormErrorSummary({ errors, title, labels = {}, languageDisplayNames, focusKey }) {
   const { t, i18n } = useTranslation();
   const uiLanguage = i18n?.language;
   const nameLanguage = useMemo(
@@ -35,7 +37,17 @@ function AdminFormErrorSummary({ errors, title, labels = {}, languageDisplayName
     [uiLanguage, languageDisplayNames]
   );
   const containerRef = useRef(null);
+  const bannerRef = useRef(null);
   const entries = normalizeErrors(errors);
+  const hasEntries = entries.length > 0;
+
+  useEffect(() => {
+    if (!focusKey || !hasEntries) return;
+    bannerRef.current?.focus?.();
+    bannerRef.current?.scrollIntoView?.({ behavior: 'smooth', block: 'center' });
+    // Only a new save attempt moves the focus, not every change of the errors.
+    // eslint-disable-next-line @eslint-react/exhaustive-deps
+  }, [focusKey]);
   const fieldIdsKey = entries
     .map(e => e.fieldId)
     .filter(Boolean)
@@ -95,7 +107,9 @@ function AdminFormErrorSummary({ errors, title, labels = {}, languageDisplayName
     <div ref={containerRef} aria-live="polite" aria-atomic="false">
       {entries.length > 0 && (
         <div
-          className="rounded-md border border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-900/20 p-4"
+          ref={bannerRef}
+          tabIndex={-1}
+          className="rounded-md border border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-900/20 p-4 focus:outline-hidden focus-visible:ring-2 focus-visible:ring-red-500"
           role="alert"
         >
           <div className="flex items-start gap-3">

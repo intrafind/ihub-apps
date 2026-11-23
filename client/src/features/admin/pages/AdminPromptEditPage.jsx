@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
@@ -36,6 +36,20 @@ function AdminPromptEditPage() {
   const [uiConfig, setUiConfig] = useState(null);
   const [jsonSchema, setJsonSchema] = useState(null);
   const [historyOpen, setHistoryOpen] = useState(false);
+  // What the form reports (`{ isValid, errors }`) and in which mode the editor is: a save
+  // from the form waits until the form is valid; the JSON mode keeps the server's check.
+  const [formValidation, setFormValidation] = useState({ isValid: true, errors: [] });
+  const [editorMode, setEditorMode] = useState('form');
+  // Save attempts that the form refused; from the first one on every error shows.
+  const [saveAttempts, setSaveAttempts] = useState(0);
+  // IDs of the existing prompts, so a new prompt hears "taken" before it is saved, and the
+  // ID the server refused as taken (409) after a save.
+  const [existingIds, setExistingIds] = useState([]);
+  const [refusedId, setRefusedId] = useState(null);
+  const takenIds = useMemo(
+    () => (refusedId ? [...existingIds, refusedId] : existingIds),
+    [existingIds, refusedId]
+  );
 
   const {
     data: promptData,
@@ -113,6 +127,22 @@ function AdminPromptEditPage() {
     void loadJsonSchema();
   }, [promptId]); // eslint-disable-line @eslint-react/exhaustive-deps
 
+  // A new prompt's ID must not be taken; the list is checked while the admin types.
+  useEffect(() => {
+    if (!isNewPrompt) return undefined;
+    let cancelled = false;
+    fetchAdminPrompts()
+      .then(items => {
+        if (!cancelled && Array.isArray(items)) setExistingIds(items.map(prompt => prompt.id));
+      })
+      .catch(() => {
+        // Without the list the server still refuses a taken ID on save.
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [isNewPrompt]);
+
   const loadApps = useCallback(async () => {
     try {
       const data = await fetchAdminApps();
@@ -141,6 +171,12 @@ function AdminPromptEditPage() {
       // Redirect to prompts list
       navigate('/admin/prompts');
     } catch (err) {
+      // A taken ID belongs to the ID field: the form says it there and in its summary.
+      if (isNewPrompt && err?.response?.status === 409) {
+        setRefusedId(promptData?.id);
+        setSaveAttempts(count => count + 1);
+        return;
+      }
       setSaveError(getAdminApiErrorMessage(err));
     } finally {
       setSaving(false);
@@ -151,8 +187,18 @@ function AdminPromptEditPage() {
     setPromptData(newData);
   };
 
+  /**
+   * The form saves only when it is valid: otherwise every error shows, with the summary on
+   * top. Checks left to the browser come next, with the browser's own message.
+   */
   const handleFormSubmit = async e => {
     e.preventDefault();
+    if (editorMode === 'form' && !formValidation.isValid) {
+      setSaveAttempts(count => count + 1);
+      return;
+    }
+    if (typeof e.currentTarget?.reportValidity === 'function' && !e.currentTarget.reportValidity())
+      return;
     await handleSave();
   };
 
@@ -265,13 +311,19 @@ function AdminPromptEditPage() {
         </div>
       )}
 
-      <form onSubmit={handleFormSubmit} className="space-y-8">
+      {/* noValidate: the form's own messages come first (see handleFormSubmit). */}
+      <form onSubmit={handleFormSubmit} noValidate className="space-y-8">
         <DualModeEditor
           value={promptData}
           onChange={handleDataChange}
           formComponent={PromptFormEditor}
+          onValidationChange={setFormValidation}
+          onModeChange={setEditorMode}
           formProps={{
             isNewPrompt,
+            showAllErrors: saveAttempts > 0,
+            summaryFocusKey: saveAttempts,
+            takenIds,
             apps,
             categories: uiConfig?.promptsList?.categories?.list || [],
             jsonSchema

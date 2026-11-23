@@ -5099,7 +5099,15 @@
       "preview": "Vorschau",
       "loadError": "Fehler beim Laden der Funktionen",
       "saveError": "Fehler beim Speichern der Funktionen",
-      "saved": "Funktionen erfolgreich aktualisiert"
+      "saved": "Funktionen erfolgreich aktualisiert",
+      "appGeneratorModel": {
+        "label": "Modell für Entwürfe",
+        "automatic": "Automatisch (empfohlen)",
+        "automaticCurrent": "Automatisch (empfohlen): derzeit {{model}}",
+        "unavailableOption": "{{model}} (nicht verfügbar)",
+        "help": "Die Beschreibung einer neuen App wird an dieses Modell gesendet, für Admin-Apps und persönliche Apps. Es wird nur für Personen verwendet, deren Gruppen es nutzen dürfen; alle anderen erhalten die automatische Auswahl: das Standard-Chatmodell unter den Modellen, die sie nutzen dürfen.",
+        "unavailable": "Das Modell {{model}} ist kein aktiviertes Chatmodell. Entwürfe verwenden die automatische Auswahl, bis Sie ein anderes Modell wählen."
+      }
     },
     "iFinder": {
       "testResults": {
@@ -9610,7 +9618,39 @@
     "formErrors": {
       "title": "Bitte beheben Sie die folgenden Fehler",
       "count_one": "({{count}} Fehler)",
-      "count_other": "({{count}} Fehler)"
+      "count_other": "({{count}} Fehler)",
+      "rule": {
+        "required": "Füllen Sie dieses Feld aus.",
+        "choose": "Wählen Sie einen Wert aus.",
+        "minLength": "Geben Sie mindestens {{min}} Zeichen ein.",
+        "maxLength": "Höchstens {{max}} Zeichen.",
+        "minimum": "Geben Sie eine Zahl ab {{limit}} ein.",
+        "maximum": "Geben Sie eine Zahl bis {{limit}} ein.",
+        "exclusiveMinimum": "Geben Sie eine Zahl größer als {{limit}} ein.",
+        "exclusiveMaximum": "Geben Sie eine Zahl kleiner als {{limit}} ein.",
+        "number": "Geben Sie eine Zahl ein.",
+        "integer": "Geben Sie eine ganze Zahl ein.",
+        "pattern": "Dieser Wert hat nicht das richtige Format.",
+        "uri": "Geben Sie eine vollständige Webadresse ein, zum Beispiel https://example.com.",
+        "email": "Geben Sie eine gültige E-Mail-Adresse ein.",
+        "enum": "Wählen Sie einen der angebotenen Werte aus.",
+        "uniqueItems": "Entfernen Sie die doppelten Einträge.",
+        "additionalProperties": "Diese Einstellung wird hier nicht unterstützt. Entfernen Sie sie im JSON-Editor.",
+        "languageText": "Geben Sie für diese Sprache einen Text ein oder entfernen Sie die Sprache.",
+        "invalid": "Prüfen Sie diesen Wert."
+      },
+      "field": {
+        "idRequired": "Geben Sie eine ID ein.",
+        "idFormat": "Verwenden Sie nur Kleinbuchstaben, Ziffern, Punkte, Unterstriche und Bindestriche.",
+        "idTaken": "Diese ID ist bereits vergeben.",
+        "groupIdFormat": "Verwenden Sie nur Buchstaben, Ziffern, Punkte, Unterstriche und Bindestriche.",
+        "nameRequired": "Geben Sie einen Namen ein.",
+        "descriptionRequired": "Geben Sie eine Beschreibung ein.",
+        "modelIdRequired": "Geben Sie die Modell-ID ein, die der Anbieter verwendet.",
+        "providerRequired": "Wählen Sie einen Anbieter aus.",
+        "urlRequired": "Geben Sie die API-URL ein.",
+        "promptRequired": "Geben Sie den Prompt-Text ein."
+      }
     },
     "resourceSelector": {
       "placeholder": "Suchen und auswählen...",

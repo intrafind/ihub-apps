@@ -1,23 +1,65 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
-import { useState, useEffect } from 'react';
+import { useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
 import ResourceSelector from './ResourceSelector';
 import GroupMultiSelect from './GroupMultiSelect';
 import GroupIntegrationsSection from './GroupIntegrationsSection';
-import {
-  validateWithSchema,
-  errorsToFieldErrors,
-  isFieldRequired
-} from '../../../utils/schemaValidation';
+import { FIELD_KEYS, isBlank, schemaFieldErrors } from '../utils/fieldErrors';
+import useFieldErrorVisibility from '../hooks/useFieldErrorVisibility';
+import RequiredMark from './RequiredMark';
 import AdminFormErrorSummary from './AdminFormErrorSummary';
 import { FormValidationProvider } from '../../../shared/contexts/formValidationContext';
 import { CHECKBOX_CLASS, INPUT_CLASS } from './formStyles';
 
+const NO_IDS = Object.freeze([]);
+
+/** The group fields with texts of their own, by schema rule (`fieldErrors.js`). */
+const GROUP_FIELD_RULES = Object.freeze({
+  id: { empty: FIELD_KEYS.idRequired, pattern: FIELD_KEYS.groupIdFormat },
+  name: { empty: FIELD_KEYS.nameRequired }
+});
+
+/**
+ * Every problem of a group, in the admin's language, by field path.
+ *
+ * @param {Object} group - The group as the form holds it.
+ * @param {Object|null} schema - The group JSON schema; without it only the ID
+ *   and the name are checked.
+ * @param {function} t - The translation function.
+ * @param {Object} options
+ * @param {boolean} options.isNewGroup
+ * @param {string[]} options.takenIds - IDs of the existing groups.
+ * @returns {Object<string, string>}
+ */
+export function groupFieldErrors(group, schema, t, { isNewGroup, takenIds }) {
+  const errors = schema ? schemaFieldErrors(group, schema, t, { rules: GROUP_FIELD_RULES }) : {};
+  if (!schema) {
+    if (isBlank(group.id)) errors.id = t(FIELD_KEYS.idRequired);
+    if (isBlank(group.name)) errors.name = t(FIELD_KEYS.nameRequired);
+  }
+  if (isNewGroup && !errors.id && takenIds.includes(group.id)) {
+    errors.id = t(FIELD_KEYS.idTaken);
+  }
+  return errors;
+}
+
 /**
  * GroupFormEditor - Form-based editor for group configuration
+ *
+ * A blank group shows no errors: a field says what is wrong once the admin has
+ * left or changed it, and every problem shows after the first save attempt.
+ *
+ * @param {Object} props
+ * @param {Object} props.value - The group
+ * @param {Function} props.onChange - Receives the changed group
+ * @param {Function} [props.onValidationChange] - Receives `{ isValid, errors, displayed }`
+ * @param {boolean} [props.isNewGroup] - A group not saved yet: its ID must not be taken
+ * @param {boolean} [props.showAllErrors] - Show every problem (after a save attempt)
+ * @param {string[]} [props.takenIds] - IDs of the existing groups
+ * @param {number} [props.summaryFocusKey] - A new value moves the focus to the error summary
  */
 function GroupFormEditor({
   value: group,
@@ -25,61 +67,39 @@ function GroupFormEditor({
   onValidationChange,
   resources = { apps: [], models: [], prompts: [], workflows: [], skills: [] },
   groups = {},
-  jsonSchema
+  jsonSchema,
+  isNewGroup = false,
+  showAllErrors = false,
+  takenIds = NO_IDS,
+  summaryFocusKey = 0
 }) {
   const { t } = useTranslation();
-  const [validationErrors, setValidationErrors] = useState({});
 
-  // Validation function
-  const validateGroup = groupData => {
-    let errors = {};
+  const allErrors = useMemo(
+    () => (group ? groupFieldErrors(group, jsonSchema, t, { isNewGroup, takenIds }) : {}),
+    [group, jsonSchema, t, isNewGroup, takenIds]
+  );
+  const { visibleErrors: validationErrors, controlHandlers } = useFieldErrorVisibility(allErrors, {
+    showAll: showAllErrors
+  });
+  const errorsShown = Object.keys(validationErrors).length > 0;
+  // Reported when the problems change, not on every render.
+  const errorsKey = JSON.stringify(allErrors);
 
-    // Use schema validation if available
-    if (jsonSchema) {
-      const validation = validateWithSchema(groupData, jsonSchema);
-      if (!validation.isValid) {
-        errors = errorsToFieldErrors(validation.errors);
-      }
-    } else {
-      // Fallback to manual validation if no schema
-      if (!groupData.id) {
-        errors.id = t('admin.groups.validation.idRequired', 'Group ID is required');
-      } else if (!/^[a-zA-Z0-9_-]+$/.test(groupData.id)) {
-        errors.id = t(
-          'admin.groups.validation.idInvalid',
-          'Group ID can only contain letters, numbers, hyphens, and underscores'
-        );
-      }
-
-      if (!groupData.name) {
-        errors.name = t('admin.groups.validation.nameRequired', 'Group name is required');
-      }
-    }
-
-    setValidationErrors(errors);
-
-    const isValid = Object.keys(errors).length === 0;
-    if (onValidationChange) {
-      onValidationChange({
-        isValid,
-        errors: Object.entries(errors).map(([field, message]) => ({
-          field,
-          message,
-          severity: 'error'
-        }))
-      });
-    }
-
-    return isValid;
-  };
-
-  // Validate on group changes
   useEffect(() => {
-    if (group) {
-      validateGroup(group);
-    }
+    if (!onValidationChange) return;
+    onValidationChange({
+      isValid: Object.keys(allErrors).length === 0,
+      errors: Object.entries(allErrors).map(([field, message]) => ({
+        field,
+        message,
+        severity: 'error'
+      })),
+      // The form shows its errors itself; the editor around it only marks them.
+      displayed: errorsShown
+    });
     // eslint-disable-next-line @eslint-react/exhaustive-deps
-  }, [group]);
+  }, [errorsKey, errorsShown]);
 
   const handleInputChange = (field, value) => {
     const updatedGroup = {
@@ -137,12 +157,16 @@ function GroupFormEditor({
 
   return (
     <FormValidationProvider errors={validationErrors}>
-      <div className="group-form-editor space-y-6">
-        <AdminFormErrorSummary
-          errors={validationErrors}
-          labels={errorLabels}
-          title={t('admin.groups.edit.fixErrors', 'Please fix the following errors')}
-        />
+      <div className="group-form-editor space-y-6" {...controlHandlers}>
+        {/* One summary, after a save attempt; before it only touched fields say what is wrong. */}
+        {showAllErrors && (
+          <AdminFormErrorSummary
+            errors={validationErrors}
+            labels={errorLabels}
+            title={t('admin.groups.edit.fixErrors', 'Please fix the following errors')}
+            focusKey={summaryFocusKey}
+          />
+        )}
         {/* Basic Information */}
         <div className="bg-white dark:bg-gray-800 shadow-sm dark:shadow-gray-900/20 px-4 py-5 sm:rounded-lg sm:p-6">
           <div className="md:grid md:grid-cols-3 md:gap-6">
@@ -160,15 +184,19 @@ function GroupFormEditor({
             <div className="mt-5 md:col-span-2 md:mt-0">
               <div className="grid grid-cols-6 gap-6">
                 <div className="col-span-6 sm:col-span-3">
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                  <label
+                    htmlFor="group-id"
+                    className="block text-sm font-medium text-gray-700 dark:text-gray-300"
+                  >
                     {t('admin.groups.groupId', 'Group ID')}
-                    {isFieldRequired('id', jsonSchema) && (
-                      <span className="text-red-500 ml-1">*</span>
-                    )}
+                    <RequiredMark />
                   </label>
                   <input
                     type="text"
-                    required={isFieldRequired('id', jsonSchema)}
+                    id="group-id"
+                    name="id"
+                    required
+                    aria-invalid={validationErrors.id ? true : undefined}
                     value={group.id || ''}
                     onChange={e => handleInputChange('id', e.target.value)}
                     disabled={isProtectedGroup(group.id)}
@@ -190,15 +218,19 @@ function GroupFormEditor({
                 </div>
 
                 <div className="col-span-6 sm:col-span-3">
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                  <label
+                    htmlFor="group-name"
+                    className="block text-sm font-medium text-gray-700 dark:text-gray-300"
+                  >
                     {t('admin.groups.groupName', 'Group Name')}
-                    {isFieldRequired('name', jsonSchema) && (
-                      <span className="text-red-500 ml-1">*</span>
-                    )}
+                    <RequiredMark />
                   </label>
                   <input
                     type="text"
-                    required={isFieldRequired('name', jsonSchema)}
+                    id="group-name"
+                    name="name"
+                    required
+                    aria-invalid={validationErrors.name ? true : undefined}
                     value={group.name || ''}
                     onChange={e => handleInputChange('name', e.target.value)}
                     className={`${INPUT_CLASS} mt-1 block ${

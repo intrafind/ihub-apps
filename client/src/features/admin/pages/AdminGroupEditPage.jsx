@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
@@ -32,6 +32,19 @@ function AdminGroupEditPage() {
   const [jsonSchema, setJsonSchema] = useState(null);
   // Every group, so the editor can show what this one inherits.
   const [allGroups, setAllGroups] = useState({});
+  // What the form reports (`{ isValid, errors }`) and in which mode the editor is: a save
+  // from the form waits until the form is valid.
+  const [formValidation, setFormValidation] = useState({ isValid: true, errors: [] });
+  const [editorMode, setEditorMode] = useState('form');
+  // Save attempts that the form refused; from the first one on every error shows.
+  const [saveAttempts, setSaveAttempts] = useState(0);
+  // The ID the server refused as taken (409).
+  const [refusedId, setRefusedId] = useState(null);
+  const isNewGroup = groupId === 'new';
+  const takenIds = useMemo(() => {
+    const ids = isNewGroup ? Object.keys(allGroups) : [];
+    return refusedId ? [...ids, refusedId] : ids;
+  }, [allGroups, isNewGroup, refusedId]);
 
   const loadResource = useCallback(async id => {
     const response = await makeAdminApiCall('/admin/groups');
@@ -125,6 +138,12 @@ function AdminGroupEditPage() {
   const handleSave = async data => {
     if (!data) data = group;
 
+    // The form names what is missing at its fields and in its summary.
+    if (editorMode === 'form' && !formValidation.isValid) {
+      setSaveAttempts(count => count + 1);
+      return;
+    }
+
     if (!data.id || !data.name) {
       setSaveError(
         t('admin.groups.validation.idAndNameRequired', 'Group ID and name are required')
@@ -139,6 +158,12 @@ function AdminGroupEditPage() {
       // Success - axios doesn't have response.ok, successful responses are returned directly
       navigate('/admin/groups');
     } catch (err) {
+      // A taken ID belongs to the ID field: the form says it there and in its summary.
+      if (isNewGroup && err?.response?.status === 409) {
+        setRefusedId(data.id);
+        setSaveAttempts(count => count + 1);
+        return;
+      }
       setSaveError(getAdminApiErrorMessage(err));
     } finally {
       setSaving(false);
@@ -241,15 +266,22 @@ function AdminGroupEditPage() {
         </div>
       )}
 
-      <form onSubmit={handleFormSubmit} className="space-y-8">
+      {/* noValidate: the form's own messages come first (see handleSave). */}
+      <form onSubmit={handleFormSubmit} noValidate className="space-y-8">
         <DualModeEditor
           value={group}
           onChange={handleDataChange}
           formComponent={GroupFormEditor}
+          onValidationChange={setFormValidation}
+          onModeChange={setEditorMode}
           formProps={{
             resources,
             groups: allGroups,
-            jsonSchema
+            jsonSchema,
+            isNewGroup,
+            showAllErrors: saveAttempts > 0,
+            summaryFocusKey: saveAttempts,
+            takenIds
           }}
           jsonSchema={jsonSchema}
           title={

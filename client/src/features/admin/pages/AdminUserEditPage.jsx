@@ -230,6 +230,12 @@ function AdminUserEditPage() {
   // save that fails after the editor moved on to another user does not force
   // `active` into that user's save (and one that succeeds does not clear it).
   const activeUncertainRef = useRef(null);
+  // What the form reports (`{ isValid, errors }`) and in which mode the editor is: a save
+  // from the form waits until the form is valid.
+  const [formValidation, setFormValidation] = useState({ isValid: true, errors: [] });
+  const [editorMode, setEditorMode] = useState('form');
+  // Save attempts that the form refused; from the first one on every error shows.
+  const [saveAttempts, setSaveAttempts] = useState(0);
 
   // Generate a unique ID for new users
   const generateUserId = () => `user_${crypto.randomUUID().replaceAll('-', '_')}`;
@@ -337,6 +343,12 @@ function AdminUserEditPage() {
   };
 
   const handleSave = async () => {
+    // The form names what is missing at its fields and in its summary.
+    if (editorMode === 'form' && !formValidation.isValid) {
+      setSaveAttempts(count => count + 1);
+      return;
+    }
+
     if (!user.username) {
       setSaveError(t('admin.users.validation.usernameRequired', 'Username is required'));
       return;
@@ -450,13 +462,18 @@ function AdminUserEditPage() {
         </div>
       )}
 
-      <form onSubmit={handleFormSubmit} className="space-y-8">
+      {/* noValidate: the form's own messages come first (see handleSave). */}
+      <form onSubmit={handleFormSubmit} noValidate className="space-y-8">
         <DualModeEditor
           value={user}
           onChange={handleDataChange}
           formComponent={UserFormEditor}
+          onValidationChange={setFormValidation}
+          onModeChange={setEditorMode}
           formProps={{
             isNewUser,
+            showAllErrors: saveAttempts > 0,
+            summaryFocusKey: saveAttempts,
             isSelf: !isNewUser && Boolean(currentUser?.id) && currentUser.id === user?.id,
             jsonSchema,
             availableGroups

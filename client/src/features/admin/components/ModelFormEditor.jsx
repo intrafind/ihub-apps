@@ -5,14 +5,13 @@ import { useState, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { DEFAULT_LANGUAGE, getLocalizedContent } from '../../../utils/localizeContent';
 import DynamicLanguageEditor from '../../../shared/components/DynamicLanguageEditor';
-import {
-  validateWithSchema,
-  errorsToFieldErrors,
-  isFieldRequired
-} from '../../../utils/schemaValidation';
+import { isFieldRequired } from '../../../utils/schemaValidation';
+import { FIELD_KEYS, isBlank, schemaFieldErrors } from '../utils/fieldErrors';
+import useFieldErrorVisibility from '../hooks/useFieldErrorVisibility';
 import Icon from '../../../shared/components/Icon';
 import { getAdminApiErrorMessage, makeAdminApiCall } from '../../../api/adminApi';
 import AdminFormErrorSummary from './AdminFormErrorSummary';
+import RequiredMark from './RequiredMark';
 import ApiKeyStatusBadge from './ApiKeyStatusBadge';
 import useApiKeyStatus from '../hooks/useApiKeyStatus';
 import TtsVoicesPanel, { TTS_LANGUAGES, languageName } from './tts/TtsVoicesPanel';
@@ -251,13 +250,67 @@ function SamplingField({ id, label, value, error, placeholder, onChange, bounds 
   );
 }
 
+const NO_IDS = Object.freeze([]);
+
+/** The model fields with texts of their own, by schema rule (`fieldErrors.js`). */
+const MODEL_FIELD_RULES = Object.freeze({
+  id: { empty: FIELD_KEYS.idRequired, pattern: FIELD_KEYS.idFormat },
+  modelId: { empty: FIELD_KEYS.modelIdRequired },
+  name: { empty: FIELD_KEYS.nameRequired },
+  description: { empty: FIELD_KEYS.descriptionRequired },
+  provider: { empty: FIELD_KEYS.providerRequired },
+  url: { empty: FIELD_KEYS.urlRequired }
+});
+
+/**
+ * Every problem of a model, in the admin's language, by field path.
+ *
+ * Besides the schema: the API URL is required wherever the form shows it
+ * (every provider but Bedrock, which builds its own endpoint), and the ID of a
+ * new model must not be taken.
+ *
+ * @param {Object} model - The model as the form holds it.
+ * @param {Object|null} schema - The model JSON schema; without it only the ID,
+ *   name and URL are checked.
+ * @param {function} t - The translation function.
+ * @param {Object} options
+ * @param {boolean} options.isNewModel
+ * @param {string[]} options.takenIds - IDs of the existing models.
+ * @returns {Object<string, string>}
+ */
+export function modelFieldErrors(model, schema, t, { isNewModel, takenIds }) {
+  const errors = schema
+    ? schemaFieldErrors(model, schema, t, {
+        rules: MODEL_FIELD_RULES,
+        localizedFields: ['name', 'description']
+      })
+    : {};
+  if (!schema) {
+    if (isBlank(model.id)) errors.id = t(FIELD_KEYS.idRequired);
+    if (!Object.values(model.name || {}).some(text => !isBlank(text))) {
+      errors.name = t(FIELD_KEYS.nameRequired);
+    }
+  }
+  if (!errors.url && model.provider !== 'bedrock' && isBlank(model.url)) {
+    errors.url = t(FIELD_KEYS.urlRequired);
+  }
+  if (isNewModel && !errors.id && takenIds.includes(model.id)) {
+    errors.id = t(FIELD_KEYS.idTaken);
+  }
+  return errors;
+}
+
 /**
  * Form-based editor for model configuration
  * @param {Object} props
  * @param {Object} props.value - Model configuration data
  * @param {Function} props.onChange - Callback when data changes
- * @param {Object} props.errors - Validation errors object
+ * @param {Object} [props.errors] - Messages by field from outside the form; always shown
  * @param {boolean} props.isNewModel - Whether this is a new model
+ * @param {boolean} [props.showAllErrors] - Show every problem, not only those of touched fields
+ *   (after a save attempt)
+ * @param {string[]} [props.takenIds] - IDs of the existing models; a new model must not reuse one
+ * @param {number} [props.summaryFocusKey] - A new value moves the focus to the error summary
  * @param {boolean} [props.isDirty] - Unsaved edits: the model Sync (which writes the saved model) waits for a save
  * @param {() => Promise<void>} [props.onSynced] - Reloads the saved model after a sync
  * @param {boolean} [props.autoOpenSync] - Open the model Sync when the page opens (link from the EU AI Act page)
@@ -266,63 +319,50 @@ function ModelFormEditor({
   value: data,
   onChange,
   onValidationChange,
-  errors = {},
+  errors: serverErrors = {},
   isNewModel = false,
   jsonSchema,
   isDirty = false,
   onSynced,
-  autoOpenSync = false
+  autoOpenSync = false,
+  showAllErrors = false,
+  takenIds = NO_IDS,
+  summaryFocusKey = 0
 }) {
   const { t, i18n } = useTranslation();
-  const [validationErrors, setValidationErrors] = useState({});
   const { statuses: keyStatuses } = useApiKeyStatus('models');
   // What the server says about the saved key; a model not saved yet has none.
   const keyStatus = isNewModel ? undefined : keyStatuses[data.id];
 
-  // Validation function
-  const validateModel = modelData => {
-    let errors = {};
+  // Every problem of the model, in the admin's language. Shown only for the
+  // fields the admin has touched, and all of them after a save attempt.
+  const allErrors = useMemo(
+    () => modelFieldErrors(data, jsonSchema, t, { isNewModel, takenIds }),
+    [data, jsonSchema, t, isNewModel, takenIds]
+  );
+  const { visibleErrors, controlHandlers } = useFieldErrorVisibility(allErrors, {
+    showAll: showAllErrors
+  });
+  // What the fields show: the visible problems, and what the page passes in.
+  const errors = { ...visibleErrors, ...serverErrors };
+  const errorsShown = Object.keys(errors).length > 0;
+  // Reported when the problems change, not on every render.
+  const errorsKey = JSON.stringify(allErrors);
 
-    // Use schema validation if available
-    if (jsonSchema) {
-      const validation = validateWithSchema(modelData, jsonSchema);
-      if (!validation.isValid) {
-        errors = errorsToFieldErrors(validation.errors);
-      }
-    } else {
-      // Fallback to basic validation if no schema
-      if (!modelData.id) {
-        errors.id = 'Model ID is required';
-      }
-      if (!modelData.name) {
-        errors.name = 'Model name is required';
-      }
-    }
-
-    setValidationErrors(errors);
-
-    const isValid = Object.keys(errors).length === 0;
-    if (onValidationChange) {
-      onValidationChange({
-        isValid,
-        errors: Object.entries(errors).map(([field, message]) => ({
-          field,
-          message,
-          severity: 'error'
-        }))
-      });
-    }
-
-    return isValid;
-  };
-
-  // Validate on data changes
   useEffect(() => {
-    if (data) {
-      validateModel(data);
-    }
+    if (!onValidationChange) return;
+    onValidationChange({
+      isValid: Object.keys(allErrors).length === 0,
+      errors: Object.entries(allErrors).map(([field, message]) => ({
+        field,
+        message,
+        severity: 'error'
+      })),
+      // The form shows its errors itself; the editor around it only marks them.
+      displayed: errorsShown
+    });
     // eslint-disable-next-line @eslint-react/exhaustive-deps
-  }, [data, jsonSchema]);
+  }, [errorsKey, errorsShown]);
 
   // Adapter-declared provider config schema (e.g. AWS Bedrock region).
   // Drives dynamic field rendering in the Configuration section.
@@ -599,7 +639,6 @@ function ModelFormEditor({
     );
   }, [data.id, data.provider, data.providerId, t]);
 
-  const mergedErrors = { ...errors, ...validationErrors };
   const errorLabels = {
     id: t('admin.models.fields.id', 'Model ID'),
     name: t('admin.models.fields.name', 'Name'),
@@ -631,13 +670,17 @@ function ModelFormEditor({
   ];
 
   return (
-    <FormValidationProvider errors={mergedErrors}>
-      <div className="space-y-6">
-        <AdminFormErrorSummary
-          errors={mergedErrors}
-          labels={errorLabels}
-          title={t('admin.models.edit.fixErrors', 'Please fix the following errors')}
-        />
+    <FormValidationProvider errors={errors}>
+      <div className="space-y-6" {...controlHandlers}>
+        {/* One summary, after a save attempt; before it only touched fields say what is wrong. */}
+        {showAllErrors && (
+          <AdminFormErrorSummary
+            errors={errors}
+            labels={errorLabels}
+            title={t('admin.models.edit.fixErrors', 'Please fix the following errors')}
+            focusKey={summaryFocusKey}
+          />
+        )}
         {/* Basic Information */}
         <div className="bg-white dark:bg-gray-800 shadow-sm px-4 py-5 sm:rounded-lg sm:p-6">
           <div className="md:grid md:grid-cols-3 md:gap-6">
@@ -657,7 +700,7 @@ function ModelFormEditor({
                     className="block text-sm font-medium text-gray-700 dark:text-gray-300"
                   >
                     {t('admin.models.fields.id')}
-                    {isFieldRequired('id', jsonSchema) && <span className="text-red-500"> *</span>}
+                    <RequiredMark />
                   </label>
                   <input
                     type="text"
@@ -667,15 +710,17 @@ function ModelFormEditor({
                     onChange={handleInputChange}
                     disabled={!isNewModel}
                     className={`${INPUT_CLASS} mt-1 block ${
-                      validationErrors.id || errors.id
+                      errors.id
                         ? 'border-red-500 dark:border-red-400 text-red-900 placeholder-red-300'
                         : ''
                     }`}
-                    required={isFieldRequired('id', jsonSchema)}
+                    required
+                    aria-invalid={errors.id ? true : undefined}
+                    aria-describedby={errors.id ? 'id-error' : undefined}
                   />
-                  {(validationErrors.id || errors.id) && (
-                    <p className="mt-2 text-sm text-red-600 dark:text-red-400">
-                      {validationErrors.id || errors.id}
+                  {errors.id && (
+                    <p id="id-error" className="mt-2 text-sm text-red-600 dark:text-red-400">
+                      {errors.id}
                     </p>
                   )}
                   <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
@@ -685,7 +730,8 @@ function ModelFormEditor({
 
                 <div className="col-span-6 sm:col-span-3">
                   <DynamicLanguageEditor
-                    label={`${t('admin.models.fields.name')} *`}
+                    label={t('admin.models.fields.name')}
+                    name="name"
                     value={data.name || { [DEFAULT_LANGUAGE]: '' }}
                     onChange={value => handleChange('name', value)}
                     required={true}
@@ -695,7 +741,8 @@ function ModelFormEditor({
 
                 <div className="col-span-6">
                   <DynamicLanguageEditor
-                    label={`${t('admin.models.fields.description')} *`}
+                    label={t('admin.models.fields.description')}
+                    name="description"
                     value={data.description || { [DEFAULT_LANGUAGE]: '' }}
                     onChange={value => handleChange('description', value)}
                     required={true}
@@ -737,7 +784,8 @@ function ModelFormEditor({
                     htmlFor="provider"
                     className="block text-sm font-medium text-gray-700 dark:text-gray-300"
                   >
-                    {t('admin.models.fields.provider')} <span className="text-red-500">*</span>
+                    {t('admin.models.fields.provider')}
+                    <RequiredMark />
                   </label>
                   <select
                     id="provider"
@@ -818,6 +866,7 @@ function ModelFormEditor({
                     className="block text-sm font-medium text-gray-700 dark:text-gray-300"
                   >
                     {t('admin.models.fields.modelId')}
+                    <RequiredMark />
                   </label>
                   <input
                     type="text"
@@ -850,7 +899,8 @@ function ModelFormEditor({
                       htmlFor="url"
                       className="block text-sm font-medium text-gray-700 dark:text-gray-300"
                     >
-                      {t('admin.models.fields.url')} <span className="text-red-500">*</span>
+                      {t('admin.models.fields.url')}
+                      <RequiredMark />
                     </label>
                     <input
                       type={isTranscription ? 'text' : 'url'}
@@ -1520,7 +1570,7 @@ function ModelFormEditor({
                             id={`sampling.${key}`}
                             label={label}
                             value={data.sampling?.[key] ?? ''}
-                            error={mergedErrors[`sampling.${key}`]}
+                            error={errors[`sampling.${key}`]}
                             placeholder={t(
                               'admin.models.placeholders.samplingDefault',
                               'Provider default'

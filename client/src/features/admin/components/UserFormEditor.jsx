@@ -1,22 +1,81 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
-import {
-  validateWithSchema,
-  errorsToFieldErrors,
-  validatePasswordConfirmation,
-  isFieldRequired
-} from '../../../utils/schemaValidation';
+import { validatePasswordConfirmation, isFieldRequired } from '../../../utils/schemaValidation';
+import { schemaFieldErrors } from '../utils/fieldErrors';
+import useFieldErrorVisibility from '../hooks/useFieldErrorVisibility';
 import AdminFormErrorSummary from './AdminFormErrorSummary';
 import { FormValidationProvider } from '../../../shared/contexts/formValidationContext';
 import GroupMultiSelect from './GroupMultiSelect';
 import { CHECKBOX_CLASS, INPUT_CLASS } from './formStyles';
 
+/** The user fields with texts of their own, by schema rule (`fieldErrors.js`). */
+const USER_FIELD_RULES = Object.freeze({
+  username: { empty: 'admin.users.validation.usernameRequired' }
+});
+
+/**
+ * Every problem of a user, in the admin's language, by field path.
+ *
+ * @param {Object} user - The user as the form holds it.
+ * @param {Object|null} schema - The user JSON schema.
+ * @param {function} t - The translation function.
+ * @param {Object} options
+ * @param {boolean} options.needsPassword - A new local user needs a password.
+ * @param {string} options.confirmPassword - What the admin typed to confirm it.
+ * @returns {Object<string, string>}
+ */
+export function userFieldErrors(user, schema, t, { needsPassword, confirmPassword }) {
+  const errors = schema ? schemaFieldErrors(user, schema, t, { rules: USER_FIELD_RULES }) : {};
+  if (!schema) {
+    if (!user.username) {
+      errors.username = t('admin.users.validation.usernameRequired', 'Username is required');
+    } else if (!/^[a-zA-Z0-9_.-]+$/.test(user.username)) {
+      errors.username = t(
+        'admin.users.validation.usernameInvalid',
+        'Username can only contain letters, numbers, periods, hyphens, and underscores'
+      );
+    }
+    // Email is optional for external auth users (NTLM, OIDC, proxy, etc.)
+    if (user.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(user.email)) {
+      errors.email = t('admin.users.validation.emailInvalid', 'Please enter a valid email address');
+    }
+  }
+
+  // Password validation - only required for new local auth users
+  if (needsPassword && !user.password) {
+    errors.password = t(
+      'admin.users.validation.passwordRequired',
+      'Password is required for local authentication'
+    );
+  } else if (user.password && user.password.length > 0 && user.password.length < 6) {
+    errors.password = t(
+      'admin.users.validation.passwordTooShort',
+      'Password must be at least 6 characters long'
+    );
+  }
+
+  if (user.password && validatePasswordConfirmation(user.password, confirmPassword)) {
+    errors.confirmPassword = t('admin.users.validation.passwordMismatch', 'Passwords do not match');
+  }
+  return errors;
+}
+
 /**
  * UserFormEditor - Form-based editor for user configuration
+ *
+ * A blank user shows no errors: a field says what is wrong once the admin has
+ * left or changed it, and every problem shows after the first save attempt.
+ *
+ * @param {Object} props
+ * @param {Object} props.value - The user
+ * @param {Function} props.onChange - Receives the changed user
+ * @param {Function} [props.onValidationChange] - Receives `{ isValid, errors, displayed }`
+ * @param {boolean} [props.showAllErrors] - Show every problem (after a save attempt)
+ * @param {number} [props.summaryFocusKey] - A new value moves the focus to the error summary
  */
 function UserFormEditor({
   value: user,
@@ -25,10 +84,11 @@ function UserFormEditor({
   isNewUser = false,
   isSelf = false,
   jsonSchema,
-  availableGroups = []
+  availableGroups = [],
+  showAllErrors = false,
+  summaryFocusKey = 0
 }) {
   const { t } = useTranslation();
-  const [validationErrors, setValidationErrors] = useState({});
   const [confirmPassword, setConfirmPassword] = useState('');
 
   // Check if user uses local auth (needs password)
@@ -37,87 +97,33 @@ function UserFormEditor({
   const hasExternalAuth = user?.authMethods?.some(m =>
     ['ntlm', 'oidc', 'ldap', 'proxy', 'teams'].includes(m)
   );
+  const needsPassword = isNewUser && isLocalAuthUser && !hasExternalAuth;
 
-  // Validation function
-  const validateUser = userData => {
-    let errors = {};
+  const allErrors = useMemo(
+    () => (user ? userFieldErrors(user, jsonSchema, t, { needsPassword, confirmPassword }) : {}),
+    [user, jsonSchema, t, needsPassword, confirmPassword]
+  );
+  const { visibleErrors: validationErrors, controlHandlers } = useFieldErrorVisibility(allErrors, {
+    showAll: showAllErrors
+  });
+  const errorsShown = Object.keys(validationErrors).length > 0;
+  // Reported when the problems change, not on every render.
+  const errorsKey = JSON.stringify(allErrors);
 
-    // Use schema validation if available
-    if (jsonSchema) {
-      const validation = validateWithSchema(userData, jsonSchema);
-      if (!validation.isValid) {
-        errors = errorsToFieldErrors(validation.errors);
-      }
-    } else {
-      // Fallback to manual validation if no schema
-      if (!userData.username) {
-        errors.username = t('admin.users.validation.usernameRequired', 'Username is required');
-      } else if (!/^[a-zA-Z0-9_.-]+$/.test(userData.username)) {
-        errors.username = t(
-          'admin.users.validation.usernameInvalid',
-          'Username can only contain letters, numbers, periods, hyphens, and underscores'
-        );
-      }
-
-      // Email is optional for external auth users (NTLM, OIDC, proxy, etc.)
-      // Only validate format if email is provided
-      if (userData.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(userData.email)) {
-        errors.email = t(
-          'admin.users.validation.emailInvalid',
-          'Please enter a valid email address'
-        );
-      }
-    }
-
-    // Password validation - only required for new local auth users
-    const needsPassword = isNewUser && isLocalAuthUser && !hasExternalAuth;
-    if (needsPassword && !userData.password) {
-      errors.password = t(
-        'admin.users.validation.passwordRequired',
-        'Password is required for local authentication'
-      );
-    } else if (userData.password && userData.password.length > 0 && userData.password.length < 6) {
-      errors.password = t(
-        'admin.users.validation.passwordTooShort',
-        'Password must be at least 6 characters long'
-      );
-    }
-
-    // Confirm password validation
-    if (userData.password) {
-      const passwordError = validatePasswordConfirmation(userData.password, confirmPassword);
-      if (passwordError) {
-        errors.confirmPassword = t(
-          'admin.users.validation.passwordMismatch',
-          'Passwords do not match'
-        );
-      }
-    }
-
-    setValidationErrors(errors);
-
-    const isValid = Object.keys(errors).length === 0;
-    if (onValidationChange) {
-      onValidationChange({
-        isValid,
-        errors: Object.entries(errors).map(([field, message]) => ({
-          field,
-          message,
-          severity: 'error'
-        }))
-      });
-    }
-
-    return isValid;
-  };
-
-  // Validate on user changes
   useEffect(() => {
-    if (user) {
-      validateUser(user);
-    }
+    if (!onValidationChange) return;
+    onValidationChange({
+      isValid: Object.keys(allErrors).length === 0,
+      errors: Object.entries(allErrors).map(([field, message]) => ({
+        field,
+        message,
+        severity: 'error'
+      })),
+      // The form shows its errors itself; the editor around it only marks them.
+      displayed: errorsShown
+    });
     // eslint-disable-next-line @eslint-react/exhaustive-deps
-  }, [user, confirmPassword, jsonSchema]);
+  }, [errorsKey, errorsShown]);
 
   const handleInputChange = (field, value) => {
     const updatedUser = {
@@ -155,12 +161,16 @@ function UserFormEditor({
 
   return (
     <FormValidationProvider errors={validationErrors}>
-      <div className="user-form-editor space-y-6">
-        <AdminFormErrorSummary
-          errors={validationErrors}
-          labels={errorLabels}
-          title={t('admin.users.edit.fixErrors', 'Please fix the following errors')}
-        />
+      <div className="user-form-editor space-y-6" {...controlHandlers}>
+        {/* One summary, after a save attempt; before it only touched fields say what is wrong. */}
+        {showAllErrors && (
+          <AdminFormErrorSummary
+            errors={validationErrors}
+            labels={errorLabels}
+            title={t('admin.users.edit.fixErrors', 'Please fix the following errors')}
+            focusKey={summaryFocusKey}
+          />
+        )}
         {/* Basic Information */}
         <div className="bg-white dark:bg-gray-800 shadow-sm dark:shadow-gray-900/20 px-4 py-5 sm:rounded-lg sm:p-6">
           <div className="md:grid md:grid-cols-3 md:gap-6">
@@ -186,6 +196,8 @@ function UserFormEditor({
                   </label>
                   <input
                     type="text"
+                    name="username"
+                    aria-invalid={validationErrors.username ? true : undefined}
                     required={isFieldRequired('username', jsonSchema)}
                     value={user.username || ''}
                     onChange={e => handleInputChange('username', e.target.value)}
@@ -219,6 +231,8 @@ function UserFormEditor({
                   </label>
                   <input
                     type="email"
+                    name="email"
+                    aria-invalid={validationErrors.email ? true : undefined}
                     required={isFieldRequired('email', jsonSchema)}
                     value={user.email || ''}
                     onChange={e => handleInputChange('email', e.target.value)}
@@ -384,7 +398,9 @@ function UserFormEditor({
                     </label>
                     <input
                       type="password"
-                      required={isNewUser && isLocalAuthUser && !hasExternalAuth}
+                      name="password"
+                      aria-invalid={validationErrors.password ? true : undefined}
+                      required={needsPassword}
                       value={user.password || ''}
                       onChange={e => handleInputChange('password', e.target.value)}
                       className={`${INPUT_CLASS} mt-1 block ${
@@ -412,6 +428,8 @@ function UserFormEditor({
                     </label>
                     <input
                       type="password"
+                      name="confirmPassword"
+                      aria-invalid={validationErrors.confirmPassword ? true : undefined}
                       required={!!user.password}
                       value={confirmPassword}
                       onChange={e => setConfirmPassword(e.target.value)}
