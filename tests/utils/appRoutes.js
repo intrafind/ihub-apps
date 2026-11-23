@@ -70,8 +70,8 @@ function joinPaths(parent, child) {
 
 /**
  * Every route in JSX source, as full path patterns (`/admin/models/:modelId`, `/admin/docs/*`).
- * A layout route without an index child is not a page and is not listed; the catch-all `*` is
- * listed as `/*` with `catchAll: true`.
+ * A layout route without an index child is not a page and is not listed; the catch-all (`*` or
+ * `/*`) is listed as `/*` with `catchAll: true`.
  *
  * @param {string} source JSX source text
  * @returns {Array<{ pattern: string, redirectTo?: string, catchAll?: true }>}
@@ -97,7 +97,7 @@ export function routesInSource(source) {
         routes.push({
           pattern: full || '/',
           ...(redirectTo !== undefined && { redirectTo }),
-          ...(ownPath === '*' && { catchAll: true })
+          ...((ownPath === '*' || ownPath === '/*') && { catchAll: true })
         });
       }
       visit(node.children, full);
@@ -134,9 +134,25 @@ function patternToRegExp(pattern) {
 }
 
 /**
+ * How React Router ranks a route pattern (`computeScore` in react-router): every segment counts,
+ * a static one most, a parameter less, and a splat costs. So `/admin/system` wins over
+ * `/admin/:id`, and `/files/:id` over `/files/*`.
+ */
+function routeScore(pattern) {
+  const segments = pattern.split('/');
+  const initial = segments.length + (segments.includes('*') ? -2 : 0);
+  return segments
+    .filter(segment => segment !== '*')
+    .reduce(
+      (score, segment) => score + (/^:[\w-]+$/.test(segment) ? 3 : segment === '' ? 1 : 10),
+      initial
+    );
+}
+
+/**
  * The route a concrete path (`/admin/models/new`) opens, or undefined when only the catch-all
- * "not found" route would take it. A literal route wins over a parameter route, so `/admin/system`
- * is reported as the redirect it is and not as some `/admin/:id`.
+ * "not found" route would take it. Routes are ranked as React Router ranks them, so
+ * `/admin/system` is reported as the redirect it is and not as some `/admin/:id`.
  *
  * @param {string} pathname
  * @param {ReturnType<typeof routesInSource>} routes
@@ -145,6 +161,5 @@ export function matchRoute(pathname, routes) {
   const candidates = routes.filter(
     route => !route.catchAll && patternToRegExp(route.pattern).test(pathname)
   );
-  const dynamicParts = route => (route.pattern.match(/\/(?::[^/]+|\*)/g) || []).length;
-  return candidates.sort((a, b) => dynamicParts(a) - dynamicParts(b))[0];
+  return candidates.sort((a, b) => routeScore(b.pattern) - routeScore(a.pattern))[0];
 }

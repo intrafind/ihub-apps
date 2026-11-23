@@ -130,4 +130,35 @@ describe('the route check itself', () => {
   test('reports a redirect with its target', () => {
     expect(pageProblem('/admin/system', routes)).toBe('/admin/system: redirects to /admin/models');
   });
+
+  test('treats a root catch-all written "/*" like "*", and keeps a named splat a page', () => {
+    const slashed = routesInSource(`
+      const App = () => (
+        <Routes>
+          <Route path="/admin/docs/*" element={<Docs />} />
+          <Route path="/*" element={<NotFound />} />
+        </Routes>
+      );
+    `);
+    expect(slashed).toEqual([{ pattern: '/admin/docs/*' }, { pattern: '/*', catchAll: true }]);
+    expect(pageProblem('/scheduled', slashed)).toBe('/scheduled: no route in client/src/App.jsx');
+    expect(pageProblem('/admin/docs/a', slashed)).toBeNull();
+  });
+
+  test('ranks routes as React Router does: static, then parameter, then splat', () => {
+    const ranked = routesInSource(`
+      const App = () => (
+        <Routes>
+          <Route path="/files/*" element={<Navigate to="/files" />} />
+          <Route path="/files/:fileId" element={<File />} />
+          <Route path="/files/:fileId/*" element={<Navigate to="/" />} />
+          <Route path="/files/new" element={<Navigate to="/upload" />} />
+        </Routes>
+      );
+    `);
+    expect(matchRoute('/files/abc', ranked).pattern).toBe('/files/:fileId');
+    expect(matchRoute('/files/new', ranked).pattern).toBe('/files/new');
+    expect(matchRoute('/files/abc/raw', ranked).pattern).toBe('/files/:fileId/*');
+    expect(matchRoute('/files', ranked).pattern).toBe('/files/*');
+  });
 });
