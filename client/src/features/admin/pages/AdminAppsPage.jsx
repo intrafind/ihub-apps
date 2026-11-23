@@ -436,11 +436,7 @@ function AdminAppsPage() {
       link.remove();
       URL.revokeObjectURL(url);
     } catch (err) {
-      setError(
-        t('admin.apps.downloadError', 'Failed to download app config: {{error}}', {
-          error: getAdminApiErrorMessage(err)
-        })
-      );
+      setError(t('admin.apps.downloadError', { error: getAdminApiErrorMessage(err) }));
     }
   };
 
@@ -465,19 +461,11 @@ function AdminAppsPage() {
       event.target.value = '';
     } catch (err) {
       if (getAdminApiErrorMessage(err).includes('already exists')) {
-        setError(
-          t('admin.apps.uploadExists', 'App with ID "{{id}}" already exists', {
-            id: appConfig?.id || 'unknown'
-          })
-        );
+        setError(t('admin.apps.uploadExists', { id: appConfig?.id || 'unknown' }));
       } else if (err instanceof SyntaxError) {
         setError(t('admin.common.invalidJsonFile', 'Invalid JSON file format'));
       } else {
-        setError(
-          t('admin.apps.uploadError', 'Failed to upload app config: {{error}}', {
-            error: getAdminApiErrorMessage(err)
-          })
-        );
+        setError(t('admin.apps.uploadError', { error: getAdminApiErrorMessage(err) }));
       }
     } finally {
       setUploading(false);

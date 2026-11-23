@@ -174,11 +174,7 @@ function AdminWorkflowsPage() {
       link.remove();
       URL.revokeObjectURL(url);
     } catch (err) {
-      setError(
-        t('admin.workflows.downloadError', 'Failed to download workflow config: {{error}}', {
-          error: getAdminApiErrorMessage(err)
-        })
-      );
+      setError(t('admin.workflows.downloadError', { error: getAdminApiErrorMessage(err) }));
     }
   };
 
@@ -202,19 +198,11 @@ function AdminWorkflowsPage() {
       event.target.value = '';
     } catch (err) {
       if (getAdminApiErrorMessage(err).includes('already exists')) {
-        setError(
-          t('admin.workflows.uploadExists', 'Workflow with ID "{{id}}" already exists', {
-            id: workflowConfig?.id || 'unknown'
-          })
-        );
+        setError(t('admin.workflows.uploadExists', { id: workflowConfig?.id || 'unknown' }));
       } else if (err instanceof SyntaxError) {
         setError(t('admin.common.invalidJsonFile', 'Invalid JSON file format'));
       } else {
-        setError(
-          t('admin.workflows.uploadError', 'Failed to upload workflow config: {{error}}', {
-            error: getAdminApiErrorMessage(err)
-          })
-        );
+        setError(t('admin.workflows.uploadError', { error: getAdminApiErrorMessage(err) }));
       }
     } finally {
       setUploading(false);

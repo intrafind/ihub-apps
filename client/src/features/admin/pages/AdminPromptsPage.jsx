@@ -182,11 +182,7 @@ function AdminPromptsPage() {
       link.remove();
       URL.revokeObjectURL(url);
     } catch (err) {
-      setError(
-        t('admin.prompts.downloadError', 'Failed to download prompt config: {{error}}', {
-          error: getAdminApiErrorMessage(err)
-        })
-      );
+      setError(t('admin.prompts.downloadError', { error: getAdminApiErrorMessage(err) }));
     }
   };
 
@@ -210,19 +206,11 @@ function AdminPromptsPage() {
       event.target.value = '';
     } catch (err) {
       if (getAdminApiErrorMessage(err).includes('already exists')) {
-        setError(
-          t('admin.prompts.uploadExists', 'Prompt with ID "{{id}}" already exists', {
-            id: promptConfig?.id || 'unknown'
-          })
-        );
+        setError(t('admin.prompts.uploadExists', { id: promptConfig?.id || 'unknown' }));
       } else if (err instanceof SyntaxError) {
         setError(t('admin.common.invalidJsonFile', 'Invalid JSON file format'));
       } else {
-        setError(
-          t('admin.prompts.uploadError', 'Failed to upload prompt config: {{error}}', {
-            error: getAdminApiErrorMessage(err)
-          })
-        );
+        setError(t('admin.prompts.uploadError', { error: getAdminApiErrorMessage(err) }));
       }
     } finally {
       setUploading(false);
