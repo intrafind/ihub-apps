@@ -2476,7 +2476,9 @@ Taken when revising after the critiques:
   and hand over apps of their own** ("yes let's just do this as well. similar to projects").
   The design is [02-personal-apps.md](02-personal-apps.md) (increment 2). The owner also asked
   for a chat-based app builder; its plan is
-  [03-chat-based-app-builder.md](03-chat-based-app-builder.md).
+  [03-chat-based-app-builder.md](03-chat-based-app-builder.md), and the implementation plan
+  checked against the shipped code (2026-11-23) is
+  [04-chat-builder-implementation-plan.md](04-chat-builder-implementation-plan.md).
 - "Only these groups" when creating or publishing (open decision 1), and marketplace access for
   content admins.
 - Drafts of an already published app (open decision 6).
