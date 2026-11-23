@@ -100,13 +100,16 @@ export const STAKES_KEYS = Object.freeze({
 
 const isPlainObject = value => value !== null && typeof value === 'object' && !Array.isArray(value);
 
+/** Code-point order: the same in every browser and locale, unlike `localeCompare`. */
+const byCodePoint = (a, b) => (a < b ? -1 : a > b ? 1 : 0);
+
 /** A value with the keys of every object sorted, so that equal values serialise equally. */
 function canonical(value) {
   if (Array.isArray(value)) return value.map(canonical);
   if (!isPlainObject(value)) return value;
   return Object.fromEntries(
     Object.keys(value)
-      .sort()
+      .sort(byCodePoint)
       .filter(key => value[key] !== undefined)
       .map(key => [key, canonical(value[key])])
   );
