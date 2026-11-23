@@ -119,7 +119,7 @@ test('the context window is null when unknown, unseen or stale', async () => {
 });
 
 test('a configured contextWindow wins over the discovered one', async () => {
-  const { chatCompactThresholdTokens } = await import('../services/chat/ChatService.js');
+  const { chatCompactThresholdTokens } = await import('../services/chat/chatTurnPolicies.js');
   modelDiscoveryService.clearCache(model.id);
   modelDiscoveryService.cache.set(model.id, {
     modelId: 'm',

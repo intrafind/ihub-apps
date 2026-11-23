@@ -68,8 +68,6 @@ import { describeChatError } from '../../chat/chatErrors.js';
 import { scheduleChatTitle } from '../../chat/chatTitles.js';
 import { appendSchedulingContextNote } from '../../scheduler/tasks/schedulingContext.js';
 import { recordTextOutput } from '../../provenance/turnProvenance.js';
-// A cycle (ChatService.js imports this module): every name below is read only
-// while a turn runs, never while either module is evaluated.
 import {
   COMPONENT,
   CHAT_MAX_TOOL_ROUNDS,
@@ -78,7 +76,7 @@ import {
   chatContextPolicies,
   chatToolPolicies,
   wireUsage
-} from '../../chat/ChatService.js';
+} from '../../chat/chatTurnPolicies.js';
 
 const NO_STREAM = { emit: () => null, runId: null };
 

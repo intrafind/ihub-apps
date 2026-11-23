@@ -21,7 +21,7 @@
 
 import configCache from '../../../configCache.js';
 import { findByIdCaseInsensitive } from '../../../utils/resourceLookup.js';
-import { withAppPrompt } from '../../chat/ChatService.js';
+import { withAppPrompt } from '../../chat/appPrompt.js';
 import { resolveChatScopes } from '../../integrations/scopes/index.js';
 
 const hasEntries = value =>

@@ -48,7 +48,8 @@ import {
 } from '../../../sse.js';
 import config from '../../../config.js';
 import { abortCause, causeOfSignal } from '../../chat/abortCause.js';
-import ChatService, { withAppPrompt } from '../../chat/ChatService.js';
+import ChatService from '../../chat/ChatService.js';
+import { withAppPrompt } from '../../chat/appPrompt.js';
 import llmClient from '../../loop/LLMClient.js';
 import { getChatRepository, normalizeChatSettings } from '../../chat/ChatRepository.js';
 import { isChatHistoryConfigured } from '../../chat/chatPersistence.js';

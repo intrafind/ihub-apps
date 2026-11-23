@@ -37,12 +37,13 @@ import { v4 as uuidv4 } from 'uuid';
 import configCache from '../../configCache.js';
 import logger from '../../utils/logger.js';
 import { canUserAccessResource } from '../../utils/authorization.js';
-import ChatService, {
+import ChatService from '../chat/ChatService.js';
+import {
   CHAT_MAX_TOOL_ROUNDS,
   chatCompactionModel,
   chatContextPolicies,
   chatToolPolicies
-} from '../chat/ChatService.js';
+} from '../chat/chatTurnPolicies.js';
 import { markInteractiveTools } from '../loop/seams/index.js';
 import { newRunId, isValidRunId } from '../loop/RunLog.js';
 import { createPageReadGate, resolveMaxPageReads } from '../chat/pageReadLimit.js';

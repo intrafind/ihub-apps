@@ -20,7 +20,7 @@
  * @module services/inference/appTurn
  */
 import crypto from 'node:crypto';
-import { withAppPrompt } from '../chat/ChatService.js';
+import { withAppPrompt } from '../chat/appPrompt.js';
 import { recordStructuredOutputValidation } from '../../telemetry/metrics.js';
 import { isLLMError } from '../loop/contracts/errors.js';
 import { InferenceApiError, fromLLMError } from './errors.js';

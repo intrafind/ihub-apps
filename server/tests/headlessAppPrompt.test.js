@@ -27,7 +27,7 @@ jest.unstable_mockModule('../configCache.js', () => ({
   }
 }));
 
-const { withAppPrompt } = await import('../services/chat/ChatService.js');
+const { withAppPrompt } = await import('../services/chat/appPrompt.js');
 const { default: PromptService } = await import('../services/PromptService.js');
 
 const TRANSLATOR_PROMPT = {
