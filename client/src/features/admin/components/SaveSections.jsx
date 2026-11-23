@@ -11,6 +11,8 @@ import {
   useSyncExternalStore
 } from 'react';
 import AdminSaveBar from './AdminSaveBar';
+import UnsavedChangesDialog from './UnsavedChangesDialog';
+import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
 
 /**
  * One save bar for a page whose sections load, edit and save on their own (the cards of the
@@ -28,9 +30,15 @@ import AdminSaveBar from './AdminSaveBar';
  *
  * Outside a provider `useSaveSection` does nothing and says `managed: false`, so a section
  * reused somewhere else can still draw its own Save button.
+ *
+ * Providers nest: a provider below another one hands out the outer registry and its bar draws
+ * nothing, so a tab that carries its own provider and bar can be hosted by a page that keeps
+ * the tab mounted (hidden) and shows ONE bar and leave-guard for the whole page.
  */
 
 const SaveSectionsContext = createContext(null);
+/** True below a provider that deferred to an outer one: its bar is the outer bar's job. */
+const SaveSectionsHostedContext = createContext(false);
 
 /** The registry: what each section last said, read by the bar when it renders or saves. */
 function createStore() {
@@ -104,7 +112,7 @@ function createStore() {
       }
     },
     discardAll() {
-      for (const entry of [...entries.values()]) {
+      for (const entry of entries.values()) {
         if (entry.dirty) entry.discard();
       }
     }
@@ -118,8 +126,16 @@ function createStore() {
  * @param {React.ReactNode} props.children
  */
 export function SaveSectionsProvider({ children }) {
+  const outer = useContext(SaveSectionsContext);
   const storeRef = useRef(null);
-  if (storeRef.current === null) storeRef.current = createStore();
+  if (outer === null && storeRef.current === null) storeRef.current = createStore();
+  if (outer !== null) {
+    return (
+      <SaveSectionsHostedContext.Provider value={true}>
+        {children}
+      </SaveSectionsHostedContext.Provider>
+    );
+  }
   return (
     <SaveSectionsContext.Provider value={storeRef.current}>{children}</SaveSectionsContext.Provider>
   );
@@ -203,17 +219,32 @@ export function useSaveSections() {
  *
  * @param {Object} [props]
  * @param {boolean} [props.disabled=false] - Hide the bar (the page is loading or its load failed).
+ * @param {boolean} [props.leaveGuard=false] - Also ask before the admin leaves the page while
+ *   a section is dirty ("Leave without saving?"). Leave it off on a page that guards itself.
  */
-export function SaveSectionsBar({ disabled = false }) {
+export function SaveSectionsBar({ disabled = false, leaveGuard = false }) {
   const { dirty, saving, error, save, discard } = useSaveSections();
-  if (disabled) return null;
+  const hosted = useContext(SaveSectionsHostedContext);
+  if (hosted) return null;
   return (
-    <AdminSaveBar
-      dirty={dirty}
-      saving={saving}
-      message={error || undefined}
-      onSave={() => void save()}
-      onDiscard={discard}
-    />
+    <>
+      {!disabled && (
+        <AdminSaveBar
+          dirty={dirty}
+          saving={saving}
+          message={error || undefined}
+          onSave={() => void save()}
+          onDiscard={discard}
+        />
+      )}
+      {leaveGuard && <SaveSectionsLeaveGuard />}
+    </>
   );
+}
+
+/** The route leave-guard of the page's sections: one dialog for all of them. */
+function SaveSectionsLeaveGuard() {
+  const { dirty } = useSaveSections();
+  const { blocker } = useUnsavedChanges(false, dirty);
+  return <UnsavedChangesDialog blocker={blocker} />;
 }

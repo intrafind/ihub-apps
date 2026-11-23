@@ -197,6 +197,18 @@ function missingRequirements(app, platformConfig, integrationStatus, language, t
   return [...missingFeatures, ...missingIntegrationNames(app, integrationStatus, t)];
 }
 
+/** The ids of the apps in the order the reorder draft shows, or the order it started with. */
+function draftIdsOf(orderDraft, orderStart) {
+  return orderDraft ? orderDraft.map(app => app.id) : orderStart;
+}
+
+/** With tabs, the list is the panel of the "Apps" tab; a content admin gets no tabs. */
+function appsPanelPropsFor(isFullAdmin) {
+  return isFullAdmin
+    ? { role: 'tabpanel', id: `tabpanel-${APPS_TAB}`, 'aria-labelledby': `tab-${APPS_TAB}` }
+    : {};
+}
+
 function AdminAppsPage() {
   const { t, i18n } = useTranslation();
   const currentLanguage = i18n.language;
@@ -224,7 +236,7 @@ function AdminAppsPage() {
   // bar and the leave-guard compare against.
   const [orderStart, setOrderStart] = useState(null);
   const [savingOrder, setSavingOrder] = useState(false);
-  const draftIds = orderDraft ? orderDraft.map(app => app.id) : orderStart;
+  const draftIds = draftIdsOf(orderDraft, orderStart);
   const { blocker, markSaved, isDirty: orderDirty } = useUnsavedChanges(orderStart, draftIds);
   // The tab "Personal apps" is for full admins, whether or not the feature is
   // on. A content admin gets the page without tabs.
@@ -238,9 +250,7 @@ function AdminAppsPage() {
   const refreshWaiting = () => setWaitingRefresh(value => value + 1);
   const [waitingCount, setWaitingCount] = useWaitingUserAppCount(isFullAdmin, waitingRefresh);
   // With tabs, today's page is the panel of the "Apps" tab.
-  const appsPanelProps = isFullAdmin
-    ? { role: 'tabpanel', id: `tabpanel-${APPS_TAB}`, 'aria-labelledby': `tab-${APPS_TAB}` }
-    : {};
+  const appsPanelProps = appsPanelPropsFor(isFullAdmin);
 
   useEffect(() => {
     void loadApps();

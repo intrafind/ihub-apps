@@ -275,7 +275,7 @@ describe('Voice input: an Azure test that is still running when the credentials 
         answer = () => resolve(ok({ ok: true, code: 'token-issued', region: 'eastus' }));
       });
     render(<AdminVoiceInputPage />);
-    await waitFor(() => expect(screen.getByLabelText('Region')).toBeInTheDocument());
+    await screen.findByLabelText('Region');
     await settle();
 
     fireEvent.change(screen.getByLabelText('Region'), { target: { value: 'eastus' } });
@@ -297,7 +297,7 @@ describe('Voice input: an Azure test that is still running when the credentials 
       throw new Error('test request refused');
     };
     render(<AdminVoiceInputPage />);
-    await waitFor(() => expect(screen.getByLabelText('Region')).toBeInTheDocument());
+    await screen.findByLabelText('Region');
     await settle();
 
     await act(async () => {

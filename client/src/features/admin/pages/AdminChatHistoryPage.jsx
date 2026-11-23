@@ -22,6 +22,11 @@ function errorText(error, fallback) {
   return error?.response?.data?.detail || error?.message || fallback;
 }
 
+/** Whether the bar is offered: the settings loaded, and they changed or the last save failed. */
+function offersSave(savedSettings, isDirty, saveFailed) {
+  return savedSettings !== null && (isDirty || saveFailed);
+}
+
 function formatNumber(value) {
   return typeof value === 'number' ? value.toLocaleString() : '—';
 }
@@ -1607,7 +1612,7 @@ function AdminChatHistoryPage() {
       />
       {/* No bar while loading or when the settings could not be loaded. */}
       <AdminSaveBar
-        dirty={savedSettings !== null && (isDirty || saveFailed)}
+        dirty={offersSave(savedSettings, isDirty, saveFailed)}
         saving={saving}
         onSave={() => void handleSave()}
         onDiscard={handleDiscard}
