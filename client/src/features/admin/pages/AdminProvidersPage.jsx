@@ -285,8 +285,10 @@ function AdminProvidersPage() {
     navigate(`/admin/providers/${providerId}`);
   };
 
+  // "Add provider" opens the guided connect flow; its first step links to the
+  // plain form (/admin/providers/new) for custom-credential providers.
   const createProvider = () => {
-    navigate('/admin/providers/new');
+    navigate('/admin/providers/connect');
   };
 
   /**

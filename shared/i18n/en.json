@@ -1599,7 +1599,132 @@
       },
       "add": "Add provider",
       "import": "Import models",
-      "ownTimeouts": "Sets its own timeouts"
+      "ownTimeouts": "Sets its own timeouts",
+      "connect": {
+        "access": {
+          "title": "Who can use these models?",
+          "intro": "Grant the new models to groups. You can change this later under Groups.",
+          "groupsUnavailable": "The groups could not be loaded. The models get the access the groups already grant; change it later under Groups.",
+          "everyone": "Everyone who signs in",
+          "everyoneHint": "Granted to the \"authenticated\" group, which every signed-in user is in.",
+          "groups": "Only the groups I pick",
+          "allModels": "(all models)",
+          "wildcardNote": "These groups can use every model, including the new ones, whatever you choose here: {{groups}}."
+        },
+        "tiles": {
+          "openai": "GPT models from api.openai.com.",
+          "azureOpenai": "OpenAI models deployed in your Azure resource.",
+          "anthropic": "Claude models from api.anthropic.com.",
+          "google": "Gemini models from the Google AI API.",
+          "mistral": "Mistral models from api.mistral.ai.",
+          "bedrock": "Foundation models through the Bedrock Converse API.",
+          "openrouter": "One API for models of many vendors.",
+          "openaiCompatible": "A gateway such as T-Systems LLM Hub or LiteLLM.",
+          "selfHosted": "vLLM, LM Studio or Ollama on your own hardware.",
+          "ifinderGateway": "The model gateway of an iFinder installation.",
+          "openaiCompatibleName": "OpenAI-compatible gateway",
+          "selfHostedName": "Self-hosted"
+        },
+        "vendor": {
+          "title": "Where are your models?",
+          "intro": "Pick the service that runs your models. You can connect more providers later.",
+          "keyStored": "Key stored",
+          "otherProvider": "Need a provider that only holds custom credentials, or want to set every field yourself?",
+          "otherProviderLink": "Use the provider form"
+        },
+        "models": {
+          "title": "Pick models",
+          "intro": "Each picked model is added, enabled and linked to the provider: it uses the provider’s endpoint and key, so none is stored on the model.",
+          "selected": "{{selected}} of {{total}} models picked"
+        },
+        "done": {
+          "smokeIntro": "Send one short prompt to {{model}} to check that it answers.",
+          "smokeRunning": "Sending…",
+          "smokeRun": "Send a test prompt",
+          "smokeOk": "The model answered:",
+          "providerFailedTitle": "The provider was not saved",
+          "providerFailedHint": "Nothing else was created. Go back, fix the connection and try again.",
+          "keySavedTitle": "{{provider}} is connected",
+          "title": "{{count}} models connected through {{provider}}",
+          "bedrockHint": "Bedrock has no model list iHub can read. Install ready-made Bedrock model configs from the Marketplace; they use the key stored on the provider.",
+          "linked": "The models use the endpoint and key of the provider.",
+          "default": "{{model}} is the default model.",
+          "groups": "Granted to: {{groups}}.",
+          "groupFailed": "Group {{group}}: {{error}}",
+          "marketplace": "Browse models in the Marketplace",
+          "createApp": "Create an app with this model",
+          "openProvider": "Open the provider",
+          "openModels": "Go to models",
+          "title_one": "{{count}} model connected through {{provider}}"
+        },
+        "steps": {
+          "vendor": "Service",
+          "connection": "Connection",
+          "test": "Test",
+          "models": "Models",
+          "default": "Default",
+          "access": "Access",
+          "done": "Done",
+          "label": "Progress"
+        },
+        "default": {
+          "title": "Choose the default model",
+          "intro": "Apps without a model of their own, and new chats, use the default model.",
+          "noChatModels": "None of the picked models is a chat model, so none can be the default.",
+          "keep": "Keep {{model}}",
+          "keepHint": "The current default model."
+        },
+        "test": {
+          "causes": {
+            "unreachable": "The iHub server could not reach the host. Check the host name and port, and that the server (not your browser) can reach it through your network, firewall or proxy.",
+            "tls": "The endpoint presents a certificate the iHub server does not trust, which is usual for a private CA. Add the host to the SSL whitelist under Security, or install the CA on the server.",
+            "auth": "The endpoint rejected the key. Check that it is the key for this endpoint and that it may list models.",
+            "path": "The host answered, but not with a model list at this path. Check the URL; it usually ends in /v1.",
+            "other": "Check the URL and the key, then test again."
+          },
+          "title": "Test the connection",
+          "intro": "iHub asks the endpoint for its model list from the server, with the key you entered.",
+          "running": "Connecting to {{host}}…",
+          "success": "Connected",
+          "host": "Host",
+          "models": "Models",
+          "modelCount": "{{count}} listed, {{chat}} chat models",
+          "noModels": "The endpoint lists no models. Check that models are deployed, or that the key may see them.",
+          "retry": "Test again",
+          "openSsl": "Open the SSL whitelist",
+          "changeKey": "Change the key",
+          "changeConnection": "Change the URL or key"
+        },
+        "connection": {
+          "urlHintAzure": "The endpoint of your Azure OpenAI resource, for example https://my-resource.openai.azure.com/openai/v1. A deployment URL copied from Azure (…/chat/completions?api-version=…) works too.",
+          "urlHintGateway": "The API base, usually ending in /v1, for example https://llm-server.llmhub.t-systems.net/v2. Its /models listing or a chat completions URL works too.",
+          "urlHintSelfHosted": "The API base as the iHub server reaches it (not your browser), for example {{example}}.",
+          "idExists": "A provider with this ID already exists. Choose another ID, or edit that provider under Providers.",
+          "title": "Connect {{provider}}",
+          "introBedrock": "Enter a Bedrock API key. It is stored encrypted on the AWS Bedrock provider. The region comes from AWS_REGION (default eu-central-1) or from each model.",
+          "intro": "Where iHub reaches the models, and the key it sends. Nothing is saved until the last step.",
+          "serverKind": "Server",
+          "serverKindHint": "vLLM is called with the vLLM adapter; LM Studio and Ollama with the OpenAI-compatible one.",
+          "urlFixedHint": "The vendor's public API. Use the OpenAI-compatible gateway tile for a proxy in front of it.",
+          "keyStoredPlaceholder": "Stored — leave empty to keep it",
+          "keyStoredHint": "A key is already stored on this provider. Leave the field empty to test and keep it, or enter a new one to replace it.",
+          "keyHintSelfHosted": "Leave empty if the server has no authentication. A key entered here is stored encrypted on the provider.",
+          "keyHint": "Stored encrypted on the provider, not on each model.",
+          "envVarHint": "Instead of storing it, you can leave this empty and set the environment variable {{envVar}} on the server.",
+          "getKey": "Where do I get a key?"
+        },
+        "loadError": "Could not load providers and models",
+        "saving": "Saving…",
+        "finish": "Connect and add {{count}} models",
+        "saveKey": "Save the key",
+        "testAction": "Test connection",
+        "next": "Next",
+        "title": "Connect a model provider",
+        "subtitle": "Connect a service, test it, pick its models and choose who can use them — in one go.",
+        "back": "Back",
+        "backToConnection": "Back to the connection",
+        "finish_one": "Connect and add {{count}} model"
+      }
     },
     "models": {
       "sync": {
@@ -1975,7 +2100,8 @@
         "unsupported": "iHub cannot run this model from this provider",
         "gatewayCheckbox": "This endpoint is an iFinder Model Gateway",
         "gatewayUrlHint": "The gateway root, for example https://gateway:9614. iHub reads /v1/gateway/models and calls the models through /v1/gateway/proxy. Enter the gateway project API key below if the gateway requires one.",
-        "models": "Import models"
+        "models": "Import models",
+        "tools": "Tools"
       },
       "areaTitle": "Models",
       "areaSubtitle": "Connect AI providers and choose the models your apps can use",
@@ -2007,7 +2133,8 @@
         "enableHint": "Import the models of a provider, or switch on one below.",
         "defaultHint": "Open a model and tick “Default” so apps without a model of their own have one.",
         "done": "(done)",
-        "todo": "(to do)"
+        "todo": "(to do)",
+        "connectWizardAction": "Connect a model provider"
       },
       "moreActions": "More model actions",
       "disableAllDefault": "The default model setting is cleared. When models are enabled again, the first chat model in the list becomes the default.",

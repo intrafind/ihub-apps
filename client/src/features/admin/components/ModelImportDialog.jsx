@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import Modal from '../../../shared/components/Modal';
 import Icon from '../../../shared/components/Icon';
+import ModelPickList from './ModelPickList';
 import { getAdminApiErrorMessage, makeAdminApiCall } from '../../../api/adminApi';
 import { getLocalizedContent } from '../../../utils/localizeContent';
 import {
@@ -39,7 +40,6 @@ const PRIMARY_BUTTON =
   'inline-flex items-center justify-center rounded-md border border-transparent bg-indigo-600 px-4 py-2 text-sm font-medium text-white shadow-xs hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed';
 const SECONDARY_BUTTON =
   'inline-flex items-center justify-center rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-200 shadow-xs hover:bg-gray-50 dark:hover:bg-gray-600 disabled:opacity-50';
-const BADGE = 'inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium';
 
 const EMPTY_NEW_PROVIDER = {
   name: '',
@@ -51,27 +51,6 @@ const EMPTY_NEW_PROVIDER = {
   // Set to IFINDER_GATEWAY when the endpoint is an iFinder Model Gateway.
   gateway: ''
 };
-
-function typeLabel(t, type) {
-  const labels = {
-    embedding: t('admin.models.import.types.embedding', 'Embedding'),
-    rerank: t('admin.models.import.types.rerank', 'Reranker'),
-    audio: t('admin.models.import.types.audio', 'Audio'),
-    transcription: t('admin.models.import.types.transcription', 'Transcription'),
-    tts: t('admin.models.import.types.tts', 'Text-to-speech'),
-    image: t('admin.models.import.types.image', 'Image'),
-    moderation: t('admin.models.import.types.moderation', 'Moderation'),
-    other: t('admin.models.import.types.other', 'Not a chat model')
-  };
-  return labels[type] || type;
-}
-
-function formatTokens(value) {
-  if (!value) return '—';
-  if (value >= 1000000) return `${Math.round(value / 100000) / 10}M`;
-  if (value >= 1000) return `${Math.round(value / 1000)}k`;
-  return String(value);
-}
 
 /**
  * "Import from URL": list the models an endpoint offers and create the ones the
@@ -707,160 +686,23 @@ function ModelImportDialog({ onClose, onImported, existingModelIds, initialProvi
           {t('admin.models.import.noModels', 'The endpoint lists no models.')}
         </p>
       ) : (
-        <div className="rounded-md border border-gray-200 dark:border-gray-700 overflow-hidden">
-          <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700 text-sm">
-            <thead className="bg-gray-50 dark:bg-gray-900">
-              <tr>
-                <th className="px-3 py-2 w-8">
-                  <input
-                    type="checkbox"
-                    checked={allSelected}
-                    onChange={toggleAll}
-                    aria-label={t('admin.models.import.selectAll', 'Select all chat models')}
-                    className="h-4 w-4 rounded-sm border-gray-300 text-indigo-600"
-                  />
-                </th>
-                <th className="px-3 py-2 text-left font-medium text-gray-500 dark:text-gray-400">
-                  {t('admin.models.import.model', 'Model')}
-                </th>
-                <th className="px-3 py-2 text-left font-medium text-gray-500 dark:text-gray-400 hidden sm:table-cell">
-                  {t('admin.models.import.context', 'Context')}
-                </th>
-                {isAzure && (
-                  <th className="px-3 py-2 text-left font-medium text-gray-500 dark:text-gray-400">
-                    {t('admin.models.import.deploymentName', 'Deployment name')}
-                  </th>
-                )}
-                <th className="px-3 py-2 text-left font-medium text-gray-500 dark:text-gray-400">
-                  {t('admin.models.import.targetId', 'iHub model ID')}
-                </th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
-              {visibleModels.map(model => {
-                const checked = Boolean(selected[model.id]);
-                const problem = checked ? idProblems[model.id] : null;
-                return (
-                  <tr
-                    key={model.id}
-                    className={checked ? 'bg-indigo-50/50 dark:bg-indigo-900/10' : ''}
-                  >
-                    <td className="px-3 py-2 align-top">
-                      <input
-                        type="checkbox"
-                        checked={checked}
-                        disabled={model.unsupported}
-                        onChange={e =>
-                          setSelected(prev => ({ ...prev, [model.id]: e.target.checked }))
-                        }
-                        aria-label={model.name}
-                        className="mt-1 h-4 w-4 rounded-sm border-gray-300 text-indigo-600"
-                      />
-                    </td>
-                    <td className="px-3 py-2 align-top">
-                      <div className="font-medium text-gray-900 dark:text-gray-100">
-                        {model.name}
-                      </div>
-                      <div className="text-xs text-gray-500 dark:text-gray-400 break-all">
-                        {model.id}
-                      </div>
-                      <div className="mt-1 flex flex-wrap gap-1">
-                        {model.type !== 'chat' && (
-                          <span
-                            className={`${BADGE} bg-amber-100 dark:bg-amber-900/50 text-amber-800 dark:text-amber-300`}
-                          >
-                            {typeLabel(t, model.type)}
-                          </span>
-                        )}
-                        {model.unsupported && (
-                          <span
-                            className={`${BADGE} bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300`}
-                          >
-                            {t(
-                              'admin.models.import.unsupported',
-                              'iHub cannot run this model from this provider'
-                            )}
-                          </span>
-                        )}
-                        {model.supportsVision && (
-                          <span
-                            className={`${BADGE} bg-blue-100 dark:bg-blue-900/50 text-blue-800 dark:text-blue-300`}
-                          >
-                            {t('admin.models.import.vision', 'Vision')}
-                          </span>
-                        )}
-                        {model.existingModelId && (
-                          <span
-                            className={`${BADGE} bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300`}
-                          >
-                            {t('admin.models.import.alreadyAdded', 'Already added as {{id}}', {
-                              id: model.existingModelId
-                            })}
-                          </span>
-                        )}
-                        {model.endOfLife && (
-                          <span
-                            className={`${BADGE} bg-red-100 dark:bg-red-900/50 text-red-800 dark:text-red-300`}
-                          >
-                            {t('admin.models.import.endOfLife', 'End of life: {{date}}', {
-                              date: model.endOfLife.slice(0, 10)
-                            })}
-                          </span>
-                        )}
-                      </div>
-                    </td>
-                    <td className="px-3 py-2 align-top text-gray-700 dark:text-gray-300 hidden sm:table-cell">
-                      {formatTokens(model.contextWindow)}
-                    </td>
-                    {isAzure && (
-                      <td className="px-3 py-2 align-top">
-                        <input
-                          type="text"
-                          value={deployments[model.id] ?? model.id}
-                          onChange={e =>
-                            setDeployments(prev => ({ ...prev, [model.id]: e.target.value }))
-                          }
-                          disabled={!checked}
-                          aria-label={t(
-                            'admin.models.import.deploymentNameFor',
-                            'Deployment name for {{name}}',
-                            { name: model.name }
-                          )}
-                          className={`${FIELD} mt-0 disabled:opacity-60 ${
-                            checked && !deploymentOf(model) ? 'border-red-400' : ''
-                          }`}
-                        />
-                      </td>
-                    )}
-                    <td className="px-3 py-2 align-top">
-                      <input
-                        type="text"
-                        value={targetIdOf(model)}
-                        onChange={e =>
-                          setEditedIds(prev => ({ ...prev, [model.id]: e.target.value }))
-                        }
-                        disabled={!checked}
-                        aria-label={t(
-                          'admin.models.import.targetIdFor',
-                          'iHub model ID for {{name}}',
-                          {
-                            name: model.name
-                          }
-                        )}
-                        className={`${FIELD} mt-0 disabled:opacity-60 ${problem ? 'border-red-400' : ''}`}
-                      />
-                      {problem && (
-                        <p className="mt-1 text-xs text-red-600 dark:text-red-400">
-                          {problemText(problem)}
-                        </p>
-                      )}
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
+        <ModelPickList
+          models={visibleModels}
+          selected={selected}
+          onToggle={(modelId, checked) => setSelected(prev => ({ ...prev, [modelId]: checked }))}
+          allSelected={allSelected}
+          onToggleAll={toggleAll}
+          targetIdOf={targetIdOf}
+          onIdChange={(modelId, id) => setEditedIds(prev => ({ ...prev, [modelId]: id }))}
+          idProblems={idProblems}
+          problemText={problemText}
+          isAzure={isAzure}
+          deployments={deployments}
+          deploymentOf={deploymentOf}
+          onDeploymentChange={(modelId, name) =>
+            setDeployments(prev => ({ ...prev, [modelId]: name }))
+          }
+        />
       )}
 
       {importError && <p className="text-sm text-red-600 dark:text-red-400">{importError}</p>}

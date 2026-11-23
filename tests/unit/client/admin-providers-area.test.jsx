@@ -146,10 +146,10 @@ test('Import opens the models page with the provider preselected, where the API 
   expect(screen.getByTestId('state')).toHaveTextContent('"importProviderId":"llmhub"');
 });
 
-test('Add provider opens the create page', async () => {
+test('Add provider opens the connect flow', async () => {
   renderPage();
   fireEvent.click(await screen.findByRole('button', { name: 'Add provider' }));
-  expect(screen.getByTestId('location')).toHaveTextContent('/admin/providers/new');
+  expect(screen.getByTestId('location')).toHaveTextContent('/admin/providers/connect');
 });
 
 test('entries of other categories wait in one collapsed group instead of leading the page', async () => {

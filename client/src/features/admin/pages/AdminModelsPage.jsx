@@ -610,7 +610,7 @@ function AdminModelsPage() {
             <ModelsSetupStrip
               keyStatuses={providerKeyStatuses}
               models={models}
-              onConnect={access.providers ? () => navigate('/admin/providers') : undefined}
+              onConnect={access.providers ? () => navigate('/admin/providers/connect') : undefined}
               onImport={() => setImportDialog({ open: true, providerId: null })}
               onShowEnabled={() => setFilterEnabled('enabled')}
             />
@@ -673,15 +673,26 @@ function AdminModelsPage() {
                 icon: 'cpu-chip',
                 title: t('admin.models.noModels', 'No models found'),
                 description: t('admin.models.noModelsDesc', 'Get started by creating a new model.'),
-                action: (
-                  <button
-                    onClick={() => navigate('/admin/models/new')}
-                    className="inline-flex items-center px-4 py-2 border border-transparent shadow-xs text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-                  >
-                    <Icon name="plus" className="h-4 w-4 mr-2" />
-                    {t('admin.models.addNew', 'Add New Model')}
-                  </button>
-                )
+                action:
+                  // With no model at all the way in is connecting a provider;
+                  // a filter that hides every model keeps "Add New Model".
+                  models.length === 0 && access.providers ? (
+                    <button
+                      onClick={() => navigate('/admin/providers/connect')}
+                      className="inline-flex items-center px-4 py-2 border border-transparent shadow-xs text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                    >
+                      <Icon name="link" className="h-4 w-4 mr-2" />
+                      {t('admin.providers.connect.title', 'Connect a model provider')}
+                    </button>
+                  ) : (
+                    <button
+                      onClick={() => navigate('/admin/models/new')}
+                      className="inline-flex items-center px-4 py-2 border border-transparent shadow-xs text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                    >
+                      <Icon name="plus" className="h-4 w-4 mr-2" />
+                      {t('admin.models.addNew', 'Add New Model')}
+                    </button>
+                  )
               }}
             />
           </div>

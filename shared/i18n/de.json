@@ -2070,7 +2070,132 @@
       },
       "add": "Anbieter hinzufügen",
       "import": "Modelle importieren",
-      "ownTimeouts": "Setzt eigene Timeouts"
+      "ownTimeouts": "Setzt eigene Timeouts",
+      "connect": {
+        "access": {
+          "title": "Wer darf diese Modelle nutzen?",
+          "intro": "Geben Sie die neuen Modelle für Gruppen frei. Sie können das später unter Gruppen ändern.",
+          "groupsUnavailable": "Die Gruppen konnten nicht geladen werden. Die Modelle erhalten den Zugriff, den die Gruppen bereits gewähren; ändern Sie ihn später unter Gruppen.",
+          "everyone": "Alle angemeldeten Benutzer",
+          "everyoneHint": "Freigegeben für die Gruppe „authenticated“, zu der jeder angemeldete Benutzer gehört.",
+          "groups": "Nur die Gruppen, die ich auswähle",
+          "allModels": "(alle Modelle)",
+          "wildcardNote": "Diese Gruppen können jedes Modell nutzen, auch die neuen, unabhängig von Ihrer Auswahl hier: {{groups}}."
+        },
+        "tiles": {
+          "openai": "GPT-Modelle von api.openai.com.",
+          "azureOpenai": "OpenAI-Modelle, die in Ihrer Azure-Ressource bereitgestellt sind.",
+          "anthropic": "Claude-Modelle von api.anthropic.com.",
+          "google": "Gemini-Modelle über die Google-AI-API.",
+          "mistral": "Mistral-Modelle von api.mistral.ai.",
+          "bedrock": "Foundation-Modelle über die Bedrock-Converse-API.",
+          "openrouter": "Eine API für Modelle vieler Hersteller.",
+          "openaiCompatible": "Ein Gateway wie T-Systems LLM Hub oder LiteLLM.",
+          "selfHosted": "vLLM, LM Studio oder Ollama auf Ihrer eigenen Hardware.",
+          "ifinderGateway": "Das Modell-Gateway einer iFinder-Installation.",
+          "openaiCompatibleName": "OpenAI-kompatibles Gateway",
+          "selfHostedName": "Selbst betrieben"
+        },
+        "vendor": {
+          "title": "Wo laufen Ihre Modelle?",
+          "intro": "Wählen Sie den Dienst, der Ihre Modelle betreibt. Weitere Anbieter können Sie später verbinden.",
+          "keyStored": "Schlüssel gespeichert",
+          "otherProvider": "Brauchen Sie einen Anbieter, der nur eigene Zugangsdaten hält, oder möchten Sie jedes Feld selbst setzen?",
+          "otherProviderLink": "Anbieter-Formular verwenden"
+        },
+        "models": {
+          "title": "Modelle auswählen",
+          "intro": "Jedes ausgewählte Modell wird hinzugefügt, aktiviert und mit dem Anbieter verknüpft: Es nutzt Endpunkt und Schlüssel des Anbieters, am Modell wird keiner gespeichert.",
+          "selected": "{{selected}} von {{total}} Modellen ausgewählt"
+        },
+        "done": {
+          "smokeIntro": "Senden Sie einen kurzen Prompt an {{model}}, um zu prüfen, ob es antwortet.",
+          "smokeRunning": "Wird gesendet…",
+          "smokeRun": "Test-Prompt senden",
+          "smokeOk": "Das Modell hat geantwortet:",
+          "providerFailedTitle": "Der Anbieter wurde nicht gespeichert",
+          "providerFailedHint": "Sonst wurde nichts angelegt. Gehen Sie zurück, korrigieren Sie die Verbindung und versuchen Sie es erneut.",
+          "keySavedTitle": "{{provider}} ist verbunden",
+          "title": "{{count}} Modelle über {{provider}} verbunden",
+          "title_one": "{{count}} Modell über {{provider}} verbunden",
+          "bedrockHint": "Bedrock bietet keine Modellliste, die iHub lesen kann. Installieren Sie fertige Bedrock-Modellkonfigurationen aus dem Marketplace; sie nutzen den am Anbieter gespeicherten Schlüssel.",
+          "linked": "Die Modelle nutzen Endpunkt und Schlüssel des Anbieters.",
+          "default": "{{model}} ist das Standardmodell.",
+          "groups": "Freigegeben für: {{groups}}.",
+          "groupFailed": "Gruppe {{group}}: {{error}}",
+          "marketplace": "Modelle im Marketplace ansehen",
+          "createApp": "App mit diesem Modell erstellen",
+          "openProvider": "Anbieter öffnen",
+          "openModels": "Zu den Modellen"
+        },
+        "steps": {
+          "vendor": "Dienst",
+          "connection": "Verbindung",
+          "test": "Test",
+          "models": "Modelle",
+          "default": "Standard",
+          "access": "Zugriff",
+          "done": "Fertig",
+          "label": "Fortschritt"
+        },
+        "default": {
+          "title": "Standardmodell wählen",
+          "intro": "Apps ohne eigenes Modell und neue Chats verwenden das Standardmodell.",
+          "noChatModels": "Keines der ausgewählten Modelle ist ein Chat-Modell, daher kann keines das Standardmodell sein.",
+          "keep": "{{model}} beibehalten",
+          "keepHint": "Das aktuelle Standardmodell."
+        },
+        "test": {
+          "causes": {
+            "unreachable": "Der iHub-Server konnte den Host nicht erreichen. Prüfen Sie Hostname und Port und ob der Server (nicht Ihr Browser) ihn über Netzwerk, Firewall oder Proxy erreicht.",
+            "tls": "Der Endpunkt legt ein Zertifikat vor, dem der iHub-Server nicht vertraut – üblich bei einer privaten CA. Fügen Sie den Host unter Sicherheit der SSL-Whitelist hinzu oder installieren Sie die CA auf dem Server.",
+            "auth": "Der Endpunkt hat den Schlüssel abgelehnt. Prüfen Sie, ob es der Schlüssel für diesen Endpunkt ist und ob er Modelle auflisten darf.",
+            "path": "Der Host hat geantwortet, aber unter diesem Pfad liegt keine Modellliste. Prüfen Sie die URL; sie endet meist auf /v1.",
+            "other": "Prüfen Sie URL und Schlüssel und testen Sie erneut."
+          },
+          "title": "Verbindung testen",
+          "intro": "iHub fragt die Modellliste des Endpunkts vom Server aus ab, mit dem eingegebenen Schlüssel.",
+          "running": "Verbindung zu {{host}} wird hergestellt…",
+          "success": "Verbunden",
+          "host": "Host",
+          "models": "Modelle",
+          "modelCount": "{{count}} gelistet, davon {{chat}} Chat-Modelle",
+          "noModels": "Der Endpunkt listet keine Modelle. Prüfen Sie, ob Modelle bereitgestellt sind und ob der Schlüssel sie sehen darf.",
+          "retry": "Erneut testen",
+          "openSsl": "SSL-Whitelist öffnen",
+          "changeKey": "Schlüssel ändern",
+          "changeConnection": "URL oder Schlüssel ändern"
+        },
+        "connection": {
+          "urlHintAzure": "Der Endpunkt Ihrer Azure-OpenAI-Ressource, zum Beispiel https://my-resource.openai.azure.com/openai/v1. Eine aus Azure kopierte Deployment-URL (…/chat/completions?api-version=…) funktioniert ebenfalls.",
+          "urlHintGateway": "Die API-Basis, meist auf /v1 endend, zum Beispiel https://llm-server.llmhub.t-systems.net/v2. Die /models-Liste oder eine Chat-Completions-URL funktionieren ebenfalls.",
+          "urlHintSelfHosted": "Die API-Basis, wie der iHub-Server (nicht Ihr Browser) sie erreicht, zum Beispiel {{example}}.",
+          "idExists": "Ein Anbieter mit dieser ID existiert bereits. Wählen Sie eine andere ID oder bearbeiten Sie diesen Anbieter unter Anbieter.",
+          "title": "{{provider}} verbinden",
+          "introBedrock": "Geben Sie einen Bedrock-API-Schlüssel ein. Er wird verschlüsselt am Anbieter AWS Bedrock gespeichert. Die Region kommt aus AWS_REGION (Standard eu-central-1) oder aus dem jeweiligen Modell.",
+          "intro": "Wo iHub die Modelle erreicht und welchen Schlüssel es sendet. Gespeichert wird erst im letzten Schritt.",
+          "serverKind": "Server",
+          "serverKindHint": "vLLM wird mit dem vLLM-Adapter angesprochen, LM Studio und Ollama mit dem OpenAI-kompatiblen.",
+          "urlFixedHint": "Die öffentliche API des Herstellers. Für einen vorgeschalteten Proxy verwenden Sie die Kachel „OpenAI-kompatibles Gateway“.",
+          "keyStoredPlaceholder": "Gespeichert – leer lassen, um ihn zu behalten",
+          "keyStoredHint": "An diesem Anbieter ist bereits ein Schlüssel gespeichert. Lassen Sie das Feld leer, um ihn zu testen und zu behalten, oder geben Sie einen neuen ein, um ihn zu ersetzen.",
+          "keyHintSelfHosted": "Leer lassen, wenn der Server keine Authentifizierung hat. Ein hier eingegebener Schlüssel wird verschlüsselt am Anbieter gespeichert.",
+          "keyHint": "Wird verschlüsselt am Anbieter gespeichert, nicht an jedem Modell.",
+          "envVarHint": "Statt ihn zu speichern, können Sie das Feld leer lassen und auf dem Server die Umgebungsvariable {{envVar}} setzen.",
+          "getKey": "Wo bekomme ich einen Schlüssel?"
+        },
+        "loadError": "Anbieter und Modelle konnten nicht geladen werden",
+        "saving": "Wird gespeichert…",
+        "finish": "Verbinden und {{count}} Modelle hinzufügen",
+        "finish_one": "Verbinden und {{count}} Modell hinzufügen",
+        "saveKey": "Schlüssel speichern",
+        "testAction": "Verbindung testen",
+        "next": "Weiter",
+        "title": "Modell-Anbieter verbinden",
+        "subtitle": "Verbinden Sie einen Dienst, testen Sie ihn, wählen Sie seine Modelle und legen Sie fest, wer sie nutzen darf – in einem Durchgang.",
+        "back": "Zurück",
+        "backToConnection": "Zurück zur Verbindung"
+      }
     },
     "models": {
       "sync": {
@@ -2446,7 +2571,8 @@
         "unsupported": "iHub kann dieses Modell bei diesem Anbieter nicht ausführen",
         "gatewayCheckbox": "Dieser Endpunkt ist ein iFinder Model Gateway",
         "gatewayUrlHint": "Die Gateway-Wurzel, zum Beispiel https://gateway:9614. iHub liest /v1/gateway/models und ruft die Modelle über /v1/gateway/proxy auf. Tragen Sie unten den Projekt-API-Schlüssel des Gateways ein, falls das Gateway einen verlangt.",
-        "models": "Modelle importieren"
+        "models": "Modelle importieren",
+        "tools": "Tools"
       },
       "areaTitle": "Modelle",
       "areaSubtitle": "KI-Anbieter verbinden und die Modelle auswählen, die Ihre Apps nutzen können",
@@ -2478,7 +2604,8 @@
         "enableHint": "Importieren Sie die Modelle eines Anbieters oder schalten Sie unten eines ein.",
         "defaultHint": "Öffnen Sie ein Modell und setzen Sie „Standard“, damit Apps ohne eigenes Modell eines haben.",
         "done": "(erledigt)",
-        "todo": "(offen)"
+        "todo": "(offen)",
+        "connectWizardAction": "Modell-Anbieter verbinden"
       },
       "moreActions": "Weitere Modell-Aktionen",
       "disableAllDefault": "Die Einstellung für das Standardmodell wird entfernt. Werden Modelle wieder aktiviert, wird das erste Chat-Modell der Liste zum Standard.",
