@@ -18,9 +18,9 @@
 
 import { jest, describe, it, expect, beforeEach } from '@jest/globals';
 import express from 'express';
-import cookieParser from 'cookie-parser';
 import jwt from 'jsonwebtoken';
 import request from 'supertest';
+import { parseCookies } from './helpers/parseCookies.js';
 
 const SECRET = 'embed-auth-test-secret';
 process.env.JWT_SECRET = SECRET;
@@ -63,10 +63,7 @@ function sessionToken({ expiresInSeconds = 3600 } = {}) {
 function buildApp() {
   const app = express();
   app.use(express.json());
-  // Test harness, not a deployed app: the routes under test refuse a request another site made
-  // themselves (isSameOriginRequest), which the CSRF rule cannot see.
-  // codeql[js/missing-token-validation] -- see above
-  app.use(cookieParser());
+  app.use(parseCookies);
   app.use((req, res, next) => {
     const user = req.get('x-test-user');
     if (user) req.user = { id: user };

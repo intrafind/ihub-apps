@@ -20,8 +20,8 @@
 import { jest, describe, it, expect, beforeEach } from '@jest/globals';
 import jwt from 'jsonwebtoken';
 import express from 'express';
-import cookieParser from 'cookie-parser';
 import supertest from 'supertest';
+import { parseCookies } from './helpers/parseCookies.js';
 
 const SECRET = 'embed-session-cookie-secret';
 process.env.JWT_SECRET = SECRET;
@@ -251,11 +251,7 @@ describe('the popup page of the sign-in in a frame, as the server really serves 
   const challenge = 'A'.repeat(43);
   const page = () => {
     const app = express();
-    // Test harness, not a deployed app: the page changes nothing by itself and its two code
-    // endpoints refuse requests another site made (isSameOriginRequest), which the CSRF rule
-    // cannot see.
-    // codeql[js/missing-token-validation] -- see above
-    app.use(cookieParser());
+    app.use(parseCookies);
     app.use(express.json());
     registerEmbedAuthRoutes(app);
     return supertest(app).get(`/embed-auth/complete?challenge=${challenge}`);
