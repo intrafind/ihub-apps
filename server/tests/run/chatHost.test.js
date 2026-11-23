@@ -86,4 +86,20 @@ describe('ChatHost', () => {
     assert.equal(seen[0].svc, service);
     assert.equal(seen[0].given, params);
   });
+  it('hands the approval seam whether the chat may keep a grant (a personal app of another)', () => {
+    const host = new ChatHost(new ChatService({ runTool: async () => ({}) }));
+    const turn = chatGrants => ({
+      chatId: 'c1',
+      runId: 'r1',
+      streaming: false,
+      persist: null,
+      log: () => ({}),
+      app: { id: 'a1' },
+      model: { id: 'm1' },
+      toolApproval: { grants: ['t1'], resume: null, chatGrants }
+    });
+    assert.equal(host._turnParts(turn(false)).approval.chatGrants, false);
+    assert.equal(host._turnParts(turn(true)).approval.chatGrants, true);
+    assert.deepEqual(host._turnParts(turn(false)).approval.grants, ['t1']);
+  });
 });
