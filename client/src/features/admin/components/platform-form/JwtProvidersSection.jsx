@@ -61,7 +61,10 @@ function JwtProvidersSection({ config, onChange, t }) {
             {t('admin.auth.jwtProviders', 'JWT Providers')}
           </h4>
           <p className="text-xs text-gray-500 dark:text-gray-400">
-            Configure JWT token validation for pure JWT authentication (no headers required)
+            {t(
+              'admin.auth.jwt.help',
+              'Configure JWT token validation for pure JWT authentication (no headers required)'
+            )}
           </p>
         </div>
         <button
@@ -70,14 +73,14 @@ function JwtProvidersSection({ config, onChange, t }) {
           className="inline-flex items-center px-3 py-1 border border-transparent text-sm font-medium rounded-md text-blue-700 bg-blue-100 hover:bg-blue-200"
         >
           <Icon name="plus" size="sm" className="mr-1" />
-          Add Provider
+          {t('admin.auth.jwt.addProvider', 'Add Provider')}
         </button>
       </div>
       {(config.proxyAuth?.jwtProviders || []).map((provider, index) => (
         <div key={index} className="p-4 border border-gray-200 rounded-md mb-4">
           <div className="flex justify-between items-start mb-3">
             <h5 className="font-medium text-gray-900 dark:text-gray-100">
-              JWT Provider {index + 1}
+              {t('admin.auth.jwt.provider', 'JWT Provider')} {index + 1}
             </h5>
             <button
               type="button"
@@ -90,35 +93,35 @@ function JwtProvidersSection({ config, onChange, t }) {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             <input
               type="text"
-              placeholder="Provider name"
+              placeholder={t('admin.auth.jwt.namePlaceholder', 'Provider name')}
               value={provider.name || ''}
               onChange={e => updateJwtProvider(index, 'name', e.target.value)}
               className={INPUT_CLASS}
             />
             <input
               type="text"
-              placeholder="Header name"
+              placeholder={t('admin.auth.jwt.headerPlaceholder', 'Header name')}
               value={provider.header || ''}
               onChange={e => updateJwtProvider(index, 'header', e.target.value)}
               className={INPUT_CLASS}
             />
             <input
               type="text"
-              placeholder="Issuer URL"
+              placeholder={t('admin.auth.jwt.issuerPlaceholder', 'Issuer URL')}
               value={provider.issuer || ''}
               onChange={e => updateJwtProvider(index, 'issuer', e.target.value)}
               className={INPUT_CLASS}
             />
             <input
               type="text"
-              placeholder="Audience"
+              placeholder={t('admin.auth.jwt.audiencePlaceholder', 'Audience')}
               value={provider.audience || ''}
               onChange={e => updateJwtProvider(index, 'audience', e.target.value)}
               className={INPUT_CLASS}
             />
             <input
               type="text"
-              placeholder="JWK URL"
+              placeholder={t('admin.auth.jwt.jwkPlaceholder', 'JWK URL')}
               value={provider.jwkUrl || ''}
               onChange={e => updateJwtProvider(index, 'jwkUrl', e.target.value)}
               className={`${INPUT_CLASS} md:col-span-2`}

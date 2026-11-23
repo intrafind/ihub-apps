@@ -226,6 +226,16 @@ export const USER_CLEANUP_STEPS = [
     }
   },
   {
+    // Owned personal apps go with the user, with their stored content states;
+    // memberships in the apps of others and offers to the user are dropped.
+    name: 'userApps',
+    kind: 'content',
+    run: async userId => {
+      const { cleanUpUserAppsOfUser } = await import('./userApps/userAppUserCleanup.js');
+      return cleanUpUserAppsOfUser(userId);
+    }
+  },
+  {
     name: 'userSkills',
     kind: 'content',
     run: async userId => {

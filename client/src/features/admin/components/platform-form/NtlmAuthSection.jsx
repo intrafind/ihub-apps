@@ -22,15 +22,18 @@ function NtlmAuthSection({ config, onChange, t, availableGroups = [] }) {
   return (
     <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xs border border-gray-200 dark:border-gray-700 p-6">
       <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">
-        NTLM Authentication Settings
+        {t('admin.auth.ntlm.title', 'NTLM Authentication Settings')}
       </h3>
       <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
-        Configure Windows Integrated Authentication (NTLM) for domain users.
+        {t(
+          'admin.auth.ntlm.help',
+          'Configure Windows Integrated Authentication (NTLM) for domain users.'
+        )}
       </p>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div>
           <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-            Domain Name
+            {t('admin.auth.ntlm.domain', 'Domain Name')}
           </label>
           <input
             type="text"
@@ -40,12 +43,12 @@ function NtlmAuthSection({ config, onChange, t, availableGroups = [] }) {
             placeholder="EXAMPLE"
           />
           <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-            Windows domain name (e.g., EXAMPLE, MUC)
+            {t('admin.auth.ntlm.domainHelp', 'Windows domain name (e.g., EXAMPLE, MUC)')}
           </p>
         </div>
         <div>
           <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-            Domain Controller URL
+            {t('admin.auth.ntlm.domainController', 'Domain Controller URL')}
           </label>
           <input
             type="text"
@@ -55,13 +58,15 @@ function NtlmAuthSection({ config, onChange, t, availableGroups = [] }) {
             placeholder="ldaps://dc.example.com:636"
           />
           <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-            LDAP URL of the domain controller that checks the sign-in (e.g.,
-            ldaps://dc.example.com:636, or ldap://dc.example.com:389 for an unencrypted connection)
+            {t(
+              'admin.auth.ntlm.domainControllerHelp',
+              'LDAP URL of the domain controller that checks the sign-in (e.g., ldaps://dc.example.com:636, or ldap://dc.example.com:389 for an unencrypted connection)'
+            )}
           </p>
         </div>
         <div>
           <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-            Session Timeout (minutes)
+            {t('admin.auth.sessionTimeout', 'Session Timeout (minutes)')}
           </label>
           <input
             type="number"
@@ -70,7 +75,9 @@ function NtlmAuthSection({ config, onChange, t, availableGroups = [] }) {
             className={INPUT_CLASS}
             placeholder="480"
           />
-          <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">JWT token expiration time</p>
+          <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+            {t('admin.auth.ntlm.sessionTimeoutHelp', 'JWT token expiration time')}
+          </p>
         </div>
         <div className="md:col-span-2">
           <GroupMultiSelect
@@ -98,11 +105,11 @@ function NtlmAuthSection({ config, onChange, t, availableGroups = [] }) {
               className={`${CHECKBOX_CLASS} mr-2`}
             />
             <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
-              Enable Debug Logging
+              {t('admin.auth.ntlm.debug', 'Enable Debug Logging')}
             </span>
           </label>
           <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-            Log detailed NTLM authentication information
+            {t('admin.auth.ntlm.debugHelp', 'Log detailed NTLM authentication information')}
           </p>
         </div>
         <div className="md:col-span-2">
@@ -119,12 +126,17 @@ function NtlmAuthSection({ config, onChange, t, availableGroups = [] }) {
               className={CHECKBOX_CLASS}
             />
             <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
-              Allow self-signed / internal CA certificates (ldaps://)
+              {t(
+                'admin.auth.ntlm.selfSigned',
+                'Allow self-signed / internal CA certificates (ldaps://)'
+              )}
             </span>
           </label>
           <p className="text-xs text-gray-500 dark:text-gray-400 mt-1 ml-7">
-            Enable when the domain controller uses a certificate from a private or internal CA.
-            Required for most on-premise ldaps:// setups.
+            {t(
+              'admin.auth.ntlm.selfSignedHelp',
+              'Enable when the domain controller uses a certificate from a private or internal CA. Required for most on-premise ldaps:// setups.'
+            )}
           </p>
         </div>
       </div>
@@ -132,14 +144,16 @@ function NtlmAuthSection({ config, onChange, t, availableGroups = [] }) {
       {/* LDAP Group Lookup Provider */}
       <div className="mt-4">
         <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-          LDAP Group Lookup Provider
+          {t('admin.auth.ldapGroupLookup.provider', 'LDAP Group Lookup Provider')}
         </label>
         <select
           value={config.ntlmAuth?.ldapGroupLookupProvider || ''}
           onChange={e => updateNtlmAuth('ldapGroupLookupProvider', e.target.value || undefined)}
           className={INPUT_CLASS}
         >
-          <option value="">None (default groups only)</option>
+          <option value="">
+            {t('admin.auth.ntlm.ldapLookupNone', 'None (default groups only)')}
+          </option>
           {(config.ldapAuth?.providers || []).map(p => (
             <option key={p.name} value={p.name}>
               {p.displayName || p.name}
@@ -147,9 +161,10 @@ function NtlmAuthSection({ config, onChange, t, availableGroups = [] }) {
           ))}
         </select>
         <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-          NTLM sign-in returns no groups. To give NTLM users their directory groups, pick an LDAP
-          provider with admin credentials and group search configured; without one, NTLM users get
-          only the default groups.
+          {t(
+            'admin.auth.ntlm.ldapLookupHelp',
+            'NTLM sign-in returns no groups. To give NTLM users their directory groups, pick an LDAP provider with admin credentials and group search configured; without one, NTLM users get only the default groups.'
+          )}
         </p>
       </div>
     </div>

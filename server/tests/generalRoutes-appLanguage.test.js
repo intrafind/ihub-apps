@@ -19,7 +19,8 @@ import express from 'express';
 jest.unstable_mockModule('../configCache.js', () => ({
   default: {
     getPlatform: () => ({ defaultLanguage: 'de' }),
-    getApps: () => ({ data: [] })
+    getApps: () => ({ data: [] }),
+    getAppForRequest: () => null
   }
 }));
 

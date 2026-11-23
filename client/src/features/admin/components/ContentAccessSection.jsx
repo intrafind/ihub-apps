@@ -50,8 +50,16 @@ const FALLBACK_SUBJECT_PLURAL = {
  * @param {string} props.resourceId - The content's id
  * @param {boolean} [props.isNew=false] - The content has not been saved yet; nothing to grant
  * @param {string} [props.className] - Extra classes for the outer card
+ * @param {(access: object) => void} [props.onSaved] - Called with the new access view after
+ *   a grant or a revoke was saved, so the page around it can show who has access now
  */
-function ContentAccessSection({ resourceType, resourceId, isNew = false, className = '' }) {
+function ContentAccessSection({
+  resourceType,
+  resourceId,
+  isNew = false,
+  className = '',
+  onSaved
+}) {
   const { t } = useTranslation();
   const inputRef = useRef(null);
   const [access, setAccess] = useState(null);
@@ -95,7 +103,9 @@ function ContentAccessSection({ resourceType, resourceId, isNew = false, classNa
     setPending(prev => new Set(prev).add(groupId));
     setSaveError(null);
     try {
-      setAccess(await updateContentAccess(resourceType, resourceId, change));
+      const saved = await updateContentAccess(resourceType, resourceId, change);
+      setAccess(saved);
+      onSaved?.(saved);
     } catch (err) {
       setSaveError(getAdminApiErrorMessage(err));
     } finally {

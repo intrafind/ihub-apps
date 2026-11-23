@@ -17,3 +17,8 @@ fcc8cbb9fc944177758eb3358fb86700cfc4229e:tests/unit/client/secret-reveal-dialog.
 # (tests/security/authz/resources.js) plants in alice's resources, in a commit
 # already pushed. The line itself now uses a stopword value (.gitleaks.toml).
 c437a8d91b353d6f17cf96279d851943ea486c9e:tests/security/authz/resources.js:generic-api-key:44
+
+# A test fixture, not a secret: the marker the unpublished-app access test
+# (app-unpublished-access.test.js) plants in an app's texts, in a commit already
+# pushed. The line itself now uses a stopword value (.gitleaks.toml).
+c8d7622c449445d778c9fd2c62be3ac52a469084:server/tests/app-unpublished-access.test.js:generic-api-key:83

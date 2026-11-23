@@ -8,12 +8,15 @@ import registerAdminOAuthCimdRoutes from './admin/oauthCimdClients.js';
 import registerAdminOAuthConnectionRoutes from './admin/oauthConnections.js';
 import registerAdminCacheRoutes from './admin/cache.js';
 import registerAdminConfigRoutes from './admin/configs.js';
+import registerAdminAppBuilderRoutes from './admin/appBuilder.js';
 import registerAdminAppsRoutes from './admin/apps.js';
 import registerAdminAppUsageGuideRoute from './admin/appUsageGuide.js';
 import registerAdminModelsRoutes from './admin/models.js';
 import registerAdminProvidersRoutes from './admin/providers.js';
 import registerAdminPromptsRoutes from './admin/prompts.js';
 import registerAdminProjectsRoutes from './admin/projects.js';
+import registerAdminUserAppPublishRoutes from './admin/userAppPublish.js';
+import registerAdminUserAppRoutes from './admin/userApps.js';
 import registerAdminGroupRoutes from './admin/groups.js';
 import registerAdminContentAccessRoutes from './admin/contentAccess.js';
 import registerAdminTranslateRoute from './admin/translate.js';
@@ -76,12 +79,18 @@ export default async function registerAdminRoutes(app) {
   registerAdminOAuthConnectionRoutes(app);
   registerAdminCacheRoutes(app);
   registerAdminConfigRoutes(app);
+  // Before the app routes: `_generate` is an action on the same collection.
+  registerAdminAppBuilderRoutes(app);
   registerAdminAppsRoutes(app);
   registerAdminAppUsageGuideRoute(app);
   registerAdminModelsRoutes(app);
   registerAdminProvidersRoutes(app);
   registerAdminPromptsRoutes(app);
   registerAdminProjectsRoutes(app);
+  // Publishing personal apps (`_waiting`, `_promote`, `_release`): before the
+  // routes below, so that its action segments are matched first.
+  registerAdminUserAppPublishRoutes(app);
+  registerAdminUserAppRoutes(app);
   registerAdminGroupRoutes(app);
   registerAdminContentAccessRoutes(app);
   registerAdminTranslateRoute(app);

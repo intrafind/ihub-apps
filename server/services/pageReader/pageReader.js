@@ -17,7 +17,6 @@ import * as pdfjs from 'pdfjs-dist/legacy/build/pdf.mjs';
 import { throttledFetch } from '../../requestThrottler.js';
 import { emitToolProgress } from '../loop/RunStream.js';
 import config from '../../config.js';
-import configCache from '../../configCache.js';
 import {
   DEFAULT_PAGE_CACHE_TTL_MS,
   getCachedPage,
@@ -37,7 +36,8 @@ import logger from '../../utils/logger.js';
 import {
   describeProxyRouting,
   enhanceFetchOptions,
-  isSsrfTrustedHost
+  isSsrfTrustedHost,
+  shouldIgnoreSSLForURL
 } from '../../utils/httpConfig.js';
 import { assertPublicTarget, createPinnedLookup } from '../../utils/ssrfGuard.js';
 import {
@@ -550,9 +550,10 @@ export async function readWebPage({
     throw createError(`Invalid URL: ${error.message}`, 'INVALID_URL');
   }
 
-  // Determine SSL ignore setting: explicit parameter > global config > default false
-  const platformConfig = configCache.getPlatform() || {};
-  const shouldIgnoreSSL = ignoreSSL ?? (platformConfig.ssl?.ignoreInvalidCertificates || false);
+  // An explicit parameter wins. Otherwise stay `null` so `createAgent` decides per
+  // request from `ssl.ignoreInvalidCertificates` AND `ssl.domainWhitelist`: copying
+  // the global flag here would skip certificate checks for every host.
+  const shouldIgnoreSSL = ignoreSSL;
 
   const acceptLanguage = acceptLanguageFor(resolveSearchLanguage(language));
 
@@ -651,7 +652,10 @@ export async function readWebPage({
       }
       throw error;
     }
-    if (/certificate|SSL/i.test(error.message) && !shouldIgnoreSSL) {
+    if (
+      /certificate|SSL/i.test(error.message) &&
+      !(shouldIgnoreSSL ?? shouldIgnoreSSLForURL(validUrl.toString()))
+    ) {
       throw createError(
         `TLS certificate error: ${error.message}. Please contact your administrator to resolve invalid certificates or enable global SSL ignore in platform configuration.`,
         'TLS_ERROR'
