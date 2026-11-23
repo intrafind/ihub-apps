@@ -63,6 +63,9 @@ const AdminProviderEditPage = lazyWithRetry(
 const AdminProviderCreatePage = lazyWithRetry(
   () => import('./features/admin/pages/AdminProviderCreatePage')
 );
+const AdminProviderConnectPage = lazyWithRetry(
+  () => import('./features/admin/pages/AdminProviderConnectPage')
+);
 const AdminPromptsPage = lazyWithRetry(() => import('./features/admin/pages/AdminPromptsPage'));
 const AdminPromptEditPage = lazyWithRetry(
   () => import('./features/admin/pages/AdminPromptEditPage')
@@ -606,6 +609,12 @@ function App() {
               <Route
                 path="providers/new"
                 element={<LazyAdminRoute component={AdminProviderCreatePage} />}
+              />
+            )}
+            {showAdminPage('providers') && (
+              <Route
+                path="providers/connect"
+                element={<LazyAdminRoute component={AdminProviderConnectPage} />}
               />
             )}
             {showAdminPage('providers') && (

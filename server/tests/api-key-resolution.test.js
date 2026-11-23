@@ -170,6 +170,23 @@ describe('allowsMissingApiKey', () => {
     expect(allowsMissingApiKey({ provider: 'anthropic', url: 'http://localhost/v1' })).toBe(false);
     expect(allowsMissingApiKey(null)).toBe(false);
   });
+
+  it('allows models of a custom provider that declares it needs no key', () => {
+    const lmStudio = { id: 'lm-studio', category: 'llm', apiType: 'openai', requiresApiKey: false };
+    expect(
+      allowsMissingApiKey(
+        { provider: 'openai', providerId: 'lm-studio', url: 'http://gpu01:1234/v1' },
+        lmStudio
+      )
+    ).toBe(true);
+    // Only an explicit false counts: a provider that says nothing keeps the requirement.
+    expect(
+      allowsMissingApiKey(
+        { provider: 'openai', providerId: 'gateway', url: 'https://gw/v1' },
+        { id: 'gateway', category: 'llm', apiType: 'openai' }
+      )
+    ).toBe(false);
+  });
 });
 
 describe('resolveModelApiKey', () => {
