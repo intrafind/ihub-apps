@@ -454,15 +454,17 @@ question-then-draft case.
 | The conversation became a third editor | The card has no inputs except suggestion ticks; "Form" is one click away |
 | The sanitiser changed untouched keys of an older hand-written app | Patch only the keys the model changed; a test with a hand-written app |
 
-## 6. Open questions for the owner (each with a recommended default)
+## 6. Owner decisions (2026-11-23)
 
-1. **Apply saves at once for a published or shared app, or only fills the form?** Default: save
-   at once, with the stakes line; the test chat runs saved apps only.
-2. **A second confirmation for an app others use ("Apply for 40 people")?** Default: no in the
-   preview; measure through the audit log first.
-3. **Own turn budget (60/h) or the draft limit (30/h)?** Default: own, 60/h.
-4. **Open the conversation automatically after a create from a description?** Default: yes when
-   `appBuilderChat` is on.
-5. **Ship slice 2 before slice 1?** Default: build the server part once; ship slice 1 behind the
-   preview flag and slice 2 at the same time under `appGenerator`.
-6. **Keep option B on the roadmap?** Default: park it with the triggers in 2.1.
+All six questions were decided with the proposed default:
+
+1. **Apply on a published or shared app** saves at once, with the stakes line; the test chat runs
+   saved apps only.
+2. **No second confirmation** for an app others use while the feature is a preview; the audit log
+   shows how Apply is used first.
+3. **Own turn budget:** `appReviseLimiter`, 60 turns per user per hour.
+4. **The conversation opens by itself** after a create from a description when `appBuilderChat` is
+   on.
+5. **Slices 1 and 2 ship together:** the server part is built once; slice 1 behind the preview flag
+   `appBuilderChat`, slice 2 under `appGenerator`.
+6. **Option B is parked** with the triggers in 2.1.
