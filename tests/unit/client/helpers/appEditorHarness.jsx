@@ -41,9 +41,10 @@ function httpError(status, detail = 'Request failed', code = undefined) {
  *   admin). Without it the request is refused with 403, as for a content admin,
  *   and the editor falls back to the models the author may use (`fetchModels`).
  * @param {boolean} [options.etags=false] - Answer the app's revision as `ETag` and honour
- *   `If-Match` on PUT (412 `PRECONDITION_FAILED` on a mismatch, nothing written), as
- *   `PUT /api/admin/apps/{id}` does since the chat builder plan. `state.revision` counts
- *   the writes; `bumpRevision()` stands for a save from somewhere else.
+ *   `If-Match` on PUT and `_toggle` (412 `PRECONDITION_FAILED` on a mismatch, nothing
+ *   written), as `PUT /api/admin/apps/{id}` and `POST /api/admin/apps/{id}/_toggle` do.
+ *   `state.revision` counts the writes, toggles included; `bumpRevision()` stands for a
+ *   save from somewhere else.
  * @returns {{request: Function, calls: object[], writes: () => object[], state: object,
  *   failures: object, revise: object[], bumpRevision: () => void}} `revise` holds the
  *   answers of `POST /admin/apps/_revise`, taken in order (an Error is thrown).
@@ -91,8 +92,14 @@ function createAppServer({ app, access, adminModels, etags = false }) {
       return { data: typeof answer === 'function' ? answer(data) : answer, headers: {} };
     }
     if (url === `${appUrl}/_toggle` && method === 'POST') {
+      // The toggle rewrites the app file: its revision changes like on a PUT, and the
+      // answer for one app carries the new one.
+      if (etags && ifMatch && ifMatch !== `"${state.revision}"`) {
+        throw httpError(412, 'The app was changed since it was read.', 'PRECONDITION_FAILED');
+      }
       state.app = { ...state.app, enabled: data.enabled };
-      return { data: { enabled: data.enabled, ids: [app.id] }, headers: {} };
+      state.revision += 1;
+      return { data: { enabled: data.enabled, ids: [app.id] }, headers: etag() };
     }
     if (url === '/admin/models' && method === 'GET') {
       if (!adminModels) throw httpError(403, 'Admin access required', 'FORBIDDEN');
@@ -194,6 +201,12 @@ function MockDualModeEditor({
         onChange={event =>
           onChange({ ...value, name: { ...value.name, [nameLanguage]: event.target.value } })
         }
+      />
+      {/* A setting outside the content keys a conversation changes. */}
+      <input
+        aria-label="Preferred model"
+        value={value?.preferredModel ?? ''}
+        onChange={event => onChange({ ...value, preferredModel: event.target.value })}
       />
       {groups && mode === 'form' && (
         <MockEditorGroup id="instructions" groups={groups}>

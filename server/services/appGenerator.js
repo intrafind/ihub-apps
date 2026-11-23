@@ -54,6 +54,7 @@ import { USER_APP_ICON_PATTERN, USER_APP_LIMITS } from '../../shared/userAppCont
 import { isFeatureEnabled } from '../featureRegistry.js';
 import { isWebSearchAvailableTo } from './tools/webSearchResolver.js';
 import { stripHiddenCharacters } from '../../shared/visibleText.js';
+import { revisionBaseLanguage } from '../../shared/appRevision.js';
 
 export { appGeneratorSettings, integrationsFromAnswer } from '../../shared/appGenerator.js';
 
@@ -141,11 +142,7 @@ function isPlainObject(value) {
  * @returns {string}
  */
 export function baseLanguage(tag) {
-  const base = String(tag ?? '')
-    .split(/[-_]/)[0]
-    .trim()
-    .toLowerCase();
-  return /^[a-z]{2}$/.test(base) ? base : 'en';
+  return revisionBaseLanguage(tag);
 }
 
 // ---------------------------------------------------------------------------

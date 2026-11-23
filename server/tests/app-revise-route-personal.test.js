@@ -20,9 +20,9 @@ import assert from 'node:assert/strict';
 
 import installedIntegrationService from '../services/integrations/InstalledIntegrationService.js';
 import { resetAppReviseLimiter } from '../middleware/rateLimiting.js';
-import { queryAuditLog } from '../services/AuditLogService.js';
+import { flushAuditLog, queryAuditLog } from '../services/AuditLogService.js';
 import { FEATURES, setConfig } from './helpers/userAppsHarness.js';
-import { startUserAppRoutesApi } from './helpers/userAppRoutesApi.js';
+import { USERS, startUserAppRoutesApi } from './helpers/userAppRoutesApi.js';
 
 /** Every call of the stubbed model, and what it answers. */
 const llm = { calls: [], answer: null };
@@ -205,6 +205,79 @@ describe('a turn on a personal app', () => {
     });
     assert.equal(JSON.stringify(entry).includes('AUDIT-AUTHOR-mark'), false);
     assert.equal(JSON.stringify(entry).includes('job ads'), false);
+  });
+});
+
+describe('the audit entry of a refused turn', () => {
+  // Unique per run: the audit log of the test contents outlives a run.
+  const MARK = `REFUSED-DRAFT-${Date.now().toString(36)}${Math.random().toString(36).slice(2)}`;
+
+  /** The personal routes behind the audit safety net, as the server mounts them. */
+  async function auditedServer() {
+    const { default: express } = await import('express');
+    const { default: request } = await import('supertest');
+    const { default: auditLogger } = await import('../middleware/auditLogger.js');
+    const { default: registerUserAppRoutes } = await import('../routes/userAppRoutes.js');
+    const { UserAppService } = await import('../services/userApps/UserAppService.js');
+    const { default: errorHandler } = await import('../middleware/errorHandler.js');
+    const server = express();
+    server.use(express.json());
+    server.use((req, _res, next) => {
+      req.user = api.user(req.headers['x-test-principal']);
+      next();
+    });
+    server.use(auditLogger());
+    registerUserAppRoutes(server, {
+      service: new UserAppService({ users: () => ({ ...USERS }) }),
+      llmClient: { complete: async () => ({ content: '{}', finishReason: 'stop', usage: null }) }
+    });
+    server.use(errorHandler);
+    return body =>
+      request(server).post('/api/apps/_revise').set('x-test-principal', 'anna').send(body);
+  }
+
+  const entriesWithMark = async () => {
+    await flushAuditLog();
+    const { entries } = await queryAuditLog({ limit: 1000 });
+    return entries.filter(entry => JSON.stringify(entry).includes(MARK));
+  };
+
+  it('writes no text of the body at the verbosity `request`, whatever refused it', async () => {
+    const draft = { ...DRAFT, description: { en: `Drafts ${MARK}` } };
+    const failures = [
+      // The validation of the body.
+      [{ draft }, 400, 'VALIDATION_FAILED'],
+      // A content key over its limit.
+      [
+        BODY({ draft: { ...draft, name: { en: `${MARK} ${'x'.repeat(200)}` } } }),
+        400,
+        'APP_REVISE_TOO_LONG'
+      ]
+    ];
+    setConfig({ platform: { audit: { verbosity: 'request' } } });
+    const send = await auditedServer();
+    for (const [body, status, code] of failures) {
+      const res = await send(body);
+      assert.deepEqual([res.status, res.body.code], [status, code], res.text);
+    }
+    // A gate before the body is read: the feature is off.
+    setConfig({
+      features: { ...FEATURES, appGenerator: false },
+      platform: { audit: { verbosity: 'request' } }
+    });
+    const off = await send(BODY({ draft }));
+    assert.deepEqual([off.status, off.body.code], [403, 'FEATURE_DISABLED']);
+    await new Promise(resolve => setImmediate(resolve));
+
+    assert.deepEqual(await entriesWithMark(), []);
+    const { entries } = await queryAuditLog({ resource: 'userApp', limit: 1000 });
+    const codes = entries
+      .filter(entry => entry.result === 'failure' && entry.details?.purpose === 'app-revise')
+      .map(entry => entry.details.code);
+    for (const code of ['VALIDATION_FAILED', 'APP_REVISE_TOO_LONG', 'FEATURE_DISABLED']) {
+      assert.ok(codes.includes(code), `${code} in ${codes.join(',')}`);
+    }
+    assert.equal(llm.calls.length, 0);
   });
 });
 

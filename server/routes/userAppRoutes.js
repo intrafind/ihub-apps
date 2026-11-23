@@ -589,7 +589,7 @@ export default function registerUserAppRoutes(app, { llmClient, service: injecte
    *             schema:
    *               $ref: '#/components/schemas/AppRevisionTurn'
    *       400:
-   *         description: The body is invalid (`VALIDATION_FAILED`), the instructions are too long (`APP_REVISE_TOO_LONG`), or the model refused the request
+   *         description: The body is invalid (`VALIDATION_FAILED`), a content key of the draft is over the personal-app limit (`APP_REVISE_TOO_LONG` with `details.field` and `details.max`), or the model refused the request
    *       401:
    *         description: Not signed in (`AUTH_REQUIRED`)
    *       403:
@@ -629,10 +629,13 @@ export default function registerUserAppRoutes(app, { llmClient, service: injecte
       auditRevision(req, 'success');
       res.json(turn);
     },
-    // The failure entry: without it the audit safety net would record the request, and at
-    // the `request` verbosity that includes the body, which holds the draft and the conversation.
+    // The failure entry, for every failure of the chain: the gates, the feature switch, the
+    // validation of the body and the limiter included. Without it the audit safety net would
+    // record the request, and at the `request` verbosity that includes the body, which holds
+    // the draft and the conversation. An early failure has no `req.appRevision` yet; its entry
+    // then holds no lengths.
     (error, req, _res, next) => {
-      if (req.appRevision && req.user?.id && req.user.id !== 'anonymous') {
+      if (req.user?.id && req.user.id !== 'anonymous') {
         auditRevision(req, 'failure', { code: codeOf(error) });
       }
       next(error);

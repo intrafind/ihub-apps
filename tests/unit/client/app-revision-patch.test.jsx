@@ -27,6 +27,7 @@ import {
   sameValue,
   stillApplied,
   suggestionChanges,
+  unsavedOutsideContent,
   valuesOf,
   warningKey,
   wireConversation,
@@ -190,6 +191,34 @@ describe('what a turn sends and when a change still applies', () => {
     spy.mockRestore();
     window.sessionStorage.clear();
   });
+
+  test('unsaved changes outside the content keys are told apart from content edits', () => {
+    const saved = { name: { en: 'A' }, preferredModel: 'x', capabilities: { upload: false } };
+    expect(unsavedOutsideContent({ ...saved, name: { en: 'B' } }, saved, 'admin')).toBe(false);
+    expect(unsavedOutsideContent({ ...saved, preferredModel: 'y' }, saved, 'admin')).toBe(true);
+    expect(
+      unsavedOutsideContent({ ...saved, capabilities: { upload: true } }, saved, 'personal')
+    ).toBe(true);
+    expect(unsavedOutsideContent(saved, null, 'admin')).toBe(false);
+  });
+
+  test('a save that was running when the page went away is settled on read', () => {
+    writeConversation('k', {
+      entries: [
+        { id: 1, role: 'builder', kind: 'change', text: 'A', status: 'applying' },
+        { id: 2, role: 'builder', kind: 'change', text: 'B', status: 'undoing' },
+        { id: 3, role: 'builder', kind: 'change', text: 'C', status: 'applied' }
+      ],
+      turns: 3,
+      nextId: 4
+    });
+    expect(readConversation('k').entries.map(entry => entry.status)).toEqual([
+      'proposed',
+      'applied',
+      'applied'
+    ]);
+    window.sessionStorage.clear();
+  });
 });
 
 describe('answers and suggestions', () => {
@@ -306,8 +335,17 @@ describe('warnings', () => {
 describe('error sentences and the stakes line', () => {
   test('errors map by code, the turn limit by limiter, others say the server detail', () => {
     const problem = data => ({ response: { status: 400, data } });
+    // Too long: the instructions have their own sentence, every other content key one for all.
+    expect(
+      reviseErrorMessage(problem({ code: 'APP_REVISE_TOO_LONG', details: { field: 'system' } }))
+    ).toEqual({ key: 'admin.apps.conversation.error.tooLong' });
+    expect(
+      reviseErrorMessage(
+        problem({ code: 'APP_REVISE_TOO_LONG', details: { field: 'starterPrompts' } })
+      )
+    ).toEqual({ key: 'admin.apps.conversation.error.contentTooLong' });
     expect(reviseErrorMessage(problem({ code: 'APP_REVISE_TOO_LONG' }))).toEqual({
-      key: 'admin.apps.conversation.error.tooLong'
+      key: 'admin.apps.conversation.error.contentTooLong'
     });
     expect(
       reviseErrorMessage(problem({ code: 'RATE_LIMITED', details: { limiter: 'appRevise' } }))

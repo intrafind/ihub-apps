@@ -113,8 +113,9 @@ function parseConversationEntry(entry, index) {
  * cannot send messages, a model, a token limit or a schema. Of `draft`, the
  * engine reads only the content keys of the target.
  *
- * Instructions longer than a turn can revise are refused here, before the
- * revise limit counts the request.
+ * Content longer than a turn can revise (`REVISE_CONTENT_LIMITS` of the
+ * target: the instructions, and every other content key the model would see)
+ * is refused here, before the revise limit counts the request.
  *
  * @param {unknown} body
  * @param {Object} [options]
@@ -185,7 +186,7 @@ export function parseRevisionRequest(body, { target = 'admin' } = {}) {
       'language must be a language code such as "en" or "de-DE"'
     );
   }
-  assertRevisable(draft, language);
+  assertRevisable(draft, language, target);
 
   return { draft, conversation, fields, allowQuestions: input.allowQuestions !== false, language };
 }
@@ -671,7 +672,7 @@ export default function registerAdminAppBuilderRoutes(app, { llmClient } = {}) {
    *               warnings: [{ code: OTHER_LANGUAGES_UNCHANGED, field: system }]
    *               model: { id: "gemini-flash", name: "Gemini Flash" }
    *       400:
-   *         description: The body is invalid (`VALIDATION_FAILED`), the instructions are longer than 8000 characters (`APP_REVISE_TOO_LONG` with `details.max`), or the model refused the request (`INVALID_REQUEST`, `CONTEXT_WINDOW_EXCEEDED`)
+   *         description: The body is invalid (`VALIDATION_FAILED`), a content key of the draft is over its limit, e.g. instructions longer than 8000 characters (`APP_REVISE_TOO_LONG` with `details.field` naming the key and `details.max`), or the model refused the request (`INVALID_REQUEST`, `CONTEXT_WINDOW_EXCEEDED`)
    *       401:
    *         description: Not signed in (`AUTH_REQUIRED`)
    *       403:

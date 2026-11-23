@@ -46,6 +46,7 @@ import { buildRevisionMessages } from './appGeneratorBrief.js';
 import { newAppDefaults } from '../../shared/appDefaults.js';
 import {
   REVISE_CHOICES_MAX,
+  REVISE_CONTENT_LIMITS,
   REVISE_CHOICE_MAX,
   REVISE_LOCALIZED_KEYS,
   REVISE_QUESTION_CAP,
@@ -53,7 +54,8 @@ import {
   REVISE_TEXT_MAX,
   REVISE_WARNINGS,
   appRevisionKeys,
-  applyRevisionPatch
+  applyRevisionPatch,
+  revisionLanguageKey
 } from '../../shared/appRevision.js';
 import { stripHiddenCharacters } from '../../shared/visibleText.js';
 
@@ -127,23 +129,134 @@ export function textIn(value, language) {
   return text || '';
 }
 
+/** The localized text keys a revision reads, with the limit each one has in `REVISE_CONTENT_LIMITS`. */
+const LIMITED_TEXT_KEYS = ['name', 'description', 'system', 'prompt', 'messagePlaceholder'];
+
+/** The keys a revision reads as one short string. */
+const SHORT_VALUE_KEYS = ['category', 'color', 'icon'];
+
+/** `{ field, max, length }` when `length` is over `max`, else `null`. */
+function over(field, length, max) {
+  return length > max ? { field, max, length } : null;
+}
+
 /**
- * Refuse a revision whose instructions are longer than a turn can revise:
- * the model would have to write them out in full, and a cut-off answer would
- * lose their end.
+ * The length of a value the model gets as it is (a field's `name` and `type`,
+ * an option's `value`). Anything but a string, number or boolean is never
+ * passed on as it is, so it counts as too long.
+ */
+function rawLength(value) {
+  if (value === undefined || value === null) return 0;
+  if (['string', 'number', 'boolean'].includes(typeof value)) return String(value).length;
+  return Infinity;
+}
+
+/** The plain-object entries of a list, or none. */
+function entriesOf(list) {
+  return Array.isArray(list) ? list.filter(isPlainObject) : [];
+}
+
+/** The texts and short values of a draft over their limit; see {@link overLimit}. */
+function textsOverLimit(draft, language, limits) {
+  for (const key of LIMITED_TEXT_KEYS) {
+    const found = over(key, textIn(draft[key], language).length, limits[key]);
+    if (found) return found;
+  }
+  for (const key of SHORT_VALUE_KEYS) {
+    const value = draft[key];
+    const found = typeof value === 'string' ? over(key, value.length, limits.shortValue) : null;
+    if (found) return found;
+  }
+  return null;
+}
+
+/** The input fields of a draft over their limits; see {@link overLimit}. */
+function variablesOverLimit(draft, language, limits) {
+  if (!Array.isArray(draft.variables)) return null;
+  const field = 'variables';
+  const textLength = value => textIn(value, language).length;
+  const variables = entriesOf(draft.variables);
+  const checks = [over(field, variables.length, limits.variables)];
+  for (const variable of variables) {
+    const options = entriesOf(variable.predefinedValues);
+    checks.push(
+      over(field, rawLength(variable.name), limits.variableName),
+      over(field, rawLength(variable.type), limits.shortValue),
+      over(field, textLength(variable.label), limits.variableLabel),
+      over(field, textLength(variable.defaultValue), limits.variableDefault),
+      over(field, options.length, limits.options),
+      ...options.flatMap(option => [
+        over(field, rawLength(option.value), limits.optionValue),
+        over(field, textLength(option.label), limits.optionLabel)
+      ])
+    );
+  }
+  return checks.find(Boolean) || null;
+}
+
+/** The conversation starters of a draft over their limits; see {@link overLimit}. */
+function startersOverLimit(draft, language, limits) {
+  if (!Array.isArray(draft.starterPrompts)) return null;
+  const field = 'starterPrompts';
+  const starters = entriesOf(draft.starterPrompts);
+  const checks = [
+    over(field, starters.length, limits.starterPrompts),
+    ...starters.flatMap(starter => [
+      over(field, textIn(starter.title, language).length, limits.starterTitle),
+      over(field, textIn(starter.message, language).length, limits.starterMessage)
+    ])
+  ];
+  return checks.find(Boolean) || null;
+}
+
+/**
+ * The first content key of a draft that is over its limit, as the model would
+ * see it: the text in `language`, the number of entries of a list, the length
+ * of a short value. `null` when everything fits.
+ *
+ * @param {object} draft
+ * @param {string} language
+ * @param {'admin'|'personal'} target
+ * @returns {{ field: string, max: number, length: number }|null}
+ */
+function overLimit(draft, language, target) {
+  const limits = REVISE_CONTENT_LIMITS[target] || REVISE_CONTENT_LIMITS.admin;
+  return (
+    textsOverLimit(draft, language, limits) ||
+    variablesOverLimit(draft, language, limits) ||
+    startersOverLimit(draft, language, limits)
+  );
+}
+
+/**
+ * Refuse a revision whose content is more than a turn can revise
+ * (`REVISE_CONTENT_LIMITS` of the target). The instructions: the model would
+ * have to write them out in full, and a cut-off answer would lose their end.
+ * Every other key: the content of one model call stays bounded. Only the
+ * content keys of the target are read, each as the model would get it (the
+ * text in `language`).
+ *
+ * Called by the routes before the revise limit counts the request, and again
+ * by {@link reviseApp}.
  *
  * @param {object} draft - The `draft` of the request.
  * @param {string} language - The language of the revision.
- * @throws {ServiceError} `APP_REVISE_TOO_LONG` (400) with `details: { field: 'system', max }`
+ * @param {'admin'|'personal'} [target='admin']
+ * @throws {ServiceError} `APP_REVISE_TOO_LONG` (400) with `details: { field, max }`;
+ *   `field` is the content key (`system`, `variables`, …)
  */
-export function assertRevisable(draft, language) {
-  const system = textIn(isPlainObject(draft) ? draft.system : undefined, language);
-  if (system.length <= REVISE_SYSTEM_MAX) return;
-  throw new ServiceError(
-    'APP_REVISE_TOO_LONG',
-    `The instructions have ${system.length} characters; a conversation can change at most ${REVISE_SYSTEM_MAX}`,
-    { details: { field: 'system', max: REVISE_SYSTEM_MAX } }
-  );
+export function assertRevisable(draft, language, target = 'admin') {
+  if (!isPlainObject(draft)) return;
+  const keys = appRevisionKeys(target);
+  const content = Object.fromEntries(Object.entries(draft).filter(([key]) => keys.includes(key)));
+  const found = overLimit(content, language, target);
+  if (!found) return;
+  const { field, max } = found;
+  const message =
+    field === 'system'
+      ? `The instructions have ${found.length} characters; a conversation can change at most ${REVISE_SYSTEM_MAX}`
+      : `"${field}" is longer than a conversation can change (at most ${max})`;
+  throw new ServiceError('APP_REVISE_TOO_LONG', message, { details: { field, max } });
 }
 
 /**
@@ -163,6 +276,48 @@ export function questionsSinceLastChange(conversation) {
   return count;
 }
 
+/** An input field as the model sees it: its texts in `language`. */
+function variableForModel(variable, language) {
+  const defaultValue = textIn(variable.defaultValue, language);
+  const options = Array.isArray(variable.predefinedValues) ? variable.predefinedValues : [];
+  return {
+    name: variable.name,
+    label: textIn(variable.label, language) || variable.name,
+    type: variable.type,
+    ...(variable.required === true ? { required: true } : {}),
+    ...(defaultValue ? { defaultValue } : {}),
+    ...(options.length > 0
+      ? {
+          predefinedValues: options.filter(isPlainObject).map(option => ({
+            value: option.value,
+            label: textIn(option.label, language) || option.value
+          }))
+        }
+      : {})
+  };
+}
+
+/** A conversation starter as the model sees it: its texts in `language`. */
+function starterForModel(starter, language) {
+  return { title: textIn(starter.title, language), message: textIn(starter.message, language) };
+}
+
+/** One key of the content the model sees, or `undefined` to leave it out. */
+function valueForModel(key, value, language) {
+  if (REVISE_LOCALIZED_KEYS.includes(key)) return textIn(value, language) || undefined;
+  if (key === 'variables') {
+    return Array.isArray(value)
+      ? value.filter(isPlainObject).map(variable => variableForModel(variable, language))
+      : undefined;
+  }
+  if (key === 'starterPrompts') {
+    return Array.isArray(value)
+      ? value.filter(isPlainObject).map(starter => starterForModel(starter, language))
+      : undefined;
+  }
+  return typeof value === 'string' && value ? value : undefined;
+}
+
 /**
  * Step 2: the content the model sees. Only the target's keys, each text in
  * `language` (hidden characters removed), input fields and conversation
@@ -179,52 +334,32 @@ function contentForModel(source, keys, language) {
   for (const key of keys) {
     const value = source[key];
     if (value === undefined || value === null) continue;
-    if (REVISE_LOCALIZED_KEYS.includes(key)) {
-      const text = textIn(value, language);
-      if (text) content[key] = text;
-    } else if (key === 'variables') {
-      if (!Array.isArray(value)) continue;
-      content.variables = value.filter(isPlainObject).map(variable => ({
-        name: variable.name,
-        label: textIn(variable.label, language) || variable.name,
-        type: variable.type,
-        ...(variable.required === true ? { required: true } : {}),
-        ...(textIn(variable.defaultValue, language)
-          ? { defaultValue: textIn(variable.defaultValue, language) }
-          : {}),
-        ...(Array.isArray(variable.predefinedValues) && variable.predefinedValues.length > 0
-          ? {
-              predefinedValues: variable.predefinedValues.filter(isPlainObject).map(option => ({
-                value: option.value,
-                label: textIn(option.label, language) || option.value
-              }))
-            }
-          : {})
-      }));
-    } else if (key === 'starterPrompts') {
-      if (!Array.isArray(value)) continue;
-      content.starterPrompts = value.filter(isPlainObject).map(starter => ({
-        title: textIn(starter.title, language),
-        message: textIn(starter.message, language)
-      }));
-    } else if (typeof value === 'string' && value) {
-      content[key] = value;
-    }
+    const forModel = valueForModel(key, value, language);
+    if (forModel !== undefined) content[key] = forModel;
   }
   return content;
 }
 
-/** The languages the app has text in, read from its name, description and instructions. */
-function languagesOf(source) {
-  const languages = new Set();
+/**
+ * Whether the app has text in a language this revision does not write: a key
+ * of its name, description or instructions with text other than the one the
+ * revision reads and writes there ({@link revisionLanguageKey}). `de-DE` text
+ * revised in `de-DE` is the revision's own language, not another one.
+ *
+ * @param {object} source
+ * @param {string} language - The language of the revision.
+ * @returns {boolean}
+ */
+function hasOtherLanguages(source, language) {
   for (const key of ['name', 'description', 'system']) {
     const value = source[key];
     if (!isPlainObject(value)) continue;
-    for (const [language, text] of Object.entries(value)) {
-      if (typeof text === 'string' && text.trim()) languages.add(language);
+    const own = revisionLanguageKey(value, language);
+    for (const [other, text] of Object.entries(value)) {
+      if (other !== own && typeof text === 'string' && text.trim()) return true;
     }
   }
-  return languages;
+  return false;
 }
 
 /** A plain sentence for the author: hidden characters removed, white space collapsed, cut. */
@@ -282,23 +417,38 @@ function variableNamed(variables, name) {
 }
 
 /**
+ * A localized value with the revised text of `lang` (the sanitiser's key)
+ * written under the key the revision reads ({@link revisionLanguageKey}): the
+ * value's other languages stay.
+ *
+ * @param {unknown} before - The value as the draft holds it.
+ * @param {string} text - The revised text.
+ * @param {string} language - The language of the revision.
+ * @returns {object}
+ */
+function withText(before, text, language) {
+  return { ...localizedObject(before), [revisionLanguageKey(before, language)]: text };
+}
+
+/**
  * Step 8 for `variables`: the sanitised fields (texts in `lang` only) with the
  * other languages of a field whose `name` stayed: its label, default and the
- * labels of options whose `value` stayed.
+ * labels of options whose `value` stayed. A revised text goes under the key it
+ * was read from (`language`).
  */
-function variablesWithLanguages(sanitized, currentVariables, lang) {
+function variablesWithLanguages(sanitized, currentVariables, lang, language) {
   return sanitized.map(variable => {
     const before = variableNamed(currentVariables, variable.name);
     const result = {
       name: variable.name,
-      label: { ...localizedObject(before?.label), [lang]: variable.label[lang] },
+      label: withText(before?.label, variable.label[lang], language),
       type: variable.type,
       required: variable.required
     };
     const otherDefaults = localizedObject(before?.defaultValue);
-    delete otherDefaults[lang];
+    delete otherDefaults[revisionLanguageKey(before?.defaultValue, language)];
     if (variable.defaultValue) {
-      result.defaultValue = { ...otherDefaults, [lang]: variable.defaultValue[lang] };
+      result.defaultValue = withText(before?.defaultValue, variable.defaultValue[lang], language);
     } else if (Object.keys(otherDefaults).length > 0 && before?.type === variable.type) {
       result.defaultValue = otherDefaults;
     }
@@ -310,7 +460,7 @@ function variablesWithLanguages(sanitized, currentVariables, lang) {
         );
         return {
           value: option.value,
-          label: { ...localizedObject(known?.label), [lang]: option.label[lang] }
+          label: withText(known?.label, option.label[lang], language)
         };
       });
     }
@@ -323,39 +473,55 @@ function variablesWithLanguages(sanitized, currentVariables, lang) {
  * of the starter they replace: the one whose title or message in `lang` is the
  * same, else, when the number of starters stayed, the one at the same place.
  */
-function startersWithLanguages(sanitized, currentStarters, lang) {
+function startersWithLanguages(sanitized, currentStarters, lang, language) {
   const before = (Array.isArray(currentStarters) ? currentStarters : []).filter(isPlainObject);
   return sanitized.map((starter, index) => {
     const match =
       before.find(
         candidate =>
-          textIn(candidate.title, lang) === starter.title[lang] ||
-          textIn(candidate.message, lang) === starter.message[lang]
+          textIn(candidate.title, language) === starter.title[lang] ||
+          textIn(candidate.message, language) === starter.message[lang]
       ) || (before.length === sanitized.length ? before[index] : undefined);
     return {
-      title: { ...localizedObject(match?.title), [lang]: starter.title[lang] },
-      message: { ...localizedObject(match?.message), [lang]: starter.message[lang] }
+      title: withText(match?.title, starter.title[lang], language),
+      message: withText(match?.message, starter.message[lang], language)
     };
   });
 }
 
 /**
  * Step 8: the whole new value of a changed key. A localized text keeps its
- * other languages; an empty optional text removes the language, and the key
- * (`null`) when no language is left.
+ * other languages, and the new text goes under the key it was read from
+ * ({@link revisionLanguageKey}: `de-DE` for an app kept under `de-DE`); an
+ * empty optional text removes that key, and the whole key (`null`) when no
+ * language is left.
+ *
+ * @param {string} key
+ * @param {object} sanitizedApp - The sanitiser's app; its texts are under `lang`.
+ * @param {object} source - The draft's content keys.
+ * @param {string} lang - The base language, the sanitiser's key.
+ * @param {string} language - The language of the revision as requested.
+ * @returns {unknown}
  */
-function patchValue(key, sanitizedApp, source, lang) {
+function patchValue(key, sanitizedApp, source, lang, language) {
   if (REVISE_LOCALIZED_KEYS.includes(key)) {
     const value = localizedObject(source[key]);
+    const own = revisionLanguageKey(source[key], language);
     const text = sanitizedApp[key]?.[lang];
-    if (text) value[lang] = text;
-    else delete value[lang];
+    if (text) value[own] = text;
+    else delete value[own];
     return Object.keys(value).length > 0 ? value : null;
   }
-  if (key === 'variables')
-    return variablesWithLanguages(sanitizedApp.variables, source.variables, lang);
+  if (key === 'variables') {
+    return variablesWithLanguages(sanitizedApp.variables, source.variables, lang, language);
+  }
   if (key === 'starterPrompts') {
-    return startersWithLanguages(sanitizedApp.starterPrompts, source.starterPrompts, lang);
+    return startersWithLanguages(
+      sanitizedApp.starterPrompts,
+      source.starterPrompts,
+      lang,
+      language
+    );
   }
   return sanitizedApp[key] ?? null;
 }
@@ -399,24 +565,67 @@ function assertPatchFitsSchema({ source, draft, patch, personal, lang, modelId }
   throw invalidAnswer('incomplete', 'The change of the model could not be applied to the app');
 }
 
+/** A warning's `field` for a key the model may not change: the key, or `?` for a strange one. */
+function ignoredField(key) {
+  return /^[A-Za-z0-9_.-]{1,40}$/.test(key) ? key : '?';
+}
+
 /**
- * Steps 7 to 10: the patch, the changed keys, the warnings and the suggestions
- * of a change.
+ * Step 7: what the model proposed for the keys it may change, and a
+ * `KEY_IGNORED` warning per other key. Suggestions are read separately.
  */
-function changeOf({ answer, source, current, allowed, draft, language, lang, sanitizeOptions }) {
-  const proposed = isPlainObject(answer.change) ? answer.change : {};
+function proposalOf(proposed, allowed, language) {
   const proposal = {};
   const warnings = [];
   for (const [key, value] of Object.entries(proposed)) {
     if (SUGGESTION_KEYS.includes(key)) continue;
     if (!allowed.includes(key)) {
-      warnings.push({ code: 'KEY_IGNORED', field: /^[A-Za-z0-9_.-]{1,40}$/.test(key) ? key : '?' });
+      warnings.push({ code: 'KEY_IGNORED', field: ignoredField(key) });
       continue;
     }
     // A required text cannot be removed in a conversation: an empty proposal is no proposal.
     if (REQUIRED_TEXT_KEYS.has(key) && !textIn(value, language)) continue;
     proposal[key] = value;
   }
+  return { proposal, warnings };
+}
+
+/** Step 8: the keys whose sanitised value differs before and after the proposal. */
+function changedKeys(proposal, before, after) {
+  const changed = Object.keys(proposal).filter(key => !sameValue(after.app[key], before.app[key]));
+  // A field no text used got its line in the message template: the template changes with its
+  // fields, also when `fields` does not name it, or the new field would be asked for and ignored.
+  if (
+    changed.includes('variables') &&
+    !changed.includes('prompt') &&
+    !sameValue(after.app.prompt, before.app.prompt)
+  ) {
+    changed.push('prompt');
+  }
+  return changed;
+}
+
+/**
+ * `allowEmptyContent` is derived, never read: with a field in the message
+ * template a user can send the form without typing a message. It is only
+ * switched on, for an admin app; an admin's choice stays.
+ */
+function switchesOnEmptyContent({ changed, after, draft, personal }) {
+  return (
+    !personal &&
+    (changed.includes('variables') || changed.includes('prompt')) &&
+    after.app.allowEmptyContent === true &&
+    draft.allowEmptyContent !== true
+  );
+}
+
+/**
+ * Steps 7 to 10: the patch, the changed keys, the warnings and the suggestions
+ * of a change.
+ */
+function changeOf({ answer, source, current, allowed, draft, language, lang, sanitizeOptions }) {
+  const proposed = isPlainObject(answer.change) ? answer.change : {};
+  const { proposal, warnings } = proposalOf(proposed, allowed, language);
   const suggestionInput = sanitizeOptions.mayPropose
     ? Object.fromEntries(
         SUGGESTION_KEYS.filter(key => key in proposed).map(key => [key, proposed[key]])
@@ -430,28 +639,10 @@ function changeOf({ answer, source, current, allowed, draft, language, lang, san
     sanitizeOptions
   );
 
-  const changed = Object.keys(proposal).filter(key => !sameValue(after.app[key], before.app[key]));
-  // A field no text used got its line in the message template: the template changes with its
-  // fields, also when `fields` does not name it, or the new field would be asked for and ignored.
-  if (
-    changed.includes('variables') &&
-    !changed.includes('prompt') &&
-    !sameValue(after.app.prompt, before.app.prompt)
-  ) {
-    changed.push('prompt');
-  }
-
+  const changed = changedKeys(proposal, before, after);
   const patch = {};
-  for (const key of changed) patch[key] = patchValue(key, after.app, source, lang);
-
-  // `allowEmptyContent` is derived, never read: with a field in the message template a user can
-  // send the form without typing a message. It is only switched on; an admin's choice stays.
-  if (
-    !sanitizeOptions.personal &&
-    (changed.includes('variables') || changed.includes('prompt')) &&
-    after.app.allowEmptyContent === true &&
-    draft.allowEmptyContent !== true
-  ) {
+  for (const key of changed) patch[key] = patchValue(key, after.app, source, lang, language);
+  if (switchesOnEmptyContent({ changed, after, draft, personal: sanitizeOptions.personal })) {
     patch.allowEmptyContent = true;
   }
 
@@ -468,6 +659,169 @@ function changeOf({ answer, source, current, allowed, draft, language, lang, san
       ? after.suggestions
       : { websearch: false, integrations: [] }
   };
+}
+
+/**
+ * Steps 1 and 2: the keys the turn may change and the content it reads.
+ *
+ * @returns {{ keys: string[], allowed: string[], mayPropose: boolean, input: object,
+ *   source: object, current: object }}
+ */
+function readContent({ draft, fields, language, target }) {
+  // 1. Keys: the target's content keys, narrowed by `fields`.
+  const keys = appRevisionKeys(target);
+  const narrowed = Array.isArray(fields) && fields.length > 0;
+  const allowed = narrowed ? keys.filter(key => fields.includes(key)) : [...keys];
+
+  // 2. Current content: the target's keys, hidden characters removed.
+  const input = isPlainObject(draft) ? draft : {};
+  const source = {};
+  for (const key of keys) if (input[key] !== undefined) source[key] = visibleDeep(input[key]);
+  assertRevisable(source, language, target);
+  return {
+    keys,
+    allowed,
+    mayPropose: !narrowed,
+    input,
+    source,
+    current: contentForModel(source, keys, language)
+  };
+}
+
+/**
+ * Steps 4 and 5: the messages of the turn and the one model call.
+ *
+ * @returns {Promise<{ result: object, mayAsk: boolean, categories: string[],
+ *   installed: object[] }>}
+ */
+async function callModel({
+  content,
+  model,
+  conversation,
+  allowQuestions,
+  language,
+  user,
+  personal,
+  signal,
+  llmClient
+}) {
+  const { allowed, mayPropose, current } = content;
+  // 4. Messages.
+  const turns = Array.isArray(conversation) ? conversation : [];
+  const mayAsk = allowQuestions !== false && questionsSinceLastChange(turns) < REVISE_QUESTION_CAP;
+  const categories = personal ? [] : appCategoryIds();
+  const installed = mayPropose
+    ? await installationsFor(user, language, personal ? { settings: personal.settings } : null)
+    : [];
+  const { messages } = buildRevisionMessages({
+    content: current,
+    earlier: turns.slice(0, -1),
+    latest: turns.at(-1)?.text ?? '',
+    language,
+    keys: allowed,
+    categories,
+    mayAsk,
+    mayPropose,
+    integrationsBlock: integrationsBlock(installed)
+  });
+
+  // A request that was closed before this point must not start a paid call.
+  if (signal?.aborted) {
+    throw new ServiceError('ABORTED', 'The request was closed before the model was called');
+  }
+
+  // 5. Call. The same limits as a draft: one bounded call that a reasoning model cannot cut off.
+  const result = await llmClient.complete({
+    model,
+    messages,
+    options: { maxTokens: GENERATOR_MAX_TOKENS, responseFormat: 'json', thinkingEnabled: false },
+    retries: 0,
+    timeoutMs: GENERATOR_TIMEOUT_MS,
+    signal,
+    telemetry: { kind: 'utility', purpose: 'app-revise', user }
+  });
+  return { result, mayAsk, categories, installed };
+}
+
+/** An `OTHER_LANGUAGES_UNCHANGED` warning per changed text key of an app with other languages. */
+function otherLanguageWarnings(source, language, changed) {
+  if (!hasOtherLanguages(source, language)) return [];
+  return changed
+    .filter(
+      key => REVISE_LOCALIZED_KEYS.includes(key) || key === 'variables' || key === 'starterPrompts'
+    )
+    .map(key => ({ code: REVISE_WARNINGS.OTHER_LANGUAGES_UNCHANGED, field: key }));
+}
+
+/** The parts of a turn that changes nothing: no question, no patch, no suggestions. */
+function unchangedParts() {
+  return {
+    question: null,
+    patch: {},
+    changed: [],
+    warnings: [],
+    suggestions: { websearch: false, integrations: [] }
+  };
+}
+
+/** Step 6 for a question: asked when the turn may ask, else what the model wrote is a message. */
+function questionReply(answer, text, mayAsk) {
+  const asked = questionOf(answer);
+  if (mayAsk && asked.text)
+    return { ...unchangedParts(), reply: 'question', text, question: asked };
+  return { ...unchangedParts(), reply: 'message', text: text || asked.text };
+}
+
+/** Steps 7 to 10 for a change: the patch, checked against the schema, or a message. */
+function changeReply({ answer, text, content, call, user, personal, language, lang, modelId }) {
+  const { source, current, allowed, input, mayPropose } = content;
+  const sanitizeOptions = {
+    language,
+    categories: call.categories,
+    installed: call.installed,
+    description: '',
+    mayPropose,
+    personal: personal
+      ? { webSearch: personal.settings?.capabilities?.webSearch === true && searchFor(user) }
+      : null
+  };
+  const outcome = changeOf({
+    answer,
+    source,
+    current,
+    allowed,
+    draft: input,
+    language,
+    lang,
+    sanitizeOptions
+  });
+  if (outcome.changed.length === 0) {
+    const warnings = [
+      ...outcome.warnings.filter(warning => warning.code === 'KEY_IGNORED'),
+      { code: REVISE_WARNINGS.NO_CHANGE, field: '' }
+    ];
+    return { ...unchangedParts(), reply: 'message', text, warnings };
+  }
+  // 9. The patched app passes the schema of its target.
+  assertPatchFitsSchema({ source, draft: input, patch: outcome.patch, personal, lang, modelId });
+  return {
+    reply: 'change',
+    text,
+    question: null,
+    patch: outcome.patch,
+    changed: outcome.changed,
+    suggestions: outcome.suggestions,
+    warnings: [...outcome.warnings, ...otherLanguageWarnings(source, language, outcome.changed)]
+  };
+}
+
+/** Step 6: the kind of reply, and for a change steps 7 to 10. */
+function interpretAnswer({ answer, call, ...context }) {
+  const reply = replyKind(answer);
+  const text = plainText(answer.text);
+  if (reply === 'question') return questionReply(answer, text, call.mayAsk);
+  if (reply === 'change') return changeReply({ answer, text, call, ...context });
+  return { ...unchangedParts(), reply: 'message', text };
 }
 
 /**
@@ -527,161 +881,69 @@ export async function reviseApp({
   const target = personal ? 'personal' : 'admin';
   const lang = baseLanguage(language);
 
-  // 1. Keys: the target's content keys, narrowed by `fields`.
-  const keys = appRevisionKeys(target);
-  const allowed =
-    Array.isArray(fields) && fields.length > 0
-      ? keys.filter(key => fields.includes(key))
-      : [...keys];
-  const mayPropose = !(Array.isArray(fields) && fields.length > 0);
-
-  // 2. Current content: the target's keys, hidden characters removed.
-  const input = isPlainObject(draft) ? draft : {};
-  const source = {};
-  for (const key of keys) if (input[key] !== undefined) source[key] = visibleDeep(input[key]);
-  assertRevisable(source, language);
-  const current = contentForModel(source, keys, language);
+  // 1. and 2. Keys and current content.
+  const content = readContent({ draft, fields, language, target });
 
   // 3. Model.
   const model = pickDraftModel(user);
   record.modelId = model.id;
 
-  // 4. Messages.
-  const turns = Array.isArray(conversation) ? conversation : [];
-  const latest = turns.at(-1)?.text ?? '';
-  const mayAsk = allowQuestions !== false && questionsSinceLastChange(turns) < REVISE_QUESTION_CAP;
-  const categories = personal ? [] : appCategoryIds();
-  const installed = mayPropose
-    ? await installationsFor(user, language, personal ? { settings: personal.settings } : null)
-    : [];
-  const { messages } = buildRevisionMessages({
-    content: current,
-    earlier: turns.slice(0, -1),
-    latest,
-    language,
-    keys: allowed,
-    categories,
-    mayAsk,
-    mayPropose,
-    integrationsBlock: integrationsBlock(installed)
-  });
-
-  // A request that was closed before this point must not start a paid call.
-  if (signal?.aborted) {
-    throw new ServiceError('ABORTED', 'The request was closed before the model was called');
-  }
-
-  // 5. Call. The same limits as a draft: one bounded call that a reasoning model cannot cut off.
-  const result = await llmClient.complete({
+  // 4. and 5. Messages and call.
+  const call = await callModel({
+    content,
     model,
-    messages,
-    options: { maxTokens: GENERATOR_MAX_TOKENS, responseFormat: 'json', thinkingEnabled: false },
-    retries: 0,
-    timeoutMs: GENERATOR_TIMEOUT_MS,
+    conversation,
+    allowQuestions,
+    language,
+    user,
+    personal,
     signal,
-    telemetry: { kind: 'utility', purpose: 'app-revise', user }
+    llmClient
   });
+  const { result } = call;
   // The model was called and paid for, whatever becomes of its answer.
   record.usage = result?.usage || null;
 
-  // 6. Parse.
+  // 6. to 10. Parse, interpret, patch, schema check.
   const answer = parseGeneratedAnswer(result?.content, result?.finishReason);
-  let reply = replyKind(answer);
-  let text = plainText(answer.text);
-  let question = null;
-  let patch = {};
-  let changed = [];
-  let warnings = [];
-  let suggestions = { websearch: false, integrations: [] };
+  const turn = interpretAnswer({
+    answer,
+    call,
+    content,
+    user,
+    personal,
+    language,
+    lang,
+    modelId: model.id
+  });
 
-  if (reply === 'question') {
-    const asked = questionOf(answer);
-    if (mayAsk && asked.text) {
-      question = asked;
-    } else {
-      // Not allowed in this turn, or the cap is reached: what the model wrote is a message.
-      reply = 'message';
-      text = text || asked.text;
-    }
-  } else if (reply === 'change') {
-    // 7. to 10.
-    const sanitizeOptions = {
-      language,
-      categories,
-      installed,
-      description: '',
-      mayPropose,
-      personal: personal
-        ? { webSearch: personal.settings?.capabilities?.webSearch === true && searchFor(user) }
-        : null
-    };
-    const outcome = changeOf({
-      answer,
-      source,
-      current,
-      allowed,
-      draft: input,
-      language,
-      lang,
-      sanitizeOptions
-    });
-    if (outcome.changed.length === 0) {
-      reply = 'message';
-      warnings = [
-        ...outcome.warnings.filter(warning => warning.code === 'KEY_IGNORED'),
-        { code: REVISE_WARNINGS.NO_CHANGE, field: '' }
-      ];
-    } else {
-      assertPatchFitsSchema({
-        source,
-        draft: input,
-        patch: outcome.patch,
-        personal,
-        lang,
-        modelId: model.id
-      });
-      ({ patch, changed, suggestions } = outcome);
-      warnings = outcome.warnings;
-      if ([...languagesOf(source)].some(other => other !== lang)) {
-        for (const key of changed) {
-          if (
-            REVISE_LOCALIZED_KEYS.includes(key) ||
-            key === 'variables' ||
-            key === 'starterPrompts'
-          ) {
-            warnings.push({ code: REVISE_WARNINGS.OTHER_LANGUAGES_UNCHANGED, field: key });
-          }
-        }
-      }
-    }
-  }
-
-  if (reply === 'message' && !text && !warnings.some(w => w.code === REVISE_WARNINGS.NO_CHANGE)) {
+  const noChange = turn.warnings.some(warning => warning.code === REVISE_WARNINGS.NO_CHANGE);
+  if (turn.reply === 'message' && !turn.text && !noChange) {
     throw invalidAnswer('incomplete', 'The answer of the model holds no reply');
   }
 
-  record.reply = reply;
-  record.changed = changed;
+  record.reply = turn.reply;
+  record.changed = turn.changed;
 
   logger.debug('Answered a revision turn', {
     component: COMPONENT,
     modelId: model.id,
     target,
-    reply,
-    changed,
-    warnings: warnings.length,
+    reply: turn.reply,
+    changed: turn.changed,
+    warnings: turn.warnings.length,
     finishReason: result?.finishReason ?? null
   });
 
   const defaultLanguage = configCache.getPlatform()?.defaultLanguage || 'en';
   return {
-    reply,
-    text,
-    question,
-    patch,
-    changed,
-    suggestions,
-    warnings,
+    reply: turn.reply,
+    text: turn.text,
+    question: turn.question,
+    patch: turn.patch,
+    changed: turn.changed,
+    suggestions: turn.suggestions,
+    warnings: turn.warnings,
     model: {
       id: model.id,
       name: getLocalizedString(model.name, lang, defaultLanguage, model.id)

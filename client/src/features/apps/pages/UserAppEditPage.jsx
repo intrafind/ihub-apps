@@ -32,7 +32,10 @@ import { useCreatedArrival } from '../../admin/components/app-editor/useCreatedA
 import { useScreenTitle } from '../../admin/components/app-create/useScreenTitle';
 import ConversationPanel from '../../admin/components/app-conversation/ConversationPanel';
 import EditorViewSwitch from '../../admin/components/app-conversation/EditorViewSwitch';
-import { draftOf } from '../../admin/components/app-conversation/conversationState';
+import {
+  draftOf,
+  unsavedOutsideContent
+} from '../../admin/components/app-conversation/conversationState';
 import { personalStakes } from '../../admin/components/app-conversation/stakes';
 import {
   CONVERSATION_VIEW,
@@ -677,6 +680,9 @@ function UserAppEditPage() {
                 persist={persistFromConversation}
                 stakes={stakes}
                 testOpen={testOpen && wide}
+                // Apply and Undo save the whole form: the model and capabilities go with them.
+                // A personal app's Save has no client-side check; the server checks both.
+                savesOtherChanges={unsavedOutsideContent(form, forms.saved, 'personal')}
               />
             </div>
           )}

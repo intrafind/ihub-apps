@@ -393,6 +393,29 @@ describe('the body of a turn', () => {
     assert.deepEqual(res.body.details, { field: 'system', max: REVISE_SYSTEM_MAX });
     assert.equal(llm.calls.length, 0);
   });
+
+  it('answers every other content key over its limit with 400 APP_REVISE_TOO_LONG', async () => {
+    const tooMany = Array.from({ length: 13 }, () => ({
+      title: { de: 'T' },
+      message: { de: 'M' }
+    }));
+    const cases = [
+      [{ name: { de: 'x'.repeat(201) } }, 'name', 200],
+      [{ prompt: { de: 'x'.repeat(8001) } }, 'prompt', 8000],
+      [{ starterPrompts: tooMany }, 'starterPrompts', 12],
+      [
+        { variables: [{ name: 'v', label: { de: 'x'.repeat(201) }, type: 'string' }] },
+        'variables',
+        200
+      ]
+    ];
+    for (const [content, field, max] of cases) {
+      const res = await revise('admin', BODY({ draft: { ...DRAFT, ...content } }));
+      assertProblem(res, 400, 'APP_REVISE_TOO_LONG');
+      assert.deepEqual(res.body.details, { field, max }, field);
+    }
+    assert.equal(llm.calls.length, 0);
+  });
 });
 
 // --- The revise limit ------------------------------------------------------
@@ -412,6 +435,11 @@ describe('the revise limit', () => {
       assertProblem(await revise('builder', BODY({ draft: null })), 400, 'VALIDATION_FAILED');
       assertProblem(
         await revise('builder', BODY({ draft: { system: { de: 'x'.repeat(8001) } } })),
+        400,
+        'APP_REVISE_TOO_LONG'
+      );
+      assertProblem(
+        await revise('builder', BODY({ draft: { description: { de: 'x'.repeat(1001) } } })),
         400,
         'APP_REVISE_TOO_LONG'
       );

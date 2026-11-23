@@ -359,6 +359,25 @@ export const toggleApps = async (ids, enabled) => {
 };
 
 /**
+ * Publishes or unpublishes one app (`POST /api/admin/apps/{appId}/_toggle`).
+ * Unlike {@link toggleApps} it answers the whole response: for one app the
+ * server sends the app's new revision as `ETag`, and with `ifMatch` it refuses
+ * the toggle (412 `PRECONDITION_FAILED`) when the app changed since that
+ * revision was read.
+ *
+ * @param {string} appId
+ * @param {boolean} enabled
+ * @param {{ ifMatch?: string|null }} [options] - The `ETag` the toggle is based on.
+ * @returns {Promise<object>} The response, with `data` and `headers`.
+ */
+export const toggleApp = (appId, enabled, { ifMatch } = {}) =>
+  makeAdminApiCall(`/admin/apps/${encodeURIComponent(appId)}/_toggle`, {
+    method: 'POST',
+    ...(ifMatch ? { headers: { 'If-Match': ifMatch } } : {}),
+    body: { enabled }
+  });
+
+/**
  * Save the display order of apps: the first id becomes `order: 1`, the second
  * `order: 2`, and so on. Apps left out of `ids` keep the order they have.
  */
