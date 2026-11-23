@@ -240,6 +240,21 @@ describe('ProjectsPage', () => {
     );
   });
 
+  test('opens the create dialog when the sidebar\'s "Create" menu asks for it', async () => {
+    renderPage({ pathname: '/projects', state: { create: 'project' } });
+    expect(await screen.findByRole('dialog')).toBeInTheDocument();
+  });
+
+  test('does not open the create dialog at the quota', async () => {
+    mockApi.fetchProjectsConfig.mockResolvedValue({
+      ...CONFIG,
+      userProjects: { ...CONFIG.userProjects, used: 20 }
+    });
+    renderPage({ pathname: '/projects', state: { create: 'project' } });
+    expect(await screen.findByRole('button', { name: 'New project' })).toBeDisabled();
+    expect(screen.queryByRole('dialog')).toBeNull();
+  });
+
   test('shows the message the previous page left once, and closes it', async () => {
     renderPage({ pathname: '/projects', state: { notice: '“Old case” now belongs to Ben.' } });
     expect(await screen.findByRole('status')).toHaveTextContent('“Old case” now belongs to Ben.');

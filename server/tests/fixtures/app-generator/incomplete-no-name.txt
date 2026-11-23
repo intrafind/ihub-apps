@@ -1,0 +1,1 @@
+{"type": "iframe", "iframeConfig": {"url": "https://example.com"}, "description": "An app without a name and without instructions"}

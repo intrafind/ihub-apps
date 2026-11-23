@@ -1,0 +1,71 @@
+{
+  "id": "email-composer",
+  "name": {
+    "en": "Email Composer",
+    "de": "E-Mail-Verfasser"
+  },
+  "description": {
+    "en": "Drafts an email from a few notes.",
+    "de": "Entwirft aus wenigen Stichpunkten eine E-Mail."
+  },
+  "icon": "mail",
+  "color": "#2563EB",
+  "category": "communication",
+  "system": {
+    "en": "You are an email writing assistant. Write a complete email from the notes the user sends: a subject line, a greeting, the text and a closing.\n\nKeep the email clear and to the point. Use only what the notes say. Where something essential is missing, such as a name or a date, put a placeholder in square brackets. Write the email in the language of the notes.\n\nThe message names a tone: professional, friendly, formal or casual. Write the whole email in that tone.",
+    "de": "Sie sind ein Assistent für das Schreiben von E-Mails. Schreiben Sie aus den Stichpunkten, die der Benutzer sendet, eine vollständige E-Mail: Betreffzeile, Anrede, Text und Grußformel.\n\nHalten Sie die E-Mail klar und knapp. Verwenden Sie nur, was in den Stichpunkten steht. Wo etwas Wesentliches fehlt, etwa ein Name oder ein Termin, setzen Sie einen Platzhalter in eckigen Klammern. Schreiben Sie die E-Mail in der Sprache der Stichpunkte.\n\nDie Nachricht nennt einen Ton: professional (sachlich), friendly (freundlich), formal (förmlich) oder casual (locker). Schreiben Sie die ganze E-Mail in diesem Ton."
+  },
+  "prompt": {
+    "en": "Tone: {{tone}}\n\n{{content}}",
+    "de": "Ton: {{tone}}\n\n{{content}}"
+  },
+  "messagePlaceholder": {
+    "en": "Note who the email is for and what it should say …",
+    "de": "Notieren Sie, an wen die E-Mail geht und was darin stehen soll …"
+  },
+  "variables": [
+    {
+      "name": "tone",
+      "label": {
+        "en": "Tone",
+        "de": "Ton"
+      },
+      "type": "string",
+      "required": true,
+      "defaultValue": {
+        "en": "professional",
+        "de": "professional"
+      },
+      "predefinedValues": [
+        {
+          "value": "professional",
+          "label": {
+            "en": "Professional",
+            "de": "Sachlich"
+          }
+        },
+        {
+          "value": "friendly",
+          "label": {
+            "en": "Friendly",
+            "de": "Freundlich"
+          }
+        },
+        {
+          "value": "formal",
+          "label": {
+            "en": "Formal",
+            "de": "Förmlich"
+          }
+        },
+        {
+          "value": "casual",
+          "label": {
+            "en": "Casual",
+            "de": "Locker"
+          }
+        }
+      ]
+    }
+  ]
+}

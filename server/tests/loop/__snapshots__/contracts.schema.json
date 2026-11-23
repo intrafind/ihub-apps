@@ -3395,7 +3395,18 @@
           },
           "thinkingLevel": {
             "type": "string",
-            "enum": ["minimal", "low", "medium", "high", "MINIMAL", "LOW", "MEDIUM", "HIGH"]
+            "enum": [
+              "minimal",
+              "low",
+              "medium",
+              "high",
+              "xhigh",
+              "MINIMAL",
+              "LOW",
+              "MEDIUM",
+              "HIGH",
+              "XHIGH"
+            ]
           },
           "thinkingThoughts": {
             "type": "boolean"
@@ -4330,7 +4341,18 @@
           },
           "thinkingLevel": {
             "type": "string",
-            "enum": ["minimal", "low", "medium", "high", "MINIMAL", "LOW", "MEDIUM", "HIGH"]
+            "enum": [
+              "minimal",
+              "low",
+              "medium",
+              "high",
+              "xhigh",
+              "MINIMAL",
+              "LOW",
+              "MEDIUM",
+              "HIGH",
+              "XHIGH"
+            ]
           },
           "thinkingThoughts": {
             "type": "boolean"

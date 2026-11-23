@@ -73,7 +73,9 @@ export function resolveGroupInheritance(groupsConfig) {
         contentAdmin: false,
         scheduledTasks: false,
         projects: false,
-        projectSharing: false
+        projectSharing: false,
+        userApps: false,
+        userAppSharing: false
       };
 
       // Merge from parent groups first (in order)
@@ -130,6 +132,13 @@ export function resolveGroupInheritance(groupsConfig) {
         if (parentPerms.projectSharing === true) {
           mergedPermissions.projectSharing = true;
         }
+        // Personal apps (feature `userApps`): create, and share or publish
+        if (parentPerms.userApps === true) {
+          mergedPermissions.userApps = true;
+        }
+        if (parentPerms.userAppSharing === true) {
+          mergedPermissions.userAppSharing = true;
+        }
       }
 
       // Merge own permissions on top (overrides parents)
@@ -167,6 +176,12 @@ export function resolveGroupInheritance(groupsConfig) {
       if (ownPerms.projectSharing === true) {
         mergedPermissions.projectSharing = true;
       }
+      if (ownPerms.userApps === true) {
+        mergedPermissions.userApps = true;
+      }
+      if (ownPerms.userAppSharing === true) {
+        mergedPermissions.userAppSharing = true;
+      }
 
       // Update the group with resolved permissions
       groups[groupId] = {
@@ -182,7 +197,9 @@ export function resolveGroupInheritance(groupsConfig) {
           contentAdmin: mergedPermissions.contentAdmin,
           scheduledTasks: mergedPermissions.scheduledTasks,
           projects: mergedPermissions.projects,
-          projectSharing: mergedPermissions.projectSharing
+          projectSharing: mergedPermissions.projectSharing,
+          userApps: mergedPermissions.userApps,
+          userAppSharing: mergedPermissions.userAppSharing
         }
       };
 
@@ -287,6 +304,8 @@ export function loadGroupPermissions() {
       scheduledTasks: group.permissions?.scheduledTasks === true,
       projects: group.permissions?.projects === true,
       projectSharing: group.permissions?.projectSharing === true,
+      userApps: group.permissions?.userApps === true,
+      userAppSharing: group.permissions?.userAppSharing === true,
       description: group.description || ''
     };
   }
@@ -403,7 +422,9 @@ export function getPermissionsForUser(userGroups, groupPermissions = null) {
     contentAdmin: false,
     scheduledTasks: false,
     projects: false,
-    projectSharing: false
+    projectSharing: false,
+    userApps: false,
+    userAppSharing: false
   };
 
   if (!Array.isArray(userGroups)) {
@@ -477,6 +498,14 @@ export function getPermissionsForUser(userGroups, groupPermissions = null) {
     }
     if (groupPerms.projectSharing === true) {
       permissions.projectSharing = true;
+    }
+
+    // Personal apps: create, and share or publish (feature `userApps`)
+    if (groupPerms.userApps === true) {
+      permissions.userApps = true;
+    }
+    if (groupPerms.userAppSharing === true) {
+      permissions.userAppSharing = true;
     }
 
     // May create and run scheduled tasks
@@ -770,7 +799,9 @@ export function enhanceUserWithPermissions(user, authConfig, platform) {
       adminAccess: false, // OAuth clients never have admin access
       scheduledTasks: false, // nor may they plant recurring work
       projects: false, // nor hold projects
-      projectSharing: false
+      projectSharing: false,
+      userApps: false, // nor personal apps
+      userAppSharing: false
     };
   } else {
     user.permissions = getPermissionsForUser(user.groups);
@@ -795,6 +826,9 @@ export function enhanceUserWithPermissions(user, authConfig, platform) {
       if (user.authMode === 'oauth_authorization_code') {
         user.permissions.projects = false;
         user.permissions.projectSharing = false;
+        // The same holds for personal apps (userAppAccess.js).
+        user.permissions.userApps = false;
+        user.permissions.userAppSharing = false;
       }
     }
   }

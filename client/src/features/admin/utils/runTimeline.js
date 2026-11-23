@@ -18,12 +18,28 @@
 import { aggregateTokenUsage } from './tokenStats.js';
 
 /**
+ * Fallback for callers without i18next (the fixture tests): returns the English default with its
+ * {{placeholders}} filled in. The page passes the real `t`, so the titles follow the UI language.
+ * @param {string} _key
+ * @param {string} defaultValue
+ * @param {Object} [params]
+ * @returns {string}
+ */
+function englishDefault(_key, defaultValue, params = {}) {
+  return defaultValue.replace(/\{\{(\w+)\}\}/g, (match, name) =>
+    params[name] !== undefined ? String(params[name]) : match
+  );
+}
+
+/**
  * Derive the full step-by-step run timeline (planner/task/agent/orchestrator
  * rows) plus token-usage totals from a run's live or persisted state.
  *
  * @param {Object|null|undefined} run - the workflow execution state, as
  *   returned by useWorkflowExecution (either the live SSE shape or the
  *   persisted API shape)
+ * @param {Function} [t] - i18next translation function for the row titles and
+ *   descriptions; defaults to the English texts
  * @returns {{
  *   unifiedTasks: Array<Object>,
  *   tokenUsage: ReturnType<typeof aggregateTokenUsage>,
@@ -31,7 +47,7 @@ import { aggregateTokenUsage } from './tokenStats.js';
  *   stepLogHistory: Object
  * }}
  */
-export function deriveRunTimeline(run) {
+export function deriveRunTimeline(run, t = englishDefault) {
   const dynamicTasks = run?.data?._taskQueue || [];
   // Planner-emitted plan (static tasks materialized into the sub-workflow).
   // planCreated.tasks is accumulated across review rounds server-side
@@ -42,7 +58,7 @@ export function deriveRunTimeline(run) {
   // { taskId, title, ... }; recovered tasks render as done (they're in
   // taskResultsMap) and are listed before the current plan to preserve order.
   const planCreatedTasks = run?.data?.planCreated?.tasks || [];
-  const planCreatedTaskIds = new Set(planCreatedTasks.map(t => t.id));
+  const planCreatedTaskIds = new Set(planCreatedTasks.map(task => task.id));
   const recoveredPlanTasks = Object.values(run?.data?._taskResults || {})
     .filter(r => r && r.taskId && !planCreatedTaskIds.has(r.taskId))
     .map(r => ({
@@ -262,8 +278,11 @@ export function deriveRunTimeline(run) {
             key: 'orch:inbox-load',
             nodeId: 'inbox-load',
             kind: 'orchestrator',
-            title: 'Reading inbox',
-            description: 'Picking the highest-priority open inbox item',
+            title: t('admin.agents.runTimeline.inboxLoad.title', 'Reading inbox'),
+            description: t(
+              'admin.agents.runTimeline.inboxLoad.description',
+              'Picking the highest-priority open inbox item'
+            ),
             status: orchestratorStatus('inbox-load'),
             timing: timingFor('inbox-load'),
             log: logFor('inbox-load'),
@@ -277,8 +296,11 @@ export function deriveRunTimeline(run) {
             key: 'orch:planner',
             nodeId: 'planner',
             kind: 'orchestrator',
-            title: 'Planning',
-            description: 'Decomposing the brief into sub-tasks',
+            title: t('admin.agents.runTimeline.planner.title', 'Planning'),
+            description: t(
+              'admin.agents.runTimeline.planner.description',
+              'Decomposing the brief into sub-tasks'
+            ),
             status: plannerStatus,
             timing: timingFor('planner'),
             log: logFor('planner'),
@@ -286,16 +308,16 @@ export function deriveRunTimeline(run) {
           }
         ]
       : []),
-    ...planTasks.map((t, i) => {
-      const taskId = t.id || `task-${i}`;
+    ...planTasks.map((task, i) => {
+      const taskId = task.id || `task-${i}`;
       let s = taskStatusByNodeId[taskId];
       if (!s && taskResultsMap[taskId]) s = 'done';
       return {
         key: `plan:${taskId}`,
         nodeId: taskId,
         kind: 'planner',
-        title: t.title,
-        description: t.description,
+        title: task.title,
+        description: task.description,
         status: s || 'open',
         timing: timingFor(taskId),
         log: logFor(taskId),
@@ -309,13 +331,19 @@ export function deriveRunTimeline(run) {
       const isDecomposer = isAgentNode && hasDrain;
       const runs = nodeIterations[n.id] || 1;
       const baseTitle = isDecomposer
-        ? 'Planning sub-tasks'
+        ? t('admin.agents.runTimeline.agent.decomposerTitle', 'Planning sub-tasks')
         : isAgentNode
-          ? 'Agent answering'
-          : `Running ${n.id}`;
+          ? t('admin.agents.runTimeline.agent.answeringTitle', 'Agent answering')
+          : t('admin.agents.runTimeline.agent.runningTitle', 'Running {{id}}', { id: n.id });
       const baseDescription = isDecomposer
-        ? 'Analysing the request and queueing sub-tasks for the drain loop to execute'
-        : 'Generating the answer for this run';
+        ? t(
+            'admin.agents.runTimeline.agent.decomposerDescription',
+            'Analysing the request and queueing sub-tasks for the drain loop to execute'
+          )
+        : t(
+            'admin.agents.runTimeline.agent.answeringDescription',
+            'Generating the answer for this run'
+          );
       return {
         key: `agent:${n.id}`,
         nodeId: n.id,
@@ -323,10 +351,20 @@ export function deriveRunTimeline(run) {
         // When the verifier sent the work back, this node ran more than once.
         // Make that explicit instead of letting repeated completions read as
         // the agent "finishing" several times.
-        title: runs > 1 ? `${baseTitle} · attempt ${runs}` : baseTitle,
+        title:
+          runs > 1
+            ? t('admin.agents.runTimeline.agent.attemptTitle', '{{title}} · attempt {{attempt}}', {
+                title: baseTitle,
+                attempt: runs
+              })
+            : baseTitle,
         description:
           runs > 1
-            ? `${baseDescription} — revised ${runs - 1} time${runs - 1 === 1 ? '' : 's'} after adversarial review`
+            ? t(
+                'admin.agents.runTimeline.agent.revisedDescription',
+                '{{description}} — revised {{count}} times after adversarial review',
+                { description: baseDescription, count: runs - 1 }
+              )
             : baseDescription,
         status: orchestratorStatus(n.id),
         timing: timingFor(n.id),
@@ -339,16 +377,16 @@ export function deriveRunTimeline(run) {
     // WITHIN the agent node, before the verifier runs. Render them nested
     // directly under "Agent answering" (and before the review) rather than
     // appended after it, which read as "answering happened before the tasks".
-    ...dynamicTasks.map(t => ({
-      key: `dyn:${t.id}`,
-      nodeId: t.id,
+    ...dynamicTasks.map(task => ({
+      key: `dyn:${task.id}`,
+      nodeId: task.id,
       kind: 'dynamic',
-      title: t.title,
-      description: t.description || t.brief,
-      status: t.status || 'open',
-      timing: timingFor(t.id),
-      log: logFor(t.id),
-      depth: (t.depth ?? 0) + 1
+      title: task.title,
+      description: task.description || task.brief,
+      status: task.status || 'open',
+      timing: timingFor(task.id),
+      log: logFor(task.id),
+      depth: (task.depth ?? 0) + 1
     })),
     ...(hasVerifier
       ? (() => {
@@ -359,14 +397,39 @@ export function deriveRunTimeline(run) {
           // fails the run, but older runs may still carry forced:true — call
           // it out either way so a green PASS isn't read as a clean pass.
           const description = verdict
-            ? `${rounds} round${rounds === 1 ? '' : 's'} — verdict ${verdict}${vr?.forced ? ' (forced: retries exhausted)' : ''}`
-            : 'Adversarially probing the deliverable for gaps before accepting it';
+            ? vr?.forced
+              ? t(
+                  'admin.agents.runTimeline.verify.verdictForced',
+                  '{{count}} rounds — verdict {{verdict}} (forced: retries exhausted)',
+                  { count: rounds, verdict }
+                )
+              : t(
+                  'admin.agents.runTimeline.verify.verdict',
+                  '{{count}} rounds — verdict {{verdict}}',
+                  {
+                    count: rounds,
+                    verdict
+                  }
+                )
+            : t(
+                'admin.agents.runTimeline.verify.description',
+                'Adversarially probing the deliverable for gaps before accepting it'
+              );
           return [
             {
               key: 'orch:verify',
               nodeId: 'verify',
               kind: 'orchestrator',
-              title: rounds > 1 ? `Adversarial review · ${rounds} rounds` : 'Adversarial review',
+              title:
+                rounds > 1
+                  ? t(
+                      'admin.agents.runTimeline.verify.titleRounds',
+                      'Adversarial review · {{count}} rounds',
+                      {
+                        count: rounds
+                      }
+                    )
+                  : t('admin.agents.runTimeline.verify.title', 'Adversarial review'),
               description,
               status: orchestratorStatus('verify'),
               timing: timingFor('verify'),
@@ -393,15 +456,26 @@ export function deriveRunTimeline(run) {
           const rounds = Number.isFinite(run?.data?._reviewRound) ? run.data._reviewRound : null;
           const description = verdict
             ? verdict.needs_more_work
-              ? `Round ${rounds || 1}: more work needed — ${(verdict.gaps || []).length} gap(s)`
-              : `Round ${rounds || 1}: complete — no material gaps`
-            : 'Judging whether the agent gathered enough evidence';
+              ? t(
+                  'admin.agents.runTimeline.reviewer.moreWork',
+                  'Round {{round}}: more work needed — {{count}} gaps',
+                  { round: rounds || 1, count: (verdict.gaps || []).length }
+                )
+              : t(
+                  'admin.agents.runTimeline.reviewer.complete',
+                  'Round {{round}}: complete — no material gaps',
+                  { round: rounds || 1 }
+                )
+            : t(
+                'admin.agents.runTimeline.reviewer.description',
+                'Judging whether the agent gathered enough evidence'
+              );
           return [
             {
               key: 'orch:reviewer',
               nodeId: 'reviewer',
               kind: 'orchestrator',
-              title: 'Reviewing',
+              title: t('admin.agents.runTimeline.reviewer.title', 'Reviewing'),
               description,
               status: orchestratorStatus('reviewer'),
               timing: timingFor('reviewer'),
@@ -419,8 +493,11 @@ export function deriveRunTimeline(run) {
             key: 'orch:synthesize',
             nodeId: 'synthesize',
             kind: 'orchestrator',
-            title: 'Composing final report',
-            description: 'Synthesizing all sub-task results into the final artifact',
+            title: t('admin.agents.runTimeline.synthesize.title', 'Composing final report'),
+            description: t(
+              'admin.agents.runTimeline.synthesize.description',
+              'Synthesizing all sub-task results into the final artifact'
+            ),
             status: synthesizerStatus,
             timing: timingFor('synthesize'),
             log: logFor('synthesize'),
@@ -441,17 +518,34 @@ export function deriveRunTimeline(run) {
                   }
                 })()
               : null;
+          const mode = composerOut?.mode || 'append';
+          const summary = composerOut?.summary;
           const description = composerOut
             ? composerOut.skip
-              ? `Composer chose to skip${composerOut.summary ? ` — ${composerOut.summary}` : ''}`
-              : `Composer ${composerOut.mode || 'append'}${composerOut.summary ? ` — ${composerOut.summary}` : ''}`
-            : 'Deciding what (if anything) to commit to long-term memory';
+              ? summary
+                ? t(
+                    'admin.agents.runTimeline.memoryCompose.skipWithSummary',
+                    'Composer chose to skip — {{summary}}',
+                    { summary }
+                  )
+                : t('admin.agents.runTimeline.memoryCompose.skip', 'Composer chose to skip')
+              : summary
+                ? t(
+                    'admin.agents.runTimeline.memoryCompose.modeWithSummary',
+                    'Composer {{mode}} — {{summary}}',
+                    { mode, summary }
+                  )
+                : t('admin.agents.runTimeline.memoryCompose.mode', 'Composer {{mode}}', { mode })
+            : t(
+                'admin.agents.runTimeline.memoryCompose.description',
+                'Deciding what (if anything) to commit to long-term memory'
+              );
           return [
             {
               key: 'orch:memory-compose',
               nodeId: 'memory-compose',
               kind: 'orchestrator',
-              title: 'Composing memory',
+              title: t('admin.agents.runTimeline.memoryCompose.title', 'Composing memory'),
               description,
               status: orchestratorStatus('memory-compose'),
               timing: timingFor('memory-compose'),
@@ -470,22 +564,45 @@ export function deriveRunTimeline(run) {
           const composerSummary = finalizeLog?.composerSummary;
           let description;
           if (written === null) {
-            description = 'Writing memory to the agent profile file';
+            description = t(
+              'admin.agents.runTimeline.memoryFinalize.writing',
+              'Writing memory to the agent profile file'
+            );
           } else if (written === 0) {
             description = noopReason
               ? composerSummary
-                ? `Skipped — ${noopReason} (${composerSummary})`
-                : `Skipped — ${noopReason}`
-              : 'Skipped — no pending memory updates';
+                ? t(
+                    'admin.agents.runTimeline.memoryFinalize.skippedReasonSummary',
+                    'Skipped — {{reason}} ({{summary}})',
+                    { reason: noopReason, summary: composerSummary }
+                  )
+                : t(
+                    'admin.agents.runTimeline.memoryFinalize.skippedReason',
+                    'Skipped — {{reason}}',
+                    {
+                      reason: noopReason
+                    }
+                  )
+              : t(
+                  'admin.agents.runTimeline.memoryFinalize.skippedNoPending',
+                  'Skipped — no pending memory updates'
+                );
           } else {
-            description = `Wrote ${written} memory update${written === 1 ? '' : 's'}`;
+            description = t(
+              'admin.agents.runTimeline.memoryFinalize.wrote',
+              'Wrote {{count}} memory updates',
+              { count: written }
+            );
           }
           return [
             {
               key: 'orch:memory-finalize',
               nodeId: 'memory-finalize',
               kind: 'orchestrator',
-              title: written === 0 ? 'Memory skipped' : 'Memory written',
+              title:
+                written === 0
+                  ? t('admin.agents.runTimeline.memoryFinalize.titleSkipped', 'Memory skipped')
+                  : t('admin.agents.runTimeline.memoryFinalize.titleWritten', 'Memory written'),
               description,
               status: orchestratorStatus('memory-finalize'),
               timing: timingFor('memory-finalize'),
@@ -501,8 +618,11 @@ export function deriveRunTimeline(run) {
             key: 'orch:inbox-finalize',
             nodeId: 'inbox-finalize',
             kind: 'orchestrator',
-            title: 'Marking inbox item done',
-            description: 'Writing the completion note back to the inbox file',
+            title: t('admin.agents.runTimeline.inboxFinalize.title', 'Marking inbox item done'),
+            description: t(
+              'admin.agents.runTimeline.inboxFinalize.description',
+              'Writing the completion note back to the inbox file'
+            ),
             status: orchestratorStatus('inbox-finalize'),
             timing: timingFor('inbox-finalize'),
             log: logFor('inbox-finalize'),

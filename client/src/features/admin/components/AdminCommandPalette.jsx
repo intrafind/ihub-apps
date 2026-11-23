@@ -8,50 +8,70 @@ import { MagnifyingGlassIcon } from '@heroicons/react/24/outline';
 import { makeAdminApiCall } from '../../../api/adminApi';
 
 const ADMIN_PAGES = [
-  { label: 'Overview', href: '/admin' },
-  { label: 'Apps', href: '/admin/apps' },
-  { label: 'Models', href: '/admin/models' },
-  { label: 'Providers', href: '/admin/providers' },
-  { label: 'Prompts', href: '/admin/prompts' },
-  { label: 'Skills', href: '/admin/skills' },
-  { label: 'Projects', href: '/admin/projects' },
-  { label: 'Agents', href: '/admin/agents' },
-  { label: 'Marketplace', href: '/admin/marketplace' },
-  { label: 'Users', href: '/admin/users' },
-  { label: 'Groups', href: '/admin/groups' },
-  { label: 'Authentication', href: '/admin/auth' },
-  { label: 'OAuth', href: '/admin/oauth' },
-  { label: 'Integrations', href: '/admin/integrations' },
-  { label: 'UI Customization', href: '/admin/ui' },
-  { label: 'Disclaimer', href: '/admin/disclaimer' },
-  { label: 'Localization', href: '/admin/localization' },
-  { label: 'Pages', href: '/admin/pages' },
-  { label: 'Document Templates', href: '/admin/document-templates' },
-  { label: 'Short Links', href: '/admin/shortlinks' },
-  { label: 'Usage Reports', href: '/admin/usage' },
-  { label: 'Logging', href: '/admin/logging' },
-  { label: 'Telemetry', href: '/admin/telemetry' },
-  { label: 'System Resources', href: '/admin/system-resources' },
-  { label: 'Chat History', href: '/admin/chat-history' },
-  { label: 'Scheduled Tasks', href: '/admin/scheduled-tasks' },
-  { label: 'Voice Input', href: '/admin/voice-input' },
-  { label: 'Features', href: '/admin/features' },
-  { label: 'Security', href: '/admin/security' },
-  { label: 'Artifacts', href: '/admin/artifacts' },
-  { label: 'EU AI Act', href: '/admin/eu-ai-act' },
-  { label: 'Backup & Restore', href: '/admin/backup' },
-  { label: 'Updates', href: '/admin/updates' },
-  { label: 'Advanced', href: '/admin/advanced' },
-  { label: 'Audit Log', href: '/admin/audit-log' },
-  { label: 'Changelog', href: '/admin/changelog' },
-  { label: 'Documentation', href: '/admin/docs' }
+  { labelKey: 'admin.nav.overview', label: 'Overview', href: '/admin' },
+  { labelKey: 'admin.nav.apps', label: 'Apps', href: '/admin/apps' },
+  { labelKey: 'admin.nav.models', label: 'Models', href: '/admin/models' },
+  { labelKey: 'admin.nav.providers', label: 'Providers', href: '/admin/providers' },
+  { labelKey: 'admin.nav.prompts', label: 'Prompts', href: '/admin/prompts' },
+  { labelKey: 'admin.nav.skills', label: 'Skills', href: '/admin/skills' },
+  { labelKey: 'admin.nav.projects', label: 'Projects', href: '/admin/projects' },
+  { labelKey: 'admin.nav.agents', label: 'Agents', href: '/admin/agents' },
+  { labelKey: 'admin.nav.marketplace', label: 'Marketplace', href: '/admin/marketplace' },
+  { labelKey: 'admin.nav.users', label: 'Users', href: '/admin/users' },
+  { labelKey: 'admin.nav.groups', label: 'Groups', href: '/admin/groups' },
+  { labelKey: 'admin.nav.authentication', label: 'Authentication', href: '/admin/auth' },
+  { labelKey: 'admin.nav.oauth', label: 'OAuth', href: '/admin/oauth' },
+  { labelKey: 'admin.nav.integrations', label: 'Integrations', href: '/admin/integrations' },
+  { labelKey: 'admin.nav.ui', label: 'UI Customization', href: '/admin/ui' },
+  { labelKey: 'admin.nav.disclaimer', label: 'Disclaimer', href: '/admin/disclaimer' },
+  { labelKey: 'admin.nav.localization', label: 'Localization', href: '/admin/localization' },
+  { labelKey: 'admin.nav.pages', label: 'Pages', href: '/admin/pages' },
+  {
+    labelKey: 'admin.nav.documentTemplates',
+    label: 'Document Templates',
+    href: '/admin/document-templates'
+  },
+  { labelKey: 'admin.nav.shortlinks', label: 'Short Links', href: '/admin/shortlinks' },
+  { labelKey: 'admin.nav.usage', label: 'Usage Reports', href: '/admin/usage' },
+  { labelKey: 'admin.nav.logging', label: 'Logging', href: '/admin/logging' },
+  { labelKey: 'admin.nav.telemetry', label: 'Telemetry', href: '/admin/telemetry' },
+  {
+    labelKey: 'admin.nav.systemResources',
+    label: 'System Resources',
+    href: '/admin/system-resources'
+  },
+  { labelKey: 'admin.nav.chatHistory', label: 'Chat History', href: '/admin/chat-history' },
+  {
+    labelKey: 'admin.nav.scheduledTasks',
+    label: 'Scheduled Tasks',
+    href: '/admin/scheduled-tasks'
+  },
+  { labelKey: 'admin.nav.voiceInput', label: 'Voice Input', href: '/admin/voice-input' },
+  { labelKey: 'admin.nav.features', label: 'Features', href: '/admin/features' },
+  { labelKey: 'admin.nav.security', label: 'Security', href: '/admin/security' },
+  { labelKey: 'admin.nav.artifacts', label: 'Artifacts', href: '/admin/artifacts' },
+  { labelKey: 'admin.nav.euAiAct', label: 'EU AI Act', href: '/admin/eu-ai-act' },
+  { labelKey: 'admin.nav.backup', label: 'Backup & Restore', href: '/admin/backup' },
+  { labelKey: 'admin.nav.updates', label: 'Updates', href: '/admin/updates' },
+  { labelKey: 'admin.nav.advanced', label: 'Advanced', href: '/admin/advanced' },
+  { labelKey: 'admin.nav.auditLog', label: 'Audit Log', href: '/admin/audit-log' },
+  { labelKey: 'admin.nav.changelog', label: 'Changelog', href: '/admin/changelog' },
+  { labelKey: 'admin.nav.docs', label: 'Documentation', href: '/admin/docs' }
 ];
 
 const ACTIONS = [
-  { label: 'New App', href: '/admin/apps/new' },
-  { label: 'View Audit Log', href: '/admin/audit-log' },
-  { label: 'Run Backup', href: '/admin/backup' },
-  { label: 'Check for Updates', href: '/admin/updates' }
+  { labelKey: 'admin.commandPalette.actionNewApp', label: 'New app', href: '/admin/apps/new' },
+  {
+    labelKey: 'admin.commandPalette.actionViewAuditLog',
+    label: 'View Audit Log',
+    href: '/admin/audit-log'
+  },
+  { labelKey: 'admin.commandPalette.actionRunBackup', label: 'Run Backup', href: '/admin/backup' },
+  {
+    labelKey: 'admin.commandPalette.actionCheckUpdates',
+    label: 'Check for Updates',
+    href: '/admin/updates'
+  }
 ];
 
 function trackRecentPage(href, label) {
@@ -242,7 +262,10 @@ export default function AdminCommandPalette() {
     }
 
     // Pages
-    const filteredPages = query ? ADMIN_PAGES.filter(p => fuzzyMatch(p.label, query)) : ADMIN_PAGES;
+    // Page and action names are shown in the admin language; the key is in `labelKey`.
+    const translated = list => list.map(item => ({ ...item, label: t(item.labelKey, item.label) }));
+    const pages = translated(ADMIN_PAGES);
+    const filteredPages = query ? pages.filter(p => fuzzyMatch(p.label, query)) : pages;
     if (filteredPages.length > 0) {
       result.push({
         title: t('admin.commandPalette.pages', 'Pages'),
@@ -251,7 +274,8 @@ export default function AdminCommandPalette() {
     }
 
     // Actions
-    const filteredActions = query ? ACTIONS.filter(a => fuzzyMatch(a.label, query)) : ACTIONS;
+    const actions = translated(ACTIONS);
+    const filteredActions = query ? actions.filter(a => fuzzyMatch(a.label, query)) : actions;
     if (filteredActions.length > 0) {
       result.push({
         title: t('admin.commandPalette.actions', 'Actions'),
