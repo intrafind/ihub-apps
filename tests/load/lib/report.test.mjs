@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
-// node --test tests/load/
+// node --test "tests/load/**/*.test.mjs"
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { rateLimitAnalysis, isStubRun } from './report.mjs';

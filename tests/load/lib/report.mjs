@@ -10,7 +10,17 @@
 import { summarize, round } from './metrics.mjs';
 import { renderWaits } from './waits.mjs';
 
-const CHAT_LABELS = ['chat', 'chatFile', 'projectChat', 'projectBuildChat', 'inference'];
+/** Every label a turn is counted under (turns ok, turns failed). */
+export const CHAT_LABELS = [
+  'chat',
+  'chatFile',
+  'projectChat',
+  'projectBuildChat',
+  'inference',
+  'agentTurn'
+];
+// Without `agentTurn`: the first answer token of a turn with tool rounds comes
+// after several model calls, so it says nothing about iHub's overhead on one.
 const TTFT_LABELS = ['chat', 'chatFile', 'projectChat', 'projectBuildChat'];
 
 const sum = (counts, name, stage) => counts[name]?.[stage] || 0;
@@ -131,6 +141,14 @@ export function stageStats(result) {
       addUrl: summarize(values(trends, 'http.project.addUrl', k)),
       promptTokens: summarize(values(trends, 'projectChat.promptTokens', k)),
       tools: summarize(values(trends, 'projectChat.tools', k)),
+      // Turns with tool rounds (scenarios/agentTurn.mjs): how long a whole turn took,
+      // how many tool calls it ran, and how many ran fewer than the scenario asked for.
+      agent: {
+        turns: sum(counts, 'agentTurn.turn.ok', k) + sum(counts, 'agentTurn.turn.error', k),
+        duration: summarize(values(trends, 'agentTurn.duration', k)),
+        tools: summarize(values(trends, 'agentTurn.tools', k)),
+        shortOfToolRounds: sum(counts, 'agentTurn.toolRounds.short', k)
+      },
       streamMiss: TTFT_LABELS.reduce((a, l) => a + sum(counts, `${l}.streamMiss`, k), 0),
       http: { total: httpTotal, errorPct: httpTotal ? (httpErr / httpTotal) * 100 : 0 },
       errorCodes,
@@ -358,6 +376,20 @@ export function renderMarkdown(result) {
     L.push(
       `| ${s.name} | ${fmt(s.byLabel.projectChat?.p95)} | ${fmt(s.promptTokens?.p95)} | ${fmt(s.chatUpload?.p95)} | ${fmt(s.projectUpload?.p95)} | ${fmt((s.ingestReady?.p50 ?? NaN) / 1000, 1)} / ${fmt((s.ingestReady?.p95 ?? NaN) / 1000, 1)} | ${fmt((s.crawl?.p95 ?? NaN) / 1000, 1)} | ${fmt(s.addUrl?.p95)} | ${s.streamMiss} |`
     );
+  }
+  if (a.stats.some(s => s.agent?.turns > 0)) {
+    L.push('');
+    L.push('### Turns with tool rounds');
+    L.push('');
+    L.push(
+      '| Stage | Turns | Turn duration p50 / p95 (s) | Tool calls per turn avg / max | Turns short of their tool rounds |'
+    );
+    L.push('|---|---:|---|---|---:|');
+    for (const s of a.stats) {
+      L.push(
+        `| ${s.name} | ${s.agent.turns} | ${fmt((s.agent.duration?.p50 ?? NaN) / 1000, 1)} / ${fmt((s.agent.duration?.p95 ?? NaN) / 1000, 1)} | ${fmt(s.agent.tools?.avg, 1)} / ${fmt(s.agent.tools?.max)} | ${s.agent.shortOfToolRounds} |`
+      );
+    }
   }
   L.push('');
   L.push('## SLO violations');

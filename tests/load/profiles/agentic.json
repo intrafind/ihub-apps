@@ -1,0 +1,15 @@
+{
+  "name": "agentic",
+  "description": "3 users for about 2 minutes, every turn with 1 to 3 tool rounds on the fake LLM. Run after smoke: proves that a turn with tools works end to end (model call, tool call, model call) and shows what such a turn costs.",
+  "stages": [{ "name": "agentic", "vus": 3, "rampSec": 5, "holdSec": 90 }],
+  "gracefulStopSec": 120,
+  "thinkTimeSec": [1, 3],
+  "sessionPauseSec": [1, 2],
+  "pageLoadProbability": 0,
+  "mix": { "agentTurn": 100 },
+  "scenarios": {
+    "agentTurn": { "turns": [2, 3], "toolRounds": [1, 3], "tool": "list_scheduled_tasks" }
+  },
+  "setup": { "sharedProjects": 0, "ownProjects": false },
+  "slo": { "ttftOverheadP95Ms": null, "workerCpuAvgPct": null, "eventLoopDelayMaxMs": null }
+}

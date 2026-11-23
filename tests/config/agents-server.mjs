@@ -7,19 +7,38 @@
  *
  * 1. a fresh `contents-e2e-agents/` seeded like every e2e run (`e2e-contents.mjs`:
  *    raised rate limits, no remote marketplace, the two stub models), plus the
- *    regular users `e2e-user` and `e2e-other` and the app `e2e-tools`
- *    (`agents-scenario.mjs`);
- * 2. the model stub (`e2e-llm-stub.mjs`), in this process, so the requests it has
- *    seen and its hangs outlive a restart of the server;
+ *    regular users `e2e-user` and `e2e-other`, the app `e2e-tools`
+ *    (`agents-scenario.mjs`) and the test tools (`test-tools-contents.mjs`);
+ * 2. the model stub (`e2e-llm-stub.mjs`) and the counter of the test tools
+ *    (`test-counter.mjs`), in this process, so the requests the stub has seen, its
+ *    hangs and what was counted outlive a restart of the server;
  * 3. the iHub server and the Vite client, as `npm run dev` does, on the suite's own
  *    ports;
  * 4. a control endpoint on `CONTROL_PORT`, for specs:
- *    - `GET /__status` answers `{ starts, overlay, running }`;
+ *    - `GET /__status` answers `{ starts, overlay, running, server }`, `server` being
+ *      `{ nodeEnv, testTools, killPoint }`: what the iHub server was started as;
  *    - `POST /__restart` stops the server and starts it again on the same contents
  *      directory, and answers once it is healthy. Body (optional JSON):
  *      `{ "signal": "SIGKILL" }` to stop it the hard way (default `SIGTERM`), and
  *      `{ "overlay": { "platform": {…}, "features": {…} } }` to start it with other
- *      settings.
+ *      settings;
+ *    - `GET /__counter` answers `{ total, counters: { <key>: { count, values } } }`:
+ *      what the tool `e2e_counter_write` wrote, counted here and not in the server;
+ *    - `POST /__counter/reset` sets the counter to zero.
+ *
+ * ## The server runs as a test server
+ *
+ * The iHub server is started with `NODE_ENV=test` and `IHUB_TEST_TOOLS=1`, which
+ * registers the tools `e2e_counter_write` and `e2e_counter_read`
+ * (`server/services/integrations/protocols/native/connectors/testTools.js`). The
+ * app `e2e-tools` offers them. A spec that needs a write to count, or content
+ * from outside iHub, uses them: `e2e_counter_read` returns what was written,
+ * and a page reader pointed at this machine would be stopped by the SSRF guard.
+ *
+ * It is never started with a kill point: `IHUB_TEST_KILLPOINT` is empty in its
+ * environment, whatever this process inherited (`serverEnvironment`). A server
+ * that dies at a chosen place belongs to the fault tests (`server/tests/faults/`),
+ * which start their own servers.
  *
  * ## Overlays
  *
@@ -37,17 +56,21 @@ import { createRequire } from 'node:module';
 import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { prepareE2eContents } from './e2e-contents.mjs';
+import { createCounter } from './test-counter.mjs';
+import { seedTestTools } from './test-tools-contents.mjs';
 import { e2eContentsDir, removeDisposableContents } from './e2e-fresh-contents.mjs';
 import {
   parseOverlay,
   readBaseline,
   seedAgentsApps,
   seedAgentsUsers,
+  serverEnvironment,
   writeOverlay
 } from './agents-contents.mjs';
 import {
   CLIENT_PORT,
   CONTENTS_DIR,
+  CONTROL,
   CONTROL_PORT,
   LLM_PORT,
   SERVER_PORT
@@ -72,6 +95,18 @@ await prepareE2eContents({ root, contentsDir, llmPort: LLM_PORT });
 const bcrypt = createRequire(path.join(root, 'server', 'package.json'))('bcryptjs');
 seedAgentsUsers(contentsPath, { passwordHash: password => bcrypt.hashSync(password, 10) });
 seedAgentsApps(contentsPath);
+seedTestTools(contentsPath);
+
+/** What the test tools wrote. Lives here, so a restarted server cannot lose or hide it. */
+const counter = createCounter();
+
+/** The environment of the server: a test server with the test tools, never a kill point. */
+const serverEnv = () =>
+  serverEnvironment(process.env, {
+    contentsDir,
+    serverPort: SERVER_PORT,
+    counterUrl: CONTROL
+  });
 
 const baseline = readBaseline(contentsPath);
 let overlay = parseOverlay(process.env.E2E_AGENTS_OVERLAY);
@@ -88,14 +123,7 @@ function startServer() {
   const child = spawn(process.execPath, ['--env-file-if-exists=../.env', 'server.js'], {
     cwd: path.join(root, 'server'),
     stdio: 'inherit',
-    env: {
-      ...process.env,
-      NODE_ENV: 'development',
-      WORKERS: '1',
-      CONTENTS_DIR: contentsDir,
-      HOST: '127.0.0.1',
-      PORT: String(SERVER_PORT)
-    }
+    env: serverEnv()
   });
   child.on('exit', code => {
     if (server === child) server = null;
@@ -202,8 +230,22 @@ const control = http.createServer(async (req, res) => {
     res.writeHead(status, { 'content-type': 'application/json' });
     res.end(JSON.stringify(payload));
   };
-  const status = () => ({ starts, overlay, running: !!server });
+  const status = () => ({
+    starts,
+    overlay,
+    running: !!server,
+    // What the server was started as: a test server with the test tools, no kill point.
+    server: {
+      nodeEnv: serverEnv().NODE_ENV,
+      testTools: serverEnv().IHUB_TEST_TOOLS === '1',
+      killPoint: Object.entries(serverEnv()).some(
+        ([key, value]) => key.startsWith('IHUB_TEST_KILLPOINT') && value !== ''
+      )
+    }
+  });
   try {
+    // `/count/<key>` for the test tools of the server, `/__counter` for the specs.
+    if (await counter.handle(req, res)) return undefined;
     if (req.method === 'GET' && req.url === '/__status') return answer(200, status());
     if (req.method === 'POST' && req.url === '/__restart') {
       const body = await readJsonBody(req);

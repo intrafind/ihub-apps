@@ -1,12 +1,12 @@
 ---
-description: "The test tools for runs: runner tiers and quarantine, the scripted model, the fake clock, the golden harness with its recorded surfaces, the frozen legacy workflow path and the difference list."
+description: "The test tools for runs: runner tiers and quarantine, the scripted model, the fake clock, the golden harness with its recorded surfaces, the frozen legacy workflow path, the difference list, and the fault tier with its kill points."
 audience: developer
 type: reference
 ---
 
 # Testing Runs
 
-A run is one piece of model work: a chat turn, a scheduled task, an app called as a tool. This page describes the tools that test runs without a model key and without waiting on real time. Use it when you write a test for code in `server/services/chat/`, `server/services/loop/` or `server/services/scheduler/`, when a golden test fails, or when you change behaviour that a golden pins.
+A run is one piece of model work: a chat turn, a scheduled task, an app called as a tool. This page describes the tools that test runs without a model key and without waiting on real time. Use it when you write a test for code in `server/services/chat/`, `server/services/loop/` or `server/services/scheduler/`, when a golden test fails, when you change behaviour that a golden pins, or when you test what a run does after its server died.
 
 For the browser suite and its model stub see [Developer Onboarding](developer-onboarding.md#agents-end-to-end-suite).
 
@@ -20,13 +20,15 @@ node scripts/run-server-tests.js golden              # only files whose path con
 node scripts/run-server-tests.js --list              # how many files each runner and each tier has
 node scripts/run-server-tests.js --tier=nightly      # the whole nightly tier (npm run test:nightly)
 node scripts/run-server-tests.js --tier=nightly faults   # only its fault tests (npm run test:faults)
+npm run test:faults -- legacy                        # the fault tests whose path contains "legacy"
+npm run test:faults:smoke                            # the fault tests tagged smoke by their file name
 node scripts/run-server-tests.js --check-quarantine  # fails when a quarantined test passes
 UPDATE_GOLDENS=1 node --test server/tests/golden/golden.test.js   # record the goldens again
 node server/tests/golden/record.mjs --out-dir /tmp/records chat/plain   # record one case into a directory of your own
 node --test server/tests/workflow-legacy-frozen.test.js   # the frozen files of the legacy workflow path
 ```
 
-Do not run the server tests at the same time as an end-to-end suite. Together they can exhaust the memory of the machine, and the failure looks like a failing test.
+Do not run the server tests at the same time as an end-to-end suite. Together they can exhaust the memory of the machine, and the failure looks like a failing test. The same holds for the fault tier: it starts its own servers, so run it alone.
 
 ## Runner tiers and the quarantine
 
@@ -35,11 +37,13 @@ Do not run the server tests at the same time as an end-to-end suite. Together th
 | Tier | Files | Runs |
 |---|---|---|
 | `pr` | every file that is not in the nightly tier | on every pull request, as part of `npm run test:quick` |
-| `nightly` | everything under `server/tests/faults/`, and every `*.nightly.test.js` | only with `--tier=nightly` (`npm run test:nightly`) |
+| `nightly` | everything under `server/tests/faults/`, and every `*.nightly.test.js` | only with `--tier=nightly` (`npm run test:nightly`), one file at a time |
 
 Put a test into the nightly tier when it starts real server processes or runs for minutes. Name it `*.nightly.test.js`, or put it under `server/tests/faults/`. `--tier=all` runs both tiers.
 
-No workflow runs the nightly tier yet, so a test in it is run only by hand. `npm run test:nightly` runs the whole tier. `npm run test:faults` runs only the files whose path contains `faults`; it does not run a `*.nightly.test.js` outside `server/tests/faults/`.
+`npm run test:nightly` runs the whole tier. `npm run test:faults` runs only the files whose path contains `faults`; it does not run a `*.nightly.test.js` outside `server/tests/faults/`. The nightly workflow (`.github/workflows/nightly.yml`) runs `npm run test:faults` every night, and on a pull request that carries the label `run-faults`; see [Developer Onboarding](developer-onboarding.md#the-nightly-run) for the workflow and for who acts when it is red.
+
+The files of the nightly tier run one after the other. Each starts real servers, and side by side on a small machine a start can take longer than a test waits for it.
 
 A word after the options filters by path. Several words narrow further: `npm run test:faults -- resume` runs the fault tests whose path also contains `resume`.
 
@@ -242,7 +246,7 @@ The statements are files under `tests/fixtures/stellungnahmen/`: a PDF, a DOCX, 
 
 `surfaces/ifinderStandIn.js` serves the result set from a real HTTP server on the loopback interface. Nothing of iHub is replaced: the iFinder installation points at the stand-in, and `iFinderService` builds, signs and sends its requests as it does to a real installation. The stand-in writes down every request with the claims of its token and whether the token was signed with the key of the installation, and the golden holds that list under `result.ifinder.requests`. The key pair is made when the recording starts; no key is in the repository. Use the stand-in and the result set for any test that needs an iFinder.
 
-**What the restart cases are.** A restart is played inside the recording process. The engine is replaced by a new one, and for `delivered-after-restart` the state a dead process takes with it is dropped by hand: the bridge between the workflow and its chat, the run the ledger held open, and the engine with its executions (`processDied` in `surfaces/legacyWorkflow.js`). No process is killed: a test that kills a real server belongs in the nightly tier (`server/tests/faults/`). Three things follow:
+**What the restart cases are.** A restart is played inside the recording process. The engine is replaced by a new one, and for `delivered-after-restart` the state a dead process takes with it is dropped by hand: the bridge between the workflow and its chat, the run the ledger held open, and the engine with its executions (`processDied` in `surfaces/legacyWorkflow.js`). No process is killed there. The same story with a real server that is killed and started again is the fault test `server/tests/faults/legacy-workflow-restart.fault.test.js` (see [The fault tier](#the-fault-tier)). Three limits of the goldens follow:
 
 - The sweep of a starting server is called with the options `server/startup/worker.js` gives it for a plain workflow, written again in the test, because that file does not export them. A change to the options there does not show in these goldens.
 - A case that lets its server die calls `env.processRestarted()`. The check that `seq` increases within a run then runs on each side of the restart on its own.
@@ -406,6 +410,153 @@ node server/tests/golden/sideBySide.mjs \
 A side is a module that exports `run({ input, files, label })` and returns `{ report, record }`: the Markdown the implementation produced for the user, and a record of what it did. A side can also be a golden case, written as `case:<surface>/<case>`.
 
 The tool writes `<label>.report.md` and `<label>.record.json` for each side, and a `README.md` that lists the input files and the parts of the two records that differ. It asserts nothing: the two sides are expected to differ, and people decide which differences are fine. It exits with 1 only when a side could not run.
+
+## The fault tier
+
+A fault test answers a question no test in one process can: what does a run do when its server dies in the middle? The fault harness (`server/tests/faults/harness.mjs`) starts a real server, kills it, starts another one on the same contents directory, and looks at what is left: the chat, the events of the run, and how often a write ran.
+
+```bash
+npm run test:faults        # the whole fault tier, about a minute
+```
+
+The tier starts its own servers on free ports and its own contents directories (`contents-e2e-faults-<random>`, removed afterwards). It needs no model key and no network. Do not run it together with `npm run test:quick` or an end-to-end suite.
+
+### What a fault test looks like
+
+```js
+import { after, before, test } from 'node:test';
+import assert from 'node:assert/strict';
+import { CASE_TIMEOUT_MS, COUNTER_WRITE, SETUP_TIMEOUT_MS, TOOLS_APP, startStack } from './harness.mjs';
+
+let stack;
+before(async () => { stack = await startStack(); }, { timeout: SETUP_TIMEOUT_MS });
+after(() => stack?.stop());
+
+test('the server dies with a write in flight', { timeout: CASE_TIMEOUT_MS }, async () => {
+  await stack.restart({ killPoint: 'e2e-counter-after-write' });
+  const api = await stack.api();
+  const turn = api.chatTurn(TOOLS_APP, `e2e-tool:${COUNTER_WRITE}:{"key":"order-1"}`);
+
+  await stack.waitKilledAt('e2e-counter-after-write');   // the server is gone
+  assert.equal(stack.counter.count('order-1'), 1);        // the write happened
+
+  await stack.restart();                                  // same contents, no kill point
+  assert.equal(stack.counter.count('order-1'), 1);        // and was not repeated
+});
+```
+
+Name the file `<what>.fault.test.js` and put it under `server/tests/faults/`. Give every test `{ timeout: CASE_TIMEOUT_MS }` (90 seconds).
+
+| The stack | |
+|---|---|
+| `startStack({ workers, killPoint, seed, stub, env, contents })` | seeds a contents directory and starts a server on it; `workers: 2` starts a primary with two workers. `contents` names a directory another stack left: the stack starts on it as it is and does not remove it. The seed and the start share one limit of two minutes; a start that runs into it stops what it started |
+| `stack.restart({ killPoint, signal, env, clockAheadMs })` | stops the server if it runs (`SIGKILL` unless told otherwise) and starts one on the same contents directory. The new server has 70 seconds to answer (`RESTART_TIMEOUT_MS`). With the stop before it, that is less than a case has, so a restart that hangs at the beginning of a case fails with the log of the server before the case is cancelled. The limit is fixed; it is not the time the case has left. A case that waited for a kill point first, or that restarts twice, can still be cancelled by node:test with a bare timeout |
+| `stack.kill(signal)` | `SIGKILL` or `SIGTERM` and waits until the server is gone; `SIGSTOP` and `SIGCONT` freeze and thaw it |
+| `stack.waitKilledAt(name)` | waits until the server reached its kill point |
+| `stack.killPointHits()` | the kill points that fired since this start, one name for each time |
+| `stack.healthy()` | waits until the server answers again, after a worker was replaced or the server was thawed |
+| `stack.api(credentials)` | an HTTP client that is signed in (the default admin unless told otherwise): `get`, `post`, `put`, `delete`, `stream`, `chatTurn`. `chatTurn(app, message, { ownConnection: true })` sends the turn on a connection of its own |
+| `stack.readChat(chatId)`, `stack.readLedger(runId)`, `stack.evidence(runId)` | what the server answers for a chat, the events of a run and its evidence record |
+| `stack.stored(namespace, key)`, `stack.journal(runId)` | what is on disk right now: a stored document, the events of a run. A running server can know more than its disk |
+| `stack.counter` | the counter of the write tool: `count(key)`, `read(key)`, `snapshot()`, `reset()`, and `writers(key)`: the process id of the server process behind each write |
+| `stack.stub` | the model stub: `requests(marker)`, `stats()`, `hanging(key)`, `release(key)` |
+| `stack.stop()` | stops everything and removes the contents directory the stack made |
+
+`seed` adds to the contents directory before the first start: `features` and `platform` are laid over the two config files, `apps` are written as app files, and `workflows` lays fields over a shipped workflow. The contents directory already holds the two stub models, the users and the app `e2e-tools` of the [agents suite](developer-onboarding.md#agents-end-to-end-suite), and the test tools.
+
+Three rules keep the tier from becoming flaky:
+
+- **Never read a log line to find out where the server is.** Use a kill point and `waitKilledAt`, or wait for something the server stored (`stack.stored`, `stack.journal`) or sent (a frame of a stream).
+- **Never sleep.** Every wait of the harness is for a condition, with a limit. The limit also holds when a server takes a connection and never answers. `server/tests/no-real-time-waits.test.js` searches the directory for sleeps and for timers of a second or more.
+- **Kill only once the disk says what you rely on.** A server writes its records a moment after it sends an event. `legacy-workflow-restart.fault.test.js` waits until the stored execution says `paused` before it kills. A test that kills earlier tests a different thing: what happens to a write that was still on its way.
+
+Start the stack in a `before` hook with `{ timeout: SETUP_TIMEOUT_MS }`. That limit is longer than a start can take, so a start that fails has stopped its server before the hook gives up.
+
+With two workers, a connection stays with the worker that took it, and `fetch` uses its connections again. A test that has to reach both workers sends its turns with `ownConnection: true` and reads from `stack.counter.writers(key)` which worker wrote, as `two-workers.fault.test.js` does. A replaced worker takes connections only once it has started; `stack.healthy()` returns as soon as the other one answers.
+
+The harness signals only the process groups it started, and none of them after its first process ended. It never looks a process up by name or port.
+
+Set `KEEP_FAULT_CONTENTS=1` to keep the contents directories with the output of their servers (`faults-server.log`) after a run. Without it nothing is left behind, also when you interrupt the run. The nightly workflow sets the variable, to upload the logs of a failed run, so every fault test has to hold in both settings: assert on `stack.keepsContents`, never on the directory being gone. Before you merge a change to the harness or to a fault test, run the tier once as the workflow does:
+
+```bash
+CI=true KEEP_FAULT_CONTENTS=1 npm run test:faults   # then remove the contents-e2e-faults-* directories
+```
+
+### Kill points
+
+A kill point is a place in the code where a fault test can end the process:
+
+```js
+import { killPoint } from '../utils/killPoint.js';
+
+killPoint('after-tool-start');
+```
+
+In every installation this call does nothing. A kill point is armed only in a process that was started with **both** `NODE_ENV=test` and `IHUB_TEST_KILLPOINT=<name>`. The two are read once, when the module is imported; setting them in a running server arms nothing. With `NODE_ENV=production` the module is inert whatever else is set. `server/tests/killPoint.test.js` proves each of these with real processes.
+
+When an armed process reaches its kill point, it claims the kill point, appends the name to the file in `IHUB_TEST_KILLPOINT_FILE` and kills itself with SIGKILL: no handler runs, no buffer is flushed, as when a machine loses power. The harness reads the file. That is how `waitKilledAt` knows that the place was reached. The claim is a file beside it, `<file>.<name>.claim`, made with an exclusive create that only one process can win. The claim belongs to its file: a process that is given a file without the name but finds the claim beside it is not armed, and prints one line that says so (`"<name>" is NOT armed`). The harness makes a new file for every start, so it never meets this; whoever removes a file by hand removes the claim with it.
+
+- `IHUB_TEST_KILLPOINT=<name>@<n>` kills at the n-th time the place is reached, counted per process.
+- A kill point fires once per start of a stack. With two workers the worker that reaches it dies, the primary starts another, and neither the new worker nor the one beside it dies at the same place again. This also holds when two workers reach the place in the same instant: one wins the claim and dies, the other goes on, and `killPointHits()` holds the name once.
+- `startStack` and `restart` set the variables. Never set them yourself, and never in an installation. A server that is started without a kill point gets both variables as empty text, so a `.env` file in `server/` that names a kill point does not arm it (dotenv leaves a variable alone that is set, even to nothing).
+
+To add a kill point:
+
+1. Import it as above, `import { killPoint } from`, and call `killPoint('<name>')` at the place, with the name as a plain string: lower-case words joined by hyphens.
+2. Add a row to `server/tests/faults/KILLPOINTS.md`.
+
+`server/tests/killPoint-inventory.test.js` fails when the code and the list differ. It also fails when a name is not a plain string, when a file other than `server/utils/killPoint.js` names the variable, and when a kill point is placed in a file of the [frozen legacy workflow path](#the-legacy-workflow-path). The test finds a call by its name, so it also fails when a file gets at the module in a way it cannot follow (a default import, a namespace, a dynamic import, a re-export), and when a file imports the module and has no row in the list.
+
+The first two kill points are in the test tool `e2e_counter_write`, before and after its write. They give a test a write that is in flight when the server dies, without a kill point in the code that runs tools. The kill points of a feature come with the feature.
+
+### The counter tools
+
+A test of "this write ran exactly once" needs a write whose effect a killed server cannot take along and cannot hide. A server that is started with `NODE_ENV=test` and `IHUB_TEST_TOOLS=1` has two tools for that (`server/services/integrations/protocols/native/connectors/testTools.js`):
+
+| Tool | |
+|---|---|
+| `e2e_counter_write` | adds one to the counter of a `key`; a write, never read-only |
+| `e2e_counter_read` | returns the count and the values written for a `key`; a read, marked as content from outside iHub (`untrustedInput`) |
+
+The counter itself (`tests/config/test-counter.mjs`) lives in the process of the test. The tools reach it through `httpFetch`, at the address in `IHUB_TEST_COUNTER_URL`. Every write counts, so two writes for one tool call show as 2. A write also names the server process it came from (its process id, in the header `x-ihub-test-writer`); `counter.writers(key)` returns them, for a test of a server with two workers.
+
+No installation has these tools. The connector is registered only with both variables set, and it logs one warning line when it is. iHub ships no definition that names the connector: the definition and the installation are written into the contents directory of the test (`tests/config/test-tools-contents.mjs`). The agents browser suite uses the same tools on the same counter.
+
+### The self-test of the harness
+
+`harness.fault.test.js` tests the harness before any feature relies on it.
+
+**Can it see a double write?** A harness that always reports one write proves nothing. The self-test runs a small server with a journal (`fixtures/journalServer.mjs`): a job writes "write started", writes to the counter, writes "write done". The server is killed between the write and "write done", and started again:
+
+| The fixture is started | The counter shows |
+|---|---|
+| with its protection: an interrupted write is not repeated, the job needs attention | 1 |
+| with `FIXTURE_WRITE_GUARD=off`: an interrupted write is repeated | **2** |
+
+The switch is in the fixture, so the server of the product has no switch that turns a protection off.
+
+**Does it work on the real server?** A real server is killed at a kill point with a write in flight, killed with a model call open, stopped with SIGTERM, and each time started again on the same contents directory. A second stack is started on the contents directory the first one left. `two-workers.fault.test.js` kills one worker of a primary with two workers, shows that the worker beside it and its replacement both reach the kill point afterwards and live, and then kills all of them.
+
+**Does it clean up, and does every wait end?** A frozen server (`SIGSTOP`) takes a connection and does not answer, and the wait for it ends at its limit. A start that runs into its limit leaves no process and no directory. A server that ended by itself is not signalled again. A contents directory is removed, or kept with the output of its servers, as the stack was told.
+
+These tests say nothing about what a run should do after a kill. A killed turn leaves its chat as it was, and the cases that pin "needs attention" and "run again" come with the features that build them.
+
+### A legacy workflow that waits for a person
+
+`legacy-workflow-restart.fault.test.js` is the story of the golden `legacy-workflow/delivered-after-restart` with real processes. A server runs the shipped workflow `approval-workflow` from a chat until it asks its question and is killed. A second server is started on the same contents directory. The chat says that it waits, the person answers, and the next read of the chat holds the result in the place of the waiting answer. Each step asked the model once.
+
+Two things in it are worth knowing for your own tests:
+
+- **The clock.** A chat whose turn claimed it less than two minutes ago is presumed alive, and is closed as interrupted only after that. The test does not sleep for two minutes: it starts the second server with its clock three minutes ahead, `stack.restart({ clockAheadMs })`. This is "the person came back later". Only `Date.now()` and `new Date()` are moved; timers keep their pace.
+- **The pinned defect.** When an answer continues an execution that the answering server did not start, the legacy engine counts the events of the run from 1 again (#3875). The test pins this: the ledger of the run holds two events with the number 1. Whoever fixes it changes the assertion in the same pull request.
+
+### Smoke cases on a pull request
+
+The whole fault tier is too slow for every pull request. A fault test whose file name ends in `.smoke.fault.test.js` also runs on every pull request, in the job **Fault tests (smoke)** of `e2e.yml` (`npm run test:faults:smoke`). Give the tag only to the few cases that guard against the worst regressions. No file carries it yet.
+
+### A load smoke with tool rounds
+
+The nightly workflow also runs a load smoke: `npm run loadtest:smoke` starts the fake LLM of the load harness and a server of its own, runs the profiles `smoke` and `agentic`, and fails when a scenario made no turn or a turn failed. The profile `agentic` makes every turn a turn with one to three tool rounds. It measures nothing at three users; it keeps the load harness working. See [`tests/load/README.md`](../tests/load/README.md).
 
 ## App as tool
 

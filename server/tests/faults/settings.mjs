@@ -1,0 +1,110 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
+/**
+ * The limits and the names of the fault harness (`harness.mjs`).
+ *
+ * They are in a module of their own, which does nothing when it is imported,
+ * so that a test of the pull request tier can read them
+ * (`server/tests/fault-harness-settings.test.js`). The fault tier itself runs
+ * only at night and with the label `run-faults`; what the nightly workflow
+ * gives it and what the harness expects must not drift apart unseen.
+ */
+
+/** The limit of one fault case. Pass it as the `timeout` of the test. */
+export const CASE_TIMEOUT_MS = 90_000;
+/**
+ * How long `startStack` may take at most: the seed and the first start of the
+ * server share this one limit. A started server gets the same limit to answer.
+ */
+export const START_TIMEOUT_MS = 120_000;
+/** How long a signalled process may take to be gone. */
+export const EXIT_TIMEOUT_MS = 15_000;
+/**
+ * How long the start of a `restart` may take. A restart happens inside a case.
+ * One that begins within the first five seconds of its case gives up before
+ * the case does (`CASE_TIMEOUT_MS`), with room for the stop of the server that
+ * ran before it: the error then names the wait and shows the log of the
+ * server. A case that node:test cancels shows neither.
+ *
+ * The limit is fixed. It is not the time the case has left: a case that waited
+ * for a kill point first (`KILL_POINT_TIMEOUT_MS`), or that restarts twice, can
+ * still be cancelled before a hanging restart gives up.
+ */
+export const RESTART_TIMEOUT_MS = CASE_TIMEOUT_MS - EXIT_TIMEOUT_MS - 5_000;
+/**
+ * The limit of a `before` hook that seeds a contents directory and starts a
+ * server. It is longer than a start may take plus the stop of one that failed
+ * (see `fault-harness-settings.test.js`): `startStack` gives up and stops what
+ * it started before the hook does. A hook that gave up first would leave a
+ * server behind that no `after` hook knows.
+ */
+export const SETUP_TIMEOUT_MS = 180_000;
+/** How long a kill point may take to be reached, unless the test says otherwise. */
+export const KILL_POINT_TIMEOUT_MS = 60_000;
+/** How often a condition is looked at while it is waited for. */
+export const POLL_MS = 25;
+/**
+ * The limit of one look at a server ("does it answer?"). A server that takes
+ * the connection and says nothing must not hold the wait up.
+ */
+export const LOOK_TIMEOUT_MS = 2_000;
+
+/** The variable that keeps the contents directories of a run. */
+export const KEEP_VARIABLE = 'KEEP_FAULT_CONTENTS';
+/** How the contents directory of a stack is named: this prefix and a random part. */
+export const CONTENTS_PREFIX = 'contents-e2e-faults-';
+/** The log of the servers of a stack, in a contents directory that is kept. */
+export const SERVER_LOG = 'faults-server.log';
+
+/**
+ * Whether the stacks of a process keep their contents directories.
+ *
+ * @param {Record<string, string|undefined>} [env=process.env]
+ * @returns {boolean}
+ */
+export function keepsContents(env = process.env) {
+  return env[KEEP_VARIABLE] === '1';
+}
+
+/**
+ * What `stack.stop()` does with the contents directory.
+ *
+ * @param {Object} stack
+ * @param {boolean} stack.keep - The stack keeps its contents (`keepsContents`)
+ * @param {boolean} stack.ownsContents - The stack made the directory; false for
+ *   one that was started on the directory of another stack
+ * @returns {{log: boolean, remove: boolean}} `log`: the output of the server is
+ *   added to `faults-server.log` in the directory; `remove`: the directory is deleted
+ */
+export function afterStop({ keep, ownsContents }) {
+  return { log: keep, remove: !keep && ownsContents };
+}
+
+/** The variables of a kill point (`server/utils/killPoint.js`). */
+const KILL_POINT_VARIABLES = ['IHUB_TEST_KILLPOINT', 'IHUB_TEST_KILLPOINT_FILE'];
+
+/**
+ * The environment of a child of the harness: the one of the test, without the
+ * mark of the test runner (a server is not a test file) and with no kill point
+ * but the one in `extra`.
+ *
+ * The kill point variables are set to the empty text, not taken out. The
+ * server reads a `.env` file when it starts, and dotenv fills in every
+ * variable the environment does not have; one that is there, even empty, it
+ * leaves alone. A `.env` with `IHUB_TEST_KILLPOINT` would otherwise arm a
+ * server that was started without a kill point.
+ *
+ * @param {Record<string, string|undefined>} env - The environment of the test process
+ * @param {Record<string, string>} [extra] - What the child gets on top; wins over `env`
+ * @returns {Record<string, string|undefined>}
+ */
+export function childEnvironment(env, extra = {}) {
+  const inherited = Object.fromEntries(
+    Object.entries(env).filter(
+      ([key]) => !key.startsWith('IHUB_TEST_KILLPOINT') && key !== 'NODE_TEST_CONTEXT'
+    )
+  );
+  const unarmed = Object.fromEntries(KILL_POINT_VARIABLES.map(key => [key, '']));
+  return { ...inherited, ...unarmed, ...extra };
+}

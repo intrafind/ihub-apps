@@ -4,6 +4,7 @@
 import { test, expect } from '@playwright/test';
 import {
   chatTurn,
+  counter,
   dismissDisclaimer,
   openApp,
   restartServer,
@@ -106,6 +107,66 @@ test.describe('Agents suite smoke', () => {
     const requests = await stub.requests(message);
     expect(requests.map(body => body.messages.at(-1).role)).toEqual(['user', 'tool']);
     expect(requests[0].tools.map(tool => tool.function.name)).toContain('list_scheduled_tasks');
+  });
+
+  // The counter lives in the helper process of the suite, not in the server: a
+  // spec that has to prove "this write ran once" reads it there.
+  test(
+    'a write made from the chat page is counted outside the server',
+    { tag: '@gate' },
+    async ({ page }) => {
+      await signInPage(page, USER);
+      await openApp(page, TOOLS_APP);
+      const key = `smoke-${unique('w').slice(-8)}`;
+      expect(await counter.count(key)).toBe(0);
+
+      await sendMessage(
+        page,
+        `e2e-tool:e2e_counter_write:{"key":"${key}","value":"from the page"}`
+      );
+      await expect(shown(page, `E2E tool result seen: {"key":"${key}","count":1}`)).toBeVisible({
+        timeout: 30_000
+      });
+
+      expect((await counter.read()).counters[key]).toEqual({ count: 1, values: ['from the page'] });
+
+      // The read tool returns what was written: content from outside iHub, offline.
+      const user = await signedIn(USER);
+      const read = await chatTurn(user, TOOLS_APP, `e2e-tool:e2e_counter_read:{"key":"${key}"}`, {
+        modelId: MODELS.tools
+      });
+      expect(read.status, read.text).toBe(200);
+      const requests = await stub.requests(`e2e_counter_read:{"key":"${key}"}`);
+      expect(JSON.parse(requests.at(-1).messages.at(-1).content)).toEqual({
+        key,
+        count: 1,
+        values: ['from the page']
+      });
+      await user.dispose();
+
+      await counter.reset();
+      expect(await counter.read()).toEqual({ total: 0, counters: {} });
+    }
+  );
+
+  test('the suite’s server is a test server without a kill point', { tag: '@gate' }, async () => {
+    // What the helper started the server as (`serverEnvironment`, agents-contents.mjs).
+    expect((await serverStatus()).server).toEqual({
+      nodeEnv: 'test',
+      testTools: true,
+      killPoint: false
+    });
+    // And what the server made of it: the installation of the test tools has a
+    // connector behind it, so both of its actions can be called.
+    const admin = await signedIn(ADMIN);
+    const installed = await admin.get('/api/admin/integrations/installed/e2e-counter');
+    expect(installed.status(), await installed.text()).toBe(200);
+    const { actions } = await installed.json();
+    expect(actions.map(action => [action.toolId, action.sideEffect, action.available])).toEqual([
+      ['e2e_counter_write', 'write', true],
+      ['e2e_counter_read', 'read', true]
+    ]);
+    await admin.dispose();
   });
 
   test(

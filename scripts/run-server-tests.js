@@ -20,8 +20,9 @@
  *   - `nightly`: everything under `server/tests/faults/` and every
  *     `*.nightly.test.js`. These start real server processes or run for
  *     minutes, so they never run on a pull request: they run only with
- *     `--tier=nightly` (`npm run test:nightly`). No workflow runs this tier
- *     yet (docs/run-testing.md).
+ *     `--tier=nightly` (`npm run test:nightly`), one file at a time. The
+ *     nightly workflow runs this tier (`.github/workflows/nightly.yml`,
+ *     docs/run-testing.md).
  *   - `pr`: every other file. This is the default and what `npm run test:quick`
  *     runs.
  *
@@ -204,8 +205,23 @@ function isJest(file) {
   );
 }
 
+/**
+ * The options of `node --test` for a group of files.
+ *
+ * Files of the nightly tier run one after the other. They start real server
+ * processes; side by side on a small machine, a start can take longer than a
+ * test waits for it, and that reads as a failing test.
+ *
+ * @param {string[]} files
+ * @returns {string[]}
+ */
+export function nodeTestArgs(files) {
+  const serial = files.some(file => tierOf(file) === 'nightly');
+  return ['--test', ...(serial ? ['--test-concurrency=1'] : []), ...files];
+}
+
 function runNodeGroup(files, { env, stdio = 'inherit' }) {
-  return spawnSync(process.execPath, ['--test', ...files], { cwd: root, env, stdio });
+  return spawnSync(process.execPath, nodeTestArgs(files), { cwd: root, env, stdio });
 }
 
 function runJestGroup(files, { env, stdio = 'inherit' }) {
@@ -339,9 +355,17 @@ export function main({
 
   let failed = false;
 
-  if (nodeFiles.length > 0) {
-    console.log(`\n[server tests] node:test group: ${nodeFiles.length} files`);
-    if (runNodeGroup(nodeFiles, { env }).status !== 0) failed = true;
+  // The nightly files are a group of their own, so that `--tier=all` still runs
+  // the pr tier side by side.
+  const nightlyNodeFiles = nodeFiles.filter(f => tierOf(f) === 'nightly');
+  const prNodeFiles = nodeFiles.filter(f => tierOf(f) !== 'nightly');
+  for (const [label, group] of [
+    ['node:test group', prNodeFiles],
+    ['node:test group, nightly tier, one file at a time', nightlyNodeFiles]
+  ]) {
+    if (group.length === 0) continue;
+    console.log(`\n[server tests] ${label}: ${group.length} files`);
+    if (runNodeGroup(group, { env }).status !== 0) failed = true;
   }
 
   if (jestFiles.length > 0) {

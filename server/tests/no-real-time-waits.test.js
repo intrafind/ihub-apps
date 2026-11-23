@@ -43,6 +43,12 @@ const SEARCHED = [
   'fakeClock.test.js',
   'appToolsGateway.characterization.test.js',
   'run-server-tests-runner.test.js',
+  'killPoint.test.js',
+  'killPoint-inventory.test.js',
+  'testTools.test.js',
+  'test-counter.test.js',
+  'nightly-red-issue.test.js',
+  'fault-harness-settings.test.js',
   'fixtures/scriptedModel',
   'fixtures/sideBySide'
 ];
