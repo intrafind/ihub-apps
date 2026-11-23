@@ -76,7 +76,12 @@ jest.mock('../../../client/src/shared/contexts/PlatformConfigContext', () => ({
   usePlatformConfig: () => ({ platformConfig: {} })
 }));
 jest.mock('../../../client/src/features/admin/hooks/useUnsavedChanges', () => ({
-  useUnsavedChanges: () => ({ blocker: { state: 'unblocked' }, markSaved: () => {} })
+  // Always dirty: the page's save bar is shown only for unsaved changes.
+  useUnsavedChanges: () => ({
+    blocker: { state: 'unblocked' },
+    markSaved: () => {},
+    isDirty: true
+  })
 }));
 
 const mockSchemas = {};
@@ -123,8 +128,11 @@ const settle = async () => {
 };
 
 const submit = () => {
-  // The save button is the form's only submit button.
-  fireEvent.click(document.querySelector('form button[type="submit"]'));
+  // The save bar's primary button submits the form (its last button; Discard comes first).
+  const labels = mockLanguage === 'de' ? de : en;
+  const bar = screen.getByRole('region', { name: labels.admin.ui.saveBar.label });
+  const buttons = within(bar).getAllByRole('button');
+  fireEvent.click(buttons[buttons.length - 1]);
 };
 
 /** The error summaries on the page: alerts with the summary heading. */

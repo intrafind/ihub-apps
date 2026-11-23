@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { fetchUsageBreakdown } from '../../../api/usageReportsAdminApi';
 import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
@@ -18,6 +18,7 @@ import ModelFormEditor from '../components/ModelFormEditor';
 import ChangeHistoryDrawer from '../components/ChangeHistoryDrawer';
 import { useAdminResourceEditor } from '../hooks/useAdminResourceEditor';
 import AdminEditPageShell from '../../../shared/components/AdminEditPageShell';
+import AdminSaveBar from '../components/AdminSaveBar';
 import MarketplaceModelReviewNotice from '../components/marketplace/MarketplaceModelReviewNotice';
 import AdminLoadError from '../components/AdminLoadError';
 import { UsageLimitBucketFields, normalizeLimitBucket } from '../components/UsageLimitsEditor';
@@ -279,6 +280,7 @@ function AdminModelEditPage() {
     retryLoad,
     save,
     reload,
+    initialData,
     isDirty,
     blocker
   } = useAdminResourceEditor({ resourceId: modelId, loadResource, makeDefault, saveResource });
@@ -376,6 +378,12 @@ function AdminModelEditPage() {
     if (typeof e.currentTarget?.reportValidity === 'function' && !e.currentTarget.reportValidity())
       return;
     await handleSave();
+  };
+
+  const formRef = useRef(null);
+  const handleDiscard = () => {
+    setFormData(initialData);
+    setError(null);
   };
 
   const handleSave = async () => {
@@ -512,7 +520,7 @@ function AdminModelEditPage() {
       {fromMarketplace && <MarketplaceModelReviewNotice className="mb-6" />}
 
       {/* noValidate: the form's own messages come first (see handleFormSubmit). */}
-      <form onSubmit={handleFormSubmit} noValidate className="space-y-8">
+      <form ref={formRef} onSubmit={handleFormSubmit} noValidate className="space-y-8">
         <div className="space-y-8">
           {/* Main Form Editor */}
           <DualModeEditor
@@ -668,29 +676,16 @@ function AdminModelEditPage() {
             </div>
           )}
         </div>
-
-        {/* Save buttons */}
-        <div className="flex justify-end space-x-4">
-          <button
-            type="button"
-            onClick={() => navigate('/admin/models')}
-            className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-xs text-sm font-medium text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-          >
-            {t('common.cancel')}
-          </button>
-          <button
-            type="submit"
-            disabled={saving}
-            className="inline-flex justify-center px-4 py-2 border border-transparent shadow-xs text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50"
-          >
-            {saving
-              ? t('admin.models.edit.saving')
-              : isNewModel
-                ? t('admin.models.edit.createModel')
-                : t('admin.models.edit.saveChanges')}
-          </button>
-        </div>
       </form>
+
+      <AdminSaveBar
+        // A model made from a template or a clone is complete as it opens.
+        dirty={isDirty || (isNewModel && Boolean(location.state?.templateModel))}
+        saving={saving}
+        saveLabel={isNewModel ? t('admin.ui.saveBar.create', 'Create') : undefined}
+        onSave={() => formRef.current?.requestSubmit()}
+        onDiscard={handleDiscard}
+      />
     </AdminEditPageShell>
   );
 }

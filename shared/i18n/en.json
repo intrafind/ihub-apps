@@ -5866,7 +5866,8 @@
         "label": "Save changes",
         "saving": "Saving…",
         "unsaved": "You have unsaved changes",
-        "discard": "Discard"
+        "discard": "Discard",
+        "create": "Create"
       },
       "saved": "UI configuration saved successfully",
       "backedUp": "Configuration backed up to: {{path}}",
