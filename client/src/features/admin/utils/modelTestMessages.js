@@ -24,7 +24,9 @@ const MODEL_TEST_MESSAGE_I18N_KEYS = {
   authenticationFailed: 'admin.models.testResults.messages.authenticationFailed',
   modelNotFound: 'admin.models.testResults.messages.modelNotFound',
   rateLimitExceeded: 'admin.models.testResults.messages.rateLimitExceeded',
-  serverError: 'admin.models.testResults.messages.serverError'
+  serverError: 'admin.models.testResults.messages.serverError',
+  apiKeyRequired: 'admin.models.testResults.messages.apiKeyRequired',
+  certificateUntrusted: 'admin.models.testResults.messages.certificateUntrusted'
 };
 
 /**

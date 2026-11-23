@@ -1599,7 +1599,8 @@
       },
       "add": "Add provider",
       "import": "Import models",
-      "ownTimeouts": "Sets its own timeouts"
+      "ownTimeouts": "Sets its own timeouts",
+      "loadError": "Error loading providers"
     },
     "models": {
       "sync": {
@@ -1642,7 +1643,9 @@
           "modelNotFound": "Model not found",
           "rateLimitExceeded": "Rate limit exceeded",
           "serverError": "Server error",
-          "apiKeyUndecryptable": "Stored API key cannot be decrypted"
+          "apiKeyUndecryptable": "Stored API key cannot be decrypted",
+          "apiKeyRequired": "The endpoint requires an API key",
+          "certificateUntrusted": "Certificate not trusted"
         }
       },
       "enable": "Enable",
@@ -1970,7 +1973,9 @@
           "connectionRefused": "Connection refused",
           "hostNotFound": "Host not found",
           "networkError": "Network error",
-          "providerIdReserved": "This ID is the name of an API type. Choose another ID."
+          "providerIdReserved": "This ID is the name of an API type. Choose another ID.",
+          "serverError": "The endpoint answered with a server error",
+          "certificateUntrusted": "The certificate of the endpoint is not trusted"
         },
         "unsupported": "iHub cannot run this model from this provider",
         "gatewayCheckbox": "This endpoint is an iFinder Model Gateway",
@@ -4586,7 +4591,8 @@
       },
       "downloadError": "Failed to download app config: {{error}}",
       "uploadExists": "App with ID \"{{id}}\" already exists",
-      "uploadError": "Failed to upload app config: {{error}}"
+      "uploadError": "Failed to upload app config: {{error}}",
+      "loadError": "Error loading apps"
     },
     "features": {
       "title": "Features",
@@ -9470,6 +9476,31 @@
     },
     "integrationPages": {
       "oauthClientId": "OAuth Client ID:"
+    },
+    "connectionErrors": {
+      "facts": {
+        "status": "HTTP {{status}}",
+        "host": "Host: {{host}}",
+        "code": "Code: {{code}}"
+      },
+      "openSslSettings": "Open the SSL / TLS settings",
+      "remediation": {
+        "certificateUntrusted": "The iHub server does not trust the TLS certificate of this endpoint, which is typical for a private CA or a self-signed certificate. Add the host to the SSL domain whitelist and turn on \"Ignore invalid SSL certificates\".",
+        "serverError": "The endpoint itself failed. Check the status and logs of the service (or of a proxy in front of it) and try again; the configuration in iHub is probably correct.",
+        "authenticationFailed": "The endpoint rejected the API key. Check the key on the model or its provider.",
+        "accessDenied": "The endpoint accepted the API key but does not allow this request. Check the permissions of the key and which models the account may use.",
+        "apiKeyRequired": "The endpoint asks for an API key, but none is configured. Enter the key on the provider or the model and try again.",
+        "apiKeyNotConfigured": "No API key is configured. Enter one on the model or its provider, or set the environment variable.",
+        "apiKeyUndecryptable": "The stored API key was saved with a different encryption key. Enter the key again.",
+        "wrongPath": "Nothing was found at this URL. Check the path (it usually ends in /v1/chat/completions) and the model ID.",
+        "listNotFound": "No model list was found at this URL. Check the path: it usually ends in /v1 or /v1/models.",
+        "connectionRefused": "Nothing accepts connections at this host and port. Check the port in the URL and that the service is running.",
+        "hostNotFound": "The host name could not be resolved. Check the spelling of the URL, or the DNS and proxy settings of the iHub server.",
+        "timeout": "The endpoint did not answer in time. Check the URL, that the service is running, and that the iHub server can reach it (firewall, VPN, proxy).",
+        "requestTimeout": "The service took too long to answer. Try again, or check how busy the service is.",
+        "networkError": "The connection failed. Check that the iHub server can reach the host (firewall, VPN, outbound proxy).",
+        "rateLimitExceeded": "The endpoint is limiting requests. Wait a moment and try again."
+      }
     }
   },
   "cloudStorage": {

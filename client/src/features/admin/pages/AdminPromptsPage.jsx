@@ -63,7 +63,10 @@ function AdminPromptsPage() {
 
   const [prompts, setPrompts] = useState([]);
   const [loading, setLoading] = useState(true);
+  // `error`: a failed action (toggle, download, upload). `loadError`: the list could not be
+  // loaded; the table then shows it with Retry instead of the empty state.
   const [error, setError] = useState(null);
+  const [loadError, setLoadError] = useState(null);
   const [searchTerm, setSearchTerm] = useFilterState('q', '');
   const [filterEnabled, setFilterEnabled] = useFilterState('enabled', 'all');
   const [selectedCategory, setSelectedCategory] = useFilterState('category', 'all');
@@ -105,9 +108,10 @@ function AdminPromptsPage() {
       setError(null);
       const data = await fetchAdminPrompts();
       setPrompts(Array.isArray(data) ? data : []);
+      setLoadError(null);
     } catch (err) {
-      setError(getAdminApiErrorMessage(err));
-      setPrompts([]);
+      // The prompts loaded before (if any) stay listed below the error.
+      setLoadError(getAdminApiErrorMessage(err));
     } finally {
       setLoading(false);
     }
@@ -365,15 +369,8 @@ function AdminPromptsPage() {
     }
   ];
 
-  if (error) {
-    return (
-      <AdminLoadError
-        title={t('admin.prompts.loadError', 'Error loading prompts')}
-        message={error}
-      />
-    );
-  }
-
+  // A failed load keeps the tabs and the actions (and any prompts loaded before); the table
+  // shows the error with Retry instead of "No prompts found" (AI-B11).
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -487,6 +484,9 @@ function AdminPromptsPage() {
 
         {activeTab === 'prompts' ? (
           <>
+            {error && (
+              <AdminLoadError message={error} framed={false} className="mt-6" action={null} />
+            )}
             <div className="mt-6 flex flex-wrap items-center gap-3">
               <SearchInput
                 value={searchTerm}
@@ -543,6 +543,9 @@ function AdminPromptsPage() {
                 getRowId={p => p.id}
                 actions={actions}
                 loading={loading}
+                error={loadError}
+                onRetry={loadPrompts}
+                errorTitle={t('admin.prompts.loadError', 'Error loading prompts')}
                 onRowClick={prompt => {
                   setSelectedPrompt(prompt);
                   setShowPromptDetails(true);

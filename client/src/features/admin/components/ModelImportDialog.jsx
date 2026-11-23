@@ -28,6 +28,7 @@ import {
   suggestModelId,
   translateDiscoveryError
 } from '../utils/modelImport';
+import ConnectionErrorDetails from './ConnectionErrorDetails';
 
 const NEW_PROVIDER = '__new__';
 
@@ -235,7 +236,8 @@ function ModelImportDialog({ onClose, onImported, existingModelIds, initialProvi
           body.details?.messageKey,
           body.detail || getAdminApiErrorMessage(err)
         ),
-        details: body.details?.remediation
+        // messageKey, remediation and the facts (upstreamStatus, host, errorCode)
+        details: body.details || null
       });
     } finally {
       setDiscovering(false);
@@ -607,9 +609,10 @@ function ModelImportDialog({ onClose, onImported, existingModelIds, initialProvi
           <p className="text-sm font-medium text-red-800 dark:text-red-300">
             {discoveryError.message}
           </p>
-          {discoveryError.details && (
-            <p className="mt-1 text-sm text-red-700 dark:text-red-400">{discoveryError.details}</p>
-          )}
+          <ConnectionErrorDetails
+            details={discoveryError.details}
+            textClassName="text-sm text-red-700 dark:text-red-400"
+          />
         </div>
       )}
       <button type="submit" className="hidden" aria-hidden="true" tabIndex={-1} />

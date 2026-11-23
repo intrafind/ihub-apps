@@ -205,7 +205,10 @@ function AdminAppsPage() {
   // migration left on an app (an action it was bound to removed); [] when unknown.
   const [installedIntegrations, setInstalledIntegrations] = useState([]);
   const [loading, setLoading] = useState(true);
+  // `error`: a failed action (save, toggle, upload). `loadError`: the list could not be
+  // loaded; the table then shows it with Retry instead of the empty state.
   const [error, setError] = useState(null);
+  const [loadError, setLoadError] = useState(null);
   const [searchTerm, setSearchTerm] = useFilterState('q', '');
   const [filterEnabled, setFilterEnabled] = useFilterState('enabled', 'all');
   const [selectedCategory, setSelectedCategory] = useFilterState('category', 'all');
@@ -261,8 +264,10 @@ function AdminAppsPage() {
       setApps(data);
       setIntegrationStatus(status);
       setInstalledIntegrations(Array.isArray(installed?.items) ? installed.items : []);
+      setLoadError(null);
     } catch (err) {
-      setError(getAdminApiErrorMessage(err));
+      // The apps loaded before (if any) stay listed below the error.
+      setLoadError(getAdminApiErrorMessage(err));
     } finally {
       setLoading(false);
     }
@@ -864,6 +869,9 @@ function AdminAppsPage() {
                   getRowId={app => app.id}
                   actions={actions}
                   loading={loading}
+                  error={loadError}
+                  onRetry={loadApps}
+                  errorTitle={t('admin.apps.loadError', 'Error loading apps')}
                   onRowClick={app => {
                     setSelectedApp(app);
                     setShowAppDetails(true);

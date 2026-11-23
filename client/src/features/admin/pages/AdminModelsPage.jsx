@@ -15,6 +15,8 @@ import ModelImportDialog from '../components/ModelImportDialog';
 import ApiKeyStatusBadge from '../components/ApiKeyStatusBadge';
 import useApiKeyStatus from '../hooks/useApiKeyStatus';
 import AdminLoadError from '../components/AdminLoadError';
+import ConnectionErrorDetails from '../components/ConnectionErrorDetails';
+import { listCount } from '../utils/listLoadState';
 import useAdminPageAccess from '../hooks/useAdminPageAccess';
 import useFeatureFlags from '../../../shared/hooks/useFeatureFlags';
 import ModelsTabsHeader from '../components/ModelsTabsHeader';
@@ -142,7 +144,10 @@ function AdminModelsPage() {
   const { statuses: providerKeyStatuses, reload: reloadProviderKeyStatus } =
     useApiKeyStatus('providers');
   const [loading, setLoading] = useState(true);
+  // `error`: a failed action (toggle, download, upload). `loadError`: the list could not be
+  // loaded; the table then shows it with Retry instead of the empty state.
   const [error, setError] = useState(null);
+  const [loadError, setLoadError] = useState(null);
   const [searchTerm, setSearchTerm] = useFilterState('q', '');
   const [filterEnabled, setFilterEnabled] = useFilterState('enabled', 'all');
   const [filterProvider, setFilterProvider] = useFilterState('provider', 'all');
@@ -177,9 +182,10 @@ function AdminModelsPage() {
       setProviders(
         Array.isArray(providersResponse.data?.items) ? providersResponse.data.items : []
       );
+      setLoadError(null);
     } catch (err) {
-      setError(getAdminApiErrorMessage(err));
-      setModels([]);
+      // The models loaded before (if any) stay listed below the error.
+      setLoadError(getAdminApiErrorMessage(err));
     } finally {
       setLoading(false);
     }
@@ -262,7 +268,8 @@ function AdminModelsPage() {
         [modelId]: { ...(response?.data || {}), success: true }
       }));
     } catch (err) {
-      // Server body: { error: headline, code, details: { remediation, messageKey } }
+      // Server body: { detail: headline, code, details: { messageKey, remediation,
+      // upstreamStatus?, host?, errorCode? } }
       const body = err?.response?.data || {};
       const fallbackMessage = body.detail || t('admin.models.testResults.failed', 'Test Failed');
       setTestResults(prev => ({
@@ -270,9 +277,8 @@ function AdminModelsPage() {
         [modelId]: {
           success: false,
           message: translateModelTestMessage(t, body.details?.messageKey, fallbackMessage),
-          error:
-            body.details?.remediation ||
-            (err?.response?.status ? `HTTP ${err.response.status}` : err.message)
+          details: body.details || null,
+          error: err?.response?.status ? `HTTP ${err.response.status}` : err.message
         }
       }));
     } finally {
@@ -502,11 +508,7 @@ function AdminModelsPage() {
                 <div className="text-sm font-medium text-red-800 dark:text-red-300">
                   {result.message || t('admin.models.testResults.failed', 'Test Failed')}
                 </div>
-                {result.error && (
-                  <div className="text-sm text-gray-700 dark:text-gray-300 mt-1">
-                    {result.error}
-                  </div>
-                )}
+                <ConnectionErrorDetails details={result.details} fallback={result.error} />
               </div>
             </>
           )}
@@ -528,18 +530,14 @@ function AdminModelsPage() {
     };
   };
 
-  if (error) {
-    return (
-      <AdminLoadError title={t('admin.models.loadError', 'Error loading models')} message={error} />
-    );
-  }
-
+  // A failed load keeps the tabs, the actions and any models loaded before; the table shows
+  // the error with Retry instead of "No models found" (AI-B11).
   return (
     <div>
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <ModelsTabsHeader
-          modelCount={loading ? undefined : models.length}
-          providerCount={loading ? undefined : providers.length}
+          modelCount={listCount(models.length, { loading, error: loadError })}
+          providerCount={listCount(providers.length, { loading, error: loadError })}
           actions={
             <>
               <button
@@ -606,7 +604,11 @@ function AdminModelsPage() {
         />
 
         <div role="tabpanel" id="tabpanel-models" aria-labelledby="tab-models">
-          {!loading && (
+          {error && (
+            <AdminLoadError message={error} framed={false} className="mb-4" action={null} />
+          )}
+          {/* The setup strip reads an empty list as "nothing set up yet": not after a failed load. */}
+          {listCount(models.length, { loading, error: loadError }) !== undefined && (
             <ModelsSetupStrip
               keyStatuses={providerKeyStatuses}
               models={models}
@@ -664,6 +666,9 @@ function AdminModelsPage() {
               getRowId={m => m.id}
               actions={actions}
               loading={loading}
+              error={loadError}
+              onRetry={loadModels}
+              errorTitle={t('admin.models.loadError', 'Error loading models')}
               getRowExpansion={getRowExpansion}
               onRowClick={model => {
                 setSelectedModel(model);
