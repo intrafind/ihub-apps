@@ -17,7 +17,8 @@ jest.mock('../../../client/src/utils/runtimeBasePath', () => ({
   getBasePath: () => mockBasePath
 }));
 
-import { getHttpUrl, getSafeReturnPath } from '../../../client/src/utils/safeUrl';
+import { getSafeReturnPath } from '../../../client/src/utils/safeUrl';
+import { getHttpBaseUrl, getHttpUrl } from '../../../client/src/utils/httpUrl';
 
 const ORIGIN = 'https://ihub.example.com';
 
@@ -144,5 +145,36 @@ describe('getHttpUrl', () => {
     undefined
   ])('rejects %s', value => {
     expect(getHttpUrl(value)).toBeNull();
+  });
+});
+
+describe('getHttpBaseUrl', () => {
+  test.each([
+    ['https://ihub.example.com', 'https://ihub.example.com'],
+    ['https://ihub.example.com/', 'https://ihub.example.com'],
+    ['  https://ihub.example.com/ihub//  ', 'https://ihub.example.com/ihub'],
+    ['http://localhost:3000', 'http://localhost:3000'],
+    ['HTTPS://IHUB.EXAMPLE.COM/ihub?x=1#frag', 'https://ihub.example.com/ihub']
+  ])('keeps %p as %p', (value, expected) => {
+    expect(getHttpBaseUrl(value)).toBe(expected);
+  });
+
+  test.each([
+    'javascript:alert(1)',
+    'data:text/html,<script>alert(1)</script>',
+    'chrome-extension://abcdef/page.html',
+    'file:///etc/passwd',
+    '//evil.example.com',
+    '/api',
+    'ihub.example.com',
+    'https://user:secret@ihub.example.com',
+    'https://',
+    '',
+    '   ',
+    null,
+    undefined,
+    42
+  ])('rejects %p', value => {
+    expect(getHttpBaseUrl(value)).toBeNull();
   });
 });

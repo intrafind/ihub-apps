@@ -230,7 +230,7 @@ export default function AdminAgentsPage() {
                 onClick={() => navigate('/admin/agents/approvals')}
                 className="px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 rounded-md hover:bg-gray-50 dark:hover:bg-gray-700"
               >
-                {t('admin.agents.approvals', 'Pending Approvals')}
+                {t('admin.agents.pendingApprovals', 'Pending Approvals')}
               </button>
               <button
                 onClick={() => navigate('/admin/agents/new')}

@@ -9,19 +9,25 @@ const DISPLAY_OPTIONS = ['standalone', 'fullscreen', 'minimal-ui', 'browser'];
 const ICON_FIELDS = [
   {
     key: 'icon192',
+    labelKey: 'admin.ui.pwa.icon192',
     label: '192×192 Icon',
+    hintKey: 'admin.ui.pwa.icon192Hint',
     hint: 'Required for Android home screen. Upload via Assets tab, paste URL here.',
     required: true
   },
   {
     key: 'icon512',
+    labelKey: 'admin.ui.pwa.icon512',
     label: '512×512 Icon',
+    hintKey: 'admin.ui.pwa.icon512Hint',
     hint: 'Required for splash screen. Should be a high-resolution version of your logo.',
     required: true
   },
   {
     key: 'iconApple',
+    labelKey: 'admin.ui.pwa.iconApple',
     label: 'Apple Touch Icon',
+    hintKey: 'admin.ui.pwa.iconAppleHint',
     hint: 'Used by iOS Safari when saving to home screen (180×180 recommended).',
     required: false
   }
@@ -90,7 +96,7 @@ function PwaCustomization({ config, onUpdate, t }) {
             >
               {t('admin.ui.pwa.shortName', 'Short Name')}
               <span className="ml-1 text-xs font-normal text-gray-600 dark:text-gray-400">
-                (max 15 chars)
+                {t('admin.ui.pwa.shortNameMax', '(max 15 chars)')}
               </span>
             </label>
             <input
@@ -121,7 +127,10 @@ function PwaCustomization({ config, onUpdate, t }) {
             maxLength={300}
             value={pwa.description || ''}
             onChange={e => handleChange('description', e.target.value)}
-            placeholder="AI-powered applications platform"
+            placeholder={t(
+              'admin.ui.pwa.descriptionPlaceholder',
+              'AI-powered applications platform'
+            )}
             className="w-full border border-admin-control-border dark:border-admin-control-border-dark rounded-md px-3 py-2 text-sm focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
           />
         </div>
@@ -244,13 +253,13 @@ function PwaCustomization({ config, onUpdate, t }) {
           )}
         </p>
 
-        {ICON_FIELDS.map(({ key, label, hint, required }) => (
+        {ICON_FIELDS.map(({ key, labelKey, label, hintKey, hint, required }) => (
           <div key={key}>
             <label
               htmlFor={`pwa-icon-${key}`}
               className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1"
             >
-              {label}
+              {t(labelKey, label)}
               {required && (
                 <span className="ml-2 text-xs bg-yellow-100 text-yellow-700 px-1.5 py-0.5 rounded-sm">
                   {t('admin.ui.pwa.required', 'required')}
@@ -269,7 +278,9 @@ function PwaCustomization({ config, onUpdate, t }) {
               {pwa.icons?.[key] && (
                 <img
                   src={pwa.icons[key]}
-                  alt={`${label} preview`}
+                  alt={t('admin.ui.pwa.iconPreview', '{{label}} preview', {
+                    label: t(labelKey, label)
+                  })}
                   className="h-10 w-10 rounded-sm border border-gray-200 dark:border-gray-600 object-contain bg-gray-50 dark:bg-gray-800 shrink-0"
                   onError={e => {
                     e.target.style.display = 'none';
@@ -277,7 +288,7 @@ function PwaCustomization({ config, onUpdate, t }) {
                 />
               )}
             </div>
-            <p className="mt-1 text-xs text-gray-600 dark:text-gray-400">{hint}</p>
+            <p className="mt-1 text-xs text-gray-600 dark:text-gray-400">{t(hintKey, hint)}</p>
           </div>
         ))}
       </fieldset>

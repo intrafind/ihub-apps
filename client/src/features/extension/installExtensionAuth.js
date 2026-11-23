@@ -13,6 +13,7 @@
 import { apiClient, streamingApiClient } from '../../api/client';
 import { installOfficeAuthInterceptor } from '../office/api/officeAuthBridge';
 import { setApiBaseUrlOverride } from '../../utils/runtimeBasePath';
+import { getHttpBaseUrl } from '../../utils/httpUrl';
 
 /**
  * Recover an absolute base URL from a possibly-malformed value.
@@ -37,8 +38,8 @@ function sanitizeBaseUrl(raw) {
     const candidate = segment.trim();
     if (/^https?:\/\//i.test(candidate)) return candidate.replace(/\/+$/, '');
   }
-  // Last resort: return the trimmed input — the caller will likely fail
-  // with a clear error message rather than a silent broken URL.
+  // Last resort: return the trimmed input; `installExtensionAuth` refuses it
+  // unless it turns out to be an absolute http(s) URL.
   return trimmed.replace(/\/+$/, '');
 }
 
@@ -50,7 +51,15 @@ export function installExtensionAuth(config) {
   // and in the Outlook taskpane these defaults are computed from
   // window.location.origin (via runtimeBasePath), but here that origin is
   // chrome-extension://<id>, which obviously does not host the iHub API.
-  const baseUrl = sanitizeBaseUrl(config.baseUrl);
+  // The address is configuration (the packaged runtime-config.js or the URL
+  // typed on the options page) and every API request and token goes to it:
+  // only an absolute http(s) URL is accepted.
+  const baseUrl = getHttpBaseUrl(sanitizeBaseUrl(config.baseUrl));
+  if (!baseUrl) {
+    throw new Error(
+      'The configured iHub address is not a valid http(s) URL. Check the extension options.'
+    );
+  }
   const apiBase = `${baseUrl}/api`;
   apiClient.defaults.baseURL = apiBase;
   streamingApiClient.defaults.baseURL = apiBase;

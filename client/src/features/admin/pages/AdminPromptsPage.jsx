@@ -182,7 +182,7 @@ function AdminPromptsPage() {
       link.remove();
       URL.revokeObjectURL(url);
     } catch (err) {
-      setError(`Failed to download prompt config: ${getAdminApiErrorMessage(err)}`);
+      setError(t('admin.prompts.downloadError', { error: getAdminApiErrorMessage(err) }));
     }
   };
 
@@ -190,7 +190,7 @@ function AdminPromptsPage() {
     const file = event.target.files[0];
     if (!file) return;
     if (!file.name.endsWith('.json')) {
-      setError('Please select a JSON file');
+      setError(t('admin.common.selectJsonFile', 'Please select a JSON file'));
       return;
     }
     setUploading(true);
@@ -206,11 +206,11 @@ function AdminPromptsPage() {
       event.target.value = '';
     } catch (err) {
       if (getAdminApiErrorMessage(err).includes('already exists')) {
-        setError(`Prompt with ID "${promptConfig?.id || 'unknown'}" already exists`);
+        setError(t('admin.prompts.uploadExists', { id: promptConfig?.id || 'unknown' }));
       } else if (err instanceof SyntaxError) {
-        setError('Invalid JSON file format');
+        setError(t('admin.common.invalidJsonFile', 'Invalid JSON file format'));
       } else {
-        setError(`Failed to upload prompt config: ${getAdminApiErrorMessage(err)}`);
+        setError(t('admin.prompts.uploadError', { error: getAdminApiErrorMessage(err) }));
       }
     } finally {
       setUploading(false);
@@ -414,7 +414,7 @@ function AdminPromptsPage() {
                 <UploadConfigButton
                   onChange={handleUploadConfig}
                   uploading={uploading}
-                  title={t('admin.prompts.uploadConfig', 'Upload Prompt Config')}
+                  title={t('admin.prompts.uploadConfigTitle', 'Upload Prompt Config')}
                   uploadingLabel={t('admin.prompts.uploading', 'Uploading...')}
                   label={t('admin.prompts.uploadConfig', 'Upload Config')}
                 />

@@ -28,10 +28,10 @@ function AppsListCustomization({ config, onUpdate, t }) {
             onChange={title => updateAppsList({ title })}
             type="text"
             placeholder={{
-              en: 'Apps page title (en)',
-              de: 'Apps page title (de)',
-              es: 'Apps page title (es)',
-              fr: 'Apps page title (fr)'
+              en: 'Apps page title',
+              de: 'Titel der Apps-Seite',
+              es: 'Título de la página de apps',
+              fr: 'Titre de la page des apps'
             }}
           />
         </div>
@@ -44,10 +44,10 @@ function AppsListCustomization({ config, onUpdate, t }) {
             onChange={subtitle => updateAppsList({ subtitle })}
             type="textarea"
             placeholder={{
-              en: 'Apps page subtitle (en)',
-              de: 'Apps page subtitle (de)',
-              es: 'Apps page subtitle (es)',
-              fr: 'Apps page subtitle (fr)'
+              en: 'Apps page subtitle',
+              de: 'Untertitel der Apps-Seite',
+              es: 'Subtítulo de la página de apps',
+              fr: 'Sous-titre de la page des apps'
             }}
           />
         </div>
@@ -81,7 +81,7 @@ function AppsListCustomization({ config, onUpdate, t }) {
               <div className="flex items-center justify-center bg-white dark:bg-gray-700 p-3 rounded-sm">
                 <img
                   src={config.icons.appsListLogo}
-                  alt="Apps List Logo"
+                  alt={t('admin.ui.content.appsListLogoAlt', 'Apps List Logo')}
                   className="w-16 h-16 object-contain"
                   onError={e => {
                     e.target.style.display = 'none';

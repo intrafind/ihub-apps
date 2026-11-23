@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 
 /**
  * Detail panel for a single step in the Agent Runs Step table. Renders the
@@ -32,14 +33,15 @@ function CollapsibleBlock({ title, defaultOpen = false, count, children }) {
 }
 
 function PromptMessage({ role, content }) {
+  const { t } = useTranslation();
   const label =
     role === 'system'
-      ? 'System'
+      ? t('admin.agents.stepDetails.role.system', 'System')
       : role === 'user'
-        ? 'User'
+        ? t('admin.agents.stepDetails.role.user', 'User')
         : role === 'assistant'
-          ? 'Assistant'
-          : role || 'Message';
+          ? t('admin.agents.stepDetails.role.assistant', 'Assistant')
+          : role || t('admin.agents.stepDetails.role.message', 'Message');
   const labelColor =
     role === 'system'
       ? 'text-purple-700 bg-purple-50 border-purple-200'
@@ -59,6 +61,7 @@ function PromptMessage({ role, content }) {
 }
 
 function ToolCallRow({ call }) {
+  const { t } = useTranslation();
   const isError = !!call.error;
   return (
     <div className={`border-l-2 pl-2 py-1 ${isError ? 'border-red-400' : 'border-indigo-300'}`}>
@@ -66,7 +69,7 @@ function ToolCallRow({ call }) {
         <span className="font-mono font-medium text-gray-800">{call.name}</span>
         {call.appId && (
           <span className="text-xs px-1.5 py-0.5 rounded-sm bg-orange-100 text-orange-800">
-            app · {call.appId}
+            {t('admin.agents.stepDetails.appBadge', 'app · {{id}}', { id: call.appId })}
           </span>
         )}
         {call.toolId && call.toolId !== call.name && !call.appId && (
@@ -87,7 +90,9 @@ function ToolCallRow({ call }) {
       </div>
       {call.args && (
         <details className="mt-1">
-          <summary className="cursor-pointer text-gray-500 hover:text-gray-700">args</summary>
+          <summary className="cursor-pointer text-gray-500 hover:text-gray-700">
+            {t('admin.agents.stepDetails.args', 'args')}
+          </summary>
           <pre className="mt-1 whitespace-pre-wrap wrap-break-word bg-gray-50 p-2 rounded-sm text-gray-700 text-xs">
             {String(call.args)}
           </pre>
@@ -95,7 +100,9 @@ function ToolCallRow({ call }) {
       )}
       {call.result && (
         <details className="mt-1">
-          <summary className="cursor-pointer text-gray-500 hover:text-gray-700">result</summary>
+          <summary className="cursor-pointer text-gray-500 hover:text-gray-700">
+            {t('admin.agents.stepDetails.result', 'result')}
+          </summary>
           <pre className="mt-1 whitespace-pre-wrap wrap-break-word bg-gray-50 p-2 rounded-sm text-gray-700 text-xs">
             {String(call.result)}
           </pre>
@@ -108,30 +115,72 @@ function ToolCallRow({ call }) {
   );
 }
 
-const APP_NOT_REGISTERED_REASON = {
-  'feature-flag-off':
-    'features.appAsTool is OFF — enable it in features.json (or via Admin → Features) to allow apps as tools',
-  'grounding-swap':
-    'Gemini native grounding cannot co-exist with function tools; webSearch dropped this app',
-  'app-in-app-guard': 'agent is itself invoked from an app — synthetic app__* tools were stripped',
-  'resolve-failed': 'app could not be resolved (missing config or no permissions)'
-};
+/**
+ * Why an app was not registered as a tool, keyed by the reason code the server sends.
+ * @param {Function} t - i18next translation function
+ * @returns {Object<string, string>}
+ */
+function appNotRegisteredReasons(t) {
+  return {
+    'feature-flag-off': t(
+      'admin.agents.stepDetails.appReason.featureFlagOff',
+      'features.appAsTool is OFF — enable it in features.json (or via Admin → Features) to allow apps as tools'
+    ),
+    'grounding-swap': t(
+      'admin.agents.stepDetails.appReason.groundingSwap',
+      'Gemini native grounding cannot co-exist with function tools; webSearch dropped this app'
+    ),
+    'app-in-app-guard': t(
+      'admin.agents.stepDetails.appReason.appInAppGuard',
+      'agent is itself invoked from an app — synthetic app__* tools were stripped'
+    ),
+    'resolve-failed': t(
+      'admin.agents.stepDetails.appReason.resolveFailed',
+      'app could not be resolved (missing config or no permissions)'
+    )
+  };
+}
 
-const SOURCE_STATUS_LABEL = {
-  loaded: { label: 'loaded', cls: 'bg-emerald-100 text-emerald-800' },
-  cached: { label: 'cached', cls: 'bg-emerald-100 text-emerald-800' },
-  unresolved: { label: 'unresolved', cls: 'bg-amber-100 text-amber-800' },
-  error: { label: 'error', cls: 'bg-red-100 text-red-800' }
-};
+/**
+ * Label and colour of each source load status.
+ * @param {Function} t - i18next translation function
+ * @returns {Object<string, {label: string, cls: string}>}
+ */
+function sourceStatusLabels(t) {
+  return {
+    loaded: {
+      label: t('admin.agents.stepDetails.sourceStatus.loaded', 'loaded'),
+      cls: 'bg-emerald-100 text-emerald-800'
+    },
+    cached: {
+      label: t('admin.agents.stepDetails.sourceStatus.cached', 'cached'),
+      cls: 'bg-emerald-100 text-emerald-800'
+    },
+    unresolved: {
+      label: t('admin.agents.stepDetails.sourceStatus.unresolved', 'unresolved'),
+      cls: 'bg-amber-100 text-amber-800'
+    },
+    error: {
+      label: t('admin.agents.stepDetails.sourceStatus.error', 'error'),
+      cls: 'bg-red-100 text-red-800'
+    }
+  };
+}
 
 function StepDetails({ log }) {
+  const { t } = useTranslation();
   if (!log) {
     return (
       <div className="text-xs text-gray-500 italic px-3 py-2">
-        No transcript captured for this step (older run, or the executor doesn’t produce one).
+        {t(
+          'admin.agents.stepDetails.noTranscript',
+          'No transcript captured for this step (older run, or the executor doesn’t produce one).'
+        )}
       </div>
     );
   }
+  const sourceStatusLabel = sourceStatusLabels(t);
+  const appNotRegisteredReason = appNotRegisteredReasons(t);
 
   const tokens = log.tokens || {};
   const inTok = tokens.prompt_tokens || tokens.input_tokens || tokens.input || tokens.promptTokens;
@@ -152,89 +201,128 @@ function StepDetails({ log }) {
       <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-gray-700">
         {log.model && (
           <span>
-            <span className="text-gray-500">model </span>
+            <span className="text-gray-500">{t('admin.agents.stepDetails.model', 'model')} </span>
             <span className="font-mono">{log.model}</span>
           </span>
         )}
         {log.kind && (
           <span>
-            <span className="text-gray-500">kind </span>
+            <span className="text-gray-500">{t('admin.agents.stepDetails.kind', 'kind')} </span>
             <span className="font-mono">{log.kind}</span>
           </span>
         )}
         {typeof log.iterations === 'number' && log.iterations > 0 && (
           <span>
-            <span className="text-gray-500">iterations </span>
+            <span className="text-gray-500">
+              {t('admin.agents.stepDetails.iterations', 'iterations')}{' '}
+            </span>
             <span className="font-mono">{log.iterations}</span>
           </span>
         )}
         {totalTok != null && (
           <span>
-            <span className="text-gray-500">tokens </span>
+            <span className="text-gray-500">{t('admin.agents.stepDetails.tokens', 'tokens')} </span>
             <span className="font-mono">
-              {inTok || '—'} in / {outTok || '—'} out{totalTok ? ` / ${totalTok} total` : ''}
+              {totalTok
+                ? t(
+                    'admin.agents.stepDetails.tokenCountsTotal',
+                    '{{input}} in / {{output}} out / {{total}} total',
+                    { input: inTok || '—', output: outTok || '—', total: totalTok }
+                  )
+                : t('admin.agents.stepDetails.tokenCounts', '{{input}} in / {{output}} out', {
+                    input: inTok || '—',
+                    output: outTok || '—'
+                  })}
             </span>
           </span>
         )}
         {typeof log.citationsAdded === 'number' && log.citationsAdded > 0 && (
           <span>
-            <span className="text-gray-500">citations added </span>
+            <span className="text-gray-500">
+              {t('admin.agents.stepDetails.citationsAdded', 'citations added')}{' '}
+            </span>
             <span className="font-mono">+{log.citationsAdded}</span>
           </span>
         )}
         {Array.isArray(log.skillsActivated) && log.skillsActivated.length > 0 && (
           <span>
-            <span className="text-gray-500">skills activated </span>
+            <span className="text-gray-500">
+              {t('admin.agents.stepDetails.skillsActivated', 'skills activated')}{' '}
+            </span>
             <span className="font-mono">{log.skillsActivated.join(', ')}</span>
           </span>
         )}
         {typeof log.plannedTaskCount === 'number' && (
           <span>
-            <span className="text-gray-500">planned tasks </span>
+            <span className="text-gray-500">
+              {t('admin.agents.stepDetails.plannedTasks', 'planned tasks')}{' '}
+            </span>
             <span className="font-mono">{log.plannedTaskCount}</span>
           </span>
         )}
         {typeof log.responseLength === 'number' && log.responseLength > 0 && (
           <span>
-            <span className="text-gray-500">response </span>
-            <span className="font-mono">{log.responseLength} chars</span>
+            <span className="text-gray-500">
+              {t('admin.agents.stepDetails.response', 'response')}{' '}
+            </span>
+            <span className="font-mono">
+              {t('admin.agents.stepDetails.responseChars', '{{count}} chars', {
+                count: log.responseLength
+              })}
+            </span>
           </span>
         )}
       </div>
 
       {log.reasoning && (
         <div className="text-xs text-gray-700 italic">
-          <span className="text-gray-500 not-italic">reasoning:</span> {log.reasoning}
+          <span className="text-gray-500 not-italic">
+            {t('admin.agents.stepDetails.reasoning', 'reasoning:')}
+          </span>{' '}
+          {log.reasoning}
         </div>
       )}
 
       {log.groundingSwap && (
         <div className="text-xs bg-amber-50 border border-amber-300 rounded-sm p-2">
-          <div className="font-medium text-amber-900">⚠ Function tools dropped on this step</div>
+          <div className="font-medium text-amber-900">
+            {t(
+              'admin.agents.stepDetails.groundingSwapTitle',
+              '⚠ Function tools dropped on this step'
+            )}
+          </div>
           <p className="text-amber-800 mt-1">{log.groundingSwap.reason}</p>
           {Array.isArray(log.groundingSwap.droppedToolIds) &&
             log.groundingSwap.droppedToolIds.length > 0 && (
               <p className="text-amber-800 mt-1">
-                <span className="text-amber-700">Not registered:</span>{' '}
+                <span className="text-amber-700">
+                  {t('admin.agents.stepDetails.notRegisteredLabel', 'Not registered:')}
+                </span>{' '}
                 <span className="font-mono">{log.groundingSwap.droppedToolIds.join(', ')}</span>
               </p>
             )}
           {Array.isArray(log.droppedApps) && log.droppedApps.length > 0 && (
             <p className="text-amber-800 mt-1">
-              <span className="text-amber-700">Apps also not registered:</span>{' '}
+              <span className="text-amber-700">
+                {t('admin.agents.stepDetails.appsAlsoNotRegistered', 'Apps also not registered:')}
+              </span>{' '}
               <span className="font-mono">{log.droppedApps.join(', ')}</span>
             </p>
           )}
           <p className="text-amber-700 mt-1 text-xs">
-            To use apps + function tools on a Google model, remove webSearch from this profile (the
-            agent loses native grounding) or split the step into two — one for grounded research,
-            one for app/function calls.
+            {t(
+              'admin.agents.stepDetails.groundingSwapHint',
+              'To use apps + function tools on a Google model, remove webSearch from this profile (the agent loses native grounding) or split the step into two — one for grounded research, one for app/function calls.'
+            )}
           </p>
         </div>
       )}
 
       {messages.length > 0 && (
-        <CollapsibleBlock title="Prompts" count={messages.length}>
+        <CollapsibleBlock
+          title={t('admin.agents.stepDetails.prompts', 'Prompts')}
+          count={messages.length}
+        >
           {messages.map((m, i) => (
             <PromptMessage key={`${m.role}-${i}`} role={m.role} content={m.content} />
           ))}
@@ -242,13 +330,16 @@ function StepDetails({ log }) {
       )}
 
       {tools.length > 0 && (
-        <CollapsibleBlock title="Tools available" count={tools.length}>
+        <CollapsibleBlock
+          title={t('admin.agents.stepDetails.toolsAvailable', 'Tools available')}
+          count={tools.length}
+        >
           <ul className="space-y-1">
-            {tools.map((t, i) => (
-              <li key={`${t.id || i}`} className="font-mono">
-                {t.id}
-                {t.description && (
-                  <span className="text-gray-500 font-sans ml-1.5">— {t.description}</span>
+            {tools.map((tool, i) => (
+              <li key={`${tool.id || i}`} className="font-mono">
+                {tool.id}
+                {tool.description && (
+                  <span className="text-gray-500 font-sans ml-1.5">— {tool.description}</span>
                 )}
               </li>
             ))}
@@ -257,17 +348,24 @@ function StepDetails({ log }) {
       )}
 
       {sources.length > 0 && (
-        <CollapsibleBlock title="Sources injected into system prompt" count={sources.length}>
+        <CollapsibleBlock
+          title={t(
+            'admin.agents.stepDetails.sourcesInjected',
+            'Sources injected into system prompt'
+          )}
+          count={sources.length}
+        >
           <p className="text-gray-500 mb-2">
-            These were loaded by the runtime and embedded as a{' '}
-            <span className="font-mono">&lt;sources&gt;</span> block in the system prompt. They do
-            NOT appear as tool calls because the agent did not need to fetch them — they were
-            already in context.
+            {t(
+              'admin.agents.stepDetails.sourcesHelp',
+              'These were loaded by the runtime and embedded as a {{tag}} block in the system prompt. They do NOT appear as tool calls because the agent did not need to fetch them — they were already in context.',
+              { tag: '<sources>' }
+            )}
           </p>
           <ul className="space-y-1">
             {sources.map((s, i) => {
-              const status = SOURCE_STATUS_LABEL[s.status] || {
-                label: s.status || 'unknown',
+              const status = sourceStatusLabel[s.status] || {
+                label: s.status || t('admin.agents.stepDetails.sourceStatus.unknown', 'unknown'),
                 cls: 'bg-gray-100 text-gray-700'
               };
               return (
@@ -277,7 +375,11 @@ function StepDetails({ log }) {
                     {status.label}
                   </span>
                   {typeof s.bytesApprox === 'number' && s.bytesApprox > 0 && (
-                    <span className="text-gray-500">~{s.bytesApprox} bytes</span>
+                    <span className="text-gray-500">
+                      {t('admin.agents.stepDetails.bytesApprox', '~{{count}} bytes', {
+                        count: s.bytesApprox
+                      })}
+                    </span>
                   )}
                   {s.error && <span className="text-red-700">{s.error}</span>}
                 </li>
@@ -289,15 +391,17 @@ function StepDetails({ log }) {
 
       {apps.length > 0 && (
         <CollapsibleBlock
-          title="Apps available"
+          title={t('admin.agents.stepDetails.appsAvailable', 'Apps available')}
           count={apps.length}
           defaultOpen={appsBlockedCount > 0}
         >
           {appsBlockedCount > 0 && (
             <p className="text-amber-800 mb-2">
-              {appsRegisteredCount} of {apps.length} configured apps were registered as tools on
-              this step. Apps that were not registered are listed with the reason — the model never
-              saw them.
+              {t(
+                'admin.agents.stepDetails.appsBlockedHelp',
+                '{{registered}} of {{count}} configured apps were registered as tools on this step. Apps that were not registered are listed with the reason — the model never saw them.',
+                { registered: appsRegisteredCount, count: apps.length }
+              )}
             </p>
           )}
           <ul className="space-y-1">
@@ -306,15 +410,17 @@ function StepDetails({ log }) {
                 <span className="font-mono text-gray-800">app__{a.id}</span>
                 {a.registered ? (
                   <span className="text-xs px-1.5 py-0.5 rounded-sm bg-emerald-100 text-emerald-800">
-                    registered
+                    {t('admin.agents.stepDetails.registered', 'registered')}
                   </span>
                 ) : (
                   <>
                     <span className="text-xs px-1.5 py-0.5 rounded-sm bg-red-100 text-red-800">
-                      not registered
+                      {t('admin.agents.stepDetails.notRegistered', 'not registered')}
                     </span>
                     <span className="text-gray-600">
-                      {APP_NOT_REGISTERED_REASON[a.reason] || a.reason || 'unknown reason'}
+                      {appNotRegisteredReason[a.reason] ||
+                        a.reason ||
+                        t('admin.agents.stepDetails.unknownReason', 'unknown reason')}
                     </span>
                   </>
                 )}
@@ -325,7 +431,11 @@ function StepDetails({ log }) {
       )}
 
       {toolCalls.length > 0 && (
-        <CollapsibleBlock title="Tool calls" count={toolCalls.length} defaultOpen>
+        <CollapsibleBlock
+          title={t('admin.agents.stepDetails.toolCalls', 'Tool calls')}
+          count={toolCalls.length}
+          defaultOpen
+        >
           <div className="space-y-2">
             {toolCalls.map((c, i) => (
               <ToolCallRow key={`${c.name}-${i}`} call={c} />

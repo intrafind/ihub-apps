@@ -336,9 +336,13 @@ export default function AdminAgentEditPage() {
       <div className="max-w-4xl mx-auto py-8 px-4">
         <AdminBreadcrumb
           crumbs={[
-            { label: 'Admin', href: '/admin' },
-            { label: 'Agents', href: '/admin/agents' },
-            { label: isNew ? 'New Agent' : (profile?.name?.en ?? profileId) }
+            { label: t('documentTitle.admin', 'Admin'), href: '/admin' },
+            { label: t('admin.nav.agents', 'Agents'), href: '/admin/agents' },
+            {
+              label: isNew
+                ? t('admin.breadcrumbs.newAgent', 'New Agent')
+                : (profile?.name?.en ?? profileId)
+            }
           ]}
         />
         <div className="flex justify-between items-center mb-6">
@@ -599,12 +603,17 @@ export default function AdminAgentEditPage() {
                   />
                   {incompatibleAppGroundingCombo && (
                     <div className="mt-2 text-xs bg-amber-50 border border-amber-300 rounded-sm p-2 text-amber-900">
-                      <span className="font-medium">⚠ App tools won’t run on this profile.</span>{' '}
-                      {incompatibleAppGroundingCombo} (Google) uses native grounding when{' '}
-                      <span className="font-mono">webSearch</span> is configured, and Google models
-                      can’t combine native grounding with function calling. To use apps: turn off{' '}
-                      <span className="font-mono">webSearch</span> for this agent, or pick a
-                      non-Google model.
+                      <span className="font-medium">
+                        {t(
+                          'admin.agents.edit.groundingWarningTitle',
+                          '⚠ App tools won’t run on this profile.'
+                        )}
+                      </span>{' '}
+                      {t(
+                        'admin.agents.edit.groundingWarning',
+                        '{{model}} (Google) uses native grounding when webSearch is configured, and Google models can’t combine native grounding with function calling. To use apps: turn off webSearch for this agent, or pick a non-Google model.',
+                        { model: incompatibleAppGroundingCombo }
+                      )}
                     </div>
                   )}
                 </div>

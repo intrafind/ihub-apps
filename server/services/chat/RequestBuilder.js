@@ -401,6 +401,11 @@ function isModelPermittedForUser(user, modelId) {
   return filterModelsForUser([{ id: modelId }], user).length > 0;
 }
 
+/** Whether two app ids name the same app (ids match regardless of case). */
+function sameAppId(a, b) {
+  return typeof a === 'string' && typeof b === 'string' && a.toLowerCase() === b.toLowerCase();
+}
+
 class RequestBuilder {
   constructor() {
     this.errorHandler = new ErrorHandler();
@@ -432,7 +437,8 @@ class RequestBuilder {
     projectId = null,
     integrationScopes = null,
     attachedProjectIds = [],
-    testProjectId = null
+    testProjectId = null,
+    resolvedApp = null
   }) {
     try {
       const { data: apps } = configCache.getApps();
@@ -442,7 +448,18 @@ class RequestBuilder {
         return { success: false, error };
       }
 
-      const configuredApp = findByIdCaseInsensitive(apps, appId);
+      // `resolvedApp` is the app the caller already resolved for this request
+      // (`configCache.getAppForRequest`). Only the interactive chat route
+      // passes it, built from the signed-in user and never from the request
+      // body: that is how a content admin tries an unpublished app. Every
+      // other caller (scheduled tasks, apps called as tools, the inference
+      // API) leaves it out and gets the lookup in the published apps above,
+      // where an unpublished app does not exist. An app with another id is
+      // not used.
+      const configuredApp =
+        resolvedApp && sameAppId(resolvedApp.id, appId)
+          ? resolvedApp
+          : findByIdCaseInsensitive(apps, appId);
       if (!configuredApp) {
         const error = await this.errorHandler.createModelError(appId, 'unknown', language);
         error.code = 'APP_NOT_FOUND';

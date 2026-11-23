@@ -39,7 +39,18 @@ const thinkingSchema = z
     // down to lowercase before sending. Schema accepts both cases so legacy /
     // hand-edited configs don't fail validation.
     level: z
-      .enum(['minimal', 'low', 'medium', 'high', 'MINIMAL', 'LOW', 'MEDIUM', 'HIGH'])
+      .enum([
+        'minimal',
+        'low',
+        'medium',
+        'high',
+        'xhigh',
+        'MINIMAL',
+        'LOW',
+        'MEDIUM',
+        'HIGH',
+        'XHIGH'
+      ])
       .optional(),
     // Return the reasoning text to the user (Gemini's `includeThoughts`, vLLM's
     // `include_reasoning`). Defaults to true when thinking is enabled; set false

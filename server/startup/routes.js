@@ -5,6 +5,7 @@ import registerChatRoutes from '../routes/chat/index.js';
 import registerAdminRoutes from '../routes/adminRoutes.js';
 import registerStaticRoutes from '../routes/staticRoutes.js';
 import registerGeneralRoutes from '../routes/generalRoutes.js';
+import registerUserAppRoutes from '../routes/userAppRoutes.js';
 import registerModelRoutes from '../routes/modelRoutes.js';
 import registerMcpAppRoutes from '../routes/mcpAppRoutes.js';
 import registerMcpOAuthRoutes from '../routes/mcpOAuth.js';
@@ -88,6 +89,8 @@ const ROUTE_STEPS = [
   app => registerOAuthRegisterRoutes(app),
   app => registerWellKnownRoutes(app),
   app => registerMcpServerRoutes(app),
+  // Before the general routes: `/api/apps/_config` and its siblings must not match `/api/apps/:appId`.
+  app => registerUserAppRoutes(app),
   app => registerGeneralRoutes(app, { getLocalizedError }),
   app => registerModelRoutes(app, { getLocalizedError }),
   app => registerMcpAppRoutes(app),

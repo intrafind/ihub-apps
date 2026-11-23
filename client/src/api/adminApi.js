@@ -186,6 +186,78 @@ export const fetchAdminAppTemplates = async () => {
   const response = await makeAdminApiCall('/admin/apps/templates');
   return response.data?.items ?? [];
 };
+
+/**
+ * One app's configuration as it is stored (`GET /api/admin/apps/{id}`).
+ *
+ * @param {string} appId
+ * @returns {Promise<Object>}
+ */
+export const fetchAdminApp = async appId => {
+  const response = await makeAdminApiCall(`/admin/apps/${encodeURIComponent(appId)}`);
+  return response.data;
+};
+
+/**
+ * The templates the "New app" page offers (`GET /api/admin/app-templates`):
+ * `{ id, name, description, icon, color, category, hasInputFields, app }`.
+ * Not to be confused with {@link fetchAdminAppTemplates}, which lists the
+ * existing apps a new app can be copied from.
+ *
+ * @returns {Promise<Object[]>}
+ */
+export const fetchAppStartTemplates = async () => {
+  const response = await makeAdminApiCall('/admin/app-templates');
+  return response.data?.items ?? [];
+};
+
+/**
+ * How long the browser waits for an app draft. Above the server's own limit
+ * for the model call (80 seconds), and well above the 30 seconds of other
+ * admin calls.
+ */
+export const APP_DRAFT_TIMEOUT_MS = 90000;
+
+/**
+ * Have an AI model prepare an app draft from a description
+ * (`POST /api/admin/apps/_generate`). Nothing is stored.
+ *
+ * @param {Object} request
+ * @param {string} request.description - What the app should do, 1 to 2,000 characters.
+ * @param {string} [request.language] - The language of the draft's texts; the
+ *   platform's default language when absent.
+ * @param {AbortSignal} [request.signal] - Aborting it cancels the request; the
+ *   server then stops the model call.
+ * @returns {Promise<{ app: Object, suggestions: Object, warnings: Object[], model: Object }>}
+ */
+export const generateAppDraft = async ({ description, language, signal }) => {
+  const response = await makeAdminApiCall('/admin/apps/_generate', {
+    method: 'POST',
+    body: { description, ...(language ? { language } : {}) },
+    timeout: APP_DRAFT_TIMEOUT_MS,
+    signal
+  });
+  return response.data;
+};
+
+/**
+ * Create an app (`POST /api/admin/apps`).
+ *
+ * @param {Object} app - The app configuration; stored as sent.
+ * @param {{ origin?: string }} [options] - How the app was started, one of
+ *   `APP_CREATE_ORIGINS` (`shared/appGenerator.js`). It goes into the audit
+ *   entry and changes nothing about the app.
+ * @returns {Promise<Object>} The created app.
+ */
+export const createAdminApp = async (app, { origin } = {}) => {
+  const response = await makeAdminApiCall('/admin/apps', {
+    method: 'POST',
+    body: app,
+    ...(origin ? { params: { origin } } : {})
+  });
+  return response.data;
+};
+
 export const createPrompt = async promptData => {
   const response = await makeAdminApiCall('/admin/prompts', {
     method: 'POST',
@@ -1320,5 +1392,200 @@ export const fetchAdminFeedbackEntries = async (limit = 100, cursor = null) => {
   const params = new URLSearchParams({ limit: String(limit) });
   if (cursor) params.set('cursor', cursor);
   const response = await makeAdminApiCall(`/admin/usage/feedback?${params}`);
+  return response.data;
+};
+
+// --- Personal apps (feature `userApps`) ---------------------------------------
+// The routes of `server/routes/admin/userApps.js`. Full admins only; they work
+// with the feature off.
+
+const ADMIN_USER_APPS_PATH = '/admin/user-apps';
+
+const adminUserAppPath = appId => `${ADMIN_USER_APPS_PATH}/${encodeURIComponent(appId)}`;
+
+/**
+ * Every personal app the filters match. The list answers one page at a time
+ * and a page can hold fewer items than its limit, so this follows `nextCursor`
+ * until it is null.
+ *
+ * @param {Object} [filters] - `q`, `ownerId`, `state` (`active` or `promoted`),
+ *   and the flags `waiting`, `everyone`, `ownerActive`, `ownerStale`, `clash`
+ *   as booleans. An empty or missing value is not sent.
+ * @returns {Promise<Array<Object>>} The items of `GET /api/admin/user-apps`.
+ *
+ * @example
+ * await fetchAdminUserApps({ ownerId: 'anna' });
+ * await fetchAdminUserApps({ waiting: true });
+ */
+export const fetchAdminUserApps = async (filters = {}) => {
+  const items = [];
+  let cursor = null;
+  do {
+    const params = new URLSearchParams({ limit: '200' });
+    for (const [name, value] of Object.entries(filters)) {
+      if (value === undefined || value === null || value === '') continue;
+      params.set(name, String(value));
+    }
+    if (cursor) params.set('cursor', cursor);
+    const response = await makeAdminApiCall(`${ADMIN_USER_APPS_PATH}?${params}`);
+    if (Array.isArray(response.data?.items)) items.push(...response.data.items);
+    cursor = response.data?.nextCursor || null;
+  } while (cursor);
+  return items;
+};
+
+/**
+ * The admin view of one personal app: the list item plus `content`, `members`,
+ * `language`, `origin` and `revision`. A read by an admin who is neither owner
+ * nor member is written to the audit log.
+ *
+ * @param {string} appId
+ * @returns {Promise<Object>}
+ */
+export const fetchAdminUserApp = async appId => {
+  const response = await makeAdminApiCall(adminUserAppPath(appId));
+  return response.data;
+};
+
+/**
+ * The stored content states of a personal app, newest first.
+ *
+ * @param {string} appId
+ * @returns {Promise<Array<{revision: number, contentHash: string, content: Object,
+ *   savedAt: string|null, savedBy: {id: string, name: string}|null}>>}
+ */
+export const fetchAdminUserAppRevisions = async appId => {
+  const response = await makeAdminApiCall(`${adminUserAppPath(appId)}/revisions`);
+  return Array.isArray(response.data?.items) ? response.data.items : [];
+};
+
+/**
+ * Switch a personal app off. Nobody but a full admin can use it then; owner
+ * and members see the reason.
+ *
+ * @param {string} appId
+ * @param {string} [reason] - At most 500 characters.
+ * @returns {Promise<Object>} The admin view, with `disabled`.
+ */
+export const disableAdminUserApp = async (appId, reason = '') => {
+  const text = String(reason).trim();
+  const response = await makeAdminApiCall(`${adminUserAppPath(appId)}/_disable`, {
+    method: 'POST',
+    body: text ? { reason: text } : {}
+  });
+  return response.data;
+};
+
+/**
+ * Switch a personal app on again.
+ *
+ * @param {string} appId
+ * @returns {Promise<Object>} The admin view.
+ */
+export const enableAdminUserApp = async appId => {
+  const response = await makeAdminApiCall(`${adminUserAppPath(appId)}/_enable`, {
+    method: 'POST'
+  });
+  return response.data;
+};
+
+/**
+ * Delete a personal app with its shares.
+ *
+ * @param {string} appId
+ * @returns {Promise<void>}
+ */
+export const deleteAdminUserApp = async appId => {
+  await makeAdminApiCall(adminUserAppPath(appId), { method: 'DELETE' });
+};
+
+/**
+ * Give a promoted personal app back to its owner. Answers 409 `CONFLICT` with
+ * `details.reason: 'published'` while the company app is visible.
+ *
+ * @param {string} appId
+ * @returns {Promise<Object>} The admin view.
+ */
+export const releaseAdminUserApp = async appId => {
+  const response = await makeAdminApiCall(`${adminUserAppPath(appId)}/_release`, {
+    method: 'POST'
+  });
+  return response.data;
+};
+
+/**
+ * The people a personal app can be offered to. The route is the user route
+ * `GET /api/apps/_share-targets` with `purpose=offer`: a full admin may offer
+ * any app, and the answer holds users only.
+ *
+ * @param {string} [q] - Search text.
+ * @returns {Promise<Array<{id: string, name: string, email: string|null}>>}
+ */
+export const fetchUserAppOfferTargets = async (q = '') => {
+  const params = new URLSearchParams({ purpose: 'offer', q });
+  const response = await makeAdminApiCall(`/apps/_share-targets?${params}`);
+  return Array.isArray(response.data?.users) ? response.data.users : [];
+};
+
+/**
+ * Offer a personal app to a new owner (`PUT /api/apps/{appId}/owner-offer`).
+ * Nothing changes until that person accepts.
+ *
+ * @param {string} appId
+ * @param {string} ownerId - The user asked to take the app over.
+ * @param {number} [revision] - The revision the admin read; a newer stored
+ *   state answers 409 `ETAG_MISMATCH`.
+ * @returns {Promise<Object>} The app, with `pendingOwner`.
+ */
+export const offerAdminUserApp = async (appId, ownerId, revision) => {
+  const response = await makeAdminApiCall(`/apps/${encodeURIComponent(appId)}/owner-offer`, {
+    method: 'PUT',
+    body: { ownerId },
+    ...(Number.isInteger(revision) && revision > 0
+      ? { headers: { 'If-Match': `"${revision}"` } }
+      : {})
+  });
+  return response.data;
+};
+
+/**
+ * Withdraw the open offer of a personal app
+ * (`DELETE /api/apps/{appId}/owner-offer`).
+ *
+ * @param {string} appId
+ * @returns {Promise<void>}
+ */
+export const withdrawAdminUserAppOffer = async appId => {
+  await makeAdminApiCall(`/apps/${encodeURIComponent(appId)}/owner-offer`, { method: 'DELETE' });
+};
+
+/**
+ * The settings of personal apps (`platform.userApps`).
+ *
+ * @returns {Promise<{limits: {maxAppsPerUser: number, maxOpenOffersPerUser: number,
+ *   ownerSnapshotMaxAgeDays: number}, sharing: {allowUsers: boolean, allowGroups: boolean,
+ *   allowEveryone: boolean, allowPublish: boolean}, capabilities: {modelChoice: boolean,
+ *   upload: boolean, webSearch: boolean, skills: boolean,
+ *   integrations: Array<{id: string, actions: string[]}>},
+ *   publishing: {adminEnables: 'withTools'|'always'}, blockedOwners: string[]}>}
+ */
+export const fetchUserAppSettings = async () => {
+  const response = await makeAdminApiCall(`${ADMIN_USER_APPS_PATH}/_settings`);
+  return response.data;
+};
+
+/**
+ * Change the settings of personal apps. Only the keys sent change; the lists
+ * `capabilities.integrations` and `blockedOwners` are replaced as a whole. A
+ * change applies at once.
+ *
+ * @param {Object} settings - A partial block of {@link fetchUserAppSettings}.
+ * @returns {Promise<Object>} The settings after the change.
+ */
+export const saveUserAppSettings = async settings => {
+  const response = await makeAdminApiCall(`${ADMIN_USER_APPS_PATH}/_settings`, {
+    method: 'PUT',
+    body: settings
+  });
   return response.data;
 };
