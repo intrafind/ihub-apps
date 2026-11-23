@@ -557,14 +557,15 @@ route that authorizes the scope before serving the bytes.
 ## What has not moved yet
 
 The agent artifact tree — `contents/data/agent-artifacts/<runId>/<name>`,
-written by `server/agents/runtime/artifactStore.js` and the `write_artifact`
-tool, read by `GET /api/agents/runs/:runId/artifacts` — predates this store and
-still runs on its own. It is not a drop-in swap:
+written by `server/agents/runtime/artifactStore.js`, the `write_artifact` tool
+and the `template-render` workflow step — predates this store and still runs on
+its own. Its read route went with the [Agent Factory](agents.md), so no route
+serves these files now; a workflow's report is read from the execution page. It
+is not a drop-in swap:
 
 - it stores **text only** (`writeArtifactDirect` requires a string), while this
   store is base64 and binary-capable;
-- its read route **hardcodes `text/markdown`**, so the `contentType` it records
-  is already inaccurate for anything else;
+- the `contentType` it records is `text/markdown` whatever the content;
 - its quotas are per run and counted against in-state bookkeeping, not against
   what is on disk;
 - it has **no retention at all**, and the workflow-state sweep deletes the

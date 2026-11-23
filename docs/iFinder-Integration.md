@@ -638,8 +638,8 @@ field catalog and a ready-to-paste markdown summary.
 - `sampleSize`: sample documents, default 10.
 - `includeFields`: also fetch the field catalog, default `true`.
 
-Run it once against an unfamiliar profile. Its `markdown` field is what
-[Admin-driven corpus discovery](#admin-driven-corpus-discovery) writes into an agent profile's memory.
+Run it once against an unfamiliar profile. Its `markdown` field is what goes into
+[a precomputed corpus map](#a-precomputed-corpus-map).
 
 ### Using it from an MCP client
 
@@ -782,24 +782,17 @@ When every candidate is processed, the cost equals the upload variant; when refi
 candidates, the lazy variant is cheaper. Start it in a chat with
 `@workflow stellungnahmen-review-ifinder` and give the focus prompt and the search profile id.
 
-### Admin-driven corpus discovery
+### A precomputed corpus map
 
-A precomputed corpus map (which sources contribute, which languages, typical titles) saves an agent
-from discovering it at runtime. An admin endpoint runs a tool with admin context and writes the
-result into an agent profile's long-term memory under the given heading:
+A precomputed corpus map (which sources contribute, which languages, typical titles) saves the
+workflow from discovering it at runtime. `stellungnahmen-review-ifinder` reads the section
+`## iFinder corpus map` of the memory file `contents/agents/memory/<agentProfileId>.md` when it is
+started with a non-empty `agentProfileId`; without the file or the section it runs without a map.
 
-```
-POST /api/admin/agents/profiles/<profileId>/memory/from-tool
-  { "toolId": "iFinder_discover",
-    "params": { "searchProfile": "searchprofile-xyz", "query": "*:*" },
-    "section": "iFinder corpus map",
-    "mode": "replace-section" }
-```
-
-Later agent runs see the `## iFinder corpus map` section through the memory auto-include;
-`stellungnahmen-review-ifinder` reads it when started with a non-empty `agentProfileId`. The endpoint
-requires an admin. No default agent profile binds `iFinder_discover`, so agents cannot call it at
-runtime. Re-run discovery when the index changes significantly.
+The admin endpoint that wrote this section went with the
+[Agent Factory](agents.md). Write the file by hand: run `iFinder_discover` (for example as a tool
+step of a workflow) with the search profile and `"query": "*:*"`, and put its markdown output under
+the heading `## iFinder corpus map`. Re-run discovery when the index changes significantly.
 
 ## Security
 

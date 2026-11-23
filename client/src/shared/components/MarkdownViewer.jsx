@@ -12,8 +12,7 @@ import MarkdownDownloadMenu from './MarkdownDownloadMenu';
  * full-page so operators can read long reports comfortably. The download
  * menu remains available in the header.
  *
- * Mirrors `features/admin/components/ArtifactViewer.jsx` but operates on
- * content the caller already has — no `runId`/`name` fetch required.
+ * It operates on content the caller already has — no fetch required.
  *
  * @param {Object} props
  * @param {string} props.content   The markdown body to render

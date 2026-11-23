@@ -53,6 +53,11 @@ jest.unstable_mockModule('../middleware/authRequired.js', () => ({
     next();
   }
 }));
+// The AI usage notice is not what these cases are about.
+jest.unstable_mockModule('../middleware/aiAcknowledgementRequired.js', () => ({
+  aiAcknowledgementRequired: (req, res, next) => next(),
+  default: (req, res, next) => next()
+}));
 jest.unstable_mockModule('../middleware/adminAuth.js', () => ({
   adminAuth: (req, res, next) => next()
 }));
@@ -70,7 +75,9 @@ configCache.getFeatures = () => ({ workflows: true });
 
 const engine = {
   cancelAnywhere: jest.fn(),
-  deleteExecution: jest.fn()
+  deleteExecution: jest.fn(),
+  getState: jest.fn(),
+  resumeFromTerminated: jest.fn()
 };
 
 const app = express();
@@ -83,6 +90,8 @@ beforeEach(() => {
   executions.clear();
   engine.cancelAnywhere.mockReset();
   engine.deleteExecution.mockReset();
+  engine.getState.mockReset();
+  engine.resumeFromTerminated.mockReset();
 });
 
 describe('workflow execution routes', () => {
@@ -151,6 +160,41 @@ describe('workflow execution routes', () => {
     const failed = await request(app).post('/api/workflows/executions/run1/_cancel').expect(500);
     expect(failed.body.code).toBe('INTERNAL_ERROR');
     expect(JSON.stringify(failed.body)).not.toContain('/srv/secret');
+  });
+
+  it('refuses to restart a run of the removed Agent Factory with CONFLICT', async () => {
+    // Cancelled at the upgrade (AGENT_FACTORY_REMOVED); an admin may open it.
+    executions.set('run1', { executionId: 'run1', userId: 'agent:legacy', status: 'cancelled' });
+    engine.getState.mockResolvedValue({
+      executionId: 'run1',
+      status: 'cancelled',
+      data: { _agent: { profileId: 'legacy', triggeredBy: { userId: 'ada' } } }
+    });
+    const res = await request(app)
+      .post('/api/workflows/executions/run1/_restart')
+      .set('x-test-admin', '1')
+      .expect(409);
+    expect(res.headers['content-type']).toMatch(/^application\/problem\+json/);
+    expect(res.body.code).toBe('CONFLICT');
+    expect(res.body.details).toEqual({ reason: 'AGENT_FACTORY_REMOVED' });
+    expect(engine.resumeFromTerminated).not.toHaveBeenCalled();
+  });
+
+  it('restarts a plain run whose data holds the artifacts the artifact store wrote', async () => {
+    executions.set('run1', { executionId: 'run1', userId: 'ada', status: 'failed' });
+    engine.getState.mockResolvedValue({
+      executionId: 'run1',
+      status: 'failed',
+      data: { _agent: { artifacts: [{ name: 'report.md' }] } }
+    });
+    engine.resumeFromTerminated.mockResolvedValue({
+      executionId: 'run1',
+      status: 'running',
+      currentNodes: ['end']
+    });
+    const res = await request(app).post('/api/workflows/executions/run1/_restart').expect(200);
+    expect(res.body).toEqual({ executionId: 'run1', status: 'running', currentNodes: ['end'] });
+    expect(engine.resumeFromTerminated).toHaveBeenCalledTimes(1);
   });
 
   it('answers an archive request without a boolean with BAD_REQUEST', async () => {

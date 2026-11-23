@@ -120,6 +120,7 @@ Every `4xx` and `5xx` response is `application/problem+json` as defined by
 | `errors`  | no     | Validation failures only: `[{ "pointer": "/prompt/en", "code": "REQUIRED", "message": "…" }]`, `pointer` being an RFC 6901 JSON Pointer. |
 
 - **A client branches on `code`**, never on `status` alone and never on text.
+- **An API path no route serves** (also a removed one) is `404`, `code: "NOT_FOUND"`, from the handler registered after every route (`server/middleware/apiNotFound.js`); never the framework's HTML page.
 - **Validation failure:** `400`, `code: "VALIDATION_FAILED"`, one entry in `errors` per problem, all of them at once.
 - **Rate limit:** `429`, `Retry-After` header (seconds), and `details.retryAfterMs`.
 - **No internals in a response:** no stack traces, file paths, URLs of internal hosts, SQL, credentials. The

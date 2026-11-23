@@ -30,7 +30,6 @@
 import { randomUUID } from 'node:crypto';
 import { DENY, send, textFile, tinyPng, waitFor } from './harness.js';
 import {
-  AGENT_PROFILE_ID,
   AUTHZ_USERS,
   SECRET_APP_ID,
   SECRET_MODEL_ID,
@@ -237,23 +236,6 @@ export async function seedAlice(alice) {
     { what: 'the workflow checkpoint' }
   );
 
-  // An agent run of the same workflow.
-  ids.agentRunId = (
-    await json(
-      await alice.post(`/api/agents/profiles/${AGENT_PROFILE_ID}/runs`, {
-        data: { brief: `${SECRET} agent brief` }
-      }),
-      'agent run'
-    )
-  ).executionId;
-  await waitFor(
-    async () => {
-      const run = await json(await alice.get(`/api/agents/runs/${ids.agentRunId}`), 'agent run');
-      return run.status === 'paused';
-    },
-    { what: 'the agent run to pause' }
-  );
-
   // OpenAI-compatible conversation and file.
   ids.conversationId = (
     await json(
@@ -347,7 +329,6 @@ export async function aliceSnapshot(alice, ids) {
   const taskFiles = await read(`/api/scheduled-tasks/${ids.taskId}/files`);
   const taskRuns = await read(`/api/scheduled-tasks/${ids.taskId}/runs`);
   const execution = await read(`/api/workflows/executions/${ids.executionId}`);
-  const agentRun = await read(`/api/agents/runs/${ids.agentRunId}`);
   const conversation = await read(`/api/inference/v1/conversations/${ids.conversationId}/items`);
   const file = await read(`/api/inference/v1/files/${ids.inferenceFileId}`);
   const key = await read(`/api/integrations/api-keys/${ids.keyId}`);
@@ -380,7 +361,6 @@ export async function aliceSnapshot(alice, ids) {
     taskFiles: [taskFiles.status, taskFiles.body?.items?.map(item => item.id)],
     taskRuns: [taskRuns.status, taskRuns.body?.items?.map(item => [item.id, item.status])],
     execution: [execution.status, execution.body?.status],
-    agentRun: [agentRun.status, agentRun.body?.status],
     conversation: [conversation.status, conversation.body?.data?.length],
     file: [file.status, file.body?.id],
     key: [key.status, key.body?.id, key.body?.active, key.body?.lastRotated],
@@ -741,24 +721,6 @@ export const RESOURCES = [
     ]
   },
   {
-    name: 'agent run',
-    params: { runId: 'agentRunId', name: 'artifactName' },
-    routes: [
-      { route: 'GET /api/agents/runs/:runId' },
-      { route: 'GET /api/agents/runs/:runId/stream', stream: true },
-      { route: 'POST /api/agents/runs/:runId/_cancel', data: {} },
-      { route: 'POST /api/agents/runs/:runId/_resume', data: {} },
-      {
-        route: 'GET /api/agents/runs/:runId/artifacts',
-        ownerSkip: 'the run wrote no artifacts (its owner gets 400 "invalid run id")'
-      },
-      {
-        route: 'GET /api/agents/runs/:runId/artifacts/:name',
-        ownerSkip: 'the run wrote no artifacts (its owner gets 400 "invalid run id")'
-      }
-    ]
-  },
-  {
     name: 'inference API conversation and file (/api/inference/v1)',
     params: { itemId: 'conversationItemId', file_id: 'inferenceFileId' },
     routes: [
@@ -1010,13 +972,6 @@ export const GROUP_GATED = [
     data: { initialData: { topic: 'x' } }
   },
   {
-    route: 'POST /api/agents/profiles/:profileId/runs',
-    params: { profileId: 'agentProfileId' },
-    data: { brief: 'x' },
-    // Agent profiles carry no group permission; any signed-in user may start one.
-    expect: { carol: callerScoped }
-  },
-  {
     route: 'GET /a2a/skills/:skillId/.well-known/agent-card.json',
     params: { skillId: 'secretA2aSkillId' },
     bearer: true,
@@ -1168,7 +1123,6 @@ export const FIXED_IDS = {
   fakeSteerId: 'c'.repeat(32),
   revision: '1',
   toolId: 'ask_user',
-  artifactName: 'report.md',
   secretAppId: SECRET_APP_ID,
   unpublishedAppId: UNPUBLISHED_APP_ID,
   unknownAppId: UNKNOWN_APP_ID,
@@ -1178,7 +1132,6 @@ export const FIXED_IDS = {
   skillFilePath: 'SKILL.md',
   secretPageId: SECRET_PAGE_ID,
   workflowId: WORKFLOW_ID,
-  agentProfileId: AGENT_PROFILE_ID,
   secretA2aSkillId: `app__${SECRET_APP_ID}`
 };
 

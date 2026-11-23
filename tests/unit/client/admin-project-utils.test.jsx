@@ -325,13 +325,14 @@ describe('availability', () => {
 describe('project dependency links', () => {
   const flags = enabled => ({ isEnabled: feature => enabled.includes(feature) });
 
-  test('links apps, and workflows and agents only while their feature is on', () => {
-    const on = flags(['workflows', 'agentFactory']);
+  test('links apps, and workflows only while their feature is on', () => {
+    const on = flags(['workflows']);
     expect(projectDependencyHref({ type: 'app', id: 'faq bot' }, on)).toBe('/admin/apps/faq%20bot');
     expect(projectDependencyHref({ type: 'workflow', id: 'knowledge-qa' }, on)).toBe(
       '/admin/workflows/knowledge-qa'
     );
-    expect(projectDependencyHref({ type: 'agent', id: 'a1' }, on)).toBe('/admin/agents/a1');
+    // An Agent Factory profile that still links a project has no admin page since its removal.
+    expect(projectDependencyHref({ type: 'agent', id: 'a1' }, on)).toBeNull();
 
     const off = flags([]);
     expect(projectDependencyHref({ type: 'app', id: 'faq' }, off)).toBe('/admin/apps/faq');

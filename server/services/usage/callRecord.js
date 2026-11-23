@@ -19,7 +19,11 @@
 
 export const USAGE_SCHEMA_VERSION = 2;
 
-/** Where a call came from. */
+/**
+ * Where a call came from. No run of kind `agent` is started since the Agent
+ * Factory was removed; `agent` stays a surface because records written before
+ * carry it and the usage report still filters and labels them.
+ */
 export const SURFACES = Object.freeze([
   'chat',
   'agent',
@@ -40,7 +44,6 @@ const IMPLICIT_GROUPS = new Set(['authenticated', 'anonymous']);
 const KIND_SURFACE = {
   chat: 'chat',
   subagent: 'chat',
-  agent: 'agent',
   workflow: 'workflow',
   inference: 'api'
 };

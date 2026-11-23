@@ -3,8 +3,8 @@
 
 /**
  * Pure projection of an SSE v2 StreamState (shared/run/runReducer.js) onto the
- * workflow execution state that `WorkflowExecutionPage` /
- * `AgentRunDetailPage` / `ExecutionProgress` read:
+ * workflow execution state that `WorkflowExecutionPage` / `ExecutionProgress`
+ * read:
  *
  *   { status, currentNodes, completedNodes, failedNodes, errors, history,
  *     pendingCheckpoint, completedAt, _lastIteration,

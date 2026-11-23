@@ -9,8 +9,7 @@ type: reference
 Every run-scoped stream the server offers speaks the same dialect: the chat
 stream (`GET /api/apps/:appId/chat/:chatId`, or the chat POST itself, see
 [A chat turn on its own POST](#a-chat-turn-on-its-own-post)), the workflow execution stream
-(`GET /api/workflows/executions/:id/stream`) and the agent run stream
-(`GET /api/agents/runs/:id/stream`). Each frame is
+(`GET /api/workflows/executions/:id/stream`). Each frame is
 
 ```
 event: <type>
@@ -103,7 +102,7 @@ above, and each call row source that `message.sources` already holds sent as
 | `search`                       | Brave web search                            | `{ query, provider }`                                   |
 | `fetch.loading` / `fetch.parsing` / `fetch.extracting` | `read_url`   | `{ url, status, type? }`                                |
 | `ifinder_search` / `ifinder_content` / `ifinder_download` | iFinder tools        | `{ query? \| documentId, searchProfile, … }`             |
-| `agent.*`                      | agent runtime (workflow / agent streams)    | the former internal event payload (task queue, plan, artifacts, inbox, memory, skills, hallucinated tools …) |
+| `agent.*`                      | agent runtime (workflow streams)            | the former internal event payload (task queue, plan, artifacts, inbox, memory, skills, hallucinated tools …) |
 | `args`                         | chat turn, while a tool call's arguments stream | `{ name, title?, integration?, activityKind?, outputKind?, argBytes, elapsedMs, occurrence? }` (first frame and every 5th after it), otherwise `{ argBytes, elapsedMs }`; frame also carries `step`, `callId`, `toolId` |
 | `args.ended`                   | chat turn, when that model call ends        | `{ outcome, argBytes, elapsedMs }`; frame also carries `step`, `callId`, `toolId` |
 | `model.waiting`                | chat turn, while the model shows nothing    | `{ elapsedMs, reasoning? }`; frame also carries `step` |

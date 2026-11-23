@@ -4,26 +4,20 @@
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
 /**
- * Validates the shipped Claude-style autonomous agent:
+ * Validates the shipped Claude-style workflow (a legacy default, kept disabled
+ * since the Agent Factory and its default profiles were removed):
  *   - server/defaults/workflows/claude-style-agent.json passes workflowConfigSchema
  *     and wires the adversarial self-correction loop (agent → verify → {pass:
  *     end | retry: agent}) with a tool-enabled adversarial verifier.
- *   - server/defaults/agents/profiles/claude-style-agent.json passes
- *     agentProfileSchema, references the workflow externally, and turns on the
- *     capabilities the loop relies on (dynamic tasks, memory, token budget).
- *   - serializeProfile preserves the external reference.
- *   - the agent prompt node would get the living-plan tools auto-registered.
+ *   - it wires the inbox lifecycle and stays hidden from the Workflows UI.
  *
- * Run directly: `node server/tests/claude-style-agent-profile.test.js`.
+ * Run directly: `node server/tests/claude-style-agent-workflow.test.js`.
  */
 
 import { readFileSync } from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { workflowConfigSchema } from '../validators/workflowConfigSchema.js';
-import { agentProfileSchema } from '../validators/agentProfileSchema.js';
-import { serializeProfile } from '../agents/profile/profileWorkflowSerializer.js';
-import { getAgentToolIds } from '../agents/runtime/agentToolRegistrar.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const root = path.join(__dirname, '..', '..');
@@ -41,7 +35,6 @@ function readJson(rel) {
 
 async function run() {
   const workflow = readJson('server/defaults/workflows/claude-style-agent.json');
-  const profile = readJson('server/defaults/agents/profiles/claude-style-agent.json');
 
   console.log('🧪 workflow passes the schema\n');
   {
@@ -98,53 +91,11 @@ async function run() {
     check('revision prompt carries the prior draft', /\{\{draft\}\}/.test(promptEn));
   }
 
-  console.log('\n🧪 profile passes the schema\n');
+  console.log('\n🧪 the standalone workflow ships disabled\n');
   {
-    const result = agentProfileSchema.safeParse(profile);
-    check(
-      'claude-style-agent profile is schema-valid',
-      result.success,
-      JSON.stringify(result.error?.issues?.slice(0, 3))
-    );
-  }
-
-  console.log('\n🧪 profile enables the Claude-like capabilities\n');
-  {
-    check(
-      'references the external workflow',
-      profile.workflow?.ref === 'external' && profile.workflow?.workflowId === 'claude-style-agent'
-    );
-    check('dynamic tasks enabled (living plan)', profile.dynamicTasks?.enabled === true);
-    check('memory enabled', profile.memory?.enabled === true);
-    check('per-run token budget set', profile.budgets?.maxTokensPerRun > 0);
-    // Shipped as a DEFAULT it ships DISABLED (the profile's own description says
-    // "Ships disabled — enable it…"): an admin enables it deliberately rather
-    // than a fresh install auto-running an autonomous agent.
-    check('profile ships disabled (admin enables)', profile.enabled === false);
-    // The standalone workflow is intentionally disabled so it is hidden from
-    // the Workflows UI and can only run via the agent profile (which supplies
-    // the agent principal + profile so the living-plan tools register). Running
-    // it as a plain workflow would strip those tools.
+    // Hidden from the Workflows UI: it was run through an Agent Factory profile,
+    // which supplied the agent principal so the living-plan tools register.
     check('standalone workflow hidden from Workflows UI', workflow.enabled === false);
-  }
-
-  console.log('\n🧪 serializeProfile preserves the external reference\n');
-  {
-    const serialized = serializeProfile(profile);
-    check('still external after serialize', serialized.workflow?.ref === 'external');
-    check('workflowId preserved', serialized.workflow?.workflowId === 'claude-style-agent');
-  }
-
-  console.log('\n🧪 the agent node gets living-plan + memory tools auto-registered\n');
-  {
-    const agentNode = workflow.nodes.find(n => n.id === 'agent');
-    const ids = getAgentToolIds(profile, agentNode.config);
-    check('set_plan auto-registered', ids.includes('set_plan'));
-    check('update_task auto-registered', ids.includes('update_task'));
-    check(
-      'memory tools auto-registered',
-      ids.includes('read_memory') && ids.includes('write_memory')
-    );
   }
 
   console.log(`\n${failures === 0 ? '✅ all passed' : `❌ ${failures} failed`}`);

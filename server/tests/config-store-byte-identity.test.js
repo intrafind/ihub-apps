@@ -98,7 +98,11 @@ const WRITABLE_EXTRAS = {
   // Admin projects ship with slice 4 of #1036; until then the defaults tree
   // has no `projects/` either, and an installation's project looks like this.
   'projects/handbook.json':
-    '{\n  "id": "handbook",\n  "ownership": "admin",\n  "name": { "en": "Handbook" },\n  "items": []\n}\n'
+    '{\n  "id": "handbook",\n  "ownership": "admin",\n  "name": { "en": "Handbook" },\n  "items": []\n}\n',
+  // The defaults tree ships no agent profile since the Agent Factory was removed
+  // (#3773); an installation that used it still has profiles like this one.
+  'agents/profiles/legacy-agent.json':
+    '{\n  "id": "legacy-agent",\n  "name": { "en": "Legacy agent" },\n  "enabled": false\n}\n'
 };
 
 for (const [relPath, bytes] of Object.entries({ ...HAND_WRITTEN, ...WRITABLE_EXTRAS })) {

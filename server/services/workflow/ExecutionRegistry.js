@@ -88,8 +88,8 @@ const EXECUTION_KINDS = new Set(['workflow', 'agent']);
  * Short enough that a listing is never visibly stale — the caller's own runs
  * are re-merged from memory on every call regardless — and long enough that a
  * burst of requests costs one walk of the `runs` namespace instead of one
- * each. That is what makes `GET /api/agents/runs` safe to leave open to every
- * signed-in user, which is what it has always been.
+ * each. That is what makes `GET /api/workflows/my-executions` safe to leave
+ * open to every signed-in user.
  */
 const EXECUTION_SCAN_TTL_MS = 5000;
 
@@ -525,10 +525,10 @@ export class ExecutionRegistry {
    *
    * This is a scan of the `runs` namespace, and the docstring here used to say
    * it was "administrator-initiated rather than per-request". That was wrong:
-   * `GET /api/agents/runs` is `authRequired, authenticatedOnly`, so any
-   * signed-in user reaches it, and `/api/agents` is not behind the rate
-   * limiter. A namespace-sized scan was therefore something a signed-in user
-   * could ask for as often as they liked.
+   * `GET /api/workflows/my-executions` (and, until the Agent Factory was
+   * removed, `GET /api/agents/runs`) reaches it for any signed-in user. A
+   * namespace-sized scan was therefore something a signed-in user could ask
+   * for as often as they liked.
    *
    * The scan itself cannot be narrowed. What separates an execution from the
    * chat and inference runs sharing the namespace is the stored `kind` field,

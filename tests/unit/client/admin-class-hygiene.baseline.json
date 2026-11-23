@@ -24,7 +24,6 @@
     "components/PwaCustomization.jsx": 1,
     "components/ReorderableList.jsx": 1,
     "components/StartPageCustomization.jsx": 2,
-    "components/StepDetails.jsx": 1,
     "components/app-form/AiNoticeSection.jsx": 1,
     "components/app-form/CompareModeSection.jsx": 1,
     "components/app-form/ExportConfigSection.jsx": 1,
@@ -43,9 +42,6 @@
     "components/usage/RangeControl.jsx": 1,
     "components/voice/VoiceInputTestPanel.jsx": 2,
     "pages/AdminAdvancedPage.jsx": 1,
-    "pages/AdminAgentApprovalsPage.jsx": 1,
-    "pages/AdminAgentEditPage.jsx": 8,
-    "pages/AdminAgentInboxEditPage.jsx": 1,
     "pages/AdminAuditLogPage.jsx": 1,
     "pages/AdminChatHistoryPage.jsx": 1,
     "pages/AdminLoggingPage.jsx": 10,
@@ -61,10 +57,6 @@
     "pages/AdminUpdatesPage.jsx": 1
   },
   "primaryRamp": {},
-  "grayTextWithoutDark": {
-    "components/ArtifactViewer.jsx": 2,
-    "components/StepDetails.jsx": 13,
-    "pages/AgentRunDetailPage.jsx": 2
-  },
+  "grayTextWithoutDark": {},
   "lowContrastFieldBorder": {}
 }

@@ -26,7 +26,7 @@ The admin UI uses a **collapsible left-rail sidebar** with these sections. Click
 |---------|--------------|
 | **Overview** | Dashboard |
 | **What's New & Docs** | Documentation, What's New |
-| **AI Workspace** | Apps, Models (tabs **Models** and **Providers**), Prompts, Skills, Projects, Workflows, Agents (Agent Factory), Marketplace |
+| **AI Workspace** | Apps, Models (tabs **Models** and **Providers**), Prompts, Skills, Projects, Workflows, Marketplace |
 | **Access & Identity** | Users, Groups, Authentication, OAuth |
 | **Integrations** | Integrations (tabs **Installed**, **Catalog**, **Requests** and **Inbound**, plus **Add manually** for the integration builder: iFinder, iAssistant, web search, people directories, storage providers, MCP servers, remote A2A agents, catalog integrations; Outlook add-in, browser extension, Microsoft 365 Copilot, Nextcloud embed, MCP gateway), MCP gateway, Credentials |
 | **Customization** | UI Customization, Disclaimer, Localization, Pages, Document templates, Short Links |

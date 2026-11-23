@@ -4,6 +4,7 @@
 import registerChatRoutes from '../routes/chat/index.js';
 import registerAdminRoutes from '../routes/adminRoutes.js';
 import registerStaticRoutes from '../routes/staticRoutes.js';
+import apiNotFound from '../middleware/apiNotFound.js';
 import registerGeneralRoutes from '../routes/generalRoutes.js';
 import registerUserAppRoutes from '../routes/userAppRoutes.js';
 import registerModelRoutes from '../routes/modelRoutes.js';
@@ -30,7 +31,6 @@ import registerWellKnownRoutes from '../routes/wellKnown.js';
 import registerMcpServerRoutes from '../routes/mcpServer.js';
 import registerSwaggerRoutes from '../routes/swagger.js';
 import registerWorkflowRoutes from '../routes/workflow/index.js';
-import registerAgentRoutes from '../routes/agents/index.js';
 import registerRunRoutes from '../routes/runs.js';
 import registerStoredChatRoutes from '../routes/chats.js';
 import registerChatShareRoutes from '../routes/chatShares.js';
@@ -119,7 +119,6 @@ const ROUTE_STEPS = [
   app => registerSwaggerRoutes(app),
   app => registerWorkflowRoutes(app, { getLocalizedError }),
   app => registerTriggerRoutes(app),
-  app => registerAgentRoutes(app),
   app => registerRunRoutes(app),
   app => registerStoredChatRoutes(app),
   app => registerChatShareRoutes(app),
@@ -199,7 +198,10 @@ const ROUTE_STEPS = [
   app => registerToolsServiceRoutes(app),
   // Register static file and SPA routes after API routes
   (app, { isPackaged, rootDir, basePath }) =>
-    registerStaticRoutes(app, { isPackaged, rootDir, basePath })
+    registerStaticRoutes(app, { isPackaged, rootDir, basePath }),
+  // Last: an API path nothing above answered is a 404 problem+json, also a
+  // removed one such as the Agent Factory's `/api/agents/...` (#3773).
+  app => app.use(buildApiPath('/'), apiNotFound)
 ];
 
 /**

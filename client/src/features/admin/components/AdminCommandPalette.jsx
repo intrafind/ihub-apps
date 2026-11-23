@@ -15,7 +15,6 @@ const ADMIN_PAGES = [
   { labelKey: 'admin.nav.prompts', label: 'Prompts', href: '/admin/prompts' },
   { labelKey: 'admin.nav.skills', label: 'Skills', href: '/admin/skills' },
   { labelKey: 'admin.nav.projects', label: 'Projects', href: '/admin/projects' },
-  { labelKey: 'admin.nav.agents', label: 'Agents', href: '/admin/agents' },
   { labelKey: 'admin.nav.marketplace', label: 'Marketplace', href: '/admin/marketplace' },
   { labelKey: 'admin.nav.users', label: 'Users', href: '/admin/users' },
   { labelKey: 'admin.nav.groups', label: 'Groups', href: '/admin/groups' },

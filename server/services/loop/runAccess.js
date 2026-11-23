@@ -38,12 +38,11 @@
  * **Where this holds.** In the routes that ask this module: `/api/runs/*`,
  * `/api/interactions/pending`, the chat routes that answer an approval or a
  * question, `POST /api/feedback` and the approval of an MCP app view's call.
- * Two older surfaces keep a check of their own and are NOT covered: the
+ * One older surface keeps a check of its own and is NOT covered: the
  * workflow execution routes (`/api/workflows/executions/:executionId/_cancel`,
- * `/_restart` and `DELETE`, `loadOwnedExecution`) and the agent run routes
- * (`/api/agents/runs/:runId/_cancel` and `/_resume`). There an admin still
- * cancels, restarts, resumes and deletes somebody else's run, and nothing is
- * written to the audit log.
+ * `/_restart` and `DELETE`, `loadOwnedExecution`). There an admin still
+ * cancels, restarts and deletes somebody else's run, and nothing is written to
+ * the audit log.
  *
  * **A run of no person.** A run whose principal is an agent's own identity
  * (`agent:<profileId>`) or the system principal of a triggered workflow has no

@@ -377,7 +377,8 @@ export function dependenciesFromDeleteError(error) {
 /**
  * Where the admin edits a resource that links a project, or `null` when its
  * admin page is switched off with its feature (the sidebar hides it too, and its
- * API answers 403): the dependency is then named, not linked.
+ * API answers 403) or does not exist (an Agent Factory profile, since its
+ * removal): the dependency is then named, not linked.
  *
  * @param {{type: string, id: string}} dependency
  * @param {{isEnabled: (feature: string, fallback: boolean) => boolean}} featureFlags - `useFeatureFlags()`
@@ -388,7 +389,5 @@ export function projectDependencyHref({ type, id }, featureFlags) {
   if (type === 'app') return `/admin/apps/${ref}`;
   if (type === 'workflow' && featureFlags.isEnabled('workflows', false))
     return `/admin/workflows/${ref}`;
-  if (type === 'agent' && featureFlags.isEnabled('agentFactory', false))
-    return `/admin/agents/${ref}`;
   return null;
 }

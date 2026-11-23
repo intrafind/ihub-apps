@@ -29,6 +29,10 @@ import { buildServerPath } from '../../utils/basePath.js';
 import { getWorkflowEngine } from '../../services/workflow/WorkflowEngine.js';
 import { getExecutionRegistry } from '../../services/workflow/ExecutionRegistry.js';
 import { isSchedulerOwner } from '../../services/workflow/triggers/schedulerLock.js';
+import {
+  AGENT_FACTORY_REMOVED,
+  isAgentFactoryExecution
+} from '../../services/workflow/agentFactoryRuns.js';
 import { hasRemote } from '../../clusterBus.js';
 import { RUN_PRESENCE_KIND } from '../../services/loop/RunLog.js';
 import { actionTracker } from '../../actionTracker.js';
@@ -1133,7 +1137,8 @@ export default function registerWorkflowRoutes(app, deps = {}) {
    *       Resumes a workflow that was cancelled by timeout/server restart or
    *       failed mid-execution. Previously-completed nodes are not re-run;
    *       only the interrupted nodes (those in `currentNodes`) are picked up.
-   *       User-cancelled executions are refused.
+   *       User-cancelled executions are refused, and so are runs of the
+   *       removed Agent Factory (409 `CONFLICT`).
    *     tags:
    *       - Workflows
    *       - Execution
@@ -1158,6 +1163,16 @@ export default function registerWorkflowRoutes(app, deps = {}) {
         if (!isValidId(executionId)) throw new ServiceError('BAD_REQUEST', 'Invalid executionId');
 
         await loadOwnedExecution(req, executionId);
+
+        // The Agent Factory was removed (#3773): none of its runs is started
+        // again, also not one it cancelled at the upgrade or one that failed.
+        if (isAgentFactoryExecution(await workflowEngine.getState(executionId))) {
+          throw new ServiceError(
+            'CONFLICT',
+            'This run belonged to the Agent Factory, which was removed; it cannot be restarted.',
+            { details: { reason: AGENT_FACTORY_REMOVED } }
+          );
+        }
 
         const state = await workflowEngine.resumeFromTerminated(executionId, {
           user: req.user

@@ -32,7 +32,7 @@
 - [Skills](skills.md)
 - [Projects](projects.md)
 - [Workflows](workflows.md)
-- [Agent Factory](agents.md)
+- [Agent Factory (Removed)](agents.md)
 - [Scheduled Tasks](scheduled-tasks.md)
 - [Tool Calling](tool-calling.md)
   - [Tool Approval](tool-approval.md)

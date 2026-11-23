@@ -336,10 +336,9 @@ task form and the task gets **notes** that live between its runs, for a prompt
 like "what are the latest features of openwebui? summarize each" that should
 report only what is new since last week.
 
-The notes are plain markdown, stored for the task and its owner. They are the
-same memory that [agents](agents.md#memory-pipeline-memory-compose--memory-finalize)
-have: the same tools (`read_memory`, `write_memory`), the same version check
-on every write, the same editor for reading and editing them.
+The notes are plain markdown, stored for the task and its owner. A run reads
+and writes them with the tools `read_memory` and `write_memory`, with a version
+check on every write.
 
 What a run with memory does:
 
