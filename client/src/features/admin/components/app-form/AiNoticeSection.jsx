@@ -4,6 +4,7 @@
 import { useTranslation } from 'react-i18next';
 import AppLanguageField from './AppLanguageField';
 import EuAiActStateNote from '../euAiAct/EuAiActStateNote';
+import { RADIO_CLASS } from '../formStyles';
 
 /**
  * AiNoticeSection - per-app override of the first-turn AI notice (Art. 50(1)).
@@ -63,7 +64,7 @@ function AiNoticeSection({ app, onChange }) {
                     value={value}
                     checked={mode === value}
                     onChange={() => handleMode(value)}
-                    className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 dark:border-gray-600"
+                    className={RADIO_CLASS}
                   />
                   {label}
                 </label>

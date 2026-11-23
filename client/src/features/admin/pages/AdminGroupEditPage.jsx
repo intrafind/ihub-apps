@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
 import DualModeEditor from '../../../shared/components/DualModeEditor';
@@ -17,11 +17,13 @@ import AdminEditPageShell, {
 } from '../../../shared/components/AdminEditPageShell';
 import useSaveAttempts from '../hooks/useSaveAttempts';
 import { FIELD_KEYS } from '../utils/fieldErrors';
+import { groupCloneDraft } from '../utils/groupClone';
 
 function AdminGroupEditPage() {
   const { t } = useTranslation();
   const { groupId } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState(null);
   const [resources, setResources] = useState({
@@ -62,8 +64,8 @@ function AdminGroupEditPage() {
     return groupData;
   }, []);
 
-  const makeDefault = useCallback(
-    () => ({
+  const makeDefault = useCallback(() => {
+    const defaults = {
       id: '',
       name: '',
       description: '',
@@ -77,9 +79,12 @@ function AdminGroupEditPage() {
       mappings: [],
       inherits: [],
       enabled: true
-    }),
-    []
-  );
+    };
+    const template = location.state?.templateGroup;
+    // A clone from the list opens with the original's settings, a proposed
+    // `<id>-copy` and no external mappings (see groupCloneDraft).
+    return template ? groupCloneDraft(defaults, template, location.state?.cloneId) : defaults;
+  }, [location.state]);
 
   const saveResource = useCallback(async (data, id) => {
     const method = id === 'new' ? 'POST' : 'PUT';

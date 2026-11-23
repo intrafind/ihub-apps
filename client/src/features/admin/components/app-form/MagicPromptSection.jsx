@@ -3,7 +3,7 @@
 
 import { useTranslation } from 'react-i18next';
 import { getLocalizedContent } from '../../../../utils/localizeContent';
-import { CHECKBOX_CLASS } from '../formStyles';
+import { CHECKBOX_CLASS, INPUT_CLASS } from '../formStyles';
 
 /**
  * MagicPromptSection - Magic Prompt (AI-powered prompt enhancement) configuration
@@ -40,12 +40,16 @@ function MagicPromptSection({ app, onChange, availableModels = [] }) {
           <div className="space-y-4">
             <div className="flex items-center">
               <input
+                id="app-enable-magic-prompt"
                 type="checkbox"
                 checked={app.features?.magicPrompt?.enabled || false}
                 onChange={e => handleMagicPromptChange({ enabled: e.target.checked })}
                 className={CHECKBOX_CLASS}
               />
-              <label className="ml-2 block text-sm text-gray-900 dark:text-gray-100">
+              <label
+                htmlFor="app-enable-magic-prompt"
+                className="ml-2 block text-sm text-gray-900 dark:text-gray-100"
+              >
                 {t('admin.apps.edit.enableMagicPrompt', 'Enable Magic Prompt')}
               </label>
             </div>
@@ -53,13 +57,17 @@ function MagicPromptSection({ app, onChange, availableModels = [] }) {
             {app.features?.magicPrompt?.enabled && (
               <div className="space-y-4 pl-6">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                  <label
+                    htmlFor="app-magic-prompt-model"
+                    className="block text-sm font-medium text-gray-700 dark:text-gray-300"
+                  >
                     {t('admin.apps.edit.magicPromptModel', 'Magic Prompt Model')}
                   </label>
                   <select
+                    id="app-magic-prompt-model"
                     value={app.features?.magicPrompt?.model || ''}
                     onChange={e => handleMagicPromptChange({ model: e.target.value || undefined })}
-                    className="mt-1 block w-full rounded-md border border-admin-control-border dark:border-admin-control-border-dark shadow-xs focus:border-admin-accent focus:ring-admin-accent sm:text-sm"
+                    className={`${INPUT_CLASS} mt-1`}
                   >
                     <option value="">{t('admin.apps.edit.selectModel', 'Select model...')}</option>
                     {availableModels.map(model => (
@@ -71,17 +79,21 @@ function MagicPromptSection({ app, onChange, availableModels = [] }) {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                  <label
+                    htmlFor="app-magic-prompt-instructions"
+                    className="block text-sm font-medium text-gray-700 dark:text-gray-300"
+                  >
                     {t('admin.apps.edit.magicPromptInstructions', 'Magic Prompt Instructions')}
                   </label>
                   <textarea
+                    id="app-magic-prompt-instructions"
                     value={
                       app.features?.magicPrompt?.prompt ||
                       'You are a helpful assistant that improves user prompts to be more specific and effective. Improve this prompt: {{prompt}}'
                     }
                     onChange={e => handleMagicPromptChange({ prompt: e.target.value })}
                     rows={3}
-                    className="mt-1 block w-full rounded-md border border-admin-control-border dark:border-admin-control-border-dark shadow-xs focus:border-admin-accent focus:ring-admin-accent sm:text-sm"
+                    className={`${INPUT_CLASS} mt-1`}
                     placeholder={t(
                       'admin.apps.edit.magicPromptInstructionsPlaceholder',
                       'Enter instructions for the magic prompt feature…'

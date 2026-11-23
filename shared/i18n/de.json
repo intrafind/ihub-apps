@@ -1982,7 +1982,8 @@
         "llmHelp": "Ein LLM-Anbieter hält einen API-Schlüssel für alle seine Modelle. Verknüpfen Sie Modelle im Modell-Editor mit ihm oder importieren Sie sie von seinem Endpunkt.",
         "nameRequired": "Der Name des Anbieters ist erforderlich",
         "subtitle": "Legen Sie einen LLM-Anbieter für einen eigenen Endpunkt, einen Websuche-Anbieter oder einen allgemeinen API-Schlüssel an",
-        "idRequired": "Die Anbieter-ID ist erforderlich"
+        "idRequired": "Die Anbieter-ID ist erforderlich",
+        "intro": "Verbinden Sie einen eigenen KI-Endpunkt – ein Gateway, einen selbst betriebenen Server oder einen anderen Hersteller. Seine Modelle teilen sich einen API-Schlüssel."
       },
       "info": {
         "title": "API-Schlüssel-Priorität",
@@ -2070,7 +2071,8 @@
       },
       "add": "Anbieter hinzufügen",
       "import": "Modelle importieren",
-      "ownTimeouts": "Setzt eigene Timeouts"
+      "ownTimeouts": "Setzt eigene Timeouts",
+      "searchLabel": "Anbieter durchsuchen"
     },
     "models": {
       "sync": {
@@ -5066,7 +5068,9 @@
         "category": "Kategorie",
         "model": "Modell",
         "order": "Reihenfolge",
-        "status": "Status"
+        "status": "Status",
+        "categoryFallback": "Keine Kategorie festgelegt: wird unter {{category}} aufgeführt",
+        "defaultModel": "Standardmodell"
       },
       "uploading": "Wird hochgeladen...",
       "details": {
@@ -6679,7 +6683,8 @@
         "noSkills": "Keine Skills ausgewählt – Benutzer können keine Agenten-Skills verwenden",
         "allWildcard": "Alle (*)",
         "allWildcardFor": "{{label}}: Alle (*)"
-      }
+      },
+      "clone": "Klonen"
     },
     "contentAccess": {
       "title": "Gruppenzugriff",
@@ -6714,7 +6719,8 @@
         "skills": "Skills",
         "tools": "Tools",
         "workflows": "Workflows"
-      }
+      },
+      "wildcardNote": "Gruppen mit Schloss dürfen über einen Platzhalter alle {{subjectPlural}} verwenden. Um einzelne zu entziehen, ersetzt ein Administrator den Platzhalter in den Gruppeneinstellungen durch eine explizite Liste."
     },
     "auditLog": {
       "title": "Audit-Log",
@@ -7227,7 +7233,8 @@
       "tabs": {
         "userPrompts": "Benutzer-Prompts",
         "prompts": "Prompts",
-        "variables": "Variablen"
+        "variables": "Variablen",
+        "aria": "Bereiche der Prompt-Verwaltung"
       },
       "edit": {
         "detectedVariables": "Im Text erkannt",
@@ -7332,7 +7339,10 @@
         "description": "Beschreibung",
         "order": "Reihenfolge",
         "appConnected": "Mit App verknüpft",
-        "status": "Status"
+        "status": "Status",
+        "categoryFallback": "Keine Kategorie festgelegt: wird unter {{category}} aufgeführt",
+        "linkedApp": "App",
+        "appMissing": "App fehlt: {{id}}"
       },
       "delete": "Löschen",
       "searchPlaceholder": "Prompts suchen…",

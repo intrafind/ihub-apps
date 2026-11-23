@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { fetchUsageBreakdown } from '../../../api/usageReportsAdminApi';
 import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
@@ -93,6 +93,10 @@ function AdminModelEditPage() {
   const isNewModel = modelId === 'new';
 
   const [historyOpen, setHistoryOpen] = useState(false);
+  // The page error above the form. Save sits at the bottom of a long form, so a
+  // refused save moves there; otherwise the admin sees nothing happen.
+  const pageErrorRef = useRef(null);
+  const [pageErrorFocusKey, setPageErrorFocusKey] = useState(0);
   // The model id the marketplace lookup found installed, so a stale answer for
   // a previous model id never shows on another one.
   const [marketplaceModelId, setMarketplaceModelId] = useState(null);
@@ -362,6 +366,16 @@ function AdminModelEditPage() {
     setFormData(newData);
   };
 
+  // After a refused save: focus the page error and bring it into view.
+  useEffect(() => {
+    if (!pageErrorFocusKey) return;
+    const target = pageErrorRef.current;
+    if (!target) return;
+    const reduceMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches;
+    target.focus?.({ preventScroll: true });
+    target.scrollIntoView?.({ block: 'center', behavior: reduceMotion ? 'auto' : 'smooth' });
+  }, [pageErrorFocusKey]);
+
   /**
    * The form saves only when it is valid: otherwise every error shows, with the summary on
    * top. Checks the form leaves to the browser (`required` of provider-specific fields) come
@@ -394,12 +408,14 @@ function AdminModelEditPage() {
         countSaveAttempt();
         if (editorMode === 'form') return;
         setError(t(FIELD_KEYS.idTaken));
+        setPageErrorFocusKey(key => key + 1);
         return;
       }
       // Shown on the page (an alert above the form); the edits stay. Not re-thrown: the
       // submit handler is the last one to see it, and a re-throw ends as an unhandled
       // rejection in the console.
       setError(getAdminApiErrorMessage(err));
+      setPageErrorFocusKey(key => key + 1);
     } finally {
       setSaving(false);
     }
@@ -445,8 +461,8 @@ function AdminModelEditPage() {
     >
       {/* Header */}
       <div className="mb-8">
-        <div className="flex items-center justify-between">
-          <div>
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div className="min-w-0">
             <h1 className="text-2xl font-semibold text-gray-900 dark:text-gray-100">
               {isNewModel ? t('admin.models.edit.titleNew') : t('admin.models.edit.title')}
             </h1>
@@ -458,7 +474,7 @@ function AdminModelEditPage() {
                   })}
             </p>
           </div>
-          <div className="flex space-x-3">
+          <div className="flex flex-wrap gap-2">
             {!isNewModel && (
               <button
                 type="button"
@@ -500,13 +516,20 @@ function AdminModelEditPage() {
 
       {/* Error display */}
       {error && (
-        <AdminLoadError
-          title={t('common.error')}
-          message={error}
-          framed={false}
-          className="mb-6"
-          action={null}
-        />
+        <div
+          ref={pageErrorRef}
+          tabIndex={-1}
+          data-testid="model-page-error"
+          className="rounded-md focus:outline-hidden focus-visible:ring-2 focus-visible:ring-admin-accent dark:focus-visible:ring-admin-accent-fg-dark"
+        >
+          <AdminLoadError
+            title={t('common.error')}
+            message={error}
+            framed={false}
+            className="mb-6"
+            action={null}
+          />
+        </div>
       )}
 
       {fromMarketplace && <MarketplaceModelReviewNotice className="mb-6" />}

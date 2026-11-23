@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
 import { useTranslation } from 'react-i18next';
+import { CHECKBOX_CLASS } from '../formStyles';
 
 /**
  * CompareModeSection - Compare Mode toggle card for the App form.
@@ -29,6 +30,7 @@ function CompareModeSection({ app, onChange }) {
           <div className="space-y-4">
             <div className="flex items-center">
               <input
+                id="app-enable-compare-mode"
                 type="checkbox"
                 checked={app.features?.compareMode?.enabled !== false}
                 onChange={e =>
@@ -40,9 +42,12 @@ function CompareModeSection({ app, onChange }) {
                     }
                   })
                 }
-                className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 dark:border-gray-600 rounded-sm"
+                className={CHECKBOX_CLASS}
               />
-              <label className="ml-2 block text-sm text-gray-900 dark:text-gray-100">
+              <label
+                htmlFor="app-enable-compare-mode"
+                className="ml-2 block text-sm text-gray-900 dark:text-gray-100"
+              >
                 {t('admin.apps.edit.enableCompareMode', 'Enable Compare Mode')}
               </label>
             </div>

@@ -169,6 +169,22 @@ test('the timeouts for all providers are one summary line above the list', async
   );
 });
 
+test('every row keeps Configure in the pinned actions column, and the search has a name', async () => {
+  renderPage();
+  const row = await rowOf('OpenAI');
+  const configure = within(row).getByRole('button', { name: 'Configure' });
+  // The shared DataTable pins its actions cell to the right edge, so at phone
+  // width the table scrolls under it instead of hiding it.
+  expect(configure.closest('td')).toHaveClass('sticky', 'right-0');
+  fireEvent.click(configure);
+  expect(screen.getByTestId('location')).toHaveTextContent('/admin/providers/openai');
+});
+
+test('the provider search has an accessible name, not only a placeholder', async () => {
+  renderPage();
+  expect(await screen.findByRole('searchbox', { name: 'Search providers' })).toBeInTheDocument();
+});
+
 test('without the models page there is no link to it: the count is plain text, Import is gone, no Models tab', async () => {
   mockPlatform.admin.pages = { models: false };
   renderPage();

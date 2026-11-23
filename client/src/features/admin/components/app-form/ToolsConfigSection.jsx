@@ -3,6 +3,7 @@
 
 import { useTranslation } from 'react-i18next';
 import { ApprovalModeSelect } from '../ToolApprovalFields';
+import { INPUT_CLASS } from '../formStyles';
 
 /** Whether the model decides to use the app's tools or must call one first. */
 function ToolChoiceSelect({ toolChoice, onChange }) {
@@ -20,7 +21,7 @@ function ToolChoiceSelect({ toolChoice, onChange }) {
         id="app-tool-choice"
         value={toolChoice || 'auto'}
         onChange={e => onChange(e.target.value === 'auto' ? undefined : e.target.value)}
-        className="mt-1 block w-full rounded-md border border-admin-control-border dark:border-admin-control-border-dark dark:bg-gray-700 dark:text-gray-100 shadow-sm focus:border-admin-accent focus:ring-admin-accent sm:text-sm"
+        className={`${INPUT_CLASS} mt-1`}
         aria-describedby="app-tool-choice-help"
       >
         <option value="auto">

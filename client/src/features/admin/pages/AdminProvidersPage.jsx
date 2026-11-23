@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
-import { useState, useEffect, Fragment } from 'react';
+import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { getLocalizedContent } from '../../../utils/localizeContent';
@@ -21,6 +21,8 @@ import {
   getProviderApiType
 } from '../../../../../shared/llmProviders.js';
 import AdminLoadError from '../components/AdminLoadError';
+import { DataTable, SearchInput } from '../components/data-table';
+import { PRIMARY_BUTTON_CLASS, SECONDARY_BUTTON_CLASS } from '../components/formStyles';
 import LlmTimeoutsCard from '../components/LlmTimeoutsCard';
 import ModelsTabsHeader from '../components/ModelsTabsHeader';
 import useAdminPageAccess from '../hooks/useAdminPageAccess';
@@ -341,6 +343,274 @@ function AdminProvidersPage() {
     p => (p.category === 'llm' || !p.category) && (enabledModelsByProvider[p.id] || []).length > 0
   ).length;
 
+  /**
+   * The columns of one provider table. Built on the shared `DataTable`, so the
+   * actions stay in a column pinned to the right edge and the secondary columns
+   * fold away on a phone instead of pushing "Configure" off-screen.
+   *
+   * @param {boolean} isLlm - Model providers show their models and a connectivity test.
+   * @returns {Array<object>} DataTable column definitions.
+   */
+  const providerColumns = isLlm => [
+    {
+      key: 'provider',
+      header: t('admin.providers.table.provider', 'Provider'),
+      render: provider => (
+        <div className="min-w-0">
+          <div
+            className="text-sm font-medium text-gray-900 dark:text-white"
+            title={getLocalizedContent(provider.description, currentLanguage) || undefined}
+          >
+            {getLocalizedContent(provider.name, currentLanguage)}
+            {provider.enabled === false && (
+              <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-300">
+                {t('admin.providers.disabled', 'Disabled')}
+              </span>
+            )}
+            {(Number.isFinite(provider.connectTimeoutMs) ||
+              Number.isFinite(provider.streamIdleTimeoutMs)) && (
+              <span
+                className="ml-1.5 text-xs font-normal text-gray-500 dark:text-gray-400"
+                title={t('admin.providers.ownTimeouts', 'Sets its own timeouts')}
+              >
+                <span aria-hidden="true">⏱</span>
+                <span className="sr-only">
+                  {t('admin.providers.ownTimeouts', 'Sets its own timeouts')}
+                </span>
+              </span>
+            )}
+          </div>
+          <div className="text-sm text-gray-500 dark:text-gray-400 break-all">{provider.id}</div>
+          {isLlm && getProviderApiType(provider) && (
+            <div className="text-xs text-gray-500 dark:text-gray-400">
+              {apiTypeLabel(t, getProviderApiType(provider))}
+            </div>
+          )}
+        </div>
+      )
+    },
+    {
+      key: 'apiKey',
+      header: t('admin.providers.table.apiKey', 'API Key'),
+      hideBelow: 'sm',
+      className: 'whitespace-nowrap',
+      render: provider =>
+        provider.requiresApiKey === false ? (
+          // Keyless provider (e.g. Qwant): "Not Configured" would read as broken
+          // when there is nothing to configure.
+          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200">
+            {t('admin.providers.noApiKeyRequired', 'No API key required')}
+          </span>
+        ) : isLlm && keyStatuses[provider.id] ? (
+          // The server's verdict: a stored key it cannot decrypt looks
+          // "Configured" below but does not work.
+          <ApiKeyStatusBadge status={keyStatuses[provider.id]} />
+        ) : provider.apiKeySet ? (
+          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200">
+            <Icon name="KeyIcon" className="w-3 h-3 mr-1" />
+            {t('admin.providers.configured', 'Configured')}
+          </span>
+        ) : (
+          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-300">
+            <Icon name="ExclamationTriangleIcon" className="w-3 h-3 mr-1" />
+            {t('admin.providers.notConfigured', 'Not Configured')}
+          </span>
+        )
+    },
+    ...(isLlm
+      ? [
+          {
+            key: 'models',
+            header: t('admin.providers.table.models', 'Models'),
+            hideBelow: 'md',
+            render: provider => {
+              const linkedModels = linkedModelsByProvider[provider.id] || [];
+              const enabledModels = enabledModelsByProvider[provider.id] || [];
+              if (linkedModels.length === 0) {
+                return <span className="text-sm text-gray-500 dark:text-gray-400">—</span>;
+              }
+              return (
+                <ModelsLink
+                  enabled={access.models}
+                  providerId={provider.id}
+                  className="block rounded-sm text-sm text-gray-700 dark:text-gray-300 hover:text-indigo-700 dark:hover:text-indigo-300 focus:outline-hidden focus:ring-2 focus:ring-indigo-500"
+                  title={linkedModels.map(m => m.id).join('\n')}
+                >
+                  <div className="font-medium whitespace-nowrap">
+                    {t(
+                      'admin.providers.linkedModels.count',
+                      '{{count}} linked, {{enabled}} enabled',
+                      {
+                        count: linkedModels.length,
+                        enabled: enabledModels.length
+                      }
+                    )}
+                  </div>
+                  <div className="text-xs text-gray-500 dark:text-gray-400 max-w-56 truncate">
+                    {linkedModels
+                      .slice(0, LINKED_MODEL_PREVIEW)
+                      .map(m => getLocalizedContent(m.name, currentLanguage))
+                      .join(', ')}
+                    {linkedModels.length > LINKED_MODEL_PREVIEW &&
+                      ` ${t('admin.providers.linkedModels.more', '+{{count}} more', {
+                        count: linkedModels.length - LINKED_MODEL_PREVIEW
+                      })}`}
+                  </div>
+                </ModelsLink>
+              );
+            }
+          },
+          {
+            key: 'connectivity',
+            header: t('admin.providers.table.connectivity', 'Connectivity'),
+            className: 'whitespace-nowrap',
+            render: provider => {
+              const providerHealth = healthStatus[provider.id] || {};
+              const hasResults = providerHealth.results && providerHealth.results.length > 0;
+              const isExpanded = providerHealth.expanded;
+              const toggleLabel = isExpanded
+                ? t('admin.providers.health.hideResults', 'Hide results')
+                : t('admin.providers.health.showResults', 'Show results');
+              return (
+                <div className="flex items-center gap-2">
+                  <HealthBadge status={providerHealth.status || 'idle'} />
+                  {hasResults && (
+                    <button
+                      type="button"
+                      onClick={e => {
+                        e.stopPropagation();
+                        toggleExpanded(provider.id);
+                      }}
+                      aria-expanded={!!isExpanded}
+                      aria-label={toggleLabel}
+                      title={toggleLabel}
+                      className="rounded-sm text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 focus:outline-hidden focus:ring-2 focus:ring-indigo-500"
+                    >
+                      <Icon
+                        name={isExpanded ? 'ChevronUpIcon' : 'ChevronDownIcon'}
+                        className="w-4 h-4"
+                      />
+                    </button>
+                  )}
+                </div>
+              );
+            }
+          }
+        ]
+      : [])
+  ];
+
+  /**
+   * The row actions of one provider table: Test and Import for model providers,
+   * Configure for every entry, Delete for entries an admin added.
+   *
+   * @param {boolean} isLlm - Model providers can be tested and imported from.
+   * @returns {Array<object>} DataTable action definitions.
+   */
+  const providerActions = isLlm => [
+    {
+      id: 'test',
+      label: t('admin.providers.test', 'Test'),
+      icon: 'signal',
+      hidden: provider => !isLlm || (enabledModelsByProvider[provider.id] || []).length === 0,
+      disabled: () => testingAll,
+      busy: provider => healthStatus[provider.id]?.status === 'testing',
+      onClick: provider => void testProvider(provider.id)
+    },
+    {
+      id: 'import',
+      label: t('admin.providers.import', 'Import models'),
+      icon: 'link',
+      hidden: provider =>
+        !isLlm ||
+        !access.models ||
+        !CUSTOM_PROVIDER_API_TYPES.includes(getProviderApiType(provider)),
+      onClick: provider => navigate('/admin/models', { state: { importProviderId: provider.id } })
+    },
+    {
+      id: 'configure',
+      label: t('admin.providers.configure', 'Configure'),
+      icon: 'pencil',
+      priority: 'primary',
+      onClick: provider => editProvider(provider.id)
+    },
+    {
+      id: 'delete',
+      label: t('admin.providers.delete', 'Delete'),
+      icon: 'trash',
+      destructive: true,
+      hidden: provider => !provider.category || BUILT_IN_LLM_PROVIDERS.includes(provider.id),
+      onClick: provider =>
+        void deleteProvider(provider.id, getLocalizedContent(provider.name, currentLanguage))
+    }
+  ];
+
+  /**
+   * The model test results under a provider row, once a test ran and the admin
+   * opened them.
+   *
+   * @param {object} provider - The provider entry of the row.
+   * @returns {{expanded: boolean, content: JSX.Element}|null}
+   */
+  const providerTestResults = provider => {
+    const providerHealth = healthStatus[provider.id] || {};
+    if (!providerHealth.expanded || !(providerHealth.results?.length > 0)) return null;
+    return {
+      expanded: true,
+      content: (
+        <div className="space-y-1.5">
+          <p className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2">
+            {t('admin.providers.modelResults', 'Model Test Results')}
+          </p>
+          {providerHealth.results.map((result, idx) => (
+            <div
+              key={idx}
+              className={`flex items-start gap-3 p-2 rounded text-sm ${
+                result.success ? 'bg-green-50 dark:bg-green-900/20' : 'bg-red-50 dark:bg-red-900/20'
+              }`}
+            >
+              <Icon
+                name={result.success ? 'CheckCircleIcon' : 'XCircleIcon'}
+                className={`w-4 h-4 mt-0.5 shrink-0 ${
+                  result.success
+                    ? 'text-green-700 dark:text-green-400'
+                    : 'text-red-600 dark:text-red-400'
+                }`}
+              />
+              <div className="min-w-0 flex-1">
+                <span className="font-medium text-gray-900 dark:text-white">
+                  {getLocalizedContent(result.model.name, currentLanguage)}
+                </span>
+                <span className="text-gray-500 dark:text-gray-400 ml-1 text-xs">
+                  ({result.model.id})
+                </span>
+                {result.error && (
+                  <p className="text-xs text-red-600 dark:text-red-400 mt-0.5">{result.error}</p>
+                )}
+              </div>
+              <span
+                className={`text-xs whitespace-nowrap ${
+                  result.success
+                    ? 'text-green-700 dark:text-green-300'
+                    : 'text-red-700 dark:text-red-300'
+                }`}
+              >
+                {result.message}
+              </span>
+            </div>
+          ))}
+          {/* Show spinner for models still being tested */}
+          {providerHealth.status === 'testing' && (
+            <div className="flex items-center gap-2 p-2 text-sm text-gray-500 dark:text-gray-400">
+              <span className="animate-spin rounded-full h-3 w-3 border-b-2 border-blue-500 inline-block" />
+              {t('admin.providers.testingMore', 'Testing remaining models...')}
+            </div>
+          )}
+        </div>
+      )
+    };
+  };
+
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -353,21 +623,18 @@ function AdminProvidersPage() {
                 <button
                   onClick={testAllProviders}
                   disabled={testingAll}
-                  className="px-4 py-2 bg-green-700 text-white rounded-lg hover:bg-green-800 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                  className={SECONDARY_BUTTON_CLASS}
                 >
                   {testingAll ? (
-                    <span className="animate-spin rounded-full h-4 w-4 border-b-2 border-white inline-block" />
+                    <span className="animate-spin rounded-full h-4 w-4 border-b-2 border-current inline-block" />
                   ) : (
-                    <Icon name="SignalIcon" className="w-5 h-5" />
+                    <Icon name="SignalIcon" className="w-4 h-4" />
                   )}
                   {t('admin.providers.testAll', 'Test All')}
                 </button>
               )}
-              <button
-                onClick={createProvider}
-                className="inline-flex items-center justify-center rounded-md border border-transparent bg-indigo-600 px-4 py-2 text-sm font-medium text-white shadow-xs hover:bg-indigo-700 focus:outline-hidden focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
-              >
-                <Icon name="plus" className="h-4 w-4 mr-2" />
+              <button onClick={createProvider} className={PRIMARY_BUTTON_CLASS}>
+                <Icon name="plus" className="h-4 w-4" />
                 {t('admin.providers.add', 'Add provider')}
               </button>
             </>
@@ -380,23 +647,14 @@ function AdminProvidersPage() {
             <AdminLoadError message={error} framed={false} className="mb-6" action={null} />
           )}
 
-          {/* Search and Actions Bar */}
-          <div className="mb-6 flex flex-col sm:flex-row gap-4">
-            <div className="flex-1">
-              <div className="relative">
-                <Icon
-                  name="MagnifyingGlassIcon"
-                  className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-500"
-                />
-                <input
-                  type="text"
-                  placeholder={t('admin.providers.search', 'Search providers...')}
-                  value={searchTerm}
-                  onChange={e => setSearchTerm(e.target.value)}
-                  className="pl-10 w-full px-4 py-2 border border-admin-control-border dark:border-admin-control-border-dark rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
-                />
-              </div>
-            </div>
+          {/* Search */}
+          <div className="mb-6">
+            <SearchInput
+              value={searchTerm}
+              onChange={setSearchTerm}
+              placeholder={t('admin.providers.search', 'Search providers...')}
+              ariaLabel={t('admin.providers.searchLabel', 'Search providers')}
+            />
           </div>
 
           {/* Installation-wide LLM timeouts (providers and models can override them) */}
@@ -411,7 +669,6 @@ function AdminProvidersPage() {
                 const categoryProviders = groupedProviders[category] || [];
                 if (categoryProviders.length === 0) return null;
                 const isLlm = category === 'llm';
-                const hasConnectivity = isLlm;
 
                 return (
                   <CategorySection
@@ -420,338 +677,16 @@ function AdminProvidersPage() {
                     title={categoryLabels[category]}
                     count={categoryProviders.length}
                   >
-                    <div className="bg-white dark:bg-gray-800 shadow-sm rounded-lg overflow-x-auto">
-                      <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
-                        <thead className="bg-gray-50 dark:bg-gray-900">
-                          <tr>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                              {t('admin.providers.table.provider', 'Provider')}
-                            </th>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                              {t('admin.providers.table.apiKey', 'API Key')}
-                            </th>
-                            {isLlm && (
-                              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                                {t('admin.providers.table.models', 'Models')}
-                              </th>
-                            )}
-                            {hasConnectivity && (
-                              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                                {t('admin.providers.table.connectivity', 'Connectivity')}
-                              </th>
-                            )}
-                            <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                              {t('admin.providers.table.actions', 'Actions')}
-                            </th>
-                          </tr>
-                        </thead>
-                        <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
-                          {categoryProviders.map(provider => {
-                            const providerHealth = healthStatus[provider.id] || {};
-                            const enabledModels = enabledModelsByProvider[provider.id] || [];
-                            const linkedModels = linkedModelsByProvider[provider.id] || [];
-                            const isExpanded = providerHealth.expanded;
-                            const hasResults =
-                              providerHealth.results && providerHealth.results.length > 0;
-                            const colSpan = isLlm ? 5 : 3;
-
-                            return (
-                              <Fragment key={provider.id}>
-                                <tr
-                                  className="hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer"
-                                  onClick={() => editProvider(provider.id)}
-                                >
-                                  <td className="px-6 py-4">
-                                    <div className="flex items-center">
-                                      <div>
-                                        <div
-                                          className="text-sm font-medium text-gray-900 dark:text-white"
-                                          title={
-                                            getLocalizedContent(
-                                              provider.description,
-                                              currentLanguage
-                                            ) || undefined
-                                          }
-                                        >
-                                          {getLocalizedContent(provider.name, currentLanguage)}
-                                          {provider.enabled === false && (
-                                            <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-300">
-                                              {t('admin.providers.disabled', 'Disabled')}
-                                            </span>
-                                          )}
-                                          {(Number.isFinite(provider.connectTimeoutMs) ||
-                                            Number.isFinite(provider.streamIdleTimeoutMs)) && (
-                                            <span
-                                              className="ml-1.5 text-xs font-normal text-gray-500 dark:text-gray-400"
-                                              title={t(
-                                                'admin.providers.ownTimeouts',
-                                                'Sets its own timeouts'
-                                              )}
-                                            >
-                                              <span aria-hidden="true">⏱</span>
-                                              <span className="sr-only">
-                                                {t(
-                                                  'admin.providers.ownTimeouts',
-                                                  'Sets its own timeouts'
-                                                )}
-                                              </span>
-                                            </span>
-                                          )}
-                                        </div>
-                                        <div className="text-sm text-gray-500 dark:text-gray-400">
-                                          {provider.id}
-                                          {isLlm && getProviderApiType(provider) && (
-                                            <span className="ml-1 text-xs">
-                                              · {apiTypeLabel(t, getProviderApiType(provider))}
-                                            </span>
-                                          )}
-                                        </div>
-                                      </div>
-                                    </div>
-                                  </td>
-                                  <td className="px-6 py-4 whitespace-nowrap">
-                                    {provider.requiresApiKey === false ? (
-                                      // Keyless provider (e.g. Qwant): "Not Configured" would
-                                      // read as broken when there is nothing to configure.
-                                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200">
-                                        {t(
-                                          'admin.providers.noApiKeyRequired',
-                                          'No API key required'
-                                        )}
-                                      </span>
-                                    ) : isLlm && keyStatuses[provider.id] ? (
-                                      // The server's verdict: a stored key it cannot decrypt
-                                      // looks "Configured" below but does not work.
-                                      <ApiKeyStatusBadge status={keyStatuses[provider.id]} />
-                                    ) : provider.apiKeySet ? (
-                                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200">
-                                        <Icon name="KeyIcon" className="w-3 h-3 mr-1" />
-                                        {t('admin.providers.configured', 'Configured')}
-                                      </span>
-                                    ) : (
-                                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-300">
-                                        <Icon
-                                          name="ExclamationTriangleIcon"
-                                          className="w-3 h-3 mr-1"
-                                        />
-                                        {t('admin.providers.notConfigured', 'Not Configured')}
-                                      </span>
-                                    )}
-                                  </td>
-                                  {isLlm && (
-                                    <td className="px-6 py-4">
-                                      {linkedModels.length > 0 ? (
-                                        <ModelsLink
-                                          enabled={access.models}
-                                          providerId={provider.id}
-                                          className="block rounded-sm text-sm text-gray-700 dark:text-gray-300 hover:text-indigo-700 dark:hover:text-indigo-300 focus:outline-hidden focus:ring-2 focus:ring-indigo-500"
-                                          title={linkedModels.map(m => m.id).join('\n')}
-                                        >
-                                          <div className="font-medium whitespace-nowrap">
-                                            {t(
-                                              'admin.providers.linkedModels.count',
-                                              '{{count}} linked, {{enabled}} enabled',
-                                              {
-                                                count: linkedModels.length,
-                                                enabled: enabledModels.length
-                                              }
-                                            )}
-                                          </div>
-                                          <div className="text-xs text-gray-500 dark:text-gray-400 max-w-56 truncate">
-                                            {linkedModels
-                                              .slice(0, LINKED_MODEL_PREVIEW)
-                                              .map(m =>
-                                                getLocalizedContent(m.name, currentLanguage)
-                                              )
-                                              .join(', ')}
-                                            {linkedModels.length > LINKED_MODEL_PREVIEW &&
-                                              ` ${t(
-                                                'admin.providers.linkedModels.more',
-                                                '+{{count}} more',
-                                                {
-                                                  count: linkedModels.length - LINKED_MODEL_PREVIEW
-                                                }
-                                              )}`}
-                                          </div>
-                                        </ModelsLink>
-                                      ) : (
-                                        <span className="text-sm text-gray-500 dark:text-gray-400">
-                                          —
-                                        </span>
-                                      )}
-                                    </td>
-                                  )}
-                                  {hasConnectivity && (
-                                    <td className="px-6 py-4 whitespace-nowrap">
-                                      <div className="flex items-center gap-2">
-                                        <HealthBadge status={providerHealth.status || 'idle'} />
-                                        {hasResults && (
-                                          <button
-                                            onClick={e => {
-                                              e.stopPropagation();
-                                              toggleExpanded(provider.id);
-                                            }}
-                                            className="text-gray-500 hover:text-gray-600 dark:hover:text-gray-200"
-                                            title={
-                                              isExpanded
-                                                ? t(
-                                                    'admin.providers.health.hideResults',
-                                                    'Hide results'
-                                                  )
-                                                : t(
-                                                    'admin.providers.health.showResults',
-                                                    'Show results'
-                                                  )
-                                            }
-                                          >
-                                            <Icon
-                                              name={
-                                                isExpanded ? 'ChevronUpIcon' : 'ChevronDownIcon'
-                                              }
-                                              className="w-4 h-4"
-                                            />
-                                          </button>
-                                        )}
-                                      </div>
-                                    </td>
-                                  )}
-                                  <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                                    <div className="flex flex-wrap justify-end gap-x-3 gap-y-1">
-                                      {isLlm && enabledModels.length > 0 && (
-                                        <button
-                                          onClick={e => {
-                                            e.stopPropagation();
-                                            void testProvider(provider.id);
-                                          }}
-                                          disabled={
-                                            providerHealth.status === 'testing' || testingAll
-                                          }
-                                          className="text-green-700 hover:text-green-900 dark:text-green-400 dark:hover:text-green-300 disabled:opacity-50 disabled:cursor-not-allowed"
-                                        >
-                                          {t('admin.providers.test', 'Test')}
-                                        </button>
-                                      )}
-                                      {isLlm &&
-                                        access.models &&
-                                        CUSTOM_PROVIDER_API_TYPES.includes(
-                                          getProviderApiType(provider)
-                                        ) && (
-                                          <button
-                                            onClick={e => {
-                                              e.stopPropagation();
-                                              navigate('/admin/models', {
-                                                state: { importProviderId: provider.id }
-                                              });
-                                            }}
-                                            className="text-indigo-600 hover:text-indigo-900 dark:text-indigo-400 dark:hover:text-indigo-300"
-                                          >
-                                            {t('admin.providers.import', 'Import models')}
-                                          </button>
-                                        )}
-                                      <button
-                                        onClick={e => {
-                                          e.stopPropagation();
-                                          editProvider(provider.id);
-                                        }}
-                                        className="text-blue-600 hover:text-blue-900 dark:text-blue-400 dark:hover:text-blue-300"
-                                      >
-                                        {t('admin.providers.configure', 'Configure')}
-                                      </button>
-                                      {provider.category &&
-                                        !BUILT_IN_LLM_PROVIDERS.includes(provider.id) && (
-                                          <button
-                                            onClick={e => {
-                                              e.stopPropagation();
-                                              void deleteProvider(
-                                                provider.id,
-                                                getLocalizedContent(provider.name, currentLanguage)
-                                              );
-                                            }}
-                                            className="text-red-600 hover:text-red-900 dark:text-red-400 dark:hover:text-red-300"
-                                          >
-                                            {t('admin.providers.delete', 'Delete')}
-                                          </button>
-                                        )}
-                                    </div>
-                                  </td>
-                                </tr>
-                                {/* Expandable model test results row */}
-                                {isLlm && isExpanded && hasResults && (
-                                  <tr>
-                                    <td
-                                      colSpan={colSpan}
-                                      className="px-6 py-3 bg-gray-50 dark:bg-gray-900/50"
-                                    >
-                                      <div className="space-y-1.5">
-                                        <p className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2">
-                                          {t('admin.providers.modelResults', 'Model Test Results')}
-                                        </p>
-                                        {providerHealth.results.map((result, idx) => (
-                                          <div
-                                            key={idx}
-                                            className={`flex items-start gap-3 p-2 rounded text-sm ${
-                                              result.success
-                                                ? 'bg-green-50 dark:bg-green-900/20'
-                                                : 'bg-red-50 dark:bg-red-900/20'
-                                            }`}
-                                          >
-                                            <Icon
-                                              name={
-                                                result.success ? 'CheckCircleIcon' : 'XCircleIcon'
-                                              }
-                                              className={`w-4 h-4 mt-0.5 shrink-0 ${
-                                                result.success
-                                                  ? 'text-green-700 dark:text-green-400'
-                                                  : 'text-red-600 dark:text-red-400'
-                                              }`}
-                                            />
-                                            <div className="min-w-0 flex-1">
-                                              <span className="font-medium text-gray-900 dark:text-white">
-                                                {getLocalizedContent(
-                                                  result.model.name,
-                                                  currentLanguage
-                                                )}
-                                              </span>
-                                              <span className="text-gray-500 dark:text-gray-400 ml-1 text-xs">
-                                                ({result.model.id})
-                                              </span>
-                                              {result.error && (
-                                                <p className="text-xs text-red-600 dark:text-red-400 mt-0.5">
-                                                  {result.error}
-                                                </p>
-                                              )}
-                                            </div>
-                                            <span
-                                              className={`text-xs whitespace-nowrap ${
-                                                result.success
-                                                  ? 'text-green-700 dark:text-green-300'
-                                                  : 'text-red-700 dark:text-red-300'
-                                              }`}
-                                            >
-                                              {result.message}
-                                            </span>
-                                          </div>
-                                        ))}
-                                        {/* Show spinner for models still being tested */}
-                                        {providerHealth.status === 'testing' && (
-                                          <div className="flex items-center gap-2 p-2 text-sm text-gray-500 dark:text-gray-400">
-                                            <span className="animate-spin rounded-full h-3 w-3 border-b-2 border-blue-500 inline-block" />
-                                            {t(
-                                              'admin.providers.testingMore',
-                                              'Testing remaining models...'
-                                            )}
-                                          </div>
-                                        )}
-                                      </div>
-                                    </td>
-                                  </tr>
-                                )}
-                              </Fragment>
-                            );
-                          })}
-                        </tbody>
-                      </table>
-                    </div>
+                    <DataTable
+                      columns={providerColumns(isLlm)}
+                      data={categoryProviders}
+                      getRowId={provider => provider.id}
+                      actions={providerActions(isLlm)}
+                      kebabThreshold={5}
+                      onRowClick={provider => editProvider(provider.id)}
+                      getRowExpansion={isLlm ? providerTestResults : undefined}
+                      stickyHeader={false}
+                    />
                   </CategorySection>
                 );
               })}

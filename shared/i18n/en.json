@@ -1511,7 +1511,8 @@
         "llmHelp": "An LLM provider holds one API key for all of its models. Link models to it in the model editor, or import them from its endpoint.",
         "nameRequired": "Provider name is required",
         "subtitle": "Create an LLM provider for your own endpoint, a web search provider, or a generic API key",
-        "idRequired": "Provider ID is required"
+        "idRequired": "Provider ID is required",
+        "intro": "Connect an AI endpoint of your own — a gateway, a self-hosted server or another vendor. Its models share one API key."
       },
       "info": {
         "title": "API Key Priority",
@@ -1599,7 +1600,8 @@
       },
       "add": "Add provider",
       "import": "Import models",
-      "ownTimeouts": "Sets its own timeouts"
+      "ownTimeouts": "Sets its own timeouts",
+      "searchLabel": "Search providers"
     },
     "models": {
       "sync": {
@@ -4569,7 +4571,9 @@
         "category": "Category",
         "model": "Model",
         "order": "Order",
-        "status": "Status"
+        "status": "Status",
+        "categoryFallback": "No category set: listed under {{category}}",
+        "defaultModel": "Default model"
       },
       "uploading": "Uploading...",
       "details": {
@@ -6182,7 +6186,8 @@
         "noSkills": "No skills selected – users can’t use any agent skills",
         "allWildcard": "All (*)",
         "allWildcardFor": "{{label}}: All (*)"
-      }
+      },
+      "clone": "Clone"
     },
     "contentAccess": {
       "title": "Group access",
@@ -6217,7 +6222,8 @@
         "skills": "skills",
         "tools": "tools",
         "workflows": "workflows"
-      }
+      },
+      "wildcardNote": "Groups with a lock can use all {{subjectPlural}} through a wildcard. To withdraw a single one, an administrator replaces the wildcard with an explicit list in the group settings."
     },
     "auditLog": {
       "title": "Audit Log",
@@ -6730,7 +6736,8 @@
       "tabs": {
         "userPrompts": "User prompts",
         "prompts": "Prompts",
-        "variables": "Variables"
+        "variables": "Variables",
+        "aria": "Prompt sections"
       },
       "edit": {
         "detectedVariables": "Detected in the text",
@@ -6835,7 +6842,10 @@
         "description": "Description",
         "order": "Order",
         "appConnected": "App Connected",
-        "status": "Status"
+        "status": "Status",
+        "categoryFallback": "No category set: listed under {{category}}",
+        "linkedApp": "App",
+        "appMissing": "Missing app: {{id}}"
       },
       "delete": "Delete",
       "searchPlaceholder": "Search prompts...",
