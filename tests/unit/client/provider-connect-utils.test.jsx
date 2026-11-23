@@ -15,6 +15,7 @@ import {
   buildProviderWrite,
   canTestConnection,
   classifyConnectionError,
+  connectionUrl,
   findTile,
   getAvailableTiles,
   initialConnectionForm,
@@ -23,6 +24,7 @@ import {
   nextStep,
   planGroupUpdates,
   previousStep,
+  regionProblem,
   resolveTarget,
   runConnectPlan,
   stepsForTile,
@@ -111,10 +113,18 @@ describe('steps', () => {
     expect(previousStep(tile, 'vendor')).toBe('vendor');
   });
 
-  it('stops Bedrock after the connection: there is no listing to test or pick from', () => {
+  it('walks Bedrock through every step: its models are listed per region', () => {
     const tile = findTile('bedrock');
-    expect(stepsForTile(tile)).toEqual(['vendor', 'connection', 'done']);
-    expect(nextStep(tile, 'connection')).toBe('done');
+    expect(stepsForTile(tile)).toEqual([
+      'vendor',
+      'connection',
+      'test',
+      'models',
+      'default',
+      'access',
+      'done'
+    ]);
+    expect(nextStep(tile, 'connection')).toBe('test');
   });
 });
 
@@ -163,11 +173,35 @@ describe('connection form', () => {
     expect(canTestConnection(azure.tile, taken, azure.target, SHIPPED)).toBe(false);
   });
 
-  it('asks Bedrock for a key unless one is stored', () => {
+  it('asks Bedrock for a valid region, preset to the stored one or the default', () => {
     const bedrock = formFor('bedrock');
-    expect(canTestConnection(bedrock.tile, bedrock.form, bedrock.target, SHIPPED)).toBe(false);
-    const keyed = updateConnectionForm(bedrock.form, 'apiKey', 'abc');
-    expect(canTestConnection(bedrock.tile, keyed, bedrock.target, SHIPPED)).toBe(true);
+    expect(bedrock.form.region).toBe('eu-central-1');
+    expect(regionProblem(bedrock.tile, bedrock.form)).toBeNull();
+    // The key may be stored or set on the server; the test says when it is missing.
+    expect(canTestConnection(bedrock.tile, bedrock.form, bedrock.target, SHIPPED)).toBe(true);
+    for (const [value, problem] of [
+      ['', 'required'],
+      ['eu central', 'invalid'],
+      ['bedrock.evil.com', 'invalid']
+    ]) {
+      const form = updateConnectionForm(bedrock.form, 'region', value);
+      expect(regionProblem(bedrock.tile, form)).toBe(problem);
+      expect(canTestConnection(bedrock.tile, form, bedrock.target, SHIPPED)).toBe(false);
+    }
+    const stored = SHIPPED.map(p =>
+      p.id === 'bedrock' ? { ...p, config: { region: 'us-west-2' } } : p
+    );
+    expect(formFor('bedrock', stored).form.region).toBe('us-west-2');
+    expect(regionProblem(findTile('openai'), formFor('openai').form)).toBeNull();
+  });
+
+  it('shows the Bedrock control plane of the region as the tested URL', () => {
+    const { tile, form } = formFor('bedrock');
+    expect(connectionUrl(tile, form)).toBe('https://bedrock.eu-central-1.amazonaws.com');
+    expect(connectionUrl(tile, updateConnectionForm(form, 'region', 'global'))).toBe(
+      'https://bedrock.eu-central-1.amazonaws.com'
+    );
+    expect(connectionUrl(tile, updateConnectionForm(form, 'region', 'x'))).toBe('');
   });
 });
 
@@ -317,6 +351,74 @@ describe('save', () => {
     );
     const openai = formFor('openai');
     expect(buildProviderWrite(openai.tile, openai.form, openai.target, discovery)).toBeNull();
+  });
+
+  it('stores the region Bedrock models were listed in, keeping the rest of the provider config', () => {
+    const providers = SHIPPED.map(p =>
+      p.id === 'bedrock' ? { ...p, apiKeySet: true, config: { region: 'eu-west-1', other: 1 } } : p
+    );
+    const bedrockDiscovery = { apiType: 'bedrock', region: 'us-east-1', models: [] };
+    const changed = formFor('bedrock', providers, { region: 'us-east-1' });
+    expect(
+      buildProviderWrite(changed.tile, changed.form, changed.target, bedrockDiscovery)
+    ).toEqual({
+      method: 'PUT',
+      path: '/admin/providers/bedrock',
+      body: {
+        id: 'bedrock',
+        name: 'AWS Bedrock',
+        category: 'llm',
+        enabled: true,
+        apiKey: '••••••••',
+        config: { region: 'us-east-1', other: 1 }
+      }
+    });
+    // Same region, a stored key: nothing to write.
+    const same = formFor('bedrock', providers);
+    expect(
+      buildProviderWrite(same.tile, same.form, same.target, {
+        ...bedrockDiscovery,
+        region: 'eu-west-1'
+      })
+    ).toBeNull();
+  });
+
+  it('asks discovery for the Bedrock region instead of a URL and builds configs the adapter accepts', () => {
+    const { tile, form, target } = formFor('bedrock', SHIPPED, { region: 'global', apiKey: 'k' });
+    expect(buildDiscoveryRequest(tile, form, target)).toEqual({
+      providerId: 'bedrock',
+      region: 'global',
+      apiKey: 'k'
+    });
+    const [config] = buildModelConfigs({
+      discovery: {
+        apiType: 'bedrock',
+        modelsUrl: 'https://bedrock.eu-central-1.amazonaws.com/foundation-models',
+        models: []
+      },
+      picks: [
+        {
+          id: 'global-claude',
+          model: {
+            id: 'global.anthropic.claude-sonnet-4-20250514-v1:0',
+            name: 'Global Claude Sonnet 4',
+            type: 'chat',
+            supportsVision: true
+          }
+        }
+      ],
+      providerId: 'bedrock',
+      defaultId: 'global-claude'
+    });
+    expect(config).toMatchObject({
+      id: 'global-claude',
+      modelId: 'global.anthropic.claude-sonnet-4-20250514-v1:0',
+      provider: 'bedrock',
+      supportsVision: true,
+      default: true
+    });
+    expect(config.url).toBeUndefined();
+    expect(config).not.toHaveProperty('providerId');
   });
 
   it('marks a gateway that passed the test without a key as keyless, and one with a key not', () => {

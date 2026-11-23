@@ -2127,15 +2127,12 @@
           "smokeOk": "Das Modell hat geantwortet:",
           "providerFailedTitle": "Der Anbieter wurde nicht gespeichert",
           "providerFailedHint": "Sonst wurde nichts angelegt. Gehen Sie zurück, korrigieren Sie die Verbindung und versuchen Sie es erneut.",
-          "keySavedTitle": "{{provider}} ist verbunden",
           "title": "{{count}} Modelle über {{provider}} verbunden",
           "title_one": "{{count}} Modell über {{provider}} verbunden",
-          "bedrockHint": "Bedrock bietet keine Modellliste, die iHub lesen kann. Installieren Sie fertige Bedrock-Modellkonfigurationen aus dem Marketplace; sie nutzen den am Anbieter gespeicherten Schlüssel.",
           "linked": "Die Modelle nutzen Endpunkt und Schlüssel des Anbieters.",
           "default": "{{model}} ist das Standardmodell.",
           "groups": "Freigegeben für: {{groups}}.",
           "groupFailed": "Gruppe {{group}}: {{error}}",
-          "marketplace": "Modelle im Marketplace ansehen",
           "createApp": "App mit diesem Modell erstellen",
           "openProvider": "Anbieter öffnen",
           "openModels": "Zu den Modellen"
@@ -2184,7 +2181,7 @@
           "urlHintSelfHosted": "Die API-Basis, wie der iHub-Server (nicht Ihr Browser) sie erreicht, zum Beispiel {{example}}.",
           "idExists": "Ein Anbieter mit dieser ID existiert bereits. Wählen Sie eine andere ID oder bearbeiten Sie diesen Anbieter unter Anbieter.",
           "title": "{{provider}} verbinden",
-          "introBedrock": "Geben Sie einen Bedrock-API-Schlüssel ein. Er wird verschlüsselt am Anbieter AWS Bedrock gespeichert. Die Region kommt aus AWS_REGION (Standard eu-central-1) oder aus dem jeweiligen Modell.",
+          "introBedrock": "Die AWS-Region, in der iHub die Modelle auflistet und aufruft, und ein Bedrock-API-Schlüssel. Beides wird beim Abschluss am Anbieter AWS Bedrock gespeichert (der Schlüssel verschlüsselt).",
           "intro": "Wo iHub die Modelle erreicht und welchen Schlüssel es sendet. Gespeichert wird erst im letzten Schritt.",
           "serverKind": "Server",
           "serverKindHint": "vLLM wird mit dem vLLM-Adapter angesprochen, LM Studio und Ollama mit dem OpenAI-kompatiblen.",
@@ -2194,13 +2191,15 @@
           "keyHintSelfHosted": "Leer lassen, wenn der Server keine Authentifizierung hat. Ein hier eingegebener Schlüssel wird verschlüsselt am Anbieter gespeichert.",
           "keyHint": "Wird verschlüsselt am Anbieter gespeichert, nicht an jedem Modell.",
           "envVarHint": "Statt ihn zu speichern, können Sie das Feld leer lassen und auf dem Server die Umgebungsvariable {{envVar}} setzen.",
-          "getKey": "Wo bekomme ich einen Schlüssel?"
+          "getKey": "Wo bekomme ich einen Schlüssel?",
+          "region": "AWS-Region",
+          "regionHint": "Ein AWS-Regionscode wie eu-central-1 oder „global“ für die globalen regionsübergreifenden Inferenzprofile. Modelle, die ein Inferenzprofil benötigen, werden mit dem Profil dieser Region angeboten (eu. für eu-central-1).",
+          "regionInvalid": "Geben Sie einen AWS-Regionscode wie eu-central-1 oder global ein."
         },
         "loadError": "Anbieter und Modelle konnten nicht geladen werden",
         "saving": "Wird gespeichert…",
         "finish": "Verbinden und {{count}} Modelle hinzufügen",
         "finish_one": "Verbinden und {{count}} Modell hinzufügen",
-        "saveKey": "Schlüssel speichern",
         "testAction": "Verbindung testen",
         "next": "Weiter",
         "title": "Modell-Anbieter verbinden",
@@ -2209,7 +2208,12 @@
         "backToConnection": "Zurück zur Verbindung"
       },
       "loadError": "Fehler beim Laden der Anbieter",
-      "searchLabel": "Anbieter durchsuchen"
+      "searchLabel": "Anbieter durchsuchen",
+      "bedrockRegion": {
+        "label": "AWS-Region",
+        "invalid": "Geben Sie einen AWS-Regionscode wie eu-central-1 oder global ein.",
+        "hint": "Region, in der die Bedrock-Modelle aufgerufen werden, sofern ein Modell keine eigene festlegt. Leer lassen, um AWS_REGION auf dem Server zu verwenden (Standard eu-central-1). Modelle, deren ID mit einem Profilpräfix beginnt (eu., us., global.), funktionieren nur in einer Region dieses Wirtschaftsraums."
+      }
     },
     "models": {
       "sync": {
@@ -2584,7 +2588,8 @@
           "networkError": "Netzwerkfehler",
           "providerIdReserved": "Diese ID ist der Name eines API-Typs. Wählen Sie eine andere ID.",
           "serverError": "Der Endpunkt hat mit einem Serverfehler geantwortet",
-          "certificateUntrusted": "Dem Zertifikat des Endpunkts wird nicht vertraut"
+          "certificateUntrusted": "Dem Zertifikat des Endpunkts wird nicht vertraut",
+          "invalidRegion": "Das ist keine AWS-Region"
         },
         "unsupported": "iHub kann dieses Modell bei diesem Anbieter nicht ausführen",
         "gatewayCheckbox": "Dieser Endpunkt ist ein iFinder Model Gateway",

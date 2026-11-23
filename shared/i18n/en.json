@@ -1656,14 +1656,11 @@
           "smokeOk": "The model answered:",
           "providerFailedTitle": "The provider was not saved",
           "providerFailedHint": "Nothing else was created. Go back, fix the connection and try again.",
-          "keySavedTitle": "{{provider}} is connected",
           "title": "{{count}} models connected through {{provider}}",
-          "bedrockHint": "Bedrock has no model list iHub can read. Install ready-made Bedrock model configs from the Marketplace; they use the key stored on the provider.",
           "linked": "The models use the endpoint and key of the provider.",
           "default": "{{model}} is the default model.",
           "groups": "Granted to: {{groups}}.",
           "groupFailed": "Group {{group}}: {{error}}",
-          "marketplace": "Browse models in the Marketplace",
           "createApp": "Create an app with this model",
           "openProvider": "Open the provider",
           "openModels": "Go to models",
@@ -1713,7 +1710,7 @@
           "urlHintSelfHosted": "The API base as the iHub server reaches it (not your browser), for example {{example}}.",
           "idExists": "A provider with this ID already exists. Choose another ID, or edit that provider under Providers.",
           "title": "Connect {{provider}}",
-          "introBedrock": "Enter a Bedrock API key. It is stored encrypted on the AWS Bedrock provider. The region comes from AWS_REGION (default eu-central-1) or from each model.",
+          "introBedrock": "The AWS region iHub lists and calls the models in, and a Bedrock API key. Both are stored on the AWS Bedrock provider (the key encrypted) when you finish.",
           "intro": "Where iHub reaches the models, and the key it sends. Nothing is saved until the last step.",
           "serverKind": "Server",
           "serverKindHint": "vLLM is called with the vLLM adapter; LM Studio and Ollama with the OpenAI-compatible one.",
@@ -1723,12 +1720,14 @@
           "keyHintSelfHosted": "Leave empty if the server has no authentication. A key entered here is stored encrypted on the provider.",
           "keyHint": "Stored encrypted on the provider, not on each model.",
           "envVarHint": "Instead of storing it, you can leave this empty and set the environment variable {{envVar}} on the server.",
-          "getKey": "Where do I get a key?"
+          "getKey": "Where do I get a key?",
+          "region": "AWS region",
+          "regionHint": "An AWS region code such as eu-central-1, or \"global\" for the global cross-region inference profiles. Models that need an inference profile are offered with the profile of this region (eu. for eu-central-1).",
+          "regionInvalid": "Enter an AWS region code such as eu-central-1, or global."
         },
         "loadError": "Could not load providers and models",
         "saving": "Saving…",
         "finish": "Connect and add {{count}} models",
-        "saveKey": "Save the key",
         "testAction": "Test connection",
         "next": "Next",
         "title": "Connect a model provider",
@@ -1738,7 +1737,12 @@
         "finish_one": "Connect and add {{count}} model"
       },
       "loadError": "Error loading providers",
-      "searchLabel": "Search providers"
+      "searchLabel": "Search providers",
+      "bedrockRegion": {
+        "label": "AWS region",
+        "invalid": "Enter an AWS region code such as eu-central-1, or global.",
+        "hint": "Region the Bedrock models are called in, unless a model sets its own. Leave empty to use AWS_REGION on the server (default eu-central-1). Models whose ID starts with a profile prefix (eu., us., global.) only work in a region of that geography."
+      }
     },
     "models": {
       "sync": {
@@ -2113,7 +2117,8 @@
           "networkError": "Network error",
           "providerIdReserved": "This ID is the name of an API type. Choose another ID.",
           "serverError": "The endpoint answered with a server error",
-          "certificateUntrusted": "The certificate of the endpoint is not trusted"
+          "certificateUntrusted": "The certificate of the endpoint is not trusted",
+          "invalidRegion": "This is not an AWS region"
         },
         "unsupported": "iHub cannot run this model from this provider",
         "gatewayCheckbox": "This endpoint is an iFinder Model Gateway",

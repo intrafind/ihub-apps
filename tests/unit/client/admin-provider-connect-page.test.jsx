@@ -320,23 +320,160 @@ test('a rejected key sends the admin back to the key', async () => {
   expect(screen.getByRole('heading', { name: 'Connect OpenAI' })).toBeInTheDocument();
 });
 
-test('Bedrock stores the key and ends with the Marketplace', async () => {
-  mockApi();
+const BEDROCK_DISCOVERY = {
+  apiType: 'bedrock',
+  baseUrl: 'https://bedrock.us-east-1.amazonaws.com',
+  modelsUrl: 'https://bedrock.us-east-1.amazonaws.com/foundation-models',
+  azure: false,
+  gateway: null,
+  region: 'us-east-1',
+  models: [
+    {
+      id: 'us.anthropic.claude-sonnet-4-20250514-v1:0',
+      name: 'US Claude Sonnet 4',
+      ownedBy: 'Anthropic',
+      type: 'chat',
+      supportsVision: true,
+      foundationModelId: 'anthropic.claude-sonnet-4-20250514-v1:0'
+    },
+    {
+      id: 'amazon.titan-embed-text-v2:0',
+      name: 'Titan Text Embeddings V2',
+      type: 'embedding',
+      unsupported: true
+    }
+  ]
+};
+
+test('Bedrock asks for the region, lists its models and walks the whole flow', async () => {
+  mockApi({ discover: () => ({ data: BEDROCK_DISCOVERY }) });
   await renderPage();
   fireEvent.click(screen.getByTestId('connect-tile-bedrock'));
   await next();
+
+  // Connection: a region instead of a URL, preset to the default; the key is optional
+  // (stored, typed or BEDROCK_API_KEY on the server).
+  expect(screen.queryByLabelText(/Endpoint URL/)).not.toBeInTheDocument();
+  const region = screen.getByLabelText(/AWS region/);
+  expect(region).toHaveValue('eu-central-1');
+  expect(screen.getByText(/BEDROCK_API_KEY/)).toBeInTheDocument();
+
+  fireEvent.change(region, { target: { value: 'eu central' } });
+  expect(
+    screen.getByText('Enter an AWS region code such as eu-central-1, or global.')
+  ).toBeInTheDocument();
   expect(screen.getByTestId('connect-next')).toBeDisabled();
+
+  fireEvent.change(region, { target: { value: 'us-east-1' } });
   fireEvent.change(screen.getByLabelText(/API key/), { target: { value: 'bedrock-key' } });
-  expect(screen.getByTestId('connect-next')).toHaveTextContent('Save the key');
+  expect(screen.getByTestId('connect-next')).toHaveTextContent('Test connection');
   await next();
 
-  const [[, put]] = calls('/admin/providers/bedrock', 'PUT');
-  expect(put.body).toMatchObject({ id: 'bedrock', apiKey: 'bedrock-key', enabled: true });
-  expect(calls('/admin/models/_discover', 'POST')).toHaveLength(0);
-  expect(screen.getByRole('link', { name: 'Browse models in the Marketplace' })).toHaveAttribute(
-    'href',
-    '/admin/marketplace?type=model'
+  // Test: the region is sent instead of a URL.
+  const success = await screen.findByTestId('connect-test-success');
+  expect(within(success).getByText('bedrock.us-east-1.amazonaws.com')).toBeInTheDocument();
+  expect(within(success).getByText('us-east-1')).toBeInTheDocument();
+  expect(within(success).getByText('AWS Bedrock')).toBeInTheDocument();
+  expect(calls('/admin/models/_discover', 'POST')[0][1].body).toEqual({
+    providerId: 'bedrock',
+    region: 'us-east-1',
+    apiKey: 'bedrock-key'
+  });
+  await next();
+
+  // Models: the embedding model cannot be picked.
+  expect(screen.getByLabelText('Titan Text Embeddings V2')).toBeDisabled();
+  fireEvent.click(screen.getByLabelText('US Claude Sonnet 4'));
+  expect(screen.getByLabelText('iHub model ID for US Claude Sonnet 4')).toHaveValue(
+    'us.anthropic.claude-sonnet-4-20250514-v1-0'
   );
+  await next();
+
+  fireEvent.click(screen.getByLabelText(/Keep GPT-4o/));
+  await next();
+  await next();
+
+  // Save: key and region on the provider, a Bedrock model config the adapter accepts.
+  const [[, put]] = calls('/admin/providers/bedrock', 'PUT');
+  expect(put.body).toMatchObject({
+    id: 'bedrock',
+    apiKey: 'bedrock-key',
+    enabled: true,
+    config: { region: 'us-east-1' }
+  });
+  const [[, modelCall]] = calls('/admin/models', 'POST');
+  expect(modelCall.body).toMatchObject({
+    id: 'us.anthropic.claude-sonnet-4-20250514-v1-0',
+    modelId: 'us.anthropic.claude-sonnet-4-20250514-v1:0',
+    provider: 'bedrock',
+    supportsVision: true,
+    default: false,
+    enabled: true
+  });
+  expect(modelCall.body).not.toHaveProperty('url');
+  expect(modelCall.body).not.toHaveProperty('providerId');
+  expect(modelCall.body).not.toHaveProperty('apiKey');
+
+  const done = await screen.findByTestId('connect-done');
+  expect(done).toHaveTextContent('1 models connected through AWS Bedrock');
+  expect(screen.queryByRole('link', { name: /Marketplace/ })).not.toBeInTheDocument();
+});
+
+test('Bedrock with an unchanged region and a stored key writes no provider update', async () => {
+  const providers = PROVIDERS.map(p =>
+    p.id === 'bedrock' ? { ...p, apiKeySet: true, config: { region: 'us-east-1' } } : p
+  );
+  mockMakeAdminApiCall.mockImplementation(async (path, options = {}) => {
+    const method = options.method || 'GET';
+    if (path === '/admin/providers' && method === 'GET') return { data: { items: providers } };
+    if (path === '/admin/models' && method === 'GET') return { data: { items: EXISTING_MODELS } };
+    if (path === '/admin/groups' && method === 'GET') return { data: GROUPS };
+    if (path === '/admin/models/_discover') return { data: BEDROCK_DISCOVERY };
+    return { data: {} };
+  });
+  await renderPage('/admin/providers/connect?vendor=bedrock');
+
+  expect(screen.getByLabelText(/AWS region/)).toHaveValue('us-east-1');
+  await next();
+  await screen.findByTestId('connect-test-success');
+  expect(calls('/admin/models/_discover', 'POST')[0][1].body).toEqual({
+    providerId: 'bedrock',
+    region: 'us-east-1'
+  });
+  await next();
+  fireEvent.click(screen.getByLabelText('US Claude Sonnet 4'));
+  await next();
+  fireEvent.click(screen.getByLabelText(/Keep GPT-4o/));
+  await next();
+  await next();
+
+  expect(calls('/admin/providers/bedrock', 'PUT')).toHaveLength(0);
+  expect(calls('/admin/models', 'POST')).toHaveLength(1);
+});
+
+test('Bedrock: an AWS refusal of the key sends the admin back to the key', async () => {
+  mockApi({
+    discover: () => {
+      const err = new Error('Request failed');
+      err.response = {
+        data: {
+          detail: 'AWS did not accept the Bedrock API key',
+          details: {
+            messageKey: 'authenticationFailed',
+            upstreamStatus: 403,
+            remediation: 'HTTP 403. Check that the key is complete and has not expired.'
+          }
+        }
+      };
+      throw err;
+    }
+  });
+  await renderPage('/admin/providers/connect?vendor=bedrock');
+  await next();
+  const alert = await screen.findByTestId('connect-test-error');
+  expect(alert).toHaveTextContent('The endpoint rejected the key.');
+  expect(alert).toHaveTextContent('Check that the key is complete');
+  expect(screen.getByTestId('connect-next')).toBeDisabled();
 });
 
 test('an answer for a connection the admin has since changed is dropped', async () => {

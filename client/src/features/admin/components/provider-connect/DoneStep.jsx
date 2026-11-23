@@ -100,9 +100,8 @@ function SmokeTest({ modelId }) {
  * @param {{ providerError: string|null, models: Array<Object>, groups: Array<Object> }} props.outcome
  * @param {string|null} props.smokeModelId - Created chat model to test
  * @param {string|null} props.defaultId - New default model, if one was chosen
- * @param {boolean} props.noListing - Bedrock: key stored, models come from the Marketplace
  */
-function DoneStep({ providerId, providerName, outcome, smokeModelId, defaultId, noListing }) {
+function DoneStep({ providerId, providerName, outcome, smokeModelId, defaultId }) {
   const { t } = useTranslation();
   const created = outcome.models.filter(m => m.ok);
   const failed = outcome.models.filter(m => !m.ok);
@@ -135,53 +134,40 @@ function DoneStep({ providerId, providerName, outcome, smokeModelId, defaultId, 
         />
         <div>
           <h2 className={STEP_TITLE}>
-            {noListing
-              ? t('admin.providers.connect.done.keySavedTitle', '{{provider}} is connected', {
-                  provider: providerName
-                })
-              : t(
-                  'admin.providers.connect.done.title',
-                  '{{count}} models connected through {{provider}}',
-                  {
-                    count: created.length,
-                    provider: providerName
-                  }
-                )}
+            {t(
+              'admin.providers.connect.done.title',
+              '{{count}} models connected through {{provider}}',
+              {
+                count: created.length,
+                provider: providerName
+              }
+            )}
           </h2>
-          {noListing ? (
-            <p className={STEP_INTRO}>
+          <ul className="mt-1 list-disc pl-5 text-sm text-gray-700 dark:text-gray-300">
+            <li>
               {t(
-                'admin.providers.connect.done.bedrockHint',
-                'Bedrock has no model list iHub can read. Install ready-made Bedrock model configs from the Marketplace; they use the key stored on the provider.'
+                'admin.providers.connect.done.linked',
+                'The models use the endpoint and key of the provider.'
               )}
-            </p>
-          ) : (
-            <ul className="mt-1 list-disc pl-5 text-sm text-gray-700 dark:text-gray-300">
+            </li>
+            {defaultId && created.some(m => m.id === defaultId) && (
               <li>
-                {t(
-                  'admin.providers.connect.done.linked',
-                  'The models use the endpoint and key of the provider.'
-                )}
+                {t('admin.providers.connect.done.default', '{{model}} is the default model.', {
+                  model: defaultId
+                })}
               </li>
-              {defaultId && created.some(m => m.id === defaultId) && (
-                <li>
-                  {t('admin.providers.connect.done.default', '{{model}} is the default model.', {
-                    model: defaultId
-                  })}
-                </li>
-              )}
-              {outcome.groups.some(g => g.ok) && (
-                <li>
-                  {t('admin.providers.connect.done.groups', 'Granted to: {{groups}}.', {
-                    groups: outcome.groups
-                      .filter(g => g.ok)
-                      .map(g => g.groupId)
-                      .join(', ')
-                  })}
-                </li>
-              )}
-            </ul>
-          )}
+            )}
+            {outcome.groups.some(g => g.ok) && (
+              <li>
+                {t('admin.providers.connect.done.groups', 'Granted to: {{groups}}.', {
+                  groups: outcome.groups
+                    .filter(g => g.ok)
+                    .map(g => g.groupId)
+                    .join(', ')
+                })}
+              </li>
+            )}
+          </ul>
         </div>
       </div>
 
@@ -212,15 +198,9 @@ function DoneStep({ providerId, providerName, outcome, smokeModelId, defaultId, 
       {smokeModelId && <SmokeTest modelId={smokeModelId} />}
 
       <div className="flex flex-wrap items-center gap-3">
-        {noListing ? (
-          <Link to="/admin/marketplace?type=model" className={PRIMARY_BUTTON}>
-            {t('admin.providers.connect.done.marketplace', 'Browse models in the Marketplace')}
-          </Link>
-        ) : (
-          <Link to="/admin/apps/new" className={PRIMARY_BUTTON}>
-            {t('admin.providers.connect.done.createApp', 'Create an app with this model')}
-          </Link>
-        )}
+        <Link to="/admin/apps/new" className={PRIMARY_BUTTON}>
+          {t('admin.providers.connect.done.createApp', 'Create an app with this model')}
+        </Link>
         <Link
           to={`/admin/providers/${encodeURIComponent(providerId)}`}
           className={SECONDARY_BUTTON}
