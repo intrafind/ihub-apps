@@ -11,6 +11,7 @@ import { usePlatformConfig } from '../../../shared/contexts/PlatformConfigContex
 import useFeatureFlags from '../../../shared/hooks/useFeatureFlags';
 import { apiErrorMessage } from '../../../utils/apiErrorMessage';
 import AdminBreadcrumb from '../components/AdminBreadcrumb';
+import { arrivalQuery } from '../components/app-conversation/useAppBuilderChat';
 import { copyLabelWith, loadCopyLanguages } from '../components/app-create/copyLanguages';
 import CreateHeader from '../components/app-create/CreateHeader';
 import CreateNotices, { EssentialsNotice } from '../components/app-create/CreateNotices';
@@ -90,13 +91,15 @@ function AdminAppCreatePage() {
   const { blocker, markSaved } = useUnsavedChanges(false, state.dirty);
 
   const onCreated = useCallback(
-    id => {
+    (id, _payload, { origin } = {}) => {
       // The draft became an app: nothing of it is kept for the tab.
       forget();
       markSaved();
-      navigate(`${APPS_PATH}/${encodeURIComponent(id)}?created=1`, { replace: true });
+      // After a draft from a description the editor may open with the conversation.
+      const query = arrivalQuery(origin, featureFlags);
+      navigate(`${APPS_PATH}/${encodeURIComponent(id)}${query}`, { replace: true });
     },
-    [forget, markSaved, navigate]
+    [forget, markSaved, navigate, featureFlags]
   );
   const labelOf = useCallback(field => t(FIELD_LABEL_KEYS[field]), [t]);
   const detailOf = useCallback(error => apiErrorMessage(error, t, ''), [t]);

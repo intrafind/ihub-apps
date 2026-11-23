@@ -4910,6 +4910,36 @@
         "modelChoice": {
           "disabled": "{{name}} (deaktiviert)",
           "default": "{{name}} (Standard)"
+        },
+        "conflict": {
+          "title": "Von jemand anderem geändert",
+          "message": "Jemand anderes hat diese App gespeichert, nachdem Sie sie geöffnet haben. Es wurde nichts gespeichert. Laden Sie neu, um die aktuelle Fassung zu sehen, und nehmen Sie Ihre Änderungen dann erneut vor.",
+          "reload": "Neu laden"
+        },
+        "improve": {
+          "action": "Mit KI verbessern",
+          "title": "Anweisungen verbessern",
+          "hint": "Der neue Text ändert nur das Formular. Speichern Sie, um ihn zu behalten; „Verwerfen“ in der Speicherleiste nimmt ihn zurück.",
+          "inputLabel": "Was soll besser werden?",
+          "chips": {
+            "label": "Schnelle Anfragen",
+            "shorter": "Kürzer",
+            "formal": "Förmlicher",
+            "steps": "Klarere Schritte",
+            "unsure": "Sagen, was bei Unsicherheit zu tun ist"
+          },
+          "requests": {
+            "shorter": "Kürzen Sie die Anweisungen, ohne etwas Wichtiges wegzulassen.",
+            "formal": "Formulieren Sie die Anweisungen förmlicher.",
+            "steps": "Schreiben Sie die Anweisungen als klarere Schritte.",
+            "unsure": "Ergänzen Sie, was der Assistent tun soll, wenn er unsicher ist oder die Antwort nicht kennt."
+          },
+          "submit": "Neuen Text vorschlagen",
+          "before": "Jetzt",
+          "after": "Vorschlag",
+          "use": "Diesen Text verwenden",
+          "close": "Schließen",
+          "noChange": "Es wurde kein neuer Text vorgeschlagen."
         }
       },
       "reorder": "Reihenfolge",
@@ -5224,7 +5254,124 @@
       "downloadError": "Die Konfiguration konnte nicht heruntergeladen werden: {{error}}",
       "uploadExists": "Eine App mit der ID „{{id}}“ existiert bereits",
       "uploadError": "Die Konfiguration konnte nicht hochgeladen werden: {{error}}",
-      "loadError": "Fehler beim Laden der Apps"
+      "loadError": "Fehler beim Laden der Apps",
+      "conversation": {
+        "title": "Unterhaltung",
+        "logLabel": "Unterhaltung mit dem App-Assistenten",
+        "view": {
+          "label": "Bearbeiten mit",
+          "form": "Formular",
+          "conversation": "Unterhaltung"
+        },
+        "intro": "Sagen Sie mir mit Ihren eigenen Worten, was sich an dieser App ändern soll. Ich schlage jeweils eine Änderung vor, und Sie entscheiden, ob Sie sie übernehmen.",
+        "chips": {
+          "label": "Ideen für den Anfang",
+          "shorter": "Antworten kürzer machen",
+          "examples": "Beispielfragen vorschlagen",
+          "inputs": "Benutzer zuerst nach den nötigen Angaben fragen"
+        },
+        "you": "Sie",
+        "builder": "Assistent",
+        "composer": {
+          "label": "Sagen Sie dem Assistenten, was sich ändern soll",
+          "placeholder": "Zum Beispiel: förmlicher antworten",
+          "hint": "Eingabetaste sendet, Umschalt+Eingabetaste fügt eine Zeile ein.",
+          "send": "Senden"
+        },
+        "working": "Wird bearbeitet …",
+        "cancel": "Abbrechen",
+        "retry": "Erneut versuchen",
+        "startOver": "Neu beginnen",
+        "longHint": "Diese Unterhaltung wird lang. Ein Neubeginn führt oft zu besseren Antworten.",
+        "toast": "Übernommen. Probieren Sie es aus.",
+        "question": {
+          "other": "Etwas anderes",
+          "otherLabel": "Ihre Antwort",
+          "skip": "Überspringen",
+          "answer": "Antworten",
+          "skipped": "Überspringen Sie diese Frage und entscheiden Sie selbst."
+        },
+        "change": {
+          "heading": "Vorgeschlagene Änderung",
+          "apply": "Übernehmen",
+          "applying": "Wird gespeichert …",
+          "dismiss": "Verwerfen",
+          "dismissed": "Verworfen.",
+          "stale": "Die App hat sich inzwischen geändert. Fragen Sie erneut.",
+          "conflict": "Jemand anderes hat diese App gespeichert. Laden Sie sie neu und fragen Sie erneut.",
+          "failed": "Die Änderung konnte nicht gespeichert werden. {{detail}}",
+          "applied": "Übernommen.",
+          "appliedTest": "Übernommen. Der Test wurde neu gestartet.",
+          "undo": "Rückgängig",
+          "undoing": "Wird rückgängig gemacht …",
+          "undone": "Rückgängig gemacht. Die vorherige Fassung ist wieder gespeichert.",
+          "undoChanged": "Dieser Teil wurde geändert, nachdem die Änderung übernommen wurde",
+          "removed": "entfernt:",
+          "added": "hinzugefügt:",
+          "empty": "(leer)",
+          "showUnchanged_one": "{{count}} unveränderte Zeile anzeigen",
+          "showUnchanged_other": "{{count}} unveränderte Zeilen anzeigen",
+          "hideUnchanged": "Unveränderte Zeilen ausblenden",
+          "suggestions": "Sie könnte außerdem",
+          "webSearch": "im Web suchen",
+          "integration": "{{name}} verwenden",
+          "languageLabel": "Sprache: {{language}}"
+        },
+        "field": {
+          "name": "Name",
+          "description": "Kurzbeschreibung",
+          "system": "Anweisungen",
+          "prompt": "Nachrichtenvorlage",
+          "messagePlaceholder": "Hinweis im Nachrichtenfeld",
+          "variables": "Was Benutzer zuerst ausfüllen",
+          "starterPrompts": "Beispielfragen",
+          "category": "Kategorie",
+          "look": "Aussehen"
+        },
+        "line": {
+          "required": "(Pflichtfeld)",
+          "color": "Farbe {{value}}",
+          "icon": "Symbol {{value}}"
+        },
+        "warning": {
+          "otherLanguages": "Nur der Text in dieser Sprache wurde geändert. Die anderen Sprachen bleiben, wie sie waren.",
+          "noChange": "Es musste nichts geändert werden.",
+          "dropped": "Etwas, das das Modell vorgeschlagen hat, war nicht verwendbar und wurde weggelassen.",
+          "shortened": "Ein Text war länger als erlaubt und wurde gekürzt.",
+          "replaced": "Ein nicht zulässiger Wert wurde durch den Standardwert ersetzt.",
+          "added": "Etwas, das die Änderung brauchte, wurde ergänzt.",
+          "ignored": "Teile der Antwort, die hier nicht geändert werden können, wurden ignoriert.",
+          "other": "Prüfen Sie die Änderung, bevor Sie sie übernehmen."
+        },
+        "stakes": {
+          "publishedGroups": "Veröffentlicht: Alle in {{groups}} erhalten diese Änderung.",
+          "publishedEveryone": "Veröffentlicht: Alle erhalten diese Änderung, auch Personen, die nicht angemeldet sind.",
+          "publishedSignedIn": "Veröffentlicht: Alle, die sich anmelden, erhalten diese Änderung.",
+          "published": "Veröffentlicht: Alle, die diese App verwenden dürfen, erhalten diese Änderung.",
+          "notPublished": "Nicht veröffentlicht: Nur Sie und andere App-Verwalter sehen sie.",
+          "sharedEveryone": "Alle können diese App verwenden und erhalten diese Änderung.",
+          "shared_one": "Sie teilen sie mit {{count}} Person oder Gruppe; diese erhält die Änderung.",
+          "shared_other": "Sie teilen sie mit {{count}} Personen oder Gruppen; diese erhalten die Änderung.",
+          "onlyYou": "Nur Sie verwenden diese App.",
+          "integrations": "Diese App kann verwenden: {{names}}."
+        },
+        "error": {
+          "invalid": "Die Anfrage konnte nicht gelesen werden. Beginnen Sie neu und versuchen Sie es noch einmal.",
+          "noModel": "Für den App-Assistenten ist kein KI-Modell verfügbar. Bitten Sie eine Administratorin oder einen Administrator, eines einzurichten.",
+          "unreadable": "Das KI-Modell hat eine Antwort gegeben, die nicht verwendet werden kann. Versuchen Sie es erneut oder formulieren Sie es anders.",
+          "tooLong": "Die Anweisungen sind für den App-Assistenten zu lang. Kürzen Sie sie zuerst im Formular.",
+          "quota": "Sie haben Ihr Nutzungslimit erreicht. Versuchen Sie es später erneut.",
+          "off": "Der App-Assistent ist ausgeschaltet.",
+          "userAppsOff": "Persönliche Apps sind ausgeschaltet.",
+          "model": "Das KI-Modell hat nicht geantwortet. Versuchen Sie es erneut.",
+          "modelSetup": "Das KI-Modell kann so, wie es eingerichtet ist, nicht antworten. Bitten Sie eine Administratorin oder einen Administrator, es zu prüfen.",
+          "refused": "Das KI-Modell hat diese Anfrage abgelehnt. Formulieren Sie sie anders.",
+          "tooManyTurns": "Sie haben in der letzten Stunde viele Anfragen gesendet. Warten Sie eine Weile und versuchen Sie es dann erneut.",
+          "busy": "Das KI-Modell ist ausgelastet. Versuchen Sie es gleich noch einmal.",
+          "failed": "Etwas ist schiefgegangen. {{detail}}",
+          "truncated": "Die Antwort des KI-Modells wurde abgeschnitten. Bitten Sie um eine kleinere Änderung."
+        }
+      }
     },
     "features": {
       "title": "Funktionen",
@@ -13838,6 +13985,7 @@
     "PRECONDITION_FAILED": "Diese Konfiguration wurde geändert, nachdem Sie sie geöffnet haben (von einem anderen Administrator, in einem anderen Tab oder durch ein Skript). Es wurde nichts gespeichert, Ihre Änderungen sind noch auf der Seite. Laden Sie neu, um den aktuellen Stand zu sehen, und übernehmen Sie Ihre Änderungen dann erneut.",
     "APP_GENERATOR_NO_MODEL": "Ihnen steht kein KI-Modell zur Verfügung, daher kann kein Entwurf vorbereitet werden.",
     "APP_GENERATOR_INVALID_ANSWER": "Der Entwurf der KI ließ sich nicht verwenden.",
+    "APP_REVISE_TOO_LONG": "Die Anweisungen dieser App sind zu lang, um sie im Gespräch zu ändern (höchstens {{max}} Zeichen). Kürzen Sie sie im Formular.",
     "USER_APPS_DISABLED": "Persönliche Apps sind auf dieser Installation abgeschaltet.",
     "USER_APPS_UNAVAILABLE": "Persönliche Apps sind gerade nicht verfügbar. Versuchen Sie es später erneut.",
     "QUOTA_USER_APPS": "Die Obergrenze für persönliche Apps ist erreicht.",

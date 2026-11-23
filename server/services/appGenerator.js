@@ -53,6 +53,7 @@ import { HEX_COLOR_PATTERN, VARIABLE_NAME_PATTERN } from '../../shared/validatio
 import { USER_APP_ICON_PATTERN, USER_APP_LIMITS } from '../../shared/userAppContent.js';
 import { isFeatureEnabled } from '../featureRegistry.js';
 import { isWebSearchAvailableTo } from './tools/webSearchResolver.js';
+import { stripHiddenCharacters } from '../../shared/visibleText.js';
 
 export { appGeneratorSettings, integrationsFromAnswer } from '../../shared/appGenerator.js';
 
@@ -133,8 +134,13 @@ function isPlainObject(value) {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
 }
 
-/** `de` for `de-DE`; `en` for anything that is not a language tag. */
-function baseLanguage(tag) {
+/**
+ * `de` for `de-DE`; `en` for anything that is not a language tag.
+ *
+ * @param {string} tag
+ * @returns {string}
+ */
+export function baseLanguage(tag) {
   const base = String(tag ?? '')
     .split(/[-_]/)[0]
     .trim()
@@ -355,14 +361,20 @@ export function parseGeneratedAnswer(text, finishReason = null) {
 /**
  * The text of a value the model wrote as a string or as a localized object:
  * the requested language first, then its base, English, any language.
+ *
+ * Characters a reader cannot see are removed first (`shared/visibleText.js`):
+ * the author reviews the draft before it is saved, and must see everything the
+ * model of the app will read. A text made only of them counts as empty.
  */
 function textOf(value, language) {
-  if (typeof value === 'string') return value.trim();
+  if (typeof value === 'string') return stripHiddenCharacters(value).trim();
   if (typeof value === 'number' && Number.isFinite(value)) return String(value);
   if (!isPlainObject(value)) return '';
   const candidates = [value[language], value[baseLanguage(language)], value.en];
   for (const key of Object.keys(value)) candidates.push(value[key]);
-  const text = candidates.find(candidate => typeof candidate === 'string' && candidate.trim());
+  const text = candidates
+    .map(candidate => (typeof candidate === 'string' ? stripHiddenCharacters(candidate) : ''))
+    .find(candidate => candidate.trim());
   return text ? text.trim() : '';
 }
 
@@ -439,7 +451,11 @@ export function sanitizeGeneratedApp(
   const warnings = [];
   const warn = (code, field) => warnings.push({ code, field });
 
-  /** A text of the answer, cut to `limit`; empty when the answer has none. */
+  /**
+   * A text of the answer without hidden characters ({@link textOf} removes
+   * them), cut to `limit`; empty when the answer has none. The length is
+   * counted after the strip, as the personal-app schema counts it.
+   */
   const limited = (value, limit, field) => {
     const text = textOf(value, language);
     if (text.length <= limit) return text;
@@ -677,7 +693,7 @@ function sanitizeOptions(value, { limited, lang, field }) {
     const source = isPlainObject(entry) ? entry : { value: entry };
     const optionValue =
       typeof source.value === 'string'
-        ? source.value.trim().slice(0, DRAFT_LIMITS.optionValue)
+        ? stripHiddenCharacters(source.value).trim().slice(0, DRAFT_LIMITS.optionValue)
         : typeof source.value === 'number' && Number.isFinite(source.value)
           ? String(source.value)
           : '';
@@ -713,8 +729,12 @@ function sanitizeStarterPrompts(value, { warn, limited, lang }) {
 // The draft
 // ---------------------------------------------------------------------------
 
-/** The category IDs of the installation's app list (`ui.json`), without "all". */
-function appCategoryIds() {
+/**
+ * The category IDs of the installation's app list (`ui.json`), without "all".
+ *
+ * @returns {string[]}
+ */
+export function appCategoryIds() {
   const list = configCache.getUI()?.data?.appsList?.categories?.list;
   return (Array.isArray(list) ? list : [])
     .map(category => category?.id)
@@ -729,8 +749,14 @@ function appCategoryIds() {
  * For a personal app (`personal` set) the list holds only the installations an
  * admin allowed for personal apps, each with only the allowed actions, and
  * nothing while the feature `integrations` is off.
+ *
+ * @param {object} user - The caller.
+ * @param {string} language - The language of labels and descriptions.
+ * @param {{ settings: object }|null} [personal] - Set for a personal app, with the
+ *   effective `platform.userApps` settings.
+ * @returns {Promise<ReturnType<typeof describeInstalledIntegrations>>}
  */
-async function installationsFor(user, language, personal = null) {
+export async function installationsFor(user, language, personal = null) {
   try {
     if (personal && !isFeatureEnabled('integrations', configCache.getFeatures() || {})) return [];
     const resolved = await installedIntegrationService.resolveAllEnabled(language);
@@ -758,8 +784,13 @@ async function installationsFor(user, language, personal = null) {
   }
 }
 
-/** Whether a search engine is available to the caller; a failed lookup reads as no. */
-function searchFor(user) {
+/**
+ * Whether a search engine is available to the caller; a failed lookup reads as no.
+ *
+ * @param {object} user
+ * @returns {boolean}
+ */
+export function searchFor(user) {
   try {
     return isWebSearchAvailableTo(user) === true;
   } catch {
@@ -806,6 +837,60 @@ export function selectDraftModel({ models, configuredId, mayUse }) {
 }
 
 /**
+ * The model that prepares a draft or a revision for one caller: the model of
+ * `platform.appGenerator.modelId` when the caller may use it, else the
+ * automatic choice ({@link selectDraftModel}). A configured model that is not
+ * usable is logged (a warning: the installation's problem), one the caller may
+ * not use too (info: expected for callers outside its groups).
+ *
+ * `POST /api/admin/apps/_generate`, `POST /api/apps/_generate` and both
+ * `_revise` routes pick their model here, so they always agree.
+ *
+ * @param {object} user - The caller.
+ * @returns {object} The model config.
+ * @throws {ServiceError} `APP_GENERATOR_NO_MODEL` (503) without a chat model the caller may use.
+ * @example
+ * pickDraftModel(req.user).id; // → 'gpt-4o-mini'
+ */
+export function pickDraftModel(user) {
+  const { modelId: configuredId } = appGeneratorSettings(configCache.getPlatform());
+  const { model, configured } = selectDraftModel({
+    models: configCache.getModels().data,
+    configuredId,
+    mayUse: candidate => canUserAccessResource(user, 'models', candidate.id)
+  });
+  if (configured === 'unavailable') {
+    // A setting that names no usable model is the installation's problem, not the caller's.
+    logger.warn(
+      'The configured app-draft model is not an enabled chat model; using the automatic choice',
+      {
+        component: COMPONENT,
+        configuredModelId: configuredId,
+        modelId: model?.id ?? null
+      }
+    );
+  } else if (configured === 'forbidden') {
+    // Expected for callers outside the groups of that model; not an error.
+    logger.info(
+      'The caller may not use the configured app-draft model; using the automatic choice',
+      {
+        component: COMPONENT,
+        configuredModelId: configuredId,
+        modelId: model?.id ?? null
+      }
+    );
+  }
+  if (!model) {
+    throw new ServiceError(
+      'APP_GENERATOR_NO_MODEL',
+      'No chat model you may use is available to prepare a draft'
+    );
+  }
+
+  return model;
+}
+
+/**
  * Have a chat model the caller may use prepare the draft of an app. Nothing
  * is stored.
  *
@@ -847,40 +932,7 @@ export async function generateAppDraft({
   record = {},
   personal = null
 }) {
-  const { modelId: configuredId } = appGeneratorSettings(configCache.getPlatform());
-  const { model, configured } = selectDraftModel({
-    models: configCache.getModels().data,
-    configuredId,
-    mayUse: candidate => canUserAccessResource(user, 'models', candidate.id)
-  });
-  if (configured === 'unavailable') {
-    // A setting that names no usable model is the installation's problem, not the caller's.
-    logger.warn(
-      'The configured app-draft model is not an enabled chat model; using the automatic choice',
-      {
-        component: COMPONENT,
-        configuredModelId: configuredId,
-        modelId: model?.id ?? null
-      }
-    );
-  } else if (configured === 'forbidden') {
-    // Expected for callers outside the groups of that model; not an error.
-    logger.info(
-      'The caller may not use the configured app-draft model; using the automatic choice',
-      {
-        component: COMPONENT,
-        configuredModelId: configuredId,
-        modelId: model?.id ?? null
-      }
-    );
-  }
-  if (!model) {
-    throw new ServiceError(
-      'APP_GENERATOR_NO_MODEL',
-      'No chat model you may use is available to prepare a draft'
-    );
-  }
-
+  const model = pickDraftModel(user);
   record.modelId = model.id;
 
   const defaultLanguage = configCache.getPlatform()?.defaultLanguage || 'en';

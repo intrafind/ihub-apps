@@ -4410,6 +4410,36 @@
         "modelChoice": {
           "disabled": "{{name}} (disabled)",
           "default": "{{name}} (default)"
+        },
+        "conflict": {
+          "title": "Changed by someone else",
+          "message": "Someone else saved this app after you opened it. Nothing was saved. Reload to see the current version, then make your changes again.",
+          "reload": "Reload"
+        },
+        "improve": {
+          "action": "Improve with AI",
+          "title": "Improve the instructions",
+          "hint": "Using the new text changes the form only. Save to keep it; Discard in the save bar takes it back.",
+          "inputLabel": "What should be better?",
+          "chips": {
+            "label": "Quick requests",
+            "shorter": "Shorter",
+            "formal": "More formal",
+            "steps": "Clearer steps",
+            "unsure": "Say what to do if unsure"
+          },
+          "requests": {
+            "shorter": "Make the instructions shorter without losing anything important.",
+            "formal": "Make the instructions more formal.",
+            "steps": "Write the instructions as clearer steps.",
+            "unsure": "Add what the assistant should do when it is unsure or does not know the answer."
+          },
+          "submit": "Suggest a new text",
+          "before": "Now",
+          "after": "Suggested",
+          "use": "Use this text",
+          "close": "Close",
+          "noChange": "No new text was suggested."
         }
       },
       "reorder": "Reorder",
@@ -4724,7 +4754,124 @@
       "downloadError": "Failed to download app config: {{error}}",
       "uploadExists": "App with ID \"{{id}}\" already exists",
       "uploadError": "Failed to upload app config: {{error}}",
-      "loadError": "Error loading apps"
+      "loadError": "Error loading apps",
+      "conversation": {
+        "title": "Conversation",
+        "logLabel": "Conversation with the app builder",
+        "view": {
+          "label": "Edit with",
+          "form": "Form",
+          "conversation": "Conversation"
+        },
+        "intro": "Tell me in your own words what to change in this app. I propose one change at a time, and you decide whether to apply it.",
+        "chips": {
+          "label": "Ideas to start with",
+          "shorter": "Make the answers shorter",
+          "examples": "Suggest example questions",
+          "inputs": "Ask users first for the details the app needs"
+        },
+        "you": "You",
+        "builder": "Builder",
+        "composer": {
+          "label": "Tell the builder what to change",
+          "placeholder": "For example: answer more formally",
+          "hint": "Enter sends, Shift+Enter adds a line.",
+          "send": "Send"
+        },
+        "working": "Working on it…",
+        "cancel": "Cancel",
+        "retry": "Try again",
+        "startOver": "Start over",
+        "longHint": "This conversation is getting long. Starting over often gives better answers.",
+        "toast": "Applied. Try it.",
+        "question": {
+          "other": "Something else",
+          "otherLabel": "Your answer",
+          "skip": "Skip",
+          "answer": "Answer",
+          "skipped": "Skip this question and decide for yourself."
+        },
+        "change": {
+          "heading": "Proposed change",
+          "apply": "Apply",
+          "applying": "Saving…",
+          "dismiss": "Dismiss",
+          "dismissed": "Dismissed.",
+          "stale": "The app changed since. Ask again.",
+          "conflict": "Someone else saved this app. Reload it and ask again.",
+          "failed": "The change could not be saved. {{detail}}",
+          "applied": "Applied.",
+          "appliedTest": "Applied. The test restarted.",
+          "undo": "Undo",
+          "undoing": "Undoing…",
+          "undone": "Undone. The earlier version is saved again.",
+          "undoChanged": "This part was changed after the change was applied",
+          "removed": "removed:",
+          "added": "added:",
+          "empty": "(empty)",
+          "showUnchanged_one": "Show {{count}} unchanged line",
+          "showUnchanged_other": "Show {{count}} unchanged lines",
+          "hideUnchanged": "Hide unchanged lines",
+          "suggestions": "It could also",
+          "webSearch": "search the web",
+          "integration": "use {{name}}",
+          "languageLabel": "Language: {{language}}"
+        },
+        "field": {
+          "name": "Name",
+          "description": "Short description",
+          "system": "Instructions",
+          "prompt": "Message template",
+          "messagePlaceholder": "Hint in the message box",
+          "variables": "What users fill in first",
+          "starterPrompts": "Example questions",
+          "category": "Category",
+          "look": "Look"
+        },
+        "line": {
+          "required": "(required)",
+          "color": "Colour {{value}}",
+          "icon": "Icon {{value}}"
+        },
+        "warning": {
+          "otherLanguages": "Only the text in this language changed. The other languages stay as they were.",
+          "noChange": "Nothing needed to change.",
+          "dropped": "Something the model proposed could not be used and was left out.",
+          "shortened": "A text was longer than allowed and was shortened.",
+          "replaced": "A value that was not allowed was replaced by the default.",
+          "added": "Something the change needed was added.",
+          "ignored": "Parts of the answer that cannot be changed here were ignored.",
+          "other": "Check the change before you apply it."
+        },
+        "stakes": {
+          "publishedGroups": "Published: everyone in {{groups}} gets this change.",
+          "publishedEveryone": "Published: everyone gets this change, also people who are not signed in.",
+          "publishedSignedIn": "Published: everyone who signs in gets this change.",
+          "published": "Published: everyone who can use this app gets this change.",
+          "notPublished": "Not published: only you and other app managers see it.",
+          "sharedEveryone": "Everyone can use this app and gets this change.",
+          "shared_one": "You share it with {{count}} person or group; they get this change.",
+          "shared_other": "You share it with {{count}} people or groups; they get this change.",
+          "onlyYou": "Only you use this app.",
+          "integrations": "This app can use: {{names}}."
+        },
+        "error": {
+          "invalid": "The request could not be read. Start over and try again.",
+          "noModel": "No AI model is available for the app builder. Ask an administrator to set one up.",
+          "unreadable": "The AI model gave an answer that could not be used. Try again, or say it differently.",
+          "tooLong": "The instructions are too long for the app builder. Shorten them in the form first.",
+          "quota": "You have reached your usage limit. Try again later.",
+          "off": "The app builder is switched off.",
+          "userAppsOff": "Personal apps are switched off.",
+          "model": "The AI model did not answer. Try again.",
+          "modelSetup": "The AI model cannot answer as it is set up. Ask an administrator to check it.",
+          "refused": "The AI model refused this request. Say it differently.",
+          "tooManyTurns": "You have sent many requests in the last hour. Wait a while, then try again.",
+          "busy": "The AI model is busy. Try again in a moment.",
+          "failed": "Something went wrong. {{detail}}",
+          "truncated": "The answer of the AI model was cut off. Ask for a smaller change."
+        }
+      }
     },
     "features": {
       "title": "Features",
@@ -13839,6 +13986,7 @@
     "PRECONDITION_FAILED": "This configuration was changed after you opened it (by another administrator, another tab or a script). Nothing was saved, and your changes are still on the page. Reload to see the current version, then apply your changes again.",
     "APP_GENERATOR_NO_MODEL": "No AI model is available to you, so a draft cannot be prepared.",
     "APP_GENERATOR_INVALID_ANSWER": "The AI's draft could not be used.",
+    "APP_REVISE_TOO_LONG": "The instructions of this app are too long to change in a conversation (at most {{max}} characters). Shorten them in the form.",
     "USER_APPS_DISABLED": "Personal apps are switched off on this installation.",
     "USER_APPS_UNAVAILABLE": "Personal apps are not available right now. Try again later.",
     "QUOTA_USER_APPS": "The limit of personal apps is reached.",

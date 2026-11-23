@@ -11,9 +11,10 @@
  * and does not come from the Marketplace. It can be a copy of an app the
  * person has access to: a company app they may use, or a personal app they
  * own or that is shared with them (`userAppCopy.js` says which apps qualify
- * and what the copy takes). This source has no `refineDraft`, so the screens
- * show no "Change the draft" control, and a person without admin rights never
- * calls an admin route: the copy lists and loads apps through the user API.
+ * and what the copy takes). Its `refineDraft` (the editor's conversation and
+ * "Improve with AI") calls `POST /api/apps/_revise`. A person without admin
+ * rights never calls an admin route: the copy lists and loads apps through
+ * the user API.
  *
  * The calls reject with the request's own error (`error.response` holds the
  * status and the problem body), because that is what the create screens read.
@@ -31,7 +32,8 @@ import {
   fetchUserApps,
   fetchUserAppsConfig,
   fetchUserAppTemplates,
-  generateUserApp
+  generateUserApp,
+  reviseUserApp
 } from '../../../api';
 import { pickUserAppContent, USER_APP_ORIGINS } from '../../../../../shared/userAppContent.js';
 import {
@@ -185,6 +187,17 @@ const generateDraft = ({ description, language, signal }) =>
   plain(() => generateUserApp({ description, language, signal }));
 
 /**
+ * One turn of the app builder's conversation (`POST /api/apps/_revise`):
+ * request and response are those of the admin route. Nothing is stored.
+ *
+ * @param {{ draft: object, conversation: object[], language?: string, fields?: string[],
+ *   allowQuestions?: boolean, signal?: AbortSignal }} request
+ * @returns {Promise<{ reply: string, text: string, question: object|null, patch: object,
+ *   changed: string[], suggestions: object, warnings: object[], model: object }>}
+ */
+const refineDraft = request => plain(() => reviseUserApp(request));
+
+/**
  * Create the app (`POST /api/apps`).
  *
  * @param {object} draft - The draft as the create screens send it.
@@ -241,6 +254,7 @@ export const userAppSource = Object.freeze({
   fetchConfig,
   fetchTemplates,
   generateDraft,
+  refineDraft,
   // A fresh list: a model that was connected a minute ago must be found.
   fetchModels: () => fetchModels({ skipCache: true }),
   createApp,

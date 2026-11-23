@@ -25,6 +25,18 @@ export const APP_GENERATOR_DRAFT_LIMIT = 30;
 export const APP_GENERATOR_DRAFT_WINDOW_MS = 60 * 60 * 1000;
 
 /**
+ * `details.limiter` of the 429 the revise limit answers with
+ * (`POST /api/admin/apps/_revise`, `POST /api/apps/_revise`).
+ */
+export const APP_REVISE_LIMITER = 'appRevise';
+
+/** How many conversation turns one person may ask for per window of the revise limit. */
+export const APP_REVISE_TURN_LIMIT = 60;
+
+/** The window of the revise limit, in milliseconds (one hour). */
+export const APP_REVISE_WINDOW_MS = 60 * 60 * 1000;
+
+/**
  * `details.reason` of `APP_GENERATOR_INVALID_ANSWER`: the answer holds no JSON
  * object, it was cut off, or it lacks what an app needs.
  */

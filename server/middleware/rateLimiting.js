@@ -9,7 +9,10 @@ import { ServiceError } from '../utils/ServiceError.js';
 import {
   APP_GENERATOR_DRAFT_LIMIT,
   APP_GENERATOR_DRAFT_WINDOW_MS,
-  APP_GENERATOR_LIMITER
+  APP_GENERATOR_LIMITER,
+  APP_REVISE_LIMITER,
+  APP_REVISE_TURN_LIMIT,
+  APP_REVISE_WINDOW_MS
 } from '../../shared/appGenerator.js';
 /**
  * Rate limiting middleware configuration for API protection
@@ -387,6 +390,15 @@ const LIMITER_FALLBACKS = Object.freeze({
     skipSuccessfulRequests: false,
     skipFailedRequests: false,
     message: 'Too many drafts were prepared in the last hour. Try again later.'
+  },
+  // Conversation turns that change an app (`POST /api/admin/apps/_revise`, `POST /api/apps/_revise`):
+  // the same reasoning as the draft limit, with a budget of its own. Code defaults only.
+  appReviseApi: {
+    limit: APP_REVISE_TURN_LIMIT,
+    windowMs: APP_REVISE_WINDOW_MS,
+    skipSuccessfulRequests: false,
+    skipFailedRequests: false,
+    message: 'Too many changes were asked for in the last hour. Try again later.'
   }
 });
 
@@ -558,4 +570,54 @@ export function appGeneratorLimiter(platformConfig = {}) {
 /** Forget the shared draft limiter, so the next route registration counts from zero (tests). */
 export function resetAppGeneratorLimiter() {
   sharedAppGeneratorLimiter = null;
+}
+
+/**
+ * The limiter of the conversation that changes an app (`POST /api/admin/apps/_revise` and
+ * `POST /api/apps/_revise`): 60 turns per user per hour, counted across cluster workers. Every
+ * turn is a paid model call, so failed turns count too. A budget of its own, apart from the
+ * draft limit: a conversation takes many more turns than drafts are asked for.
+ *
+ * Its 429 carries `details.limiter: 'appRevise'`. Limit and window are code defaults
+ * (`LIMITER_FALLBACKS.appReviseApi`); only the header settings follow `rateLimit.default`.
+ *
+ * @param {Object} platformConfig - Platform configuration object
+ * @returns {Function} Express rate limiter middleware
+ */
+function createAppReviseLimiter(platformConfig = {}) {
+  const { standardHeaders = true, legacyHeaders = false } =
+    platformConfig?.rateLimit?.default || {};
+  return createRateLimiter(
+    { standardHeaders, legacyHeaders, ...LIMITER_FALLBACKS.appReviseApi },
+    {},
+    'app revise',
+    undefined,
+    {
+      shared: true,
+      keyGenerator: adminApiRateLimitKey,
+      details: { limiter: APP_REVISE_LIMITER }
+    }
+  );
+}
+
+let sharedAppReviseLimiter = null;
+
+/**
+ * The one revise limiter of this process. The admin and the personal revise routes both mount
+ * this instance, so a user has one budget of turns for the two routes together, also on a server
+ * with a single worker.
+ *
+ * The instance is created on the first call, so the header settings of later calls are ignored.
+ *
+ * @param {Object} platformConfig - Platform configuration object
+ * @returns {Function} Express rate limiter middleware
+ */
+export function appReviseLimiter(platformConfig = {}) {
+  sharedAppReviseLimiter ??= createAppReviseLimiter(platformConfig);
+  return sharedAppReviseLimiter;
+}
+
+/** Forget the shared revise limiter, so the next route registration counts from zero (tests). */
+export function resetAppReviseLimiter() {
+  sharedAppReviseLimiter = null;
 }

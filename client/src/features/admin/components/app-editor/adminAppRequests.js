@@ -19,6 +19,7 @@ import {
   makeAdminApiCall,
   toggleApps
 } from '../../../../api/adminApi';
+import { etagOf } from '../../../../api/adminConfigRevision';
 import { fetchModels, fetchUIConfig } from '../../../../api';
 import { fetchJsonSchema } from '../../../../utils/schemaService';
 import { cleanAppForSave, padLoadedApp } from '../../../../../../shared/appDefaults.js';
@@ -28,21 +29,62 @@ const appUrl = appId => `/admin/apps/${encodeURIComponent(appId)}`;
 /**
  * The stored app, padded with what the form expects to find.
  *
+ * The server answers the read with the app's revision (`ETag`). A form that
+ * passes its own revision holder gets it stored there, and {@link saveApp}
+ * sends it back as `If-Match`: a save over a change someone else saved in
+ * between is then refused (412 `PRECONDITION_FAILED`) instead of erasing it.
+ * The holder belongs to the form that loaded the app, never to the tab (see
+ * `api/adminConfigRevision.js`).
+ *
  * @param {string} appId
+ * @param {{current: string|null}} [revision] - The form's revision holder.
  * @returns {Promise<object>} Rejects with the request's error when the app cannot be read.
  */
-export const loadApp = async appId => padLoadedApp((await makeAdminApiCall(appUrl(appId))).data);
+export const loadApp = async (appId, revision) => {
+  const response = await makeAdminApiCall(appUrl(appId));
+  if (revision) revision.current = etagOf(response);
+  return padLoadedApp(response.data);
+};
 
 /**
  * Stores the app as the form holds it, without the form's padding. The editor
  * only ever changes an existing app; creating one is the "New app" page.
  *
+ * With a revision holder that holds a revision the save is conditional
+ * (`If-Match`), and the holder then takes the revision of what was just
+ * written, so the form's next save builds on it. When the answer carries no
+ * `ETag`, the revision is read again: keeping the old one would refuse the
+ * form's next save although nobody else saved.
+ *
  * @param {object} app - The app as the form holds it.
  * @param {string} appId
- * @returns {Promise<unknown>} Rejects when the server refuses the app.
+ * @param {{current: string|null}} [revision] - The form's revision holder.
+ * @returns {Promise<unknown>} Rejects when the server refuses the app; with 412
+ *   `PRECONDITION_FAILED` when the app changed since the form loaded it.
  */
-export const saveApp = (app, appId) =>
-  makeAdminApiCall(appUrl(appId), { method: 'PUT', body: cleanAppForSave(app) });
+export const saveApp = async (app, appId, revision) => {
+  const sent = revision?.current || null;
+  const response = await makeAdminApiCall(appUrl(appId), {
+    method: 'PUT',
+    ...(sent ? { headers: { 'If-Match': sent } } : {}),
+    body: cleanAppForSave(app)
+  });
+  if (revision) {
+    const written = etagOf(response);
+    if (written) revision.current = written;
+    else if (sent) revision.current = etagOf(await makeAdminApiCall(appUrl(appId)));
+  }
+  return response;
+};
+
+/**
+ * Whether a failed save was refused because the app changed since the form
+ * loaded it (412 of `PUT /api/admin/apps/{id}` with `If-Match`).
+ *
+ * @param {unknown} error - What the save rejected with.
+ * @returns {boolean}
+ */
+export const isAppSaveConflict = error => error?.response?.status === 412;
 
 /**
  * The content-access view of the app: `{ scope, groups, audience }`.

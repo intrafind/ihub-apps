@@ -115,6 +115,43 @@ export const generateUserApp = ({ description, language, signal } = {}) =>
   );
 
 /**
+ * Ask an AI model for one change to a personal app, or one question about it
+ * (`POST /api/apps/_revise`). Request and response are those of the admin
+ * route (`POST /api/admin/apps/_revise`); nothing is stored. Aborting the
+ * signal cancels the request, and the server then stops the model call.
+ *
+ * @param {Object} request
+ * @param {Object} request.draft - The app's content as the editor holds it.
+ * @param {Array<{role: 'author'|'builder', kind?: string, text: string}>} request.conversation
+ * @param {string} [request.language] - The content language of the app.
+ * @param {string[]} [request.fields] - Restrict the change to these content keys.
+ * @param {boolean} [request.allowQuestions] - `false`: the answer is never a question.
+ * @param {AbortSignal} [request.signal]
+ * @returns {Promise<Object>} `{ reply, text, question, patch, changed, suggestions, warnings, model }`
+ */
+export const reviseUserApp = ({
+  draft,
+  conversation,
+  language,
+  fields,
+  allowQuestions,
+  signal
+} = {}) =>
+  call(() =>
+    apiClient.post(
+      `${APPS_PATH}/_revise`,
+      {
+        draft,
+        conversation,
+        ...(language ? { language } : {}),
+        ...(Array.isArray(fields) && fields.length > 0 ? { fields } : {}),
+        ...(typeof allowQuestions === 'boolean' ? { allowQuestions } : {})
+      },
+      { timeout: USER_APP_DRAFT_TIMEOUT_MS, signal }
+    )
+  );
+
+/**
  * The people and groups an app can be shared with or handed over to.
  *
  * @param {{q?: string, purpose?: 'share'|'offer'}} [options] - `offer` answers
