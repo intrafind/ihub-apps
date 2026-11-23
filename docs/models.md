@@ -585,8 +585,8 @@ Mistral backend.
 
 **Keeping the models in line with the provider.** A provider's models change over time: on an iFinder
 Model Gateway deployments are added and retired, a context window is corrected, a model moves to another
-dialect; on Google, Gemini versions are retired and new ones appear; on Anthropic, new Claude models appear. On the provider's page
-(**Admin → Models → Providers →** the gateway, **Google** or **Anthropic → Linked models**), **Sync models** asks the provider what it
+dialect; on Google, Gemini versions are retired and new ones appear; on Anthropic and AWS Bedrock, new models appear. On the provider's page
+(**Admin → Models → Providers →** the gateway, **Google**, **Anthropic** or **AWS Bedrock → Linked models**), **Sync models** asks the provider what it
 lists now and compares that with the models imported from it. Nothing changes until you apply your choice. The
 dialog shows three groups. Changes and gone models start ticked, so a plain **Apply** brings the imported models in line. **New models start unticked**: importing one makes it available to users, so a model you left out on purpose is never imported by accident. Tick the ones you want.
 
@@ -605,11 +605,16 @@ added to a member that does not declare one (see [Filled in on import](#filled-i
 the dated snapshot of a model before the 4.6 generation (`claude-haiku-4-5-20251001`), while a config often uses the
 alias (`claude-haiku-4-5`): an alias is matched to its snapshot, so that model is compared like any other and the
 snapshot is not offered again as a new model. A model that is missing from an Anthropic listing is never reported as
-gone. Each applied item has its own result, so one failure does not stop the others.
+gone. AWS Bedrock lists its models per AWS region: the sync reads the listing of the provider's region (else
+`AWS_REGION`, else eu-central-1) and compares only the models of that region, so a model you imported in another
+region is neither changed nor reported as gone; a new model is imported with that region. A Bedrock model missing
+from the listing is never reported as gone either, since a model can name an application inference profile or a
+custom model the listing does not show. A region on the provider that is not an AWS region stops the sync with an
+error instead of reading another region. Each applied item has its own result, so one failure does not stop the others.
 
 ### Syncing a single model
 
-Every model that belongs to a gateway, **Google** or **Anthropic** provider has a **Sync with provider** button in its
+Every model that belongs to a gateway, **Google**, **Anthropic** or **AWS Bedrock** provider has a **Sync with provider** button in its
 editor (**Admin → Models →** the model, under *Provider*). It opens the same dialog, limited to that model: what
 changed at the provider (URL, adapter, context window, image input, the EU AI Act marking it does not declare yet) and,
 if the provider dropped it, the offer to disable it. New models at the provider are not shown there; they belong to the

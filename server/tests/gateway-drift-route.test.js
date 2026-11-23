@@ -691,3 +691,125 @@ describe('an Anthropic provider', () => {
     expect(gatewayCalls).toHaveLength(0);
   });
 });
+
+describe('AWS Bedrock: the listing of the provider region', () => {
+  const SONNET = 'anthropic.claude-sonnet-4-20250514-v1:0';
+  // One answer for both listing calls: each reads only its own member.
+  const BEDROCK_LISTING = {
+    modelSummaries: [
+      {
+        modelId: SONNET,
+        modelName: 'Claude Sonnet 4',
+        providerName: 'Anthropic',
+        inputModalities: ['TEXT', 'IMAGE'],
+        outputModalities: ['TEXT'],
+        inferenceTypesSupported: ['INFERENCE_PROFILE']
+      },
+      {
+        modelId: 'mistral.mistral-large-2402-v1:0',
+        modelName: 'Mistral Large (24.02)',
+        providerName: 'Mistral AI',
+        inputModalities: ['TEXT'],
+        outputModalities: ['TEXT'],
+        inferenceTypesSupported: ['ON_DEMAND']
+      }
+    ],
+    inferenceProfileSummaries: [
+      {
+        inferenceProfileId: `eu.${SONNET}`,
+        inferenceProfileName: 'EU Claude Sonnet 4',
+        status: 'ACTIVE',
+        type: 'SYSTEM_DEFINED',
+        models: [{ modelArn: `arn:aws:bedrock:eu-central-1::foundation-model/${SONNET}` }]
+      }
+    ]
+  };
+
+  function withBedrock(region) {
+    providers.push({
+      id: 'bedrock',
+      name: 'AWS Bedrock',
+      enabled: true,
+      apiKey: 'enc:bedrock-key',
+      ...(region === undefined ? {} : { config: { region } })
+    });
+    // A model of another region: never compared with this listing.
+    models.push({
+      id: 'bedrock-us-sonnet',
+      modelId: `us.${SONNET}`,
+      provider: 'bedrock',
+      config: { region: 'us-east-1' },
+      supportsVision: false,
+      enabled: true
+    });
+    gatewayAnswer = { status: 200, body: BEDROCK_LISTING };
+  }
+
+  it('reads the region of the provider, with its key, and adds models of that region', async () => {
+    withBedrock('eu-central-1');
+    const res = await drift('bedrock');
+
+    expect(res.status).toBe(200);
+    expect(gatewayCalls.map(call => new URL(call.url).host)).toEqual([
+      'bedrock.eu-central-1.amazonaws.com',
+      'bedrock.eu-central-1.amazonaws.com'
+    ]);
+    expect(gatewayCalls[0].init.headers.Authorization).toBe('Bearer bedrock-key');
+    expect(res.body.items.map(i => `${i.kind}:${i.remoteId}`)).toEqual([
+      `added:eu.${SONNET}`,
+      'added:mistral.mistral-large-2402-v1:0'
+    ]);
+    expect(res.body.items[0].model).toMatchObject({
+      provider: 'bedrock',
+      config: { region: 'eu-central-1' }
+    });
+    expect(res.body.items[0].model.url).toBeUndefined();
+  });
+
+  it('applies a picked model with the region it was listed in', async () => {
+    withBedrock('eu-central-1');
+    const res = await request(app)
+      .post('/api/admin/providers/bedrock/_sync-models')
+      .send({ items: [{ kind: 'added', remoteId: 'mistral.mistral-large-2402-v1:0' }] });
+
+    expect(res.status).toBe(200);
+    expect(res.body.items.map(item => item.status)).toEqual(['applied']);
+    const stored = [...files.entries()].find(
+      ([key, value]) =>
+        key.startsWith('models/') && value.modelId === 'mistral.mistral-large-2402-v1:0'
+    );
+    expect(stored?.[1]).toMatchObject({ provider: 'bedrock', config: { region: 'eu-central-1' } });
+    // The model of the other region was not touched.
+    expect(files.has('models/bedrock-us-sonnet.json')).toBe(false);
+  });
+
+  it('refuses a region that is not an AWS region instead of reading another one', async () => {
+    withBedrock('us-east1');
+    const res = await drift('bedrock');
+
+    expect(res.status).toBe(400);
+    expect(res.body.code).toBe('BAD_REQUEST');
+    expect(res.body.details).toMatchObject({ providerId: 'bedrock', reason: 'invalidRegion' });
+    expect(gatewayCalls).toEqual([]);
+  });
+
+  it('without a region anywhere, reads eu-central-1', async () => {
+    const saved = {
+      AWS_REGION: process.env.AWS_REGION,
+      AWS_DEFAULT_REGION: process.env.AWS_DEFAULT_REGION
+    };
+    delete process.env.AWS_REGION;
+    delete process.env.AWS_DEFAULT_REGION;
+    try {
+      withBedrock(undefined);
+      const res = await drift('bedrock');
+      expect(res.status).toBe(200);
+      expect(new URL(gatewayCalls[0].url).host).toBe('bedrock.eu-central-1.amazonaws.com');
+    } finally {
+      for (const [key, value] of Object.entries(saved)) {
+        if (value === undefined) delete process.env[key];
+        else process.env[key] = value;
+      }
+    }
+  });
+});

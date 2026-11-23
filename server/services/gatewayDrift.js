@@ -3,7 +3,7 @@
 
 /**
  * Drift between a provider's model listing and the models imported from it.
- * Used for an iFinder Model Gateway, Google and Anthropic (see `supportsModelSync`).
+ * Used for an iFinder Model Gateway, Google, Anthropic and AWS Bedrock (see `supportsModelSync`).
  *
  * A provider's models come and go: deployments are registered and removed, their
  * context window or vision support is corrected, a model is moved to another
@@ -36,6 +36,13 @@
  * the dated snapshot of a model before the 4.6 generation, while a config often
  * uses the alias (`claude-haiku-4-5`), so there a missing model proves nothing and
  * is left alone.
+ *
+ * AWS Bedrock lists its models per region and they have no URL (the adapter builds
+ * it from the region). Its listing is compared with the linked models of the same
+ * region only: a model's own `config.region`, or the listing's region for a model
+ * without one. A model added from it stores that region. A model missing from it is
+ * left alone too: a config can name an application inference profile or a custom
+ * model, which the listing does not show.
  *
  * @module server/services/gatewayDrift
  */
@@ -174,7 +181,11 @@ function changesOf(model, entry, apiType) {
     if (from !== to) changes.push({ field, from: from ?? null, to });
   };
 
-  if (stripTrailingSlashes(model.url || '') !== stripTrailingSlashes(entry.url)) {
+  // A Bedrock listing has no URLs: the adapter builds them from the region.
+  if (
+    typeof entry.url === 'string' &&
+    stripTrailingSlashes(model.url || '') !== stripTrailingSlashes(entry.url)
+  ) {
     push('url', model.url, entry.url);
   }
   const adapter = expectedAdapter(entry, apiType);
@@ -238,6 +249,8 @@ function remoteIndex(entries, apiType) {
  * @param {Object[]} params.entries - What the provider lists, normalized and with their URLs
  *   (the `models` of `discoverModels`)
  * @param {string} params.modelsUrl - The listing URL (named in the description of an added model)
+ * @param {string} [params.region] - AWS Bedrock only: the region the listing was read in.
+ *   Only linked models of that region are compared, and an added model stores it.
  * @returns {Array<
  *   { kind: 'added', remoteId: string, name: string, model: Object }
  *   | { kind: 'changed', remoteId: string, modelId: string,
@@ -245,9 +258,12 @@ function remoteIndex(entries, apiType) {
  *   | { kind: 'removed', remoteId: string, modelId: string, reason: 'missing'|'unsupported' }
  * >}
  */
-export function computeGatewayDrift({ provider, models, entries, modelsUrl }) {
+export function computeGatewayDrift({ provider, models, entries, modelsUrl, region }) {
   const apiType = getProviderApiType(provider);
-  const linked = getLinkedModels(provider.id, models);
+  const bedrock = apiType === 'bedrock';
+  // A Bedrock model of another region is not in this listing: neither gone nor changed.
+  const inListing = model => !bedrock || (model.config?.region || region) === region;
+  const linked = getLinkedModels(provider.id, models).filter(inListing);
   const byRemoteId = remoteIndex(entries, apiType);
   const reportMissing = listingNamesEveryModel(provider);
   const items = [];
@@ -277,13 +293,19 @@ export function computeGatewayDrift({ provider, models, entries, modelsUrl }) {
   const linkedEntries = new Set(linked.map(model => byRemoteId.get(model.modelId)));
   // A model configured by hand for the same endpoint counts as imported, as it
   // does for the import dialog's "Already added".
-  const configured = new Set(models.map(m => `${m.modelId}\n${comparableUrl(m.url)}`));
+  // Bedrock has no URLs: there a Bedrock model of the same region with that id counts.
+  const configuredKey = (modelId, url) => (bedrock ? modelId : `${modelId}\n${comparableUrl(url)}`);
+  const configured = new Set(
+    models
+      .filter(m => !bedrock || (m.provider === 'bedrock' && inListing(m)))
+      .map(m => configuredKey(m.modelId, m.url))
+  );
   const taken = new Set(models.map(model => model.id));
 
   for (const entry of entries) {
     if (!entryClass(entry)) continue;
     if (linkedRemoteIds.has(entry.id) || linkedEntries.has(entry)) continue;
-    if (configured.has(`${entry.id}\n${comparableUrl(entry.url)}`)) continue;
+    if (configured.has(configuredKey(entry.id, entry.url))) continue;
     const id = freeModelId(provider.id, entry.id, taken);
     if (!id) continue;
     taken.add(id);
@@ -295,7 +317,8 @@ export function computeGatewayDrift({ provider, models, entries, modelsUrl }) {
         id,
         apiType,
         providerId: provider.id,
-        modelsUrl
+        modelsUrl,
+        ...(bedrock && region ? { region } : {})
       })
     });
   }

@@ -114,6 +114,11 @@ The models use the provider's key, and a one-prompt test at the end shows that t
   `eu-central-1`) applies as before. A region that is set but is not a region (for example
   `us-east1`) now stops the model call with a message that names it, instead of sending the
   data to another region; saving a model with such a region is refused.
+- **Sync models works for AWS Bedrock.** On the AWS Bedrock provider page (and **Sync with
+  provider** on a Bedrock model), iHub reads the models of the provider's region and offers new
+  ones, and image-input changes of the models you added from that region. Models you added from
+  another region are left alone, and a Bedrock model is never offered for disabling because the
+  listing no longer shows it.
 
 ## Models: What Still Uses a Model or App, and the Default in Your Hands
 
