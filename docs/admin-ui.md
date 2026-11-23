@@ -205,7 +205,7 @@ palette, from the last step of the setup wizard and from **Duplicate**.
   among the models you may use. The box is missing
   when no AI model is available to you (a notice says so) or when the feature
   **App Drafts with AI** is switched off.
-- **Templates.** Six short starting points, such as **Text Summarizer** or **Email Composer**.
+- **Templates.** Short starting points, such as **Text Summarizer** or **Email Composer**.
   The last card, **Copy an existing app**, lists the published apps to copy one.
 - **Start empty.**
 - **Other ways to start:** **Create a link app** (a link to a website, or a website shown inside
@@ -341,7 +341,7 @@ Models define which AI providers and specific model versions are available on yo
 
 ![Model management list](assets/screenshots/admin-models.png)
 
-**To add a model:** Go to **AI Workspace → Models** and click **Add New Model**, upload a JSON file, install one from the [Marketplace](#marketplace), or use **Import from URL**.
+**To add a model:** Go to **AI Workspace → Models** and click **Import models** or **Add New Model**, upload a JSON file, or install one from the [Marketplace](#marketplace). For a first model, follow [Set up models in the admin UI](models.md#set-up-models-in-the-admin-ui).
 
 **Key fields:**
 - **Model type** — **Chat** (the default), **Transcription** (speech-to-text for recordings and uploads) or **Text-to-Speech** (read aloud). Only chat models appear in the chat's model selector.
@@ -349,9 +349,9 @@ Models define which AI providers and specific model versions are available on yo
 - **Model ID** — the provider's model identifier (e.g. `gpt-5`, `claude-sonnet-5`, `gemini-flash-latest`).
 - **Context window / max output tokens** — the limits apps and chats work with.
 - **Capabilities** — tools, vision, thinking/reasoning, native web search, prompt caching, image generation.
-- **Hints** — a hint, info, warning or alert shown to users who pick the model (see [Model Hints](models.md#model-hints)).
+- **User Hint** — a hint, info, warning or alert shown to users who pick the model (see [Model Hints](models.md#model-hints)).
 
-**Import from URL** reads an endpoint's model list — OpenAI, vLLM, LM Studio, LLM Hub and other OpenAI-compatible servers, Mistral, Anthropic or Google — and creates the models you pick. It asks which provider the models belong to and can create a new provider with its API key on the spot. See [Models → Importing Models from an Endpoint](models.md#importing-models-from-an-endpoint).
+**Import models** reads an endpoint's model list — OpenAI, vLLM, LM Studio, LLM Hub and other OpenAI-compatible servers, Mistral, Anthropic or Google — and creates the models you pick. It asks which provider the models belong to and can create a new provider with its API key on the spot. See [Models → Importing Models from an Endpoint](models.md#importing-models-from-an-endpoint).
 
 ![Import models from URL with the OpenRouter provider and its API key field](assets/screenshots/admin-models-import.png)
 
@@ -371,7 +371,7 @@ The web search engines (Brave, Staan, Qwant) are not providers: each is an integ
 
 ![Provider credentials with status and linked models](assets/screenshots/admin-providers.png)
 
-**Add provider** adds an **LLM provider** for an endpoint of your own — for example a gateway such as T-Systems LLM Hub, or a self-hosted vLLM server. It has a name, an ID, the **API type** the endpoint speaks (OpenAI-compatible, vLLM, Mistral, …), an optional base URL and its API key. Its page lists the linked models, adds a model with the provider already chosen and imports more; a provider that models still use cannot be deleted. In the list, each provider's **Models** count opens the Models tab filtered to that provider, and **Import models** opens the import for it. Entries of other categories left over from before web search and storage became integrations stay under a collapsed **Other credentials** group. See [Models → Custom LLM Providers](models.md#custom-llm-providers).
+**Add provider** adds an **LLM provider** for an endpoint of your own — for example a gateway such as T-Systems LLM Hub, or a self-hosted vLLM server. It has a name, an ID, the **API type** the endpoint speaks (OpenAI-compatible, vLLM, Mistral, …), an optional base URL and its API key. The base URL is where the provider's models are listed from when you import them; chat requests go to each model's own API URL. Its page lists the linked models, adds a model with the provider already chosen and imports more; a provider that models still use cannot be deleted. In the list, each provider's **Models** count opens the Models tab filtered to that provider, and **Import models** opens the import for it. Entries of other categories left over from before web search and storage became integrations stay under a collapsed **Other credentials** group. See [Models → Custom LLM Providers](models.md#custom-llm-providers).
 
 ![Create a new LLM provider](assets/screenshots/admin-provider-new.png)
 
@@ -379,9 +379,21 @@ The web search engines (Brave, Staan, Qwant) are not providers: each is an integ
 
 ## Managing Prompts
 
-Prompts are reusable system prompt templates that can be referenced by apps or used standalone.
+Prompts are ready-made texts that users pick from the prompt library and insert into the chat
+input, for example "Summarize this text". A prompt can ask for values, such as a language, before
+it is inserted. It does not change an app's instructions. See [Prompt Library](prompts.md).
 
-Go to **AI Workspace → Prompts**. Prompts and Global Variables are organized as tabs.
+Go to **AI Workspace → Prompts**. The page has the following tabs:
+
+- **Prompts**: the global prompts that administrators and content admins curate. **Create New
+  Prompt** adds one.
+- **User prompts**: prompts that users wrote and shared with a group or with everyone.
+- **Variables**: the global prompt variables.
+
+The tabs **Prompts** and **User prompts** appear while the feature **Prompts Library** is on.
+
+Who sees a global prompt is decided by the groups, like for apps: each prompt editor has a
+**Group access** card. See [Who can use apps, models and prompts](access-control.md).
 
 **Global Variables** are key-value pairs injected into any system prompt that references `{{variableName}}`. They allow you to maintain shared values (company name, product names, URLs) in one place.
 
@@ -411,7 +423,9 @@ Deleting cannot be undone. To stop someone from signing in while keeping what th
 
 ## Managing Groups
 
-Groups control what users can access. Go to **Access & Identity → Groups**.
+Groups control what users can access. Go to **Access & Identity → Groups**. For step-by-step
+tasks, such as limiting an app to one department, see
+[Who can use apps, models and prompts](access-control.md).
 
 **Group inheritance:** Groups can inherit permissions from parent groups. Pick the parents in the **Group Inheritance** card of the group form (**Inherits From**); inheritance is optional and a group can have several parents. A group cannot inherit itself, and a parent that does not exist or a circular chain is refused with an error when you save. For example, the built-in `users` group inherits from `authenticated`, which inherits from `anonymous`. A user's effective permissions are the union of their group's permissions and all inherited parent groups.
 

@@ -17,6 +17,7 @@ import { describeIssues } from '../../validators/userPromptSchema.js';
 import { getIntegrationStatus } from '../../integrationRegistry.js';
 import { sendCreated, segment } from '../../utils/created.js';
 import { APP_CREATE_ORIGINS } from '../../../shared/appGenerator.js';
+import { findAppDependants } from '../../utils/resourceDependants.js';
 
 /**
  * Validate an app configuration an admin is about to save, and answer 400 when
@@ -499,6 +500,98 @@ export default function registerAdminAppsRoutes(app) {
       }
       inheritance.children = apps.filter(a => a.parentId === appId);
       res.json(inheritance);
+    }
+  );
+
+  /**
+   * @swagger
+   * /api/admin/apps/{appId}/_dependants:
+   *   get:
+   *     summary: What refers to an app
+   *     description: |
+   *       Read-only. Lists what names the app, so the delete dialog can say what loses its
+   *       reference before the app is deleted. Nothing here blocks a delete: a prompt whose
+   *       app is gone opens without it, an app-as-tool entry naming no app offers no tool, a
+   *       group entry naming no app grants nothing. A delete keeps a copy in the change
+   *       history, from which an administrator can restore the app.
+   *     tags:
+   *       - Admin
+   *       - Applications
+   *     security:
+   *       - adminAuth: []
+   *     parameters:
+   *       - in: path
+   *         name: appId
+   *         required: true
+   *         schema:
+   *           type: string
+   *     responses:
+   *       200:
+   *         description: The references
+   *         content:
+   *           application/json:
+   *             schema:
+   *               type: object
+   *               properties:
+   *                 prompts:
+   *                   type: array
+   *                   description: Prompts that open in the app (`appId`)
+   *                   items:
+   *                     type: object
+   *                     properties:
+   *                       id: { type: string }
+   *                       name: { description: "Localized name object or text" }
+   *                 apps:
+   *                   type: array
+   *                   description: Apps that call it as a tool or inherit from it
+   *                   items:
+   *                     type: object
+   *                     properties:
+   *                       id: { type: string }
+   *                       name: { description: "Localized name object or text" }
+   *                       references:
+   *                         type: array
+   *                         items: { type: string, enum: [tool, parent] }
+   *                 workflows:
+   *                   type: array
+   *                   description: Workflows with a node that calls it as a tool
+   *                   items:
+   *                     type: object
+   *                     properties:
+   *                       id: { type: string }
+   *                       name: { description: "Localized name object or text" }
+   *                 groups:
+   *                   type: array
+   *                   description: Groups whose app permissions list it by id
+   *                   items:
+   *                     type: object
+   *                     properties:
+   *                       id: { type: string }
+   *                       name: { type: string }
+   *       400:
+   *         description: "`BAD_REQUEST`: invalid app id"
+   *       404:
+   *         description: "`NOT_FOUND`: no such app"
+   */
+  app.get(
+    buildServerPath('/api/admin/apps/:appId/_dependants'),
+    contentAdminAuth,
+    async (req, res) => {
+      const { appId } = req.params;
+      assertValidId(appId, 'app');
+      const { data: apps = [] } = configCache.getApps(true);
+      if (!apps.some(candidate => candidate.id === appId)) {
+        throw new ServiceError('NOT_FOUND', 'App not found');
+      }
+      const dependants = findAppDependants(appId, {
+        apps,
+        prompts: configCache.getPrompts(true)?.data ?? [],
+        workflows: configCache.getWorkflows(true)?.data ?? [],
+        // The authored file: the cache's groups carry their parents' permissions as their own.
+        groupsConfig: await configStore.readJson('config/groups.json').catch(() => null)
+      });
+      res.setHeader('Cache-Control', 'no-store');
+      res.json(dependants);
     }
   );
 

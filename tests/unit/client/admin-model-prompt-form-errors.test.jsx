@@ -624,6 +624,33 @@ describe('clone ID', () => {
       process.off('unhandledRejection', unhandled);
     }
   });
+
+  test('a refused model save moves the focus to the page error above the form', async () => {
+    const scrollIntoView = jest.fn();
+    const original = window.HTMLElement.prototype.scrollIntoView;
+    window.HTMLElement.prototype.scrollIntoView = scrollIntoView;
+    mockApi.makeAdminApiCall.mockImplementation(async (path, options) => {
+      if (options?.method === 'POST') throw new Error('The provider is not reachable.');
+      return path === '/admin/models' ? { data: { items: [{ id: 'gpt-4' }] } } : { data: [] };
+    });
+    try {
+      renderAt({
+        pathname: '/admin/models/new',
+        state: { templateModel: TEMPLATE_MODEL, cloneId: 'gpt-4-copy' }
+      });
+      await screen.findByLabelText(/^Model ID/);
+      await settle();
+
+      submit();
+
+      await screen.findByText('The provider is not reachable.');
+      const pageError = screen.getByTestId('model-page-error');
+      await waitFor(() => expect(pageError).toHaveFocus());
+      expect(scrollIntoView).toHaveBeenCalled();
+    } finally {
+      window.HTMLElement.prototype.scrollIntoView = original;
+    }
+  });
 });
 
 describe('useAdminFormErrors', () => {

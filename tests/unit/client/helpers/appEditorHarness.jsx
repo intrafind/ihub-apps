@@ -37,9 +37,12 @@ function httpError(status, detail = 'Request failed', code = undefined) {
  * @param {object} options
  * @param {object} options.app - The stored app.
  * @param {object} [options.access] - The content-access view.
+ * @param {object[]} [options.adminModels] - What `GET /admin/models` lists (a full
+ *   admin). Without it the request is refused with 403, as for a content admin,
+ *   and the editor falls back to the models the author may use (`fetchModels`).
  * @returns {{request: Function, calls: object[], writes: () => object[], state: object, failures: object}}
  */
-function createAppServer({ app, access }) {
+function createAppServer({ app, access, adminModels }) {
   const state = {
     app,
     access: access || {
@@ -70,6 +73,10 @@ function createAppServer({ app, access }) {
     if (url === `${appUrl}/_toggle` && method === 'POST') {
       state.app = { ...state.app, enabled: data.enabled };
       return { data: { enabled: data.enabled, ids: [app.id] }, headers: {} };
+    }
+    if (url === '/admin/models' && method === 'GET') {
+      if (!adminModels) throw httpError(403, 'Admin access required', 'FORBIDDEN');
+      return { data: { items: adminModels }, headers: {} };
     }
     if (url === accessUrl && method === 'GET') return { data: state.access, headers: {} };
     if (url === accessUrl && method === 'PUT') {

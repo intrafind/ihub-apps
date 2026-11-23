@@ -26,6 +26,12 @@
   "GET /a2a/skills/:skillId/.well-known/agent-card.json": {
     "skipped": "an external specification"
   },
+  "GET /api/admin/access/:type/:id": {
+    "skipped": "its parent path is not a readable list"
+  },
+  "GET /api/admin/access/:type/:id/verdict": {
+    "skipped": "its parent path is not a readable list"
+  },
   "GET /api/admin/agents/inboxes": {
     "status": 200,
     "shape": {
@@ -290,6 +296,20 @@
         "en": "string"
       },
       "type": "string"
+    }
+  },
+  "GET /api/admin/apps/:appId/_dependants": {
+    "status": 200,
+    "shape": {
+      "apps": [],
+      "groups": [
+        {
+          "id": "string",
+          "name": "string"
+        }
+      ],
+      "prompts": [],
+      "workflows": []
     }
   },
   "GET /api/admin/apps/:appId/inheritance": {
@@ -2337,6 +2357,16 @@
       "supportsImageGeneration": "boolean",
       "supportsTools": "string",
       "url": "string"
+    }
+  },
+  "GET /api/admin/models/:modelId/_dependants": {
+    "status": 200,
+    "shape": {
+      "agents": [],
+      "apps": [],
+      "groups": [],
+      "isDefault": "boolean",
+      "workflows": []
     }
   },
   "GET /api/admin/models/:modelId/tts/voices": {

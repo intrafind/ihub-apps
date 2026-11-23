@@ -37,6 +37,27 @@ describe('getSetupSteps', () => {
     ).toBe(true);
   });
 
+  test('a keyless endpoint the admin set up connects (AI-B21)', () => {
+    const keyless = { vllm: { state: 'keyless' }, local: { state: 'keyless' } };
+    // A custom provider (the import wizard's entry for a vLLM server) needs no key.
+    expect(
+      getSetupSteps({ keyStatuses: keyless, providers: [{ id: 'vllm', apiType: 'local' }] })
+        .steps[0].done
+    ).toBe(true);
+    // The shipped local provider given a base URL counts too.
+    expect(
+      getSetupSteps({
+        keyStatuses: { local: { state: 'keyless' } },
+        providers: [{ id: 'local', baseUrl: 'http://gpu:8000/v1' }]
+      }).steps[0].done
+    ).toBe(true);
+    // Without a URL it still points nowhere.
+    expect(
+      getSetupSteps({ keyStatuses: { local: { state: 'keyless' } }, providers: [{ id: 'local' }] })
+        .steps[0].done
+    ).toBe(false);
+  });
+
   test('enabling counts enabled models; a default must itself be enabled', () => {
     const result = getSetupSteps({
       keyStatuses: { p: { state: 'ok' } },

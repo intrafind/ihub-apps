@@ -49,6 +49,19 @@ const PROVIDERS = [
 
 const TOTAL_STEPS = 4;
 
+/**
+ * Tile of "Connect a model provider" (/admin/providers/connect) each setup
+ * provider continues in, so "Add your models" lands on the connection already
+ * filled in.
+ */
+const CONNECT_TILE_FOR_SETUP = {
+  google: 'google',
+  anthropic: 'anthropic',
+  openai: 'openai',
+  mistral: 'mistral',
+  local: 'self-hosted'
+};
+
 // Mounts the vanilla auth gate (the single login UI, see auth-gate/auth-gate.js)
 // inline in this card instead of full-page. OIDC/NTLM buttons redirect away;
 // the wizard step is persisted in sessionStorage and restored on return.
@@ -565,6 +578,15 @@ export default function SetupWizard() {
                   <button
                     onClick={() => {
                       sessionStorage.removeItem('setup_wizard_step');
+                      // The connect flow picks up the provider whose key was just
+                      // stored and goes on with testing it and picking models.
+                      if (platformConfig?.admin?.pages?.providers !== false) {
+                        navigate(
+                          `/admin/providers/connect?vendor=${CONNECT_TILE_FOR_SETUP[selectedProvider.id] || ''}`,
+                          { replace: true }
+                        );
+                        return;
+                      }
                       navigate('/admin/models', {
                         replace: true,
                         state: { importProviderId: selectedProvider.id }

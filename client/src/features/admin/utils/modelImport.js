@@ -105,6 +105,8 @@ const DISCOVERY_ERROR_KEYS = {
   notFound: 'admin.models.import.errors.notFound',
   redirected: 'admin.models.import.errors.redirected',
   upstreamError: 'admin.models.import.errors.upstreamError',
+  serverError: 'admin.models.import.errors.serverError',
+  certificateUntrusted: 'admin.models.import.errors.certificateUntrusted',
   invalidResponse: 'admin.models.import.errors.invalidResponse',
   timeout: 'admin.models.import.errors.timeout',
   connectionRefused: 'admin.models.import.errors.connectionRefused',

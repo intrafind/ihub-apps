@@ -131,3 +131,122 @@ test('every branch returns a non-empty userMessage, errorMessage and messageKey'
     assert.ok(messageKey, `messageKey missing for code=${err.code}`);
   }
 });
+
+// AI-B10: the admin has to get from the error to the fix — the facts (status,
+// host, code) and a cause per fault, including TLS and keyless endpoints.
+
+test('an upstream 5xx maps to serverError and reports the status and host', () => {
+  const err = new LLMError('LLM API request failed with status 502', {
+    code: LLM_ERROR_CODES.PROVIDER_ERROR,
+    providerCode: 'SERVICE_UNAVAILABLE',
+    status: 502
+  });
+  const result = describeModelTestFailure(err, {
+    url: 'https://llm.example.com:8443/v1/chat/completions?api-version=1'
+  });
+  assert.equal(result.messageKey, 'serverError');
+  assert.equal(result.upstreamStatus, 502);
+  assert.equal(result.host, 'llm.example.com:8443');
+  assert.equal(result.errorCode, null);
+});
+
+test('the host never carries credentials, the path or the query', () => {
+  const err = new LLMError('x', { code: LLM_ERROR_CODES.AUTH_FAILED, status: 401 });
+  const result = describeModelTestFailure(err, {
+    url: 'https://user:s3cret@gw.internal/v1/chat/completions?key=abc'
+  });
+  assert.equal(result.host, 'gw.internal');
+  assert.doesNotMatch(JSON.stringify(result), /s3cret|key=abc|user:/);
+});
+
+test('a missing or unparsable URL reports no host', () => {
+  const err = new LLMError('x', { code: LLM_ERROR_CODES.TIMEOUT });
+  assert.equal(describeModelTestFailure(err).host, null);
+  assert.equal(describeModelTestFailure(err, { url: 'not a url' }).host, null);
+});
+
+test('401 and 403 say the key was rejected; 404 points at the path', () => {
+  const rejected = describeModelTestFailure(
+    new LLMError('x', { code: LLM_ERROR_CODES.AUTH_FAILED, status: 401 })
+  );
+  assert.equal(rejected.messageKey, 'authenticationFailed');
+  assert.equal(rejected.upstreamStatus, 401);
+  const denied = describeModelTestFailure(
+    new LLMError('x', { code: LLM_ERROR_CODES.AUTH_FAILED, status: 403 })
+  );
+  assert.equal(denied.messageKey, 'accessDenied');
+  const notFound = describeModelTestFailure(
+    new LLMError('x', { code: LLM_ERROR_CODES.MODEL_NOT_FOUND, status: 404 })
+  );
+  assert.equal(notFound.messageKey, 'modelNotFound');
+  assert.match(notFound.errorMessage, /URL path/);
+});
+
+test('a keyless model answered with 401 needs a key — it was not rejected', () => {
+  const err = new LLMError('unauthorized', { code: LLM_ERROR_CODES.AUTH_FAILED, status: 401 });
+  const result = describeModelTestFailure(err, {
+    url: 'http://vllm:8000/v1/chat/completions',
+    keyless: true
+  });
+  assert.equal(result.messageKey, 'apiKeyRequired');
+  assert.doesNotMatch(result.errorMessage, /contact your administrator|rejected/i);
+});
+
+test('a keyless model that answers 5xx is a server error, not a credentials problem', () => {
+  const err = new LLMError('oops', { code: LLM_ERROR_CODES.PROVIDER_ERROR, status: 503 });
+  assert.equal(describeModelTestFailure(err, { keyless: true }).messageKey, 'serverError');
+});
+
+test('untrusted TLS certificates map to certificateUntrusted with their code', () => {
+  const cases = [
+    // LLMClient keeps the socket code as providerCode for a `fetch failed`
+    [
+      new LLMError('fetch failed', {
+        code: LLM_ERROR_CODES.NETWORK,
+        providerCode: 'UNABLE_TO_VERIFY_LEAF_SIGNATURE'
+      }),
+      'UNABLE_TO_VERIFY_LEAF_SIGNATURE'
+    ],
+    // The code only in the cause chain
+    [
+      new LLMError('fetch failed', {
+        code: LLM_ERROR_CODES.NETWORK,
+        cause: Object.assign(new Error('fetch failed'), {
+          cause: { code: 'SELF_SIGNED_CERT_IN_CHAIN', message: 'self-signed certificate in chain' }
+        })
+      }),
+      'SELF_SIGNED_CERT_IN_CHAIN'
+    ],
+    // Only the message names it (a client that reports no code)
+    [
+      new LLMError('request failed, reason: unable to verify the first certificate', {
+        code: LLM_ERROR_CODES.PROVIDER_ERROR
+      }),
+      'CERT_UNTRUSTED'
+    ],
+    [
+      new LLMError('fetch failed', {
+        code: LLM_ERROR_CODES.NETWORK,
+        details: 'unable to get local issuer certificate'
+      }),
+      'CERT_UNTRUSTED'
+    ]
+  ];
+  for (const [err, code] of cases) {
+    const result = describeModelTestFailure(err, { url: 'https://llm.corp.local/v1' });
+    assert.equal(result.messageKey, 'certificateUntrusted', code);
+    assert.equal(result.errorCode, code);
+    assert.equal(result.host, 'llm.corp.local');
+    assert.match(result.errorMessage, /SSL domain whitelist/);
+  }
+});
+
+test('a socket error code is reported as errorCode', () => {
+  const err = new LLMError('fetch failed', {
+    code: LLM_ERROR_CODES.NETWORK,
+    providerCode: 'ECONNRESET'
+  });
+  const result = describeModelTestFailure(err);
+  assert.equal(result.messageKey, 'networkError');
+  assert.equal(result.errorCode, 'ECONNRESET');
+});

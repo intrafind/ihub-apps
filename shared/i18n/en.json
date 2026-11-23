@@ -1502,7 +1502,8 @@
         "llmHelp": "An LLM provider holds one API key for all of its models. Link models to it in the model editor, or import them from its endpoint.",
         "nameRequired": "Provider name is required",
         "subtitle": "Create an LLM provider for your own endpoint, a web search provider, or a generic API key",
-        "idRequired": "Provider ID is required"
+        "idRequired": "Provider ID is required",
+        "intro": "Connect an AI endpoint of your own — a gateway, a self-hosted server or another vendor. Its models share one API key."
       },
       "info": {
         "title": "API Key Priority",
@@ -1590,7 +1591,135 @@
       },
       "add": "Add provider",
       "import": "Import models",
-      "ownTimeouts": "Sets its own timeouts"
+      "ownTimeouts": "Sets its own timeouts",
+      "connect": {
+        "access": {
+          "title": "Who can use these models?",
+          "intro": "Grant the new models to groups. You can change this later under Groups.",
+          "groupsUnavailable": "The groups could not be loaded. The models get the access the groups already grant; change it later under Groups.",
+          "everyone": "Everyone who signs in",
+          "everyoneHint": "Granted to the \"authenticated\" group, which every signed-in user is in.",
+          "groups": "Only the groups I pick",
+          "allModels": "(all models)",
+          "wildcardNote": "These groups can use every model, including the new ones, whatever you choose here: {{groups}}.",
+          "defaultTokenNote": "You make one of these models the default. These groups grant \"the default model\", so they and every group that inherits from them can use it, whatever you choose here: {{groups}}."
+        },
+        "tiles": {
+          "openai": "GPT models from api.openai.com.",
+          "azureOpenai": "OpenAI models deployed in your Azure resource.",
+          "anthropic": "Claude models from api.anthropic.com.",
+          "google": "Gemini models from the Google AI API.",
+          "mistral": "Mistral models from api.mistral.ai.",
+          "bedrock": "Foundation models through the Bedrock Converse API.",
+          "openrouter": "One API for models of many vendors.",
+          "openaiCompatible": "A gateway such as T-Systems LLM Hub or LiteLLM.",
+          "selfHosted": "vLLM, LM Studio or Ollama on your own hardware.",
+          "ifinderGateway": "The model gateway of an iFinder installation.",
+          "openaiCompatibleName": "OpenAI-compatible gateway",
+          "selfHostedName": "Self-hosted"
+        },
+        "vendor": {
+          "title": "Where are your models?",
+          "intro": "Pick the service that runs your models. You can connect more providers later.",
+          "keyStored": "Key stored",
+          "otherProvider": "Need a provider that only holds custom credentials, or want to set every field yourself?",
+          "otherProviderLink": "Use the provider form"
+        },
+        "models": {
+          "title": "Pick models",
+          "intro": "Each picked model is added, enabled and linked to the provider: it uses the provider’s endpoint and key, so none is stored on the model.",
+          "selected": "{{selected}} of {{total}} models picked"
+        },
+        "done": {
+          "smokeIntro": "Send one short prompt to {{model}} to check that it answers.",
+          "smokeRunning": "Sending…",
+          "smokeRun": "Send a test prompt",
+          "smokeOk": "The model answered:",
+          "providerFailedTitle": "The provider was not saved",
+          "providerFailedHint": "Nothing else was created. Go back, fix the connection and try again.",
+          "keySavedTitle": "{{provider}} is connected",
+          "title": "{{count}} models connected through {{provider}}",
+          "bedrockHint": "Bedrock has no model list iHub can read. Install ready-made Bedrock model configs from the Marketplace; they use the key stored on the provider.",
+          "linked": "The models use the endpoint and key of the provider.",
+          "default": "{{model}} is the default model.",
+          "groups": "Granted to: {{groups}}.",
+          "groupFailed": "Group {{group}}: {{error}}",
+          "marketplace": "Browse models in the Marketplace",
+          "createApp": "Create an app with this model",
+          "openProvider": "Open the provider",
+          "openModels": "Go to models",
+          "title_one": "{{count}} model connected through {{provider}}"
+        },
+        "steps": {
+          "vendor": "Service",
+          "connection": "Connection",
+          "test": "Test",
+          "models": "Models",
+          "default": "Default",
+          "access": "Access",
+          "done": "Done",
+          "label": "Progress"
+        },
+        "default": {
+          "title": "Choose the default model",
+          "intro": "Apps without a model of their own, and new chats, use the default model.",
+          "noChatModels": "None of the picked models is a chat model, so none can be the default.",
+          "keep": "Keep {{model}}",
+          "keepHint": "The current default model."
+        },
+        "test": {
+          "causes": {
+            "unreachable": "The iHub server could not reach the host. Check the host name and port, and that the server (not your browser) can reach it through your network, firewall or proxy.",
+            "tls": "The endpoint presents a certificate the iHub server does not trust, which is usual for a private CA. Add the host to the SSL whitelist under Security, or install the CA on the server.",
+            "auth": "The endpoint rejected the key. Check that it is the key for this endpoint and that it may list models.",
+            "path": "The host answered, but not with a model list at this path. Check the URL; it usually ends in /v1.",
+            "other": "Check the URL and the key, then test again."
+          },
+          "title": "Test the connection",
+          "intro": "iHub asks the endpoint for its model list from the server, with the key you entered.",
+          "running": "Connecting to {{host}}…",
+          "success": "Connected",
+          "host": "Host",
+          "models": "Models",
+          "modelCount": "{{count}} listed, {{chat}} chat models",
+          "noModels": "The endpoint lists no models. Check that models are deployed, or that the key may see them.",
+          "retry": "Test again",
+          "openSsl": "Open the SSL whitelist",
+          "changeKey": "Change the key",
+          "changeConnection": "Change the URL or key"
+        },
+        "connection": {
+          "urlHintAzure": "The endpoint of your Azure OpenAI resource, for example https://my-resource.openai.azure.com/openai/v1. A deployment URL copied from Azure (…/chat/completions?api-version=…) works too.",
+          "urlHintGateway": "The API base, usually ending in /v1, for example https://llm-server.llmhub.t-systems.net/v2. Its /models listing or a chat completions URL works too.",
+          "urlHintSelfHosted": "The API base as the iHub server reaches it (not your browser), for example {{example}}.",
+          "idExists": "A provider with this ID already exists. Choose another ID, or edit that provider under Providers.",
+          "title": "Connect {{provider}}",
+          "introBedrock": "Enter a Bedrock API key. It is stored encrypted on the AWS Bedrock provider. The region comes from AWS_REGION (default eu-central-1) or from each model.",
+          "intro": "Where iHub reaches the models, and the key it sends. Nothing is saved until the last step.",
+          "serverKind": "Server",
+          "serverKindHint": "vLLM is called with the vLLM adapter; LM Studio and Ollama with the OpenAI-compatible one.",
+          "urlFixedHint": "The vendor's public API. Use the OpenAI-compatible gateway tile for a proxy in front of it.",
+          "keyStoredPlaceholder": "Stored — leave empty to keep it",
+          "keyStoredHint": "A key is already stored on this provider. Leave the field empty to test and keep it, or enter a new one to replace it.",
+          "keyHintSelfHosted": "Leave empty if the server has no authentication. A key entered here is stored encrypted on the provider.",
+          "keyHint": "Stored encrypted on the provider, not on each model.",
+          "envVarHint": "Instead of storing it, you can leave this empty and set the environment variable {{envVar}} on the server.",
+          "getKey": "Where do I get a key?"
+        },
+        "loadError": "Could not load providers and models",
+        "saving": "Saving…",
+        "finish": "Connect and add {{count}} models",
+        "saveKey": "Save the key",
+        "testAction": "Test connection",
+        "next": "Next",
+        "title": "Connect a model provider",
+        "subtitle": "Connect a service, test it, pick its models and choose who can use them — in one go.",
+        "back": "Back",
+        "backToConnection": "Back to the connection",
+        "finish_one": "Connect and add {{count}} model"
+      },
+      "loadError": "Error loading providers",
+      "searchLabel": "Search providers"
     },
     "models": {
       "sync": {
@@ -1633,7 +1762,9 @@
           "modelNotFound": "Model not found",
           "rateLimitExceeded": "Rate limit exceeded",
           "serverError": "Server error",
-          "apiKeyUndecryptable": "Stored API key cannot be decrypted"
+          "apiKeyUndecryptable": "Stored API key cannot be decrypted",
+          "apiKeyRequired": "The endpoint requires an API key",
+          "certificateUntrusted": "Certificate not trusted"
         }
       },
       "enable": "Enable",
@@ -1706,7 +1837,9 @@
         "configurationDesc": "Advanced configuration options for the model",
         "resource": "model \"{{id}}\"",
         "fixErrors": "Please fix the following errors",
-        "history": "History"
+        "history": "History",
+        "testSavedHint": "Tests the saved model. Save first to test your changes.",
+        "testing": "Testing…"
       },
       "fields": {
         "id": "Model ID",
@@ -1811,7 +1944,8 @@
         "markingDetectorCredentialRef": "Optional bearer token, if the detector asks for one.",
         "markingTokenizer": "The detector splits a text into the same tokens as the model to find the watermark. Leave empty to use the model ID; set a Hugging Face ID or path only if vLLM serves the model under another name.",
         "markingContextWidth": "Tokens the watermark looks back on, not the context window. Must equal context_width of vLLM (default 4).",
-        "autoDiscovery": "Automatically detect the active model from the /v1/models endpoint. Useful for local LLM providers (vLLM, LM Studio, Jan.ai) where the model can change. Only available for OpenAI-compatible providers."
+        "autoDiscovery": "Automatically detect the active model from the /v1/models endpoint. Useful for local LLM providers (vLLM, LM Studio, Jan.ai) where the model can change. Only available for OpenAI-compatible providers.",
+        "apiKeyLookupOrder": "Optional. When it is empty the server uses the first key it finds, in this order: this model’s key, the key of its provider, the environment variable {{modelEnv}}, the environment variable {{providerEnv}}. A local server (vLLM, LM Studio, Jan.ai, Ollama) needs no key. Keys are stored encrypted."
       },
       "placeholders": {
         "maxOutputTokens": "Default: {{value}}",
@@ -1958,12 +2092,15 @@
           "connectionRefused": "Connection refused",
           "hostNotFound": "Host not found",
           "networkError": "Network error",
-          "providerIdReserved": "This ID is the name of an API type. Choose another ID."
+          "providerIdReserved": "This ID is the name of an API type. Choose another ID.",
+          "serverError": "The endpoint answered with a server error",
+          "certificateUntrusted": "The certificate of the endpoint is not trusted"
         },
         "unsupported": "iHub cannot run this model from this provider",
         "gatewayCheckbox": "This endpoint is an iFinder Model Gateway",
         "gatewayUrlHint": "The gateway root, for example https://gateway:9614. iHub reads /v1/gateway/models and calls the models through /v1/gateway/proxy. Enter the gateway project API key below if the gateway requires one.",
-        "models": "Import models"
+        "models": "Import models",
+        "tools": "Tools"
       },
       "areaTitle": "Models",
       "areaSubtitle": "Connect AI providers and choose the models your apps can use",
@@ -1995,7 +2132,9 @@
         "enableHint": "Import the models of a provider, or switch on one below.",
         "defaultHint": "Open a model and tick “Default” so apps without a model of their own have one.",
         "done": "(done)",
-        "todo": "(to do)"
+        "todo": "(to do)",
+        "connectWizardAction": "Connect a model provider",
+        "defaultHintRow": "Choose “Make default” in the row of an enabled chat model, so apps without a model of their own have one."
       },
       "moreActions": "More model actions",
       "disableAllDefault": "The default model setting is cleared. When models are enabled again, the first chat model in the list becomes the default.",
@@ -2025,7 +2164,12 @@
       },
       "downloadError": "Failed to download model config: {{error}}",
       "uploadExists": "Model with ID \"{{id}}\" already exists",
-      "uploadError": "Failed to upload model config: {{error}}"
+      "uploadError": "Failed to upload model config: {{error}}",
+      "enabledSwitch": "Enabled: {{name}}",
+      "defaultAssigned": "\"{{name}}\" is now the default model.",
+      "madeDefault": "\"{{name}}\" is the default model now.",
+      "makeDefault": "Make default",
+      "makeDefaultDisabled": "Enable the model first"
     },
     "auth": {
       "configuration": "Authentication Configuration",
@@ -4238,7 +4382,11 @@
           "part": "{{parent}}, {{field}}",
           "language": "{{field}} — {{language}}"
         },
-        "magicPromptInstructionsPlaceholder": "Enter instructions for the magic prompt feature…"
+        "magicPromptInstructionsPlaceholder": "Enter instructions for the magic prompt feature…",
+        "modelChoice": {
+          "disabled": "{{name}} (disabled)",
+          "default": "{{name}} (default)"
+        }
       },
       "reorder": "Reorder",
       "reorderHelp": "Drag a row or use the arrows to set the order apps appear in for users — in the apps browser, on the start page and in the sidebar. Every app is listed, so search and filters do not apply here. Nothing is saved until you save the new order at the bottom of the page.",
@@ -4532,7 +4680,9 @@
         "category": "Category",
         "model": "Model",
         "order": "Order",
-        "status": "Status"
+        "status": "Status",
+        "categoryFallback": "No category set: listed under {{category}}",
+        "defaultModel": "Default model"
       },
       "uploading": "Uploading...",
       "details": {
@@ -4549,7 +4699,8 @@
       },
       "downloadError": "Failed to download app config: {{error}}",
       "uploadExists": "App with ID \"{{id}}\" already exists",
-      "uploadError": "Failed to upload app config: {{error}}"
+      "uploadError": "Failed to upload app config: {{error}}",
+      "loadError": "Error loading apps"
     },
     "features": {
       "title": "Features",
@@ -6148,7 +6299,8 @@
         "searchSkills": "Search skills to add…",
         "noSkills": "No skills selected – users can’t use any agent skills",
         "allWildcard": "All (*)",
-        "allWildcardFor": "{{label}}: All (*)"
+        "allWildcardFor": "{{label}}: All (*)",
+        "defaultModelToken": "Default model (whichever is set as default)"
       },
       "members": {
         "title": "Members",
@@ -6169,7 +6321,8 @@
         "moreMatches": "{{count}} more users match. Narrow the search to find them.",
         "addSelected": "Add {{count}} selected",
         "saveFirst": "Save the group first, then add its members here."
-      }
+      },
+      "clone": "Clone"
     },
     "contentAccess": {
       "title": "Group access",
@@ -6204,7 +6357,8 @@
         "skills": "skills",
         "tools": "tools",
         "workflows": "workflows"
-      }
+      },
+      "wildcardNote": "Groups with a lock can use all {{subjectPlural}} through a wildcard. To withdraw a single one, an administrator replaces the wildcard with an explicit list in the group settings."
     },
     "auditLog": {
       "title": "Audit Log",
@@ -6715,7 +6869,8 @@
       "tabs": {
         "userPrompts": "User prompts",
         "prompts": "Prompts",
-        "variables": "Variables"
+        "variables": "Variables",
+        "aria": "Prompt sections"
       },
       "edit": {
         "detectedVariables": "Detected in the text",
@@ -6817,7 +6972,10 @@
         "description": "Description",
         "order": "Order",
         "appConnected": "App Connected",
-        "status": "Status"
+        "status": "Status",
+        "categoryFallback": "No category set: listed under {{category}}",
+        "linkedApp": "App",
+        "appMissing": "Missing app: {{id}}"
       },
       "delete": "Delete",
       "searchPlaceholder": "Search prompts...",
@@ -8266,7 +8424,15 @@
       "resultCount_other": "{{count}} results",
       "collapseAll": "Collapse all",
       "expandAll": "Expand all",
-      "tableLabel": "Table"
+      "tableLabel": "Table",
+      "helpLink": "Help: {{topic}}",
+      "helpTopics": {
+        "models": "Set up models",
+        "providers": "Connect a provider",
+        "apps": "Build your first app",
+        "prompts": "Manage prompts",
+        "access": "Who can use apps, models and prompts"
+      }
     },
     "aiDisclosure": {
       "title": "AI notice",
@@ -8798,6 +8964,22 @@
         "disableMessage_other": "{{count}} of {{total}} {{items}} are enabled now and will be disabled. Users lose access right away:",
         "nothingToEnable": "All {{total}} {{items}} are already enabled.",
         "nothingToDisable": "All {{total}} {{items}} are already disabled."
+      },
+      "dependants": {
+        "modelMessage": "The model is removed for all users. A copy stays in the change history: open {{path}} again to restore it.",
+        "appMessage": "The app is removed for all users. A copy stays in the change history: open {{path}} again to restore it.",
+        "checkFailed": "Could not check what uses it. Apps, workflows, agents or groups may still name it.",
+        "modelApps": "Apps that name it (they answer with another model): {{names}}",
+        "modelWorkflows": "Workflows that name it: {{names}}",
+        "modelAgents": "Agents that name it: {{names}}",
+        "modelGroups": "Groups that grant it by name: {{names}}",
+        "defaultMoves": "It is the default model. \"{{name}}\" becomes the default.",
+        "defaultNone": "It is the default model, and no other enabled chat model can take over. Apps without a model of their own have none until you enable one.",
+        "appPrompts": "Prompts that open in it: {{names}}",
+        "appTools": "Apps that call it as a tool: {{names}}",
+        "appChildren": "Apps that inherit from it: {{names}}",
+        "appWorkflows": "Workflows that call it: {{names}}",
+        "appGroups": "Groups that grant it by name: {{names}}"
       }
     },
     "backup": {
@@ -9456,6 +9638,133 @@
     },
     "integrationPages": {
       "oauthClientId": "OAuth Client ID:"
+    },
+    "access": {
+      "items": {
+        "apps": "apps",
+        "models": "models",
+        "prompts": "prompts",
+        "skills": "skills",
+        "workflows": "workflows"
+      },
+      "explain": {
+        "heading": "Granted through “all {{items}}”:",
+        "ownWildcard": "Everyone in {{group}} sees this through “all {{items}}”.",
+        "inheritedWildcard": "Everyone in {{group}} sees this through “all {{items}}” (inherited from {{source}}: {{chain}}).",
+        "ownExplicit": "{{group}} is granted this by name.",
+        "inheritedExplicit": "Everyone in {{group}} gets this by name from {{source}} ({{chain}}).",
+        "ownDefault": "{{group}} gets this as the default model (“Default model” in its model list).",
+        "inheritedDefault": "Everyone in {{group}} gets this as the default model, through “Default model” of {{source}} ({{chain}})."
+      },
+      "card": {
+        "title": "Who can use this model",
+        "description": "Which groups may use the model, and why. Group lists are edited under Groups; “Restrict access” takes the model out of groups that grant all models.",
+        "loading": "Loading access…",
+        "loadError": "Access could not be loaded.",
+        "audienceEveryone": "Everyone can use this, including people who are not signed in.",
+        "audienceSignedIn": "Everyone who signs in can use this.",
+        "audienceAnonymous": "People who are not signed in can use this. Groups: {{groups}}",
+        "audienceGroups": "Only these groups can use this: {{groups}}.",
+        "audienceNone": "No group can use this."
+      },
+      "tools": {
+        "checkTitle": "Access check",
+        "title": "Restrict access and check access"
+      },
+      "check": {
+        "title": "Why can't someone see this?",
+        "descriptionGroupsOnly": "Pick one of the groups you manage. The check applies the same rules the server applies when it lists apps for its members.",
+        "description": "Pick a group or a user. The check applies the same rules the server applies when it lists apps and models for them.",
+        "subjectLegend": "Check for",
+        "byGroup": "A group",
+        "byUser": "A user",
+        "groupLabel": "Group",
+        "userLabel": "User",
+        "userPlaceholder": "Username, email or user ID",
+        "run": "Check access",
+        "error": "The check could not be run.",
+        "subjectGroups": "Checked with the groups: {{groups}}",
+        "identityProviderNote": "This user signs in through an identity provider. Groups it sends at sign-in are not known here; only the groups stored in iHub were checked.",
+        "verdict": {
+          "availableGroup": "Members of {{name}} can use this.",
+          "unavailableGroup": "Members of {{name}} cannot use this.",
+          "availableUser": "{{name}} can use this.",
+          "unavailableUser": "{{name}} cannot use this.",
+          "availableAnonymous": "People who are not signed in can use this.",
+          "unavailableAnonymous": "People who are not signed in cannot use this."
+        },
+        "reasons": {
+          "anonymousAccessOff": "Anonymous access is switched off, so people who are not signed in see nothing.",
+          "userInactive": "The account is deactivated.",
+          "itemEnabled": "It is enabled.",
+          "itemDisabled": "It is disabled: nobody sees it until it is enabled.",
+          "featureOn": "Required features are on: {{features}}.",
+          "featureOff": "The required feature “{{feature}}” is off (Features).",
+          "integrationOff": "An integration it needs is off: {{integrations}}.",
+          "granted": "A group grants it:",
+          "notGranted": "No group of theirs grants it, by name or through “all”.",
+          "modelsAvailable": "Models they can use with it: {{models}}.",
+          "noUsableModel": "No model is left that they may use with it:",
+          "preferredModelUnavailable": "The preferred model {{model}} is not available to them; another model is used."
+        },
+        "modelCause": {
+          "missing": "{{model}} is not configured.",
+          "disabled": "{{model}} is disabled.",
+          "notAllowedForApp": "{{model}} is not allowed for this app or lacks a capability the app needs.",
+          "notGranted": "{{model}} is not granted to their groups."
+        },
+        "noModelsConfigured": "No chat model is configured."
+      },
+      "restrict": {
+        "open": "Restrict access…",
+        "openHelp": "Groups that grant all {{items}} cover this one too. Restricting replaces “all” in those groups with an explicit list.",
+        "title": "Restrict who can use {{name}}",
+        "intro": "These groups see every one of the {{items}} through “all {{items}}”. To take {{name}} away from them, “all” is replaced with a list of every current item except this one.",
+        "convertLegend": "Groups that grant all {{items}}",
+        "convertRow": "“all {{items}}” becomes a list of {{count}} {{items}}",
+        "keepRow": "Keeps “all {{items}}” and keeps seeing this",
+        "passesTo": "Passed on to: {{groups}}",
+        "grantLegend": "Then grant it by name to (optional)",
+        "grantHelp": "These groups can use {{name}} after the change, whatever happens above.",
+        "previewTitle": "After the change",
+        "previewLoading": "Working out the change…",
+        "keeps": "Can use it: {{groups}}",
+        "keepsNone": "No group can use it.",
+        "loses": "Can no longer use it: {{groups}}",
+        "stillEveryone": "Everyone who signs in can still use it:",
+        "newItemsWarning": "New {{items}} you add later no longer appear automatically in the groups you convert. Add them to those groups when you create them. The change is recorded in each group's history.",
+        "error": "Access could not be restricted.",
+        "apply": "Restrict access",
+        "stillDefaultModel": "{{name}} is the default model, and {{groups}} grant “Default model”: they keep using it. Remove that entry in the group settings, or make another model the default."
+      }
+    },
+    "connectionErrors": {
+      "facts": {
+        "status": "HTTP {{status}}",
+        "host": "Host: {{host}}",
+        "code": "Code: {{code}}"
+      },
+      "openSslSettings": "Open the SSL / TLS settings",
+      "remediation": {
+        "certificateUntrusted": "The iHub server does not trust the TLS certificate of this endpoint, which is typical for a private CA or a self-signed certificate. Add the host to the SSL domain whitelist and turn on \"Ignore invalid SSL certificates\".",
+        "serverError": "The endpoint itself failed. Check the status and logs of the service (or of a proxy in front of it) and try again; the configuration in iHub is probably correct.",
+        "authenticationFailed": "The endpoint rejected the API key. Check the key on the model or its provider.",
+        "accessDenied": "The endpoint accepted the API key but does not allow this request. Check the permissions of the key and which models the account may use.",
+        "apiKeyRequired": "The endpoint asks for an API key, but none is configured. Enter the key on the provider or the model and try again.",
+        "apiKeyNotConfigured": "No API key is configured. Enter one on the model or its provider, or set the environment variable.",
+        "apiKeyUndecryptable": "The stored API key was saved with a different encryption key. Enter the key again.",
+        "wrongPath": "Nothing was found at this URL. Check the path (it usually ends in /v1/chat/completions) and the model ID.",
+        "listNotFound": "No model list was found at this URL. Check the path: it usually ends in /v1 or /v1/models.",
+        "connectionRefused": "Nothing accepts connections at this host and port. Check the port in the URL and that the service is running.",
+        "hostNotFound": "The host name could not be resolved. Check the spelling of the URL, or the DNS and proxy settings of the iHub server.",
+        "timeout": "The endpoint did not answer in time. Check the URL, that the service is running, and that the iHub server can reach it (firewall, VPN, proxy).",
+        "requestTimeout": "The service took too long to answer. Try again, or check how busy the service is.",
+        "networkError": "The connection failed. Check that the iHub server can reach the host (firewall, VPN, outbound proxy).",
+        "rateLimitExceeded": "The endpoint is limiting requests. Wait a moment and try again."
+      }
+    },
+    "restoreDeleted": {
+      "action": "Restore from History"
     }
   },
   "cloudStorage": {
@@ -13493,6 +13802,7 @@
     "LAST_ADMIN": "This change would leave no active administrator who can sign in. Nothing was changed. Give another active user administrator rights first.",
     "SELF_LOCKOUT": "You cannot deactivate or delete your own account. Ask another administrator to do it.",
     "GROUP_IN_USE": "The group \"{{groupId}}\" cannot be deleted because other groups inherit from it. Remove it from their inherited groups first.",
+    "ACCESS_CHECK_OUT_OF_SCOPE": "Content admins can check access only to apps, and only for the groups they manage. Checking a model, a user or another group needs a full administrator.",
     "ADMIN_CHECK_FAILED": "Could not verify that an administrator keeps access, so nothing was changed. Please try again.",
     "PRECONDITION_FAILED": "This configuration was changed after you opened it (by another administrator, another tab or a script). Nothing was saved, and your changes are still on the page. Reload to see the current version, then apply your changes again.",
     "APP_GENERATOR_NO_MODEL": "No AI model is available to you, so a draft cannot be prepared.",

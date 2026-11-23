@@ -13,7 +13,12 @@
  * @module features/admin/components/app-editor/adminAppRequests
  */
 
-import { fetchContentAccess, makeAdminApiCall, toggleApps } from '../../../../api/adminApi';
+import {
+  fetchAdminModels,
+  fetchContentAccess,
+  makeAdminApiCall,
+  toggleApps
+} from '../../../../api/adminApi';
 import { fetchModels, fetchUIConfig } from '../../../../api';
 import { fetchJsonSchema } from '../../../../utils/schemaService';
 import { cleanAppForSave, padLoadedApp } from '../../../../../../shared/appDefaults.js';
@@ -57,11 +62,34 @@ export const loadAccess = appId => fetchContentAccess('apps', appId);
 export const setPublished = (appId, published) => toggleApps([appId], published);
 
 /**
- * What `useEditorResources` loads: the models the author may use, the UI
+ * The chat models the app can be set to (AI-B9). An admin gets the admin model
+ * list, disabled models included, so an app can name a model before that
+ * model is switched on for everyone; the form marks each one's status. The
+ * public list would hold only the models the admin may already use in a chat.
+ *
+ * A content admin may edit apps but not read the admin model list (403): they
+ * get the models they may use themselves, as before.
+ *
+ * @returns {Promise<object[]>} Chat models (transcription and text-to-speech
+ *   models never answer in an app).
+ */
+export async function fetchEditorModels() {
+  let models;
+  try {
+    models = await fetchAdminModels();
+  } catch (error) {
+    if (error?.response?.status === 403) return fetchModels();
+    throw error;
+  }
+  return models.filter(model => (model.modelType || 'chat') === 'chat');
+}
+
+/**
+ * What `useEditorResources` loads: the models an app can be set to, the UI
  * configuration and the JSON schema of an app.
  */
 export const EDITOR_RESOURCES = Object.freeze({
-  fetchModels: () => fetchModels(),
+  fetchModels: () => fetchEditorModels(),
   fetchUiConfig: () => fetchUIConfig(),
   fetchSchema: () => fetchJsonSchema('app')
 });

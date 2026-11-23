@@ -456,6 +456,18 @@ export const ADMIN_GUARD_ERROR_CODES = Object.freeze({
   ADMIN_CHECK_FAILED: 503
 });
 
+/**
+ * Codes of the admin access check (`GET /api/admin/access/{type}/{id}/verdict`,
+ * `server/routes/admin/itemAccess.js`).
+ */
+export const ACCESS_CHECK_ERROR_CODES = Object.freeze({
+  /**
+   * A content admin asked for a check outside their scope: a model, a user, or a
+   * group they do not manage (`details: { scope }`, one of `type`, `user`, `group`).
+   */
+  ACCESS_CHECK_OUT_OF_SCOPE: 403
+});
+
 /** Codes of the app draft generator (`POST /api/admin/apps/_generate`, `server/services/appGenerator.js`). */
 export const APP_GENERATOR_ERROR_CODES = Object.freeze({
   /** No chat model the caller may use can write the draft. */
@@ -509,6 +521,7 @@ export const API_ERROR_CODES = Object.freeze({
   ...MISC_ERROR_CODES,
   ...WATERMARK_ERROR_CODES,
   ...ADMIN_GUARD_ERROR_CODES,
+  ...ACCESS_CHECK_ERROR_CODES,
   ...APP_GENERATOR_ERROR_CODES,
   ...USER_APP_ERROR_CODES
 });

@@ -1,6 +1,6 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
-import { CHECKBOX_CLASS } from '../formStyles';
+import { CHECKBOX_CLASS, INPUT_CLASS } from '../formStyles';
 
 const SANDBOX_PERMISSIONS = [
   {
@@ -80,7 +80,7 @@ function IframeConfigSection({ app, onChange, t }) {
                   })
                 }
                 placeholder="https://example.com"
-                className="mt-1 block w-full rounded-md border border-admin-control-border dark:border-admin-control-border-dark shadow-xs focus:border-admin-accent focus:ring-admin-accent sm:text-sm"
+                className={`${INPUT_CLASS} mt-1`}
               />
             </div>
             <div className="flex items-center">

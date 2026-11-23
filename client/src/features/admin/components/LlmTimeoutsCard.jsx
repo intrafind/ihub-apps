@@ -8,11 +8,9 @@ import AdminLoadGate from './AdminLoadGate';
 import { useAdminConfigLoad } from '../hooks/useAdminConfigLoad';
 import { LLM_TIMEOUT_KEYS, LLM_TIMEOUT_MAX_MS } from '../../../../../shared/llmProviders.js';
 import Icon from '../../../shared/components/Icon';
+import { INPUT_CLASS, LABEL_CLASS } from './formStyles';
 import ImplicitSubmit from '../../../shared/components/ImplicitSubmit';
 import { useSaveSection } from './SaveSections';
-
-const INPUT =
-  'mt-1 w-full px-3 py-2 border border-admin-control-border dark:border-admin-control-border-dark rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm';
 
 /** 30000 → "30 s", 1500 → "1500 ms", 0 → null (no ceiling). */
 function formatMs(ms, t) {
@@ -200,10 +198,7 @@ function LlmTimeoutsCard() {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               {fields.map(({ key, label, hint }) => (
                 <div key={key}>
-                  <label
-                    htmlFor={`llm-timeout-${key}`}
-                    className="block text-sm font-medium text-gray-700 dark:text-gray-300"
-                  >
+                  <label htmlFor={`llm-timeout-${key}`} className={LABEL_CLASS}>
                     {label}
                   </label>
                   <input
@@ -216,7 +211,7 @@ function LlmTimeoutsCard() {
                     placeholder={defaults[key] === undefined ? '' : String(defaults[key])}
                     onChange={e => setForm(prev => ({ ...prev, [key]: e.target.value }))}
                     aria-describedby={`llm-timeout-${key}-hint`}
-                    className={INPUT}
+                    className={INPUT_CLASS}
                   />
                   <p
                     id={`llm-timeout-${key}-hint`}

@@ -29,7 +29,10 @@ class ApiKeyVerifier {
     }
 
     try {
-      const resolution = await resolveModelApiKey(model.id);
+      // The admin model test calls disabled models too, so the lookup includes
+      // them: limited to enabled models, a disabled keyless server came back as
+      // an unknown model and was reported as "API key not found".
+      const resolution = await resolveModelApiKey(model.id, { includeDisabled: true });
 
       if (resolution.state === 'ok') {
         return { success: true, apiKey: resolution.apiKey };

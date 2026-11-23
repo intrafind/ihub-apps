@@ -4,7 +4,7 @@
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 import Switch from '../../../../shared/components/Switch';
-import { CALLOUT_CLASS } from '../formStyles';
+import { CALLOUT_CLASS, INPUT_CLASS } from '../formStyles';
 import { AUTO_ENGINE, webSearchEngineStatus } from './webSearchEngines';
 
 /**
@@ -90,7 +90,7 @@ function WebSearchSection({ app, onChange, engines = null }) {
                   value={provider}
                   onChange={e => handleWebSearchChange({ provider: e.target.value })}
                   aria-describedby="websearch-engine-desc"
-                  className="mt-1 block w-full rounded-lg border border-admin-control-border shadow-xs focus:border-admin-accent focus:ring-admin-accent sm:text-sm dark:bg-gray-700 dark:border-admin-control-border-dark dark:text-gray-100"
+                  className={`${INPUT_CLASS} mt-1`}
                 >
                   <option value={AUTO_ENGINE}>
                     {t('admin.apps.edit.websearchProviderAuto', 'Auto')}
@@ -204,7 +204,10 @@ function WebSearchSection({ app, onChange, engines = null }) {
               {/* Max Searches per model call (native search cap) */}
               {(app.websearch?.useNativeSearch ?? true) && (
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                  <label
+                    htmlFor="app-websearch-max-searches"
+                    className="block text-sm font-medium text-gray-700 dark:text-gray-300"
+                  >
                     {t('admin.apps.edit.websearchMaxSearches', 'Max Searches per Answer')}
                   </label>
                   <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
@@ -214,6 +217,7 @@ function WebSearchSection({ app, onChange, engines = null }) {
                     )}
                   </p>
                   <input
+                    id="app-websearch-max-searches"
                     type="number"
                     min="1"
                     max="50"
@@ -221,14 +225,17 @@ function WebSearchSection({ app, onChange, engines = null }) {
                     onChange={e =>
                       handleWebSearchChange({ maxSearches: Number.parseInt(e.target.value) || 5 })
                     }
-                    className="mt-1 block w-full rounded-md border border-admin-control-border dark:border-admin-control-border-dark shadow-xs focus:border-admin-accent focus:ring-admin-accent sm:text-sm"
+                    className={`${INPUT_CLASS} mt-1`}
                   />
                 </div>
               )}
 
               {/* Max page reads per answer (page reader cap) */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                <label
+                  htmlFor="app-websearch-max-page-reads"
+                  className="block text-sm font-medium text-gray-700 dark:text-gray-300"
+                >
                   {t('admin.apps.edit.websearchMaxPageReads', 'Max Page Reads per Answer')}
                 </label>
                 <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
@@ -238,6 +245,7 @@ function WebSearchSection({ app, onChange, engines = null }) {
                   )}
                 </p>
                 <input
+                  id="app-websearch-max-page-reads"
                   type="number"
                   min="1"
                   max="50"
@@ -247,16 +255,20 @@ function WebSearchSection({ app, onChange, engines = null }) {
                       maxPageReads: Math.min(50, Math.max(1, Number.parseInt(e.target.value) || 5))
                     })
                   }
-                  className="mt-1 block w-full rounded-md border border-admin-control-border dark:border-admin-control-border-dark shadow-xs focus:border-admin-accent focus:ring-admin-accent sm:text-sm"
+                  className={`${INPUT_CLASS} mt-1`}
                 />
               </div>
 
               {/* Max Results */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                <label
+                  htmlFor="app-websearch-max-results"
+                  className="block text-sm font-medium text-gray-700 dark:text-gray-300"
+                >
                   {t('admin.apps.edit.websearchMaxResults', 'Max Results')}
                 </label>
                 <input
+                  id="app-websearch-max-results"
                   type="number"
                   min="1"
                   max="20"
@@ -264,7 +276,7 @@ function WebSearchSection({ app, onChange, engines = null }) {
                   onChange={e =>
                     handleWebSearchChange({ maxResults: Number.parseInt(e.target.value) || 5 })
                   }
-                  className="mt-1 block w-full rounded-md border border-admin-control-border dark:border-admin-control-border-dark shadow-xs focus:border-admin-accent focus:ring-admin-accent sm:text-sm"
+                  className={`${INPUT_CLASS} mt-1`}
                 />
               </div>
 
@@ -299,7 +311,10 @@ function WebSearchSection({ app, onChange, engines = null }) {
               {/* Content Max Length */}
               {(app.websearch?.extractContent ?? true) && (
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                  <label
+                    htmlFor="app-websearch-content-max-length"
+                    className="block text-sm font-medium text-gray-700 dark:text-gray-300"
+                  >
                     {t('admin.apps.edit.websearchContentMaxLength', 'Content Max Length')}
                   </label>
                   <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
@@ -309,6 +324,7 @@ function WebSearchSection({ app, onChange, engines = null }) {
                     )}
                   </p>
                   <input
+                    id="app-websearch-content-max-length"
                     type="number"
                     min="500"
                     max="50000"
@@ -319,7 +335,7 @@ function WebSearchSection({ app, onChange, engines = null }) {
                         contentMaxLength: Number.parseInt(e.target.value) || 3000
                       })
                     }
-                    className="mt-1 block w-full rounded-md border border-admin-control-border dark:border-admin-control-border-dark shadow-xs focus:border-admin-accent focus:ring-admin-accent sm:text-sm"
+                    className={`${INPUT_CLASS} mt-1`}
                   />
                 </div>
               )}
@@ -410,7 +426,10 @@ function WebSearchSection({ app, onChange, engines = null }) {
 
               {researchGuidanceOn && (
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                  <label
+                    htmlFor="app-websearch-research-guidance-custom"
+                    className="block text-sm font-medium text-gray-700 dark:text-gray-300"
+                  >
                     {t(
                       'admin.apps.edit.websearchResearchGuidanceCustom',
                       'Custom Research Guidance'
@@ -423,13 +442,14 @@ function WebSearchSection({ app, onChange, engines = null }) {
                     )}
                   </p>
                   <textarea
+                    id="app-websearch-research-guidance-custom"
                     rows={4}
                     maxLength={4000}
                     value={customResearchGuidance}
                     onChange={e =>
                       handleWebSearchChange({ researchGuidance: e.target.value || true })
                     }
-                    className="mt-1 block w-full rounded-md border border-admin-control-border dark:border-admin-control-border-dark shadow-xs focus:border-admin-accent focus:ring-admin-accent sm:text-sm"
+                    className={`${INPUT_CLASS} mt-1`}
                   />
                 </div>
               )}

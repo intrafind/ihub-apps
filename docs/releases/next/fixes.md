@@ -27,3 +27,29 @@ group and a new user also opened with errors.
   when that one is taken) instead of an empty ID or an ID that already exists.
 - Required fields carry one asterisk; the prompt description is now marked as required, as the
   server always required it.
+
+## Admin: Connection Errors Say What to Fix, and Failed Loads Are No Longer Empty Lists
+
+- **Model Test and Import models** show the upstream HTTP status, the host and the error code,
+  with a line on what to check: a rejected or missing key, a wrong URL path, a failure on the
+  endpoint itself, or a host that cannot be reached. An untrusted certificate (private CA or
+  self-signed) is named as such, with a link to the SSL whitelist under **Security**.
+- Testing a disabled model on a server that needs no key (vLLM, LM Studio) no longer fails with
+  "API key not found".
+- **A list that fails to load** (Providers, Apps, Models, Prompts, Agents) shows the error with
+  **Retry** and keeps what was already loaded, instead of "No … yet, create your first".
+
+## Admin: Visible Fields, Phone Layout and Labels
+
+- Form fields have a visible border, padding and background everywhere, in light and dark mode,
+  and every label is linked to its field. The provider pages use the same fields and buttons as
+  the rest of the admin.
+- On phones, the model and prompt editor headers are no longer hidden behind the form, the
+  Providers list keeps its actions on screen, and all Prompts tabs fit.
+- The Apps and Prompts lists show one **All Categories** chip and the category an item is listed
+  under instead of "N/A". Apps without a preferred model say **Default model**, and a prompt
+  linked to an app that no longer exists says so.
+- **Groups can be cloned** like models and prompts (without their external group mappings). A
+  cloned workflow keeps its name. The provider form no longer has the **Provider Enabled**
+  checkbox, which had no effect, and the Providers list no longer shows a **Disabled** badge for it.
+- A model save the server refuses brings its error into view.

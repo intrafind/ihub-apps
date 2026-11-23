@@ -13,10 +13,15 @@ import AdminBreadcrumb from '../components/AdminBreadcrumb';
 import useAdminPageAccess from '../hooks/useAdminPageAccess';
 import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
 import UnsavedChangesDialog from '../components/UnsavedChangesDialog';
+import { INPUT_CLASS, LABEL_CLASS } from '../components/formStyles';
 import AdminSaveBar from '../components/AdminSaveBar';
 import ImplicitSubmit from '../../../shared/components/ImplicitSubmit';
 
-/** The empty form a new provider starts from; also the unsaved-changes baseline. */
+/**
+ * The empty form a new provider starts from; also the unsaved-changes baseline.
+ * `enabled` is not offered in the form: the server reads every provider entry,
+ * enabled or not, so a switch would change nothing.
+ */
 const INITIAL_FORM = {
   id: '',
   name: '',
@@ -131,12 +136,12 @@ function AdminProviderCreatePage() {
             <Icon name="ArrowLeftIcon" className="w-4 h-4 mr-2" />
             {t('admin.providers.backToList', 'Back to Providers')}
           </button>
-          <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
+          <h1 className="text-2xl font-semibold text-gray-900 dark:text-gray-100">
             {t('admin.providers.create.title', 'Create New Provider')}
           </h1>
           <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
             {t(
-              'admin.providers.create.subtitle',
+              'admin.providers.create.intro',
               'Connect an AI endpoint of your own — a gateway, a self-hosted server or another vendor. Its models share one API key.'
             )}
           </p>
@@ -179,34 +184,21 @@ function AdminProviderCreatePage() {
 
             {/* API Key */}
             <div className="mb-6">
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+              <label htmlFor="provider-api-key" className={LABEL_CLASS}>
                 {t('admin.providers.create.apiKey', 'API Key')}
-                <span className="ml-2 text-xs text-gray-500 dark:text-gray-400">
+                <span className="ml-2 text-xs font-normal text-gray-600 dark:text-gray-400">
                   {t('admin.providers.create.apiKeyOptional', '(Optional)')}
                 </span>
               </label>
               <input
+                id="provider-api-key"
                 type="password"
+                autoComplete="new-password"
                 value={formData.apiKey}
                 onChange={e => handleChange('apiKey', e.target.value)}
                 placeholder={t('admin.providers.create.apiKeyEnter', 'Enter API key')}
-                className="w-full px-3 py-2 border border-admin-control-border dark:border-admin-control-border-dark rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                className={INPUT_CLASS}
               />
-            </div>
-
-            {/* Enabled Toggle */}
-            <div className="mb-6">
-              <label className="flex items-center cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={formData.enabled}
-                  onChange={e => handleChange('enabled', e.target.checked)}
-                  className="w-4 h-4 text-blue-600 bg-gray-100 dark:bg-gray-700 border-gray-300 dark:border-gray-600 rounded-sm focus:ring-blue-500"
-                />
-                <span className="ml-2 text-sm text-gray-700 dark:text-gray-300">
-                  {t('admin.providers.create.enabled', 'Provider Enabled')}
-                </span>
-              </label>
             </div>
           </fieldset>
         </form>

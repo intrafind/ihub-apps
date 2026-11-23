@@ -3,6 +3,7 @@
 
 import { appAllowsUserProjects, appUsesProjects } from '../../../../../../shared/appProjects.js';
 import ProjectPicker from '../ProjectPicker';
+import { CHECKBOX_CLASS } from '../formStyles';
 
 /**
  * ProjectsConfigSection - the card of the app editor for projects in a chat
@@ -61,7 +62,7 @@ function ProjectsConfigSection({ app, onChange, t }) {
                 type="checkbox"
                 checked={projectsOn}
                 onChange={e => setFeature('projects', e.target.checked)}
-                className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 dark:border-gray-600 rounded-sm"
+                className={CHECKBOX_CLASS}
               />
               <label
                 htmlFor="app-projects-enabled"
@@ -85,7 +86,7 @@ function ProjectsConfigSection({ app, onChange, t }) {
                 checked={userProjectsOn}
                 disabled={!projectsOn}
                 onChange={e => setFeature('userProjects', e.target.checked)}
-                className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 dark:border-gray-600 rounded-sm disabled:opacity-50"
+                className={`${CHECKBOX_CLASS} disabled:opacity-50`}
               />
               <label
                 htmlFor="app-user-projects-enabled"

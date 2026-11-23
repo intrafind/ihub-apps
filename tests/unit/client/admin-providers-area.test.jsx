@@ -59,7 +59,8 @@ const providers = [
     apiType: 'openai',
     enabled: true
   },
-  { id: 'bedrock', name: 'AWS Bedrock', description: '', category: 'llm', enabled: true },
+  // `enabled: false` changes nothing on the server (it reads every provider): no badge for it.
+  { id: 'bedrock', name: 'AWS Bedrock', description: '', category: 'llm', enabled: false },
   { id: 'old-key', name: 'Old generic key', description: '', category: 'custom', enabled: true }
 ];
 const models = [
@@ -137,6 +138,13 @@ test('marks only the provider that sets its own timeouts', async () => {
   ).not.toBeInTheDocument();
 });
 
+test('a provider stored with enabled: false gets no "Disabled" badge, since the flag has no effect', async () => {
+  renderPage();
+  const row = await rowOf('AWS Bedrock');
+  expect(within(row).queryByText('Disabled')).not.toBeInTheDocument();
+  expect(screen.queryByText('Disabled')).not.toBeInTheDocument();
+});
+
 test('Import opens the models page with the provider preselected, where the API type allows it', async () => {
   renderPage();
   fireEvent.click(
@@ -146,10 +154,10 @@ test('Import opens the models page with the provider preselected, where the API 
   expect(screen.getByTestId('state')).toHaveTextContent('"importProviderId":"llmhub"');
 });
 
-test('Add provider opens the create page', async () => {
+test('Add provider opens the connect flow', async () => {
   renderPage();
   fireEvent.click(await screen.findByRole('button', { name: 'Add provider' }));
-  expect(screen.getByTestId('location')).toHaveTextContent('/admin/providers/new');
+  expect(screen.getByTestId('location')).toHaveTextContent('/admin/providers/connect');
 });
 
 test('entries of other categories wait in one collapsed group instead of leading the page', async () => {
@@ -167,6 +175,22 @@ test('the timeouts for all providers are one summary line above the list', async
   expect(await screen.findByTestId('llm-timeouts-summary')).toHaveTextContent(
     'connect 30 s · stream idle 60 s'
   );
+});
+
+test('every row keeps Configure in the pinned actions column, and the search has a name', async () => {
+  renderPage();
+  const row = await rowOf('OpenAI');
+  const configure = within(row).getByRole('button', { name: 'Configure' });
+  // The shared DataTable pins its actions cell to the right edge, so at phone
+  // width the table scrolls under it instead of hiding it.
+  expect(configure.closest('td')).toHaveClass('sticky', 'right-0');
+  fireEvent.click(configure);
+  expect(screen.getByTestId('location')).toHaveTextContent('/admin/providers/openai');
+});
+
+test('the provider search has an accessible name, not only a placeholder', async () => {
+  renderPage();
+  expect(await screen.findByRole('searchbox', { name: 'Search providers' })).toBeInTheDocument();
 });
 
 test('without the models page there is no link to it: the count is plain text, Import is gone, no Models tab', async () => {

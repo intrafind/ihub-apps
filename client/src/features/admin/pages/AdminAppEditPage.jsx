@@ -15,6 +15,7 @@ import AppFormEditor from '../components/AppFormEditor';
 import AppTestPanel from '../components/AppTestPanel';
 import ChangeHistoryDrawer from '../components/ChangeHistoryDrawer';
 import ContentAccessSection from '../components/ContentAccessSection';
+import ItemAccessTools from '../components/access/ItemAccessTools';
 import AppEditorHeader from '../components/app-editor/AppEditorHeader';
 import EditorSaveBar from '../components/app-editor/EditorSaveBar';
 import EditorToast, {
@@ -41,6 +42,8 @@ import EditorGroup from '../components/app-form/EditorGroup';
 import EditorGroupNav from '../components/app-form/EditorGroupNav';
 import { groupOfField } from '../components/app-form/editorGroups';
 import { useEditorGroups } from '../components/app-form/useEditorGroups';
+import { hasNoUsableModel } from '../components/app-form/modelChoices';
+import { useDeletedResourceRestore } from '../hooks/useDeletedResourceRestore';
 
 /** Where the page lives and where it leads. Its parts name no page. */
 const APPS_PATH = '/admin/apps';
@@ -93,6 +96,10 @@ function AdminAppEditPage() {
   const [testFocus, setTestFocus] = useState(0);
   // Bumped whenever the test has to start over: after a save, after access changed.
   const [testRun, setTestRun] = useState(0);
+  // Bumped when the group card granted or revoked: the access tools read the groups again.
+  const [accessVersion, setAccessVersion] = useState(0);
+  // Bumped when "Restrict access" changed groups: the group card loads again.
+  const [groupCardKey, setGroupCardKey] = useState(0);
   const [toast, showToast] = useEditorToast();
   // Where the focus goes when its control leaves the page (Publish, "Hide these steps").
   const headingRef = useRef(null);
@@ -102,7 +109,14 @@ function AdminAppEditPage() {
   // In the reader's language, else in one the app has: a German-only name shows in an English UI.
   const appName = getLocalizedContent(app?.name, uiLanguage) || appId;
   const isChat = (app?.type || 'chat') === 'chat';
-  const noModel = Array.isArray(models) && models.length === 0 && isChat;
+  // The editor lists disabled models too: "no model" means none of them is enabled.
+  const noModel = hasNoUsableModel(models) && isChat;
+  // A deleted app's page offers to restore it from its change history.
+  const { restorable } = useDeletedResourceRestore({
+    resource: 'app',
+    resourceId: appId,
+    notFound: loadError?.status === 404
+  });
   const formMode = editingMode === 'form';
   const describeError = error => apiErrorMessage(error, t, t('admin.apps.errorTitle'));
 
@@ -187,6 +201,14 @@ function AdminAppEditPage() {
     setAccessView(view);
     // A group that got access a moment ago: the test can load the app now.
     setTestRun(run => run + 1);
+    setAccessVersion(version => version + 1);
+  };
+
+  // "Restrict access" rewrote groups: the group card and the publish dialog read them again.
+  const handleRestricted = () => {
+    setGroupCardKey(key => key + 1);
+    void refreshAccess();
+    setTestRun(run => run + 1);
   };
 
   return (
@@ -218,10 +240,17 @@ function AdminAppEditPage() {
           loadError={loadError}
           onRetry={editor.retryLoad}
           resourceLabel={t('admin.apps.edit.resource', 'app "{{id}}"', { id: appId })}
-          notFoundAction={{
-            label: t('admin.apps.edit.backToApps', 'Back to Apps'),
-            onClick: () => navigate(APPS_PATH)
-          }}
+          notFoundAction={
+            restorable
+              ? {
+                  label: t('admin.restoreDeleted.action', 'Restore from History'),
+                  onClick: () => setHistoryOpen(true)
+                }
+              : {
+                  label: t('admin.apps.edit.backToApps', 'Back to Apps'),
+                  onClick: () => navigate(APPS_PATH)
+                }
+          }
         >
           <AppEditorHeader
             appId={appId}
@@ -286,9 +315,21 @@ function AdminAppEditPage() {
               {/* Which groups may use this app (groups.json); saved on its own. */}
               <EditorGroup id={ACCESS_GROUP} groups={groups}>
                 <ContentAccessSection
+                  key={groupCardKey}
                   resourceType="apps"
                   resourceId={appId}
                   onSaved={handleAccessSaved}
+                />
+                {/* Restrict access (W3) is for full admins; a content admin gets the
+                    access check for the groups they manage. */}
+                <ItemAccessTools
+                  type="apps"
+                  id={appId}
+                  itemName={appName}
+                  refreshKey={accessVersion}
+                  onRestricted={handleRestricted}
+                  fullAdmin={isFullAdmin}
+                  className="mt-6"
                 />
               </EditorGroup>
             </div>
@@ -343,6 +384,14 @@ function AdminAppEditPage() {
         onClose={() => setHistoryOpen(false)}
         resource="app"
         resourceId={appId}
+        onRestored={
+          loadError
+            ? () => {
+                setHistoryOpen(false);
+                editor.retryLoad();
+              }
+            : undefined
+        }
       />
     </div>
   );

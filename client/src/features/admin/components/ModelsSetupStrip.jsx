@@ -13,14 +13,15 @@ import { getSetupSteps } from '../utils/modelsArea';
  * @param {Object} props
  * @param {Object} props.keyStatuses - Provider key statuses by provider id
  * @param {Array<Object>} props.models
- * @param {() => void} [props.onConnect] - Open the Providers tab; absent when the admin may not open it,
+ * @param {Array<Object>} [props.providers] - Provider entries; a keyless one the admin set up counts as connected
+ * @param {() => void} [props.onConnect] - Open "Connect a model provider"; absent when the admin may not open it,
  *   in which case the import dialog is offered instead (it creates a provider and stores its key)
  * @param {() => void} props.onImport - Open the import dialog
  * @param {() => void} props.onShowEnabled - Filter the list to what can be enabled
  */
-function ModelsSetupStrip({ keyStatuses, models, onConnect, onImport, onShowEnabled }) {
+function ModelsSetupStrip({ keyStatuses, models, providers, onConnect, onImport, onShowEnabled }) {
   const { t } = useTranslation();
-  const { steps, complete } = getSetupSteps({ keyStatuses, models });
+  const { steps, complete } = getSetupSteps({ keyStatuses, models, providers });
   if (complete) return null;
 
   const labels = {
@@ -31,7 +32,10 @@ function ModelsSetupStrip({ keyStatuses, models, onConnect, onImport, onShowEnab
   const next = steps.find(step => !step.done);
   const cta = {
     connect: onConnect
-      ? { label: t('admin.models.setup.connectAction', 'Add a provider key'), onClick: onConnect }
+      ? {
+          label: t('admin.models.setup.connectWizardAction', 'Connect a model provider'),
+          onClick: onConnect
+        }
       : { label: t('admin.models.setup.enableAction', 'Import models'), onClick: onImport },
     enable: {
       label: t('admin.models.setup.enableAction', 'Import models'),
@@ -52,8 +56,8 @@ function ModelsSetupStrip({ keyStatuses, models, onConnect, onImport, onShowEnab
       'Import the models of a provider, or switch on one below.'
     ),
     default: t(
-      'admin.models.setup.defaultHint',
-      'Open a model and tick “Default” so apps without a model of their own have one.'
+      'admin.models.setup.defaultHintRow',
+      'Choose “Make default” in the row of an enabled chat model, so apps without a model of their own have one.'
     )
   };
 

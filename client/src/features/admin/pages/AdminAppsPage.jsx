@@ -11,6 +11,7 @@ import Icon from '../../../shared/components/Icon';
 import {
   createAdminApp,
   fetchAdminApps,
+  fetchAppDependants,
   fetchAppIntegrationStatus,
   getAdminApiErrorMessage,
   makeAdminApiCall,
@@ -27,6 +28,7 @@ import ConfirmDialog from '../../../shared/components/ConfirmDialog';
 import { useConfirmAction } from '../hooks/useConfirmAction';
 import { buildBulkToggleConfirm, chunkIdsForPath } from '../utils/bulkToggleConfirm';
 import { deleteConfirmText } from '../utils/confirmText';
+import { appDeleteConsequences, deleteWithHistoryMessage } from '../utils/deleteDependants';
 import ReorderableList from '../components/ReorderableList';
 import AdminSaveBar from '../components/AdminSaveBar';
 import UnsavedChangesDialog from '../components/UnsavedChangesDialog';
@@ -40,6 +42,13 @@ import AdminTabs from '../components/AdminTabs';
 import AdminUserAppsTab, { useWaitingUserAppCount } from '../components/AdminUserAppsTab';
 import { SaveSectionsBar, SaveSectionsProvider } from '../components/SaveSections';
 import WaitingAppsNotice from '../components/WaitingAppsNotice';
+import DocsLink from '../components/DocsLink';
+import {
+  APP_FALLBACK_CATEGORY,
+  categoryChips,
+  categoryDisplay,
+  effectiveCategory
+} from '../utils/listCategories';
 
 /** The tabs of the page, as `?tab=` names them. */
 const APPS_TAB = 'apps';
@@ -221,7 +230,10 @@ function AdminAppsPage() {
   // migration left on an app (an action it was bound to removed); [] when unknown.
   const [installedIntegrations, setInstalledIntegrations] = useState([]);
   const [loading, setLoading] = useState(true);
+  // `error`: a failed action (save, toggle, upload). `loadError`: the list could not be
+  // loaded; the table then shows it with Retry instead of the empty state.
   const [error, setError] = useState(null);
+  const [loadError, setLoadError] = useState(null);
   const [searchTerm, setSearchTerm] = useFilterState('q', '');
   const [filterEnabled, setFilterEnabled] = useFilterState('enabled', 'all');
   const [selectedCategory, setSelectedCategory] = useFilterState('category', 'all');
@@ -284,8 +296,10 @@ function AdminAppsPage() {
       setApps(data);
       setIntegrationStatus(status);
       setInstalledIntegrations(Array.isArray(installed?.items) ? installed.items : []);
+      setLoadError(null);
     } catch (err) {
-      setError(getAdminApiErrorMessage(err));
+      // The apps loaded before (if any) stay listed below the error.
+      setLoadError(getAdminApiErrorMessage(err));
     } finally {
       setLoading(false);
     }
@@ -354,14 +368,22 @@ function AdminAppsPage() {
     }
   };
 
-  const deleteApp = app => {
+  /**
+   * Opens the delete dialog once the server said what names the app (prompts,
+   * apps that call it as a tool or inherit from it, workflows, groups), so the
+   * dialog can list it. A failed check still opens the dialog, which says so.
+   */
+  const deleteApp = async app => {
+    const dependants = await fetchAppDependants(app.id).catch(() => null);
     requestConfirm({
       ...deleteConfirmText({
         typeKey: 'app',
         typeFallback: 'app',
         name: getLocalizedContent(app.name, currentLanguage) || app.id,
-        t
+        t,
+        message: deleteWithHistoryMessage({ type: 'app', path: `/admin/apps/${app.id}`, t })
       }),
+      consequences: appDeleteConsequences(dependants, { t, language: currentLanguage }),
       action: async () => {
         await makeAdminApiCall(`/admin/apps/${app.id}`, { method: 'DELETE' });
         setApps(prev => prev.filter(item => item.id !== app.id));
@@ -384,7 +406,8 @@ function AdminAppsPage() {
       (filterEnabled === 'disabled' && !app.enabled);
 
     const matchesCategory =
-      selectedCategory === 'all' || (app.category || 'utility') === selectedCategory;
+      selectedCategory === 'all' ||
+      effectiveCategory(app, APP_FALLBACK_CATEGORY) === selectedCategory;
 
     return matchesSearch && matchesFilter && matchesCategory;
   });
@@ -513,11 +536,11 @@ function AdminAppsPage() {
     }
   };
 
-  const getCategoryLabel = app => {
-    if (!app.category) return null;
-    const found = uiConfig?.appsList?.categories?.list?.find(cat => cat.id === app.category);
-    return found ? getLocalizedContent(found.name, currentLanguage) : app.category;
-  };
+  /** The category the app is listed under; its own or the end-user list's fallback. */
+  const getCategory = app =>
+    categoryDisplay(app, uiConfig?.appsList?.categories?.list, APP_FALLBACK_CATEGORY, name =>
+      getLocalizedContent(name, currentLanguage)
+    );
 
   /**
    * What the table says when it has no row: that there is no app yet and what
@@ -551,16 +574,24 @@ function AdminAppsPage() {
       key: 'category',
       header: t('admin.apps.table.category', 'Category'),
       sortable: true,
-      sortAccessor: app => app.category || '',
+      sortAccessor: app => getCategory(app).label,
       hideBelow: 'md',
       render: app => {
-        const label = getCategoryLabel(app);
-        return label ? (
-          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-indigo-100 dark:bg-indigo-900/50 text-indigo-800 dark:text-indigo-300">
-            {label}
+        const category = getCategory(app);
+        return category.isFallback ? (
+          <span
+            className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200"
+            title={t('admin.apps.table.categoryFallback', {
+              defaultValue: 'No category set: listed under {{category}}',
+              category: category.label
+            })}
+          >
+            {category.label}
           </span>
         ) : (
-          <span className="text-gray-500 text-sm">{t('common.notAvailable', 'N/A')}</span>
+          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-indigo-100 dark:bg-indigo-900/50 text-indigo-800 dark:text-indigo-300">
+            {category.label}
+          </span>
         );
       }
     },
@@ -612,7 +643,13 @@ function AdminAppsPage() {
       key: 'preferredModel',
       header: t('admin.apps.table.model', 'Model'),
       hideBelow: 'lg',
-      render: app => app.preferredModel || t('common.notAvailable', 'N/A')
+      // Without a preferred model the app runs on the installation's default model.
+      render: app =>
+        app.preferredModel || (
+          <span className="text-gray-600 dark:text-gray-400">
+            {t('admin.apps.table.defaultModel', 'Default model')}
+          </span>
+        )
     }
   ];
 
@@ -690,9 +727,12 @@ function AdminAppsPage() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="sm:flex sm:items-center">
           <div className="sm:flex-auto">
-            <h1 className="text-2xl font-semibold text-gray-900 dark:text-gray-100">
-              {t('admin.apps.title')}
-            </h1>
+            <div className="flex items-center gap-2">
+              <h1 className="text-2xl font-semibold text-gray-900 dark:text-gray-100">
+                {t('admin.apps.title')}
+              </h1>
+              <DocsLink topic="apps" />
+            </div>
             <p className="mt-2 text-sm text-gray-700 dark:text-gray-300">
               {t('admin.apps.subtitle')}
             </p>
@@ -788,13 +828,17 @@ function AdminAppsPage() {
         {personalOpened && isFullAdmin && (
           <div
             role="tabpanel"
+
             id={`tabpanel-${PERSONAL_TAB}`}
+
             aria-labelledby={`tab-${PERSONAL_TAB}`}
+
             hidden={!showPersonal}
           >
             <AdminUserAppsTab onWaitingChange={setWaitingCount} refreshKey={waitingRefresh} />
           </div>
         )}
+
         {showPersonal ? null : (
           <div {...appsPanelProps}>
             {orderDraft ? (
@@ -863,6 +907,8 @@ function AdminAppsPage() {
                 {uiConfig?.appsList?.categories?.enabled && (
                   <div className="mt-4 flex flex-wrap gap-2">
                     <button
+                      type="button"
+                      aria-pressed={selectedCategory === 'all'}
                       onClick={() => setSelectedCategory('all')}
                       className={`px-3 py-1.5 rounded-full text-sm font-medium transition-all ${
                         selectedCategory === 'all'
@@ -872,9 +918,11 @@ function AdminAppsPage() {
                     >
                       {t('admin.apps.allCategories', 'All Categories')}
                     </button>
-                    {uiConfig.appsList.categories.list.map(category => (
+                    {categoryChips(uiConfig.appsList.categories.list).map(category => (
                       <button
                         key={category.id}
+                        type="button"
+                        aria-pressed={selectedCategory === category.id}
                         onClick={() => setSelectedCategory(category.id)}
                         className={`px-3 py-1.5 rounded-full text-sm font-medium transition-all ${
                           selectedCategory === category.id
@@ -899,6 +947,9 @@ function AdminAppsPage() {
                     getRowId={app => app.id}
                     actions={actions}
                     loading={loading}
+                    error={loadError}
+                    onRetry={loadApps}
+                    errorTitle={t('admin.apps.loadError', 'Error loading apps')}
                     onRowClick={app => {
                       setSelectedApp(app);
                       setShowAppDetails(true);

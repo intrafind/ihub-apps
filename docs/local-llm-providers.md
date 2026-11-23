@@ -9,6 +9,21 @@ adminPage: /admin/providers
 
 This comprehensive guide covers how to integrate local LLM providers (LM Studio, Jan.ai, and vLLM) with iHub Apps for privacy-focused, offline AI capabilities.
 
+## Connect a local server in the admin UI
+
+Once the local server runs, connect it under **Admin → Models**. You need no JSON file:
+
+1. On the tab **Providers**, click **Add provider**. Choose the **API type**
+   **OpenAI-compatible** for LM Studio, Jan.ai and Ollama, or **vLLM / self-hosted (local)** for
+   vLLM. Enter the server's address as **Base URL**, for example `http://localhost:1234/v1`.
+2. On the tab **Models**, click **Import models**, choose the provider, click **Load models** and
+   import the models you want.
+3. Click **Test** in a model's row.
+
+[Set up models in the admin UI](models.md#set-up-models-in-the-admin-ui) describes each step,
+including what to do when the test fails. The rest of this page covers how to run each server and
+the JSON settings for the cases the admin UI does not cover.
+
 ## Overview
 
 iHub Apps supports local LLM providers through OpenAI-compatible APIs, enabling:

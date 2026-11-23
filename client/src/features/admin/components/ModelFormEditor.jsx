@@ -38,7 +38,7 @@ import { TOOL_SUPPORT, TOOL_SUPPORT_VALUES } from '../../../../../shared/modelCa
 import EuAiActStateNote from './euAiAct/EuAiActStateNote';
 import GatewaySyncDialog from './GatewaySyncDialog';
 import ModelHintSection from './ModelHintSection';
-import { CHECKBOX_CLASS, INPUT_CLASS } from './formStyles';
+import { CHECKBOX_CLASS, INPUT_CLASS, MONO_INPUT_CLASS } from './formStyles';
 import { CredentialRefSelect } from './OpenApiToolEditor';
 
 /** English fallbacks for the tool calling dropdown (`admin.models.toolSupport.*`). */
@@ -631,6 +631,26 @@ function ModelFormEditor({
     );
   }, [data.id, data.provider, data.providerId, t]);
 
+  /**
+   * The hint under the API key: where the key comes from when this field is
+   * empty, in the order the server looks (`inspectModelApiKey` in
+   * server/utils.js): this model's key, its provider's key, the model's
+   * environment variable, the provider's environment variable (AI-B23).
+   */
+  const apiKeyLookupHint = useMemo(() => {
+    const [modelEnv, providerEnv] = getEnvironmentVariableNames({
+      id: data.id,
+      provider: data.provider,
+      providerId: data.providerId
+    });
+    return t('admin.models.hints.apiKeyLookupOrder', {
+      modelEnv: modelEnv || '<MODEL_ID>_API_KEY',
+      providerEnv: providerEnv || '<PROVIDER>_API_KEY',
+      defaultValue:
+        'Optional. When it is empty the server uses the first key it finds, in this order: this model’s key, the key of its provider, the environment variable {{modelEnv}}, the environment variable {{providerEnv}}. A local server (vLLM, LM Studio, Jan.ai, Ollama) needs no key. Keys are stored encrypted.'
+    });
+  }, [data.id, data.provider, data.providerId, t]);
+
   const errorLabels = {
     id: t('admin.models.fields.id', 'Model ID'),
     name: t('admin.models.fields.name', 'Name'),
@@ -1135,14 +1155,11 @@ function ModelFormEditor({
                               'Enter API key (optional - will use environment variable if not set)'
                             )
                       }
-                      className="focus:ring-admin-accent focus:border-admin-accent block w-full pr-10 sm:text-sm border border-admin-control-border dark:border-admin-control-border-dark bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded-md"
+                      className={`${INPUT_CLASS} pr-10`}
                     />
                   </div>
                   <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
-                    {t(
-                      'admin.models.hints.apiKey',
-                      'API key for this model. If not provided, the system will use the environment variable for the provider. Keys are stored encrypted.'
-                    )}
+                    {apiKeyLookupHint}
                   </p>
                   {data.apiKeySet && !keyStatus && (
                     <p className="mt-2 text-sm text-blue-600 dark:text-blue-400">
@@ -1651,7 +1668,7 @@ function ModelFormEditor({
                             id="contentMarking.text.by"
                             value={data.contentMarking?.text?.by || 'none'}
                             onChange={e => handleMarkingChange('by', e.target.value)}
-                            className="mt-1 block w-full border border-admin-control-border dark:border-admin-control-border-dark dark:bg-gray-700 dark:text-gray-100 rounded-md shadow-xs py-2 px-3 focus:outline-hidden focus:ring-admin-accent focus:border-admin-accent sm:text-sm"
+                            className={`${INPUT_CLASS} mt-1`}
                           >
                             <option value="none">
                               {t('admin.models.marking.optionNone', 'Not marked')}
@@ -1698,7 +1715,7 @@ function ModelFormEditor({
                                     }
                                     placeholder="https://detector.internal:8443/detect"
                                     aria-describedby="contentMarking.text.detectorUrl-help"
-                                    className="mt-1 block w-full border border-admin-control-border dark:border-admin-control-border-dark dark:bg-gray-700 dark:text-gray-100 rounded-md shadow-xs py-2 px-3 focus:outline-hidden focus:ring-admin-accent focus:border-admin-accent sm:text-sm"
+                                    className={`${INPUT_CLASS} mt-1`}
                                   />
                                   <p
                                     id="contentMarking.text.detectorUrl-help"
@@ -1747,7 +1764,7 @@ function ModelFormEditor({
                                     onChange={e => handleMarkingChange('tokenizer', e.target.value)}
                                     placeholder={data.modelId || data.id || ''}
                                     aria-describedby="contentMarking.text.tokenizer-help"
-                                    className="mt-1 block w-full border border-admin-control-border dark:border-admin-control-border-dark dark:bg-gray-700 dark:text-gray-100 rounded-md shadow-xs py-2 px-3 focus:outline-hidden focus:ring-admin-accent focus:border-admin-accent sm:text-sm"
+                                    className={`${INPUT_CLASS} mt-1`}
                                   />
                                   <p
                                     id="contentMarking.text.tokenizer-help"
@@ -1784,7 +1801,7 @@ function ModelFormEditor({
                                     }
                                     placeholder="4"
                                     aria-describedby="contentMarking.text.contextWidth-help"
-                                    className="mt-1 block w-full border border-admin-control-border dark:border-admin-control-border-dark dark:bg-gray-700 dark:text-gray-100 rounded-md shadow-xs py-2 px-3 focus:outline-hidden focus:ring-admin-accent focus:border-admin-accent sm:text-sm"
+                                    className={`${INPUT_CLASS} mt-1`}
                                   />
                                   <p
                                     id="contentMarking.text.contextWidth-help"
@@ -1816,7 +1833,7 @@ function ModelFormEditor({
                                 value={data.contentMarking?.text?.scheme || ''}
                                 onChange={e => handleMarkingChange('scheme', e.target.value)}
                                 placeholder="synthid"
-                                className="mt-1 block w-full border border-admin-control-border dark:border-admin-control-border-dark dark:bg-gray-700 dark:text-gray-100 rounded-md shadow-xs py-2 px-3 focus:outline-hidden focus:ring-admin-accent focus:border-admin-accent sm:text-sm"
+                                className={`${INPUT_CLASS} mt-1`}
                               />
                             </div>
                             <div className="col-span-6 sm:col-span-2">
@@ -1835,7 +1852,7 @@ function ModelFormEditor({
                                 maxLength={500}
                                 value={data.contentMarking?.text?.statementRef || ''}
                                 onChange={e => handleMarkingChange('statementRef', e.target.value)}
-                                className="mt-1 block w-full border border-admin-control-border dark:border-admin-control-border-dark dark:bg-gray-700 dark:text-gray-100 rounded-md shadow-xs py-2 px-3 focus:outline-hidden focus:ring-admin-accent focus:border-admin-accent sm:text-sm"
+                                className={`${INPUT_CLASS} mt-1`}
                               />
                               <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
                                 {t(
@@ -1875,7 +1892,7 @@ function ModelFormEditor({
                             id="contentMarking.image.by"
                             value={data.contentMarking?.image?.by || 'none'}
                             onChange={e => handleImageMarkingChange('by', e.target.value)}
-                            className="mt-1 block w-full border border-admin-control-border dark:border-admin-control-border-dark dark:bg-gray-700 dark:text-gray-100 rounded-md shadow-xs py-2 px-3 focus:outline-hidden focus:ring-admin-accent focus:border-admin-accent sm:text-sm"
+                            className={`${INPUT_CLASS} mt-1`}
                           >
                             <option value="none">
                               {t('admin.models.marking.optionNone', 'Not marked')}
@@ -1904,7 +1921,7 @@ function ModelFormEditor({
                                 value={data.contentMarking?.image?.scheme || ''}
                                 onChange={e => handleImageMarkingChange('scheme', e.target.value)}
                                 placeholder="synthid"
-                                className="mt-1 block w-full border border-admin-control-border dark:border-admin-control-border-dark dark:bg-gray-700 dark:text-gray-100 rounded-md shadow-xs py-2 px-3 focus:outline-hidden focus:ring-admin-accent focus:border-admin-accent sm:text-sm"
+                                className={`${INPUT_CLASS} mt-1`}
                               />
                             </div>
                             <div className="col-span-6 sm:col-span-2">
@@ -1925,7 +1942,7 @@ function ModelFormEditor({
                                 onChange={e =>
                                   handleImageMarkingChange('statementRef', e.target.value)
                                 }
-                                className="mt-1 block w-full border border-admin-control-border dark:border-admin-control-border-dark dark:bg-gray-700 dark:text-gray-100 rounded-md shadow-xs py-2 px-3 focus:outline-hidden focus:ring-admin-accent focus:border-admin-accent sm:text-sm"
+                                className={`${INPUT_CLASS} mt-1`}
                               />
                               <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
                                 {t(
@@ -2436,7 +2453,7 @@ function ModelFormEditor({
                                   id={inputId}
                                   value={data.config?.[field.key]}
                                   onChange={parsed => handleConfigChange(field.key, parsed)}
-                                  className="mt-1 focus:ring-indigo-500 focus:border-indigo-500 block w-full font-mono text-xs shadow-xs sm:text-sm border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded-md"
+                                  className={`${MONO_INPUT_CLASS} mt-1`}
                                 />
                               ) : Array.isArray(field.enumHint) && field.enumHint.length > 0 ? (
                                 <input

@@ -1973,7 +1973,8 @@
         "llmHelp": "Ein LLM-Anbieter hält einen API-Schlüssel für alle seine Modelle. Verknüpfen Sie Modelle im Modell-Editor mit ihm oder importieren Sie sie von seinem Endpunkt.",
         "nameRequired": "Der Name des Anbieters ist erforderlich",
         "subtitle": "Legen Sie einen LLM-Anbieter für einen eigenen Endpunkt, einen Websuche-Anbieter oder einen allgemeinen API-Schlüssel an",
-        "idRequired": "Die Anbieter-ID ist erforderlich"
+        "idRequired": "Die Anbieter-ID ist erforderlich",
+        "intro": "Verbinden Sie einen eigenen KI-Endpunkt – ein Gateway, einen selbst betriebenen Server oder einen anderen Hersteller. Seine Modelle teilen sich einen API-Schlüssel."
       },
       "info": {
         "title": "API-Schlüssel-Priorität",
@@ -2061,7 +2062,135 @@
       },
       "add": "Anbieter hinzufügen",
       "import": "Modelle importieren",
-      "ownTimeouts": "Setzt eigene Timeouts"
+      "ownTimeouts": "Setzt eigene Timeouts",
+      "connect": {
+        "access": {
+          "title": "Wer darf diese Modelle nutzen?",
+          "intro": "Geben Sie die neuen Modelle für Gruppen frei. Sie können das später unter Gruppen ändern.",
+          "groupsUnavailable": "Die Gruppen konnten nicht geladen werden. Die Modelle erhalten den Zugriff, den die Gruppen bereits gewähren; ändern Sie ihn später unter Gruppen.",
+          "everyone": "Alle angemeldeten Benutzer",
+          "everyoneHint": "Freigegeben für die Gruppe „authenticated“, zu der jeder angemeldete Benutzer gehört.",
+          "groups": "Nur die Gruppen, die ich auswähle",
+          "allModels": "(alle Modelle)",
+          "wildcardNote": "Diese Gruppen können jedes Modell nutzen, auch die neuen, unabhängig von Ihrer Auswahl hier: {{groups}}.",
+          "defaultTokenNote": "Sie machen eines dieser Modelle zum Standardmodell. Diese Gruppen gewähren „das Standardmodell“, daher können sie und jede Gruppe, die von ihnen erbt, es nutzen, egal was Sie hier wählen: {{groups}}."
+        },
+        "tiles": {
+          "openai": "GPT-Modelle von api.openai.com.",
+          "azureOpenai": "OpenAI-Modelle, die in Ihrer Azure-Ressource bereitgestellt sind.",
+          "anthropic": "Claude-Modelle von api.anthropic.com.",
+          "google": "Gemini-Modelle über die Google-AI-API.",
+          "mistral": "Mistral-Modelle von api.mistral.ai.",
+          "bedrock": "Foundation-Modelle über die Bedrock-Converse-API.",
+          "openrouter": "Eine API für Modelle vieler Hersteller.",
+          "openaiCompatible": "Ein Gateway wie T-Systems LLM Hub oder LiteLLM.",
+          "selfHosted": "vLLM, LM Studio oder Ollama auf Ihrer eigenen Hardware.",
+          "ifinderGateway": "Das Modell-Gateway einer iFinder-Installation.",
+          "openaiCompatibleName": "OpenAI-kompatibles Gateway",
+          "selfHostedName": "Selbst betrieben"
+        },
+        "vendor": {
+          "title": "Wo laufen Ihre Modelle?",
+          "intro": "Wählen Sie den Dienst, der Ihre Modelle betreibt. Weitere Anbieter können Sie später verbinden.",
+          "keyStored": "Schlüssel gespeichert",
+          "otherProvider": "Brauchen Sie einen Anbieter, der nur eigene Zugangsdaten hält, oder möchten Sie jedes Feld selbst setzen?",
+          "otherProviderLink": "Anbieter-Formular verwenden"
+        },
+        "models": {
+          "title": "Modelle auswählen",
+          "intro": "Jedes ausgewählte Modell wird hinzugefügt, aktiviert und mit dem Anbieter verknüpft: Es nutzt Endpunkt und Schlüssel des Anbieters, am Modell wird keiner gespeichert.",
+          "selected": "{{selected}} von {{total}} Modellen ausgewählt"
+        },
+        "done": {
+          "smokeIntro": "Senden Sie einen kurzen Prompt an {{model}}, um zu prüfen, ob es antwortet.",
+          "smokeRunning": "Wird gesendet…",
+          "smokeRun": "Test-Prompt senden",
+          "smokeOk": "Das Modell hat geantwortet:",
+          "providerFailedTitle": "Der Anbieter wurde nicht gespeichert",
+          "providerFailedHint": "Sonst wurde nichts angelegt. Gehen Sie zurück, korrigieren Sie die Verbindung und versuchen Sie es erneut.",
+          "keySavedTitle": "{{provider}} ist verbunden",
+          "title": "{{count}} Modelle über {{provider}} verbunden",
+          "title_one": "{{count}} Modell über {{provider}} verbunden",
+          "bedrockHint": "Bedrock bietet keine Modellliste, die iHub lesen kann. Installieren Sie fertige Bedrock-Modellkonfigurationen aus dem Marketplace; sie nutzen den am Anbieter gespeicherten Schlüssel.",
+          "linked": "Die Modelle nutzen Endpunkt und Schlüssel des Anbieters.",
+          "default": "{{model}} ist das Standardmodell.",
+          "groups": "Freigegeben für: {{groups}}.",
+          "groupFailed": "Gruppe {{group}}: {{error}}",
+          "marketplace": "Modelle im Marketplace ansehen",
+          "createApp": "App mit diesem Modell erstellen",
+          "openProvider": "Anbieter öffnen",
+          "openModels": "Zu den Modellen"
+        },
+        "steps": {
+          "vendor": "Dienst",
+          "connection": "Verbindung",
+          "test": "Test",
+          "models": "Modelle",
+          "default": "Standard",
+          "access": "Zugriff",
+          "done": "Fertig",
+          "label": "Fortschritt"
+        },
+        "default": {
+          "title": "Standardmodell wählen",
+          "intro": "Apps ohne eigenes Modell und neue Chats verwenden das Standardmodell.",
+          "noChatModels": "Keines der ausgewählten Modelle ist ein Chat-Modell, daher kann keines das Standardmodell sein.",
+          "keep": "{{model}} beibehalten",
+          "keepHint": "Das aktuelle Standardmodell."
+        },
+        "test": {
+          "causes": {
+            "unreachable": "Der iHub-Server konnte den Host nicht erreichen. Prüfen Sie Hostname und Port und ob der Server (nicht Ihr Browser) ihn über Netzwerk, Firewall oder Proxy erreicht.",
+            "tls": "Der Endpunkt legt ein Zertifikat vor, dem der iHub-Server nicht vertraut – üblich bei einer privaten CA. Fügen Sie den Host unter Sicherheit der SSL-Whitelist hinzu oder installieren Sie die CA auf dem Server.",
+            "auth": "Der Endpunkt hat den Schlüssel abgelehnt. Prüfen Sie, ob es der Schlüssel für diesen Endpunkt ist und ob er Modelle auflisten darf.",
+            "path": "Der Host hat geantwortet, aber unter diesem Pfad liegt keine Modellliste. Prüfen Sie die URL; sie endet meist auf /v1.",
+            "other": "Prüfen Sie URL und Schlüssel und testen Sie erneut."
+          },
+          "title": "Verbindung testen",
+          "intro": "iHub fragt die Modellliste des Endpunkts vom Server aus ab, mit dem eingegebenen Schlüssel.",
+          "running": "Verbindung zu {{host}} wird hergestellt…",
+          "success": "Verbunden",
+          "host": "Host",
+          "models": "Modelle",
+          "modelCount": "{{count}} gelistet, davon {{chat}} Chat-Modelle",
+          "noModels": "Der Endpunkt listet keine Modelle. Prüfen Sie, ob Modelle bereitgestellt sind und ob der Schlüssel sie sehen darf.",
+          "retry": "Erneut testen",
+          "openSsl": "SSL-Whitelist öffnen",
+          "changeKey": "Schlüssel ändern",
+          "changeConnection": "URL oder Schlüssel ändern"
+        },
+        "connection": {
+          "urlHintAzure": "Der Endpunkt Ihrer Azure-OpenAI-Ressource, zum Beispiel https://my-resource.openai.azure.com/openai/v1. Eine aus Azure kopierte Deployment-URL (…/chat/completions?api-version=…) funktioniert ebenfalls.",
+          "urlHintGateway": "Die API-Basis, meist auf /v1 endend, zum Beispiel https://llm-server.llmhub.t-systems.net/v2. Die /models-Liste oder eine Chat-Completions-URL funktionieren ebenfalls.",
+          "urlHintSelfHosted": "Die API-Basis, wie der iHub-Server (nicht Ihr Browser) sie erreicht, zum Beispiel {{example}}.",
+          "idExists": "Ein Anbieter mit dieser ID existiert bereits. Wählen Sie eine andere ID oder bearbeiten Sie diesen Anbieter unter Anbieter.",
+          "title": "{{provider}} verbinden",
+          "introBedrock": "Geben Sie einen Bedrock-API-Schlüssel ein. Er wird verschlüsselt am Anbieter AWS Bedrock gespeichert. Die Region kommt aus AWS_REGION (Standard eu-central-1) oder aus dem jeweiligen Modell.",
+          "intro": "Wo iHub die Modelle erreicht und welchen Schlüssel es sendet. Gespeichert wird erst im letzten Schritt.",
+          "serverKind": "Server",
+          "serverKindHint": "vLLM wird mit dem vLLM-Adapter angesprochen, LM Studio und Ollama mit dem OpenAI-kompatiblen.",
+          "urlFixedHint": "Die öffentliche API des Herstellers. Für einen vorgeschalteten Proxy verwenden Sie die Kachel „OpenAI-kompatibles Gateway“.",
+          "keyStoredPlaceholder": "Gespeichert – leer lassen, um ihn zu behalten",
+          "keyStoredHint": "An diesem Anbieter ist bereits ein Schlüssel gespeichert. Lassen Sie das Feld leer, um ihn zu testen und zu behalten, oder geben Sie einen neuen ein, um ihn zu ersetzen.",
+          "keyHintSelfHosted": "Leer lassen, wenn der Server keine Authentifizierung hat. Ein hier eingegebener Schlüssel wird verschlüsselt am Anbieter gespeichert.",
+          "keyHint": "Wird verschlüsselt am Anbieter gespeichert, nicht an jedem Modell.",
+          "envVarHint": "Statt ihn zu speichern, können Sie das Feld leer lassen und auf dem Server die Umgebungsvariable {{envVar}} setzen.",
+          "getKey": "Wo bekomme ich einen Schlüssel?"
+        },
+        "loadError": "Anbieter und Modelle konnten nicht geladen werden",
+        "saving": "Wird gespeichert…",
+        "finish": "Verbinden und {{count}} Modelle hinzufügen",
+        "finish_one": "Verbinden und {{count}} Modell hinzufügen",
+        "saveKey": "Schlüssel speichern",
+        "testAction": "Verbindung testen",
+        "next": "Weiter",
+        "title": "Modell-Anbieter verbinden",
+        "subtitle": "Verbinden Sie einen Dienst, testen Sie ihn, wählen Sie seine Modelle und legen Sie fest, wer sie nutzen darf – in einem Durchgang.",
+        "back": "Zurück",
+        "backToConnection": "Zurück zur Verbindung"
+      },
+      "loadError": "Fehler beim Laden der Anbieter",
+      "searchLabel": "Anbieter durchsuchen"
     },
     "models": {
       "sync": {
@@ -2104,7 +2233,9 @@
           "modelNotFound": "Modell nicht gefunden",
           "rateLimitExceeded": "Ratenlimit überschritten",
           "serverError": "Serverfehler",
-          "apiKeyUndecryptable": "Gespeicherter API-Schlüssel kann nicht entschlüsselt werden"
+          "apiKeyUndecryptable": "Gespeicherter API-Schlüssel kann nicht entschlüsselt werden",
+          "apiKeyRequired": "Der Endpunkt erfordert einen API-Schlüssel",
+          "certificateUntrusted": "Zertifikat nicht vertrauenswürdig"
         }
       },
       "enable": "Aktivieren",
@@ -2177,7 +2308,9 @@
         "configurationDesc": "Erweiterte Konfigurationsoptionen für das Modell",
         "resource": "Modell „{{id}}“",
         "fixErrors": "Bitte beheben Sie die folgenden Fehler",
-        "history": "Verlauf"
+        "history": "Verlauf",
+        "testSavedHint": "Testet das gespeicherte Modell. Speichern Sie zuerst, um Ihre Änderungen zu testen.",
+        "testing": "Wird getestet…"
       },
       "fields": {
         "id": "Modell-ID",
@@ -2282,7 +2415,8 @@
         "markingDetectorCredentialRef": "Optionales Bearer-Token, falls der Detektor eines verlangt.",
         "markingTokenizer": "Der Detektor zerlegt einen Text in dieselben Tokens wie das Modell, um das Wasserzeichen zu finden. Leer lassen, um die Modell-ID zu verwenden; eine Hugging-Face-ID oder einen Pfad nur angeben, wenn vLLM das Modell unter einem anderen Namen bereitstellt.",
         "markingContextWidth": "Anzahl der vorherigen Tokens, auf die das Wasserzeichen zurückblickt, nicht das Kontextfenster. Muss context_width von vLLM entsprechen (Standard 4).",
-        "autoDiscovery": "Erkennt das aktive Modell automatisch über den Endpunkt /v1/models. Nützlich für lokale LLM-Anbieter (vLLM, LM Studio, Jan.ai), bei denen das Modell wechseln kann. Nur für OpenAI-kompatible Anbieter verfügbar."
+        "autoDiscovery": "Erkennt das aktive Modell automatisch über den Endpunkt /v1/models. Nützlich für lokale LLM-Anbieter (vLLM, LM Studio, Jan.ai), bei denen das Modell wechseln kann. Nur für OpenAI-kompatible Anbieter verfügbar.",
+        "apiKeyLookupOrder": "Optional. Ist das Feld leer, verwendet der Server den ersten Schlüssel, den er findet, in dieser Reihenfolge: den Schlüssel dieses Modells, den Schlüssel seines Anbieters, die Umgebungsvariable {{modelEnv}}, die Umgebungsvariable {{providerEnv}}. Ein lokaler Server (vLLM, LM Studio, Jan.ai, Ollama) braucht keinen Schlüssel. Schlüssel werden verschlüsselt gespeichert."
       },
       "placeholders": {
         "maxOutputTokens": "Standard: {{value}}",
@@ -2429,12 +2563,15 @@
           "connectionRefused": "Verbindung abgelehnt",
           "hostNotFound": "Host nicht gefunden",
           "networkError": "Netzwerkfehler",
-          "providerIdReserved": "Diese ID ist der Name eines API-Typs. Wählen Sie eine andere ID."
+          "providerIdReserved": "Diese ID ist der Name eines API-Typs. Wählen Sie eine andere ID.",
+          "serverError": "Der Endpunkt hat mit einem Serverfehler geantwortet",
+          "certificateUntrusted": "Dem Zertifikat des Endpunkts wird nicht vertraut"
         },
         "unsupported": "iHub kann dieses Modell bei diesem Anbieter nicht ausführen",
         "gatewayCheckbox": "Dieser Endpunkt ist ein iFinder Model Gateway",
         "gatewayUrlHint": "Die Gateway-Wurzel, zum Beispiel https://gateway:9614. iHub liest /v1/gateway/models und ruft die Modelle über /v1/gateway/proxy auf. Tragen Sie unten den Projekt-API-Schlüssel des Gateways ein, falls das Gateway einen verlangt.",
-        "models": "Modelle importieren"
+        "models": "Modelle importieren",
+        "tools": "Tools"
       },
       "areaTitle": "Modelle",
       "areaSubtitle": "KI-Anbieter verbinden und die Modelle auswählen, die Ihre Apps nutzen können",
@@ -2466,7 +2603,9 @@
         "enableHint": "Importieren Sie die Modelle eines Anbieters oder schalten Sie unten eines ein.",
         "defaultHint": "Öffnen Sie ein Modell und setzen Sie „Standard“, damit Apps ohne eigenes Modell eines haben.",
         "done": "(erledigt)",
-        "todo": "(offen)"
+        "todo": "(offen)",
+        "connectWizardAction": "Modell-Anbieter verbinden",
+        "defaultHintRow": "Wählen Sie „Als Standard festlegen“ in der Zeile eines aktivierten Chat-Modells, damit Apps ohne eigenes Modell eines haben."
       },
       "moreActions": "Weitere Modell-Aktionen",
       "disableAllDefault": "Die Einstellung für das Standardmodell wird entfernt. Werden Modelle wieder aktiviert, wird das erste Chat-Modell der Liste zum Standard.",
@@ -2496,7 +2635,12 @@
       },
       "downloadError": "Die Konfiguration konnte nicht heruntergeladen werden: {{error}}",
       "uploadExists": "Ein Modell mit der ID „{{id}}“ existiert bereits",
-      "uploadError": "Die Konfiguration konnte nicht hochgeladen werden: {{error}}"
+      "uploadError": "Die Konfiguration konnte nicht hochgeladen werden: {{error}}",
+      "enabledSwitch": "Aktiviert: {{name}}",
+      "defaultAssigned": "„{{name}}“ ist jetzt das Standardmodell.",
+      "madeDefault": "„{{name}}“ ist jetzt das Standardmodell.",
+      "makeDefault": "Als Standard festlegen",
+      "makeDefaultDisabled": "Aktivieren Sie das Modell zuerst"
     },
     "chat": {
       "title": "Chat",
@@ -4735,7 +4879,11 @@
           "part": "{{parent}}, {{field}}",
           "language": "{{field}} — {{language}}"
         },
-        "magicPromptInstructionsPlaceholder": "Anweisungen für die Funktion „Magic Prompt“ eingeben…"
+        "magicPromptInstructionsPlaceholder": "Anweisungen für die Funktion „Magic Prompt“ eingeben…",
+        "modelChoice": {
+          "disabled": "{{name}} (deaktiviert)",
+          "default": "{{name}} (Standard)"
+        }
       },
       "reorder": "Reihenfolge",
       "reorderHelp": "Ziehen Sie eine Zeile oder nutzen Sie die Pfeile, um die Reihenfolge festzulegen, in der Apps für Benutzer erscheinen – in der App-Übersicht, auf der Startseite und in der Seitenleiste. Es werden immer alle Apps aufgelistet, Suche und Filter gelten hier nicht. Gespeichert wird erst, wenn Sie die neue Reihenfolge unten auf der Seite speichern.",
@@ -5029,7 +5177,9 @@
         "category": "Kategorie",
         "model": "Modell",
         "order": "Reihenfolge",
-        "status": "Status"
+        "status": "Status",
+        "categoryFallback": "Keine Kategorie festgelegt: wird unter {{category}} aufgeführt",
+        "defaultModel": "Standardmodell"
       },
       "uploading": "Wird hochgeladen...",
       "details": {
@@ -5046,7 +5196,8 @@
       },
       "downloadError": "Die Konfiguration konnte nicht heruntergeladen werden: {{error}}",
       "uploadExists": "Eine App mit der ID „{{id}}“ existiert bereits",
-      "uploadError": "Die Konfiguration konnte nicht hochgeladen werden: {{error}}"
+      "uploadError": "Die Konfiguration konnte nicht hochgeladen werden: {{error}}",
+      "loadError": "Fehler beim Laden der Apps"
     },
     "features": {
       "title": "Funktionen",
@@ -6645,7 +6796,8 @@
         "searchSkills": "Skills zum Hinzufügen suchen…",
         "noSkills": "Keine Skills ausgewählt – Benutzer können keine Agenten-Skills verwenden",
         "allWildcard": "Alle (*)",
-        "allWildcardFor": "{{label}}: Alle (*)"
+        "allWildcardFor": "{{label}}: Alle (*)",
+        "defaultModelToken": "Standardmodell (das jeweils als Standard festgelegte)"
       },
       "members": {
         "title": "Mitglieder",
@@ -6666,7 +6818,8 @@
         "moreMatches": "{{count}} weitere Benutzer passen. Engere Suche eingeben, um sie zu finden.",
         "addSelected": "{{count}} ausgewählte hinzufügen",
         "saveFirst": "Speichern Sie zuerst die Gruppe, danach können Sie hier ihre Mitglieder hinzufügen."
-      }
+      },
+      "clone": "Klonen"
     },
     "contentAccess": {
       "title": "Gruppenzugriff",
@@ -6701,7 +6854,8 @@
         "skills": "Skills",
         "tools": "Tools",
         "workflows": "Workflows"
-      }
+      },
+      "wildcardNote": "Gruppen mit Schloss dürfen über einen Platzhalter alle {{subjectPlural}} verwenden. Um einzelne zu entziehen, ersetzt ein Administrator den Platzhalter in den Gruppeneinstellungen durch eine explizite Liste."
     },
     "auditLog": {
       "title": "Audit-Log",
@@ -7212,7 +7366,8 @@
       "tabs": {
         "userPrompts": "Benutzer-Prompts",
         "prompts": "Prompts",
-        "variables": "Variablen"
+        "variables": "Variablen",
+        "aria": "Bereiche der Prompt-Verwaltung"
       },
       "edit": {
         "detectedVariables": "Im Text erkannt",
@@ -7314,7 +7469,10 @@
         "description": "Beschreibung",
         "order": "Reihenfolge",
         "appConnected": "Mit App verknüpft",
-        "status": "Status"
+        "status": "Status",
+        "categoryFallback": "Keine Kategorie festgelegt: wird unter {{category}} aufgeführt",
+        "linkedApp": "App",
+        "appMissing": "App fehlt: {{id}}"
       },
       "delete": "Löschen",
       "searchPlaceholder": "Prompts suchen…",
@@ -8763,7 +8921,15 @@
       "resultCount_other": "{{count}} Treffer",
       "collapseAll": "Alle zuklappen",
       "expandAll": "Alle aufklappen",
-      "tableLabel": "Tabelle"
+      "tableLabel": "Tabelle",
+      "helpLink": "Hilfe: {{topic}}",
+      "helpTopics": {
+        "models": "Modelle einrichten",
+        "providers": "Einen Anbieter verbinden",
+        "apps": "Die erste App erstellen",
+        "prompts": "Prompts verwalten",
+        "access": "Wer Apps, Modelle und Prompts nutzen darf"
+      }
     },
     "aiDisclosure": {
       "title": "KI-Hinweis",
@@ -9295,6 +9461,22 @@
         "disableMessage_other": "{{count}} von {{total}} {{items}} sind derzeit aktiviert und werden deaktiviert. Benutzer verlieren sofort den Zugriff:",
         "nothingToEnable": "Alle {{total}} {{items}} sind bereits aktiviert.",
         "nothingToDisable": "Alle {{total}} {{items}} sind bereits deaktiviert."
+      },
+      "dependants": {
+        "modelMessage": "Das Modell wird für alle Benutzer entfernt. Eine Kopie bleibt im Änderungsverlauf: Öffnen Sie {{path}} erneut, um es wiederherzustellen.",
+        "appMessage": "Die App wird für alle Benutzer entfernt. Eine Kopie bleibt im Änderungsverlauf: Öffnen Sie {{path}} erneut, um sie wiederherzustellen.",
+        "checkFailed": "Es konnte nicht geprüft werden, was den Eintrag verwendet. Apps, Workflows, Agenten oder Gruppen nennen ihn möglicherweise noch.",
+        "modelApps": "Apps, die es nennen (sie antworten dann mit einem anderen Modell): {{names}}",
+        "modelWorkflows": "Workflows, die es nennen: {{names}}",
+        "modelAgents": "Agenten, die es nennen: {{names}}",
+        "modelGroups": "Gruppen, die es namentlich freigeben: {{names}}",
+        "defaultMoves": "Es ist das Standardmodell. „{{name}}“ wird zum Standardmodell.",
+        "defaultNone": "Es ist das Standardmodell, und kein anderes aktiviertes Chat-Modell kann übernehmen. Apps ohne eigenes Modell haben keines, bis Sie eines aktivieren.",
+        "appPrompts": "Prompts, die sich in ihr öffnen: {{names}}",
+        "appTools": "Apps, die sie als Tool aufrufen: {{names}}",
+        "appChildren": "Apps, die von ihr erben: {{names}}",
+        "appWorkflows": "Workflows, die sie aufrufen: {{names}}",
+        "appGroups": "Gruppen, die sie namentlich freigeben: {{names}}"
       }
     },
     "backup": {
@@ -9953,6 +10135,133 @@
     },
     "integrationPages": {
       "oauthClientId": "OAuth-Client-ID:"
+    },
+    "access": {
+      "items": {
+        "apps": "Apps",
+        "models": "Modelle",
+        "prompts": "Prompts",
+        "skills": "Skills",
+        "workflows": "Workflows"
+      },
+      "explain": {
+        "heading": "Freigegeben über „alle {{items}}“:",
+        "ownWildcard": "Alle in {{group}} sehen dies über „alle {{items}}“.",
+        "inheritedWildcard": "Alle in {{group}} sehen dies über „alle {{items}}“ (geerbt von {{source}}: {{chain}}).",
+        "ownExplicit": "{{group}} ist dies namentlich freigegeben.",
+        "inheritedExplicit": "Alle in {{group}} erhalten dies namentlich von {{source}} ({{chain}}).",
+        "ownDefault": "{{group}} erhält dies als Standardmodell („Standardmodell“ in der Modellliste).",
+        "inheritedDefault": "Alle in {{group}} erhalten dies als Standardmodell, über „Standardmodell“ von {{source}} ({{chain}})."
+      },
+      "card": {
+        "title": "Wer dieses Modell verwenden darf",
+        "description": "Welche Gruppen das Modell verwenden dürfen und warum. Gruppenlisten werden unter Gruppen bearbeitet; „Zugriff einschränken“ nimmt das Modell aus Gruppen heraus, die alle Modelle freigeben.",
+        "loading": "Zugriff wird geladen…",
+        "loadError": "Der Zugriff konnte nicht geladen werden.",
+        "audienceEveryone": "Alle dürfen dies verwenden, auch nicht angemeldete Personen.",
+        "audienceSignedIn": "Alle angemeldeten Benutzer dürfen dies verwenden.",
+        "audienceAnonymous": "Nicht angemeldete Personen dürfen dies verwenden. Gruppen: {{groups}}",
+        "audienceGroups": "Nur diese Gruppen dürfen dies verwenden: {{groups}}.",
+        "audienceNone": "Keine Gruppe darf dies verwenden."
+      },
+      "tools": {
+        "checkTitle": "Zugriffsprüfung",
+        "title": "Zugriff einschränken und prüfen"
+      },
+      "check": {
+        "title": "Warum sieht jemand dies nicht?",
+        "descriptionGroupsOnly": "Wählen Sie eine der Gruppen, die Sie verwalten. Die Prüfung wendet dieselben Regeln an wie der Server, wenn er Apps für ihre Mitglieder auflistet.",
+        "description": "Wählen Sie eine Gruppe oder einen Benutzer. Die Prüfung wendet dieselben Regeln an wie der Server, wenn er Apps und Modelle für sie auflistet.",
+        "subjectLegend": "Prüfen für",
+        "byGroup": "Eine Gruppe",
+        "byUser": "Einen Benutzer",
+        "groupLabel": "Gruppe",
+        "userLabel": "Benutzer",
+        "userPlaceholder": "Benutzername, E-Mail oder Benutzer-ID",
+        "run": "Zugriff prüfen",
+        "error": "Die Prüfung konnte nicht ausgeführt werden.",
+        "subjectGroups": "Geprüft mit den Gruppen: {{groups}}",
+        "identityProviderNote": "Dieser Benutzer meldet sich über einen Identitätsanbieter an. Gruppen, die dieser bei der Anmeldung sendet, sind hier nicht bekannt; geprüft wurden nur die in iHub gespeicherten Gruppen.",
+        "verdict": {
+          "availableGroup": "Mitglieder von {{name}} dürfen dies verwenden.",
+          "unavailableGroup": "Mitglieder von {{name}} dürfen dies nicht verwenden.",
+          "availableUser": "{{name}} darf dies verwenden.",
+          "unavailableUser": "{{name}} darf dies nicht verwenden.",
+          "availableAnonymous": "Nicht angemeldete Personen dürfen dies verwenden.",
+          "unavailableAnonymous": "Nicht angemeldete Personen dürfen dies nicht verwenden."
+        },
+        "reasons": {
+          "anonymousAccessOff": "Der anonyme Zugriff ist ausgeschaltet, nicht angemeldete Personen sehen also nichts.",
+          "userInactive": "Das Konto ist deaktiviert.",
+          "itemEnabled": "Es ist aktiviert.",
+          "itemDisabled": "Es ist deaktiviert: Niemand sieht es, bis es aktiviert wird.",
+          "featureOn": "Erforderliche Funktionen sind eingeschaltet: {{features}}.",
+          "featureOff": "Die erforderliche Funktion „{{feature}}“ ist ausgeschaltet (Funktionen).",
+          "integrationOff": "Eine benötigte Integration ist ausgeschaltet: {{integrations}}.",
+          "granted": "Eine Gruppe gibt es frei:",
+          "notGranted": "Keine ihrer Gruppen gibt es frei, weder namentlich noch über „alle“.",
+          "modelsAvailable": "Modelle, die sie damit verwenden dürfen: {{models}}.",
+          "noUsableModel": "Es bleibt kein Modell übrig, das sie damit verwenden dürfen:",
+          "preferredModelUnavailable": "Das bevorzugte Modell {{model}} steht ihnen nicht zur Verfügung; ein anderes Modell wird verwendet."
+        },
+        "modelCause": {
+          "missing": "{{model}} ist nicht eingerichtet.",
+          "disabled": "{{model}} ist deaktiviert.",
+          "notAllowedForApp": "{{model}} ist für diese App nicht zugelassen oder hat eine Fähigkeit nicht, die die App braucht.",
+          "notGranted": "{{model}} ist ihren Gruppen nicht freigegeben."
+        },
+        "noModelsConfigured": "Es ist kein Chat-Modell eingerichtet."
+      },
+      "restrict": {
+        "open": "Zugriff einschränken…",
+        "openHelp": "Gruppen, die alle {{items}} freigeben, umfassen auch dieses Element. Beim Einschränken wird „alle“ in diesen Gruppen durch eine explizite Liste ersetzt.",
+        "title": "Einschränken, wer {{name}} verwenden darf",
+        "intro": "Diese Gruppen sehen über „alle {{items}}“ jedes Element. Um ihnen {{name}} zu entziehen, wird „alle“ durch eine Liste aller aktuellen Elemente außer diesem ersetzt.",
+        "convertLegend": "Gruppen, die alle {{items}} freigeben",
+        "convertRow": "„alle {{items}}“ wird zu einer Liste mit {{count}} {{items}}",
+        "keepRow": "Behält „alle {{items}}“ und sieht dies weiterhin",
+        "passesTo": "Weitergegeben an: {{groups}}",
+        "grantLegend": "Danach namentlich freigeben für (optional)",
+        "grantHelp": "Diese Gruppen dürfen {{name}} nach der Änderung verwenden, unabhängig von der Auswahl oben.",
+        "previewTitle": "Nach der Änderung",
+        "previewLoading": "Änderung wird berechnet…",
+        "keeps": "Dürfen es verwenden: {{groups}}",
+        "keepsNone": "Keine Gruppe darf es verwenden.",
+        "loses": "Dürfen es nicht mehr verwenden: {{groups}}",
+        "stillEveryone": "Alle angemeldeten Benutzer dürfen es weiterhin verwenden:",
+        "newItemsWarning": "Neue {{items}}, die Sie später hinzufügen, erscheinen in den umgestellten Gruppen nicht mehr automatisch. Fügen Sie sie diesen Gruppen beim Anlegen hinzu. Die Änderung wird im Verlauf jeder Gruppe festgehalten.",
+        "error": "Der Zugriff konnte nicht eingeschränkt werden.",
+        "apply": "Zugriff einschränken",
+        "stillDefaultModel": "{{name}} ist das Standardmodell, und {{groups}} geben „Standardmodell“ frei: Sie verwenden es weiterhin. Entfernen Sie diesen Eintrag in den Gruppeneinstellungen oder legen Sie ein anderes Modell als Standard fest."
+      }
+    },
+    "connectionErrors": {
+      "facts": {
+        "status": "HTTP {{status}}",
+        "host": "Host: {{host}}",
+        "code": "Code: {{code}}"
+      },
+      "openSslSettings": "SSL-/TLS-Einstellungen öffnen",
+      "remediation": {
+        "certificateUntrusted": "Der iHub-Server vertraut dem TLS-Zertifikat dieses Endpunkts nicht. Das ist typisch für eine private CA oder ein selbstsigniertes Zertifikat. Tragen Sie den Host in die Domain-Whitelist ein und aktivieren Sie „Ungültige SSL-Zertifikate ignorieren“.",
+        "serverError": "Der Endpunkt selbst ist fehlgeschlagen. Prüfen Sie Status und Logs des Dienstes (oder eines vorgeschalteten Proxys) und versuchen Sie es erneut. Die Konfiguration in iHub ist vermutlich korrekt.",
+        "authenticationFailed": "Der Endpunkt hat den API-Schlüssel abgelehnt. Prüfen Sie den Schlüssel beim Modell oder bei seinem Anbieter.",
+        "accessDenied": "Der Endpunkt hat den API-Schlüssel angenommen, erlaubt diese Anfrage aber nicht. Prüfen Sie die Berechtigungen des Schlüssels und welche Modelle das Konto nutzen darf.",
+        "apiKeyRequired": "Der Endpunkt verlangt einen API-Schlüssel, es ist aber keiner hinterlegt. Tragen Sie den Schlüssel beim Anbieter oder beim Modell ein und versuchen Sie es erneut.",
+        "apiKeyNotConfigured": "Es ist kein API-Schlüssel hinterlegt. Tragen Sie einen beim Modell oder bei seinem Anbieter ein oder setzen Sie die Umgebungsvariable.",
+        "apiKeyUndecryptable": "Der gespeicherte API-Schlüssel wurde mit einem anderen Verschlüsselungsschlüssel gespeichert. Geben Sie den Schlüssel erneut ein.",
+        "wrongPath": "Unter dieser URL wurde nichts gefunden. Prüfen Sie den Pfad (er endet meist auf /v1/chat/completions) und die Modell-ID.",
+        "listNotFound": "Unter dieser URL wurde keine Modellliste gefunden. Prüfen Sie den Pfad: Er endet meist auf /v1 oder /v1/models.",
+        "connectionRefused": "Unter diesem Host und Port nimmt nichts Verbindungen an. Prüfen Sie den Port in der URL und ob der Dienst läuft.",
+        "hostNotFound": "Der Hostname konnte nicht aufgelöst werden. Prüfen Sie die Schreibweise der URL oder die DNS- und Proxy-Einstellungen des iHub-Servers.",
+        "timeout": "Der Endpunkt hat nicht rechtzeitig geantwortet. Prüfen Sie die URL, ob der Dienst läuft und ob der iHub-Server ihn erreicht (Firewall, VPN, Proxy).",
+        "requestTimeout": "Der Dienst hat zu lange für die Antwort gebraucht. Versuchen Sie es erneut oder prüfen Sie die Auslastung des Dienstes.",
+        "networkError": "Die Verbindung ist fehlgeschlagen. Prüfen Sie, ob der iHub-Server den Host erreicht (Firewall, VPN, ausgehender Proxy).",
+        "rateLimitExceeded": "Der Endpunkt begrenzt die Anfragen. Warten Sie einen Moment und versuchen Sie es erneut."
+      }
+    },
+    "restoreDeleted": {
+      "action": "Aus dem Verlauf wiederherstellen"
     }
   },
   "cloudStorage": {
@@ -13492,6 +13801,7 @@
     "LAST_ADMIN": "Diese Änderung würde keinen aktiven Administrator übrig lassen, der sich anmelden kann. Es wurde nichts geändert. Geben Sie zuerst einem anderen aktiven Benutzer Administratorrechte.",
     "SELF_LOCKOUT": "Sie können Ihr eigenes Konto nicht deaktivieren oder löschen. Bitten Sie einen anderen Administrator darum.",
     "GROUP_IN_USE": "Die Gruppe „{{groupId}}“ kann nicht gelöscht werden, weil andere Gruppen von ihr erben. Entfernen Sie sie zuerst aus deren geerbten Gruppen.",
+    "ACCESS_CHECK_OUT_OF_SCOPE": "Content-Admins können den Zugriff nur für Apps prüfen, und nur für die Gruppen, die sie verwalten. Ein Modell, einen Benutzer oder eine andere Gruppe kann nur ein Administrator mit vollem Admin-Zugriff prüfen.",
     "ADMIN_CHECK_FAILED": "Es konnte nicht geprüft werden, ob ein Administrator Zugriff behält, daher wurde nichts geändert. Bitte versuchen Sie es erneut.",
     "PRECONDITION_FAILED": "Diese Konfiguration wurde geändert, nachdem Sie sie geöffnet haben (von einem anderen Administrator, in einem anderen Tab oder durch ein Skript). Es wurde nichts gespeichert, Ihre Änderungen sind noch auf der Seite. Laden Sie neu, um den aktuellen Stand zu sehen, und übernehmen Sie Ihre Änderungen dann erneut.",
     "APP_GENERATOR_NO_MODEL": "Ihnen steht kein KI-Modell zur Verfügung, daher kann kein Entwurf vorbereitet werden.",
