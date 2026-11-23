@@ -46,11 +46,6 @@
       "why": "The workflow chat route. Not converted on purpose (plan 5.4): it answers for an unpublished app as for an unknown id.",
       "personal": "Answers as for an unknown ID (design 7.5; user-apps-run-paths.test.js)."
     },
-    "server/services/chat/ChatService.js": {
-      "calls": 1,
-      "why": "invokeAppInternal: the prompt template of an app that runs as a tool or headless. Published apps only, on purpose (plan 5.4).",
-      "personal": "invokeAppInternal answers APP_NOT_FOUND: a personal app runs neither as a tool nor headless (user-apps-run-paths.test.js)."
-    },
     "server/services/chat/RequestBuilder.js": {
       "calls": 1,
       "why": "prepareChatRequest without resolvedApp: scheduled tasks, apps called as tools and the inference API keep getting 'not found' for an unpublished app (plan 5.4).",
@@ -60,6 +55,11 @@
       "calls": 1,
       "why": "getApps(true) with its own check (isAppAvailable): an app that is not published is neither offered as a tool nor run as one, and the refusal says so.",
       "personal": "Neither offered nor run as a tool (user-apps-run-paths.test.js)."
+    },
+    "server/services/run/assemble/fromApp.js": {
+      "calls": 1,
+      "why": "assembleFromApp: the prompt template of an app the run service runs headless (an app called as a tool, through MCP or by an A2A agent). Published apps only, on purpose (plan 5.4); it moved here from ChatService.invokeAppInternal.",
+      "personal": "The run service answers APP_NOT_FOUND: a personal app runs neither as a tool nor headless (user-apps-run-paths.test.js)."
     }
   }
 }
