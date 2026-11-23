@@ -116,8 +116,10 @@ else (not while the [EU AI Act features are switched off](ai-act.md#switching-th
 
 Identity providers such as Microsoft Entra ID, Google and Okta refuse to be shown in a frame
 (`X-Frame-Options` / `frame-ancestors`). With OpenID Connect, iHub in an iframe therefore cannot
-send people to the provider the usual way. LDAP and local sign-in work, because their form never
-leaves the frame.
+send people to the provider the usual way. The sign-in form of LDAP and local accounts never leaves
+the frame, but its session cookie is `SameSite=Lax`: a browser keeps it only when the frame is on the
+same site as iHub (for example `ifinder.example.com` and `ihub.example.com`). In a frame of another
+site, use OpenID Connect.
 
 iHub solves this with a popup. The sign-in runs in a window of its own, where the provider is
 allowed to show its page. The frame then gets its own session, and no token reaches a script.
@@ -195,6 +197,9 @@ sequenceDiagram
 
 ### Limits
 
+- This is the way to sign in to a frame of a **different site**. Local and LDAP sign-in keep their
+  session only in a frame on the same site as iHub; in a frame of another site the browser drops
+  that cookie and the person is back at the login.
 - The popup needs a way back to the frame. If an identity provider or a browser policy cuts that
   link (`Cross-Origin-Opener-Policy`), the popup says it cannot return and the sign-in does not
   complete. Opening iHub in its own tab always works.

@@ -155,8 +155,10 @@ function renderMessagePage(language, message) {
  * @param {import('express').Express} app
  */
 export default function registerEmbedAuthRoutes(app) {
+  // At registration there is no request, so these are the bare paths the routes match on. The
+  // URLs the pages send to the browser are built per request below: behind a reverse proxy under
+  // a sub-path (`X-Forwarded-Prefix`) they carry the prefix.
   const completePath = buildServerPath('/embed-auth/complete');
-  const loginPath = buildServerPath('/login');
   const issuePath = buildServerPath('/api/auth/embed-codes/_issue');
   const redeemPath = buildServerPath('/api/auth/embed-codes/_redeem');
 
@@ -203,17 +205,25 @@ export default function registerEmbedAuthRoutes(app) {
 
     const signedIn = Boolean(req.user && req.user.id !== 'anonymous');
     if (!signedIn) {
-      const returnUrl = encodeURIComponent(`${completePath}?challenge=${challenge}`);
+      const returnUrl = encodeURIComponent(
+        `${buildServerPath('/embed-auth/complete')}?challenge=${challenge}`
+      );
       // The person already picked a provider in the frame: go straight to it instead of asking again.
       const provider = req.query.provider;
       if (typeof provider === 'string' && isValidId(provider)) {
         const start = buildServerPath(`/api/auth/oidc/${encodeURIComponent(provider)}`);
         return res.redirect(302, `${start}?returnUrl=${returnUrl}`);
       }
-      return res.redirect(302, `${loginPath}?returnUrl=${returnUrl}`);
+      return res.redirect(302, `${buildServerPath('/login')}?returnUrl=${returnUrl}`);
     }
 
-    res.type('html').send(renderCompletePage({ language, challenge, issueUrl: issuePath }));
+    res.type('html').send(
+      renderCompletePage({
+        language,
+        challenge,
+        issueUrl: buildServerPath('/api/auth/embed-codes/_issue')
+      })
+    );
   });
 
   /**

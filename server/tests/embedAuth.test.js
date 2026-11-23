@@ -44,6 +44,8 @@ const { default: errorHandler } = await import('../middleware/errorHandler.js');
 const { generateCode, storeCode } = await import('../utils/authorizationCodeStore.js');
 const { generateCodeChallenge, generateCodeVerifier } = await import('../utils/pkceUtils.js');
 const embedAuth = await import('../utils/embedAuth.js');
+const { basePathDetectionMiddleware } = await import('../utils/basePath.js');
+const { runWithContext } = await import('../utils/requestContext.js');
 
 const SAME_ORIGIN = { 'Sec-Fetch-Site': 'same-origin' };
 const ISSUE = '/api/auth/embed-codes/_issue';
@@ -242,6 +244,66 @@ describe('GET /embed-auth/complete', () => {
     // The code goes to the opener's origin only, never to '*'.
     expect(res.text).toContain('window.location.origin');
     expect(res.text).not.toMatch(/postMessage\([^)]*['"]\*['"]/);
+  });
+});
+
+describe('GET /embed-auth/complete behind a reverse proxy under a sub-path', () => {
+  const challenge = generateCodeChallenge(generateCodeVerifier());
+
+  /** As in production: the request context is opened, then the base path is read from the trusted header. */
+  function buildPrefixedApp() {
+    const app = express();
+    app.set('trust proxy', 'loopback');
+    app.use((req, res, next) => runWithContext({}, next));
+    app.use(basePathDetectionMiddleware);
+    app.use(parseCookies);
+    app.use((req, res, next) => {
+      if (req.get('x-test-user')) req.user = { id: req.get('x-test-user') };
+      next();
+    });
+    registerEmbedAuthRoutes(app);
+    return app;
+  }
+  const get = (query = '') =>
+    request(buildPrefixedApp())
+      .get(`/embed-auth/complete?challenge=${challenge}${query}`)
+      .set('X-Forwarded-Prefix', '/ihub');
+
+  it('sends a signed-out visitor to the login under the prefix and back to the page under it', async () => {
+    const res = await get();
+
+    expect(res.status).toBe(302);
+    const target = new URL(res.headers.location, 'https://ihub.example.com');
+    expect(target.pathname).toBe('/ihub/login');
+    expect(target.searchParams.get('returnUrl')).toBe(
+      `/ihub/embed-auth/complete?challenge=${challenge}`
+    );
+  });
+
+  it('sends it to the provider under the prefix, and back to the page under it', async () => {
+    const res = await get('&provider=microsoft');
+
+    const target = new URL(res.headers.location, 'https://ihub.example.com');
+    expect(target.pathname).toBe('/ihub/api/auth/oidc/microsoft');
+    expect(target.searchParams.get('returnUrl')).toBe(
+      `/ihub/embed-auth/complete?challenge=${challenge}`
+    );
+  });
+
+  it('has the page of a signed-in visitor post the code request under the prefix', async () => {
+    const res = await get().set('x-test-user', 'jane');
+
+    expect(res.status).toBe(200);
+    expect(res.text).toContain('data-issue-url="/ihub/api/auth/embed-codes/_issue"');
+  });
+
+  it('still matches the routes at the root, and leaves a request without the header alone', async () => {
+    const res = await request(buildPrefixedApp()).get(
+      `/embed-auth/complete?challenge=${challenge}`
+    );
+
+    expect(res.status).toBe(302);
+    expect(new URL(res.headers.location, 'https://ihub.example.com').pathname).toBe('/login');
   });
 });
 
