@@ -84,7 +84,14 @@ const freshModels = () => [
   { id: 'mistral', enabled: true }
 ];
 
-const ADMIN = { id: 'alice', username: 'alice', isAdmin: true, groups: ['admins'] };
+// As enhanceUserWithPermissions sets them: a full admin is a content admin too.
+const ADMIN = {
+  id: 'alice',
+  username: 'alice',
+  isAdmin: true,
+  isContentAdmin: true,
+  groups: ['admins']
+};
 const CONTENT_ADMIN = { id: 'carol', username: 'carol', isContentAdmin: true, groups: ['users'] };
 
 jest.unstable_mockModule('../services/config/ConfigStore.js', () => ({
@@ -191,10 +198,11 @@ beforeEach(() => {
 
 const reason = (body, code) => body.reasons.find(entry => entry.code === code);
 
+const PLAIN_USER = { id: 'dave', username: 'dave', groups: ['users'] };
+
 describe('admin only', () => {
   it.each([
     ['get', '/api/admin/access/apps/chat'],
-    ['get', '/api/admin/access/apps/chat/verdict?groupId=users'],
     ['post', '/api/admin/access/apps/chat/_preview-restrict'],
     ['post', '/api/admin/access/apps/chat/_restrict']
   ])('refuses a content admin: %s %s', async (method, url) => {
@@ -208,6 +216,63 @@ describe('admin only', () => {
   it('refuses a request without a user', async () => {
     const res = await request(createTestApp(undefined)).get('/api/admin/access/models/gpt');
     expect(res.status).toBe(403);
+  });
+});
+
+describe('the access check for a content admin', () => {
+  // CONTENT_ADMIN is in `users`, so manages users, admins and hr (both inherit
+  // from users) — not authenticated, anonymous or kiosk.
+  const check = url => request(createTestApp(CONTENT_ADMIN)).get(url);
+
+  it('checks an app for a group they manage', async () => {
+    const res = await check('/api/admin/access/apps/chat/verdict?groupId=hr');
+    expect(res.status).toBe(200);
+    expect(res.body).toMatchObject({
+      type: 'apps',
+      id: 'chat',
+      subject: { kind: 'group', id: 'hr' },
+      verdict: 'available'
+    });
+  });
+
+  it.each([
+    ['another group', '/api/admin/access/apps/chat/verdict?groupId=kiosk', 'group'],
+    [
+      'the group every signed-in user carries',
+      '/api/admin/access/apps/chat/verdict?groupId=authenticated',
+      'group'
+    ],
+    ['an unknown group', '/api/admin/access/apps/chat/verdict?groupId=nobody', 'group'],
+    ['a user', '/api/admin/access/apps/chat/verdict?userId=bob', 'user'],
+    ['a model', '/api/admin/access/models/gpt/verdict?groupId=users', 'type']
+  ])('refuses %s', async (_label, url, scope) => {
+    const res = await check(url);
+    expect(res.status).toBe(403);
+    expect(res.headers['content-type']).toMatch(/application\/problem\+json/);
+    expect(res.body.code).toBe('ACCESS_CHECK_OUT_OF_SCOPE');
+    expect(res.body.details).toEqual({ scope });
+  });
+
+  it('still validates the request before the scope', async () => {
+    const res = await check('/api/admin/access/apps/chat/verdict');
+    expect(res.status).toBe(400);
+  });
+
+  it('refuses a user who is no content admin', async () => {
+    const res = await request(createTestApp(PLAIN_USER)).get(
+      '/api/admin/access/apps/chat/verdict?groupId=users'
+    );
+    expect(res.status).toBe(403);
+    expect(res.body.code).toBe('FORBIDDEN');
+  });
+
+  it('lets a full admin check any group, a user and a model', async () => {
+    const admin = request(createTestApp(ADMIN));
+    expect((await admin.get('/api/admin/access/apps/chat/verdict?groupId=kiosk')).status).toBe(200);
+    expect((await admin.get('/api/admin/access/apps/chat/verdict?userId=bob')).status).toBe(200);
+    expect((await admin.get('/api/admin/access/models/gpt/verdict?groupId=kiosk')).status).toBe(
+      200
+    );
   });
 });
 

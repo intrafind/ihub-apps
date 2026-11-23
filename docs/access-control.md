@@ -163,12 +163,18 @@ group **Model** limits the models users may pick in that app. It does not depend
   groups they belong to and the groups that inherit from those. **Authenticated** and
   **Anonymous** do not count, unless an administrator made the content admin a member of them.
   Content admins cannot change wildcards, model lists or anything else in the group editor.
+- **Content admins** can also run **Why can't someone see this?** on an app's page, for the same
+  groups: the groups they belong to and the groups that inherit from those. They cannot check a
+  user, a model or any other group, and they do not get **Restrict access…**: those stay with
+  administrators with full admin rights.
 
 ## When someone does not see an app
 
 Start with **Why can't someone see this?** on the app's page or in the model editor. Pick a group
 or type a user: it answers yes or no and lists the reasons, the same ones as in this checklist.
 For a user it knows the groups stored in iHub, not the ones an identity provider sends at sign-in.
+Administrators with full admin rights can check any group or user. Content admins can check an app
+for the groups they manage only, not a user (see [Who can change access](#who-can-change-access)).
 
 To check by hand, go through the following, in this order:
 

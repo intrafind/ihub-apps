@@ -99,7 +99,8 @@ The models use the provider's key, and a one-prompt test at the end shows that t
   item, shows who keeps access before you apply, and records the change in each group's history.
   Items added later then no longer appear in those groups by themselves.
 
-The access check and **Restrict access** are for administrators with full admin rights.
+**Restrict access** is for administrators with full admin rights. The access check is too, except
+on an app's page: there content admins can check the groups they manage (not users or other groups).
 
 ## Documentation: Help Links and Guides for the Admin UI
 

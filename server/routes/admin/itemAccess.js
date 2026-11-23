@@ -4,7 +4,12 @@
 import configStore from '../../services/config/ConfigStore.js';
 import configCache from '../../configCache.js';
 import { adminAuth } from '../../middleware/adminAuth.js';
-import { getDefaultAnonymousGroups, isAnonymousAccessAllowed } from '../../utils/authorization.js';
+import { contentAdminAuth } from '../../middleware/contentAdminAuth.js';
+import {
+  getDefaultAnonymousGroups,
+  isAdmin,
+  isAnonymousAccessAllowed
+} from '../../utils/authorization.js';
 import { buildServerPath } from '../../utils/basePath.js';
 import { ServiceError } from '../../utils/ServiceError.js';
 import { assertValidId, isValidId } from '../../utils/pathSecurity.js';
@@ -17,7 +22,8 @@ import {
   GRANT_LIST_TYPES,
   canonicalGrantListType,
   describeAudience,
-  describeContentAccess
+  describeContentAccess,
+  resolveManageableGroups
 } from '../../utils/contentAccess.js';
 import {
   ACCESS_CHECK_TYPES,
@@ -38,10 +44,19 @@ import { localUsersFile } from '../../utils/contentsPath.js';
  * access check ("why can't this group see it?") and the restrict action that
  * replaces a group's wildcard with an explicit list.
  *
- * Full admins only: the views list every group, the check reads user records,
- * and the restrict action rewrites groups the way the group editor does.
- * Content admins keep `/api/admin/content-access`.
+ * The views and the restrict action are for full admins only: the views list
+ * every group, and the restrict action rewrites groups the way the group
+ * editor does. Content admins keep `/api/admin/content-access` for the list of
+ * their groups.
+ *
+ * The access check is open to content admins within their scope (see
+ * {@link assertCheckInScope}): apps only, and only for a group they manage.
+ * Checking a user stays with full admins, since it reads the user's record and
+ * answers with all of the user's groups.
  */
+
+/** The only type a content admin may check: the content they edit that the check knows. */
+const CONTENT_ADMIN_CHECK_TYPES = Object.freeze(['apps']);
 
 /** The group configuration, as a path relative to `contents/`. */
 const GROUPS_FILE = 'config/groups.json';
@@ -97,6 +112,40 @@ function resolveItem(req, allowed) {
     throw new ServiceError('NOT_FOUND', `${type.slice(0, -1)} '${req.params.id}' not found`);
   }
   return { type, item };
+}
+
+/**
+ * Refuse an access check outside a content admin's scope. A full admin may
+ * check anything; a content admin only an app, and only for a group in their
+ * manageable set (the groups they belong to and those inheriting from them;
+ * the groups every user carries do not count, see `resolveManageableGroups`).
+ *
+ * Runs before the group is looked up, so a content admin cannot tell an
+ * unknown group from one they do not manage.
+ *
+ * @param {object} options
+ * @param {object} options.user - The request user
+ * @param {string} options.type - The checked type, one of ACCESS_CHECK_TYPES
+ * @param {string|undefined} options.groupId - The checked group, when a group is checked
+ * @param {Object<string, object>} options.groups - The `groups` map of groups.json
+ * @param {string[]} options.implicitGroups - Groups people carry without being members
+ * @throws {ServiceError} `ACCESS_CHECK_OUT_OF_SCOPE` (403) when the check is not theirs
+ */
+function assertCheckInScope({ user, type, groupId, groups, implicitGroups }) {
+  if (isAdmin(user)) return;
+  const refuse = (scope, message) => {
+    throw new ServiceError('ACCESS_CHECK_OUT_OF_SCOPE', message, { details: { scope } });
+  };
+  if (!CONTENT_ADMIN_CHECK_TYPES.includes(type)) {
+    refuse('type', `Content admins can check apps only, not ${type}`);
+  }
+  if (groupId === undefined) {
+    refuse('user', 'Checking a user needs a full administrator');
+  }
+  const { groupIds } = resolveManageableGroups({ groups, user, fullAdmin: false, implicitGroups });
+  if (!groupIds.includes(groupId)) {
+    refuse('group', `Group '${groupId}' is not one of the groups you manage`);
+  }
 }
 
 /** The platform settings the views need, read once per request. */
@@ -420,11 +469,21 @@ export default function registerAdminItemAccessRoutes(app) {
    *       members are: signed in, so with the group of every signed-in user. A
    *       user is checked with the groups recorded in `users.json`; groups an
    *       identity provider sends at sign-in are not known (`notes`).
+   *
+   *       A full admin may check any app or model for any group or user. A
+   *       content admin may check only apps, and only with `groupId` naming a
+   *       group they manage: one they are a member of, or one inheriting from
+   *       such a group (the groups every signed-in or anonymous user carries do
+   *       not count unless they are an explicit member). A content admin may
+   *       not check a user at all, because the answer reads the user's record
+   *       and lists every group of the user. Anything else is refused with 403
+   *       `ACCESS_CHECK_OUT_OF_SCOPE` (`details.scope`: `type`, `user` or
+   *       `group`), also for a group that does not exist.
    *     tags:
    *       - Admin
    *       - Groups
    *     security:
-   *       - adminAuth: []
+   *       - contentAdminAuth: []
    *     parameters:
    *       - in: path
    *         name: type
@@ -459,88 +518,102 @@ export default function registerAdminItemAccessRoutes(app) {
    *       401:
    *         description: Not signed in
    *       403:
-   *         description: Admin access required
+   *         description: >
+   *           Content admin access required (`FORBIDDEN`), or a content admin asked
+   *           for a model, a user or a group they do not manage
+   *           (`ACCESS_CHECK_OUT_OF_SCOPE`)
    *       404:
    *         description: No such item, group or user
    */
-  app.get(buildServerPath('/api/admin/access/:type/:id/verdict'), adminAuth, async (req, res) => {
-    const { type, item } = resolveItem(req, ACCESS_CHECK_TYPES);
-    const { groupId, userId } = req.query;
-    const hasGroup = typeof groupId === 'string' && groupId.length > 0;
-    const hasUser = typeof userId === 'string' && userId.length > 0;
-    if (hasGroup === hasUser) {
-      throw new ServiceError('VALIDATION_FAILED', 'Give exactly one of groupId and userId', {
-        details: [
-          { path: 'groupId', code: 'invalid_value', message: 'Exactly one of groupId, userId' }
-        ]
+  app.get(
+    buildServerPath('/api/admin/access/:type/:id/verdict'),
+    contentAdminAuth,
+    async (req, res) => {
+      const { type, item } = resolveItem(req, ACCESS_CHECK_TYPES);
+      const { groupId, userId } = req.query;
+      const hasGroup = typeof groupId === 'string' && groupId.length > 0;
+      const hasUser = typeof userId === 'string' && userId.length > 0;
+      if (hasGroup === hasUser) {
+        throw new ServiceError('VALIDATION_FAILED', 'Give exactly one of groupId and userId', {
+          details: [
+            { path: 'groupId', code: 'invalid_value', message: 'Exactly one of groupId, userId' }
+          ]
+        });
+      }
+
+      const context = platformContext();
+      const { groups } = await readGroups();
+      assertCheckInScope({
+        user: req.user,
+        type,
+        groupId: hasGroup ? groupId : undefined,
+        groups,
+        implicitGroups: context.implicitGroups
+      });
+
+      let userRecord;
+      if (hasGroup) {
+        assertValidId(groupId, 'group');
+        if (!Object.hasOwn(groups, groupId)) {
+          throw new ServiceError('NOT_FOUND', `Group '${groupId}' not found`);
+        }
+      } else {
+        if (userId.length > 320 || ['__proto__', 'constructor', 'prototype'].includes(userId)) {
+          throw new ServiceError('BAD_REQUEST', 'Invalid user id');
+        }
+        const usersConfig = loadUsers(localUsersFile(context.platform.localAuth)) || {};
+        const users = usersConfig.users || {};
+        userRecord = Object.hasOwn(users, userId)
+          ? { ...users[userId], id: userId }
+          : findUserByIdentifier(usersConfig, userId);
+        if (!userRecord) throw new ServiceError('NOT_FOUND', `User '${userId}' not found`);
+      }
+
+      const subject = resolveSubject({
+        groups,
+        groupId: hasGroup ? groupId : undefined,
+        userRecord,
+        authenticatedGroup: context.authenticatedGroup,
+        anonymousAllowed: context.anonymousAllowed,
+        anonymousGroups: context.anonymousGroups
+      });
+
+      const features = configCache.getFeatures?.() || {};
+      const required = Array.isArray(item.requiredFeatures) ? item.requiredFeatures : [];
+      const result = checkAccess({
+        type,
+        item,
+        subject,
+        groups,
+        models: allItems('models'),
+        featuresOff:
+          type === 'apps'
+            ? required.filter(
+                featureId =>
+                  !FEATURE_IDS.includes(featureId) || !isFeatureEnabled(featureId, features)
+              )
+            : [],
+        integrationsOff:
+          type === 'apps'
+            ? missingAppIntegrations(item, configCache.getIntegrationContext?.() || {})
+            : [],
+        filterModelsForApp
+      });
+
+      res.json({
+        type,
+        id: item.id,
+        subject: {
+          kind: subject.kind,
+          id: subject.id,
+          name: subject.name,
+          groups: subject.groups,
+          notes: subject.notes
+        },
+        ...result
       });
     }
-
-    const context = platformContext();
-    const { groups } = await readGroups();
-
-    let userRecord;
-    if (hasGroup) {
-      assertValidId(groupId, 'group');
-      if (!Object.hasOwn(groups, groupId)) {
-        throw new ServiceError('NOT_FOUND', `Group '${groupId}' not found`);
-      }
-    } else {
-      if (userId.length > 320 || ['__proto__', 'constructor', 'prototype'].includes(userId)) {
-        throw new ServiceError('BAD_REQUEST', 'Invalid user id');
-      }
-      const usersConfig = loadUsers(localUsersFile(context.platform.localAuth)) || {};
-      const users = usersConfig.users || {};
-      userRecord = Object.hasOwn(users, userId)
-        ? { ...users[userId], id: userId }
-        : findUserByIdentifier(usersConfig, userId);
-      if (!userRecord) throw new ServiceError('NOT_FOUND', `User '${userId}' not found`);
-    }
-
-    const subject = resolveSubject({
-      groups,
-      groupId: hasGroup ? groupId : undefined,
-      userRecord,
-      authenticatedGroup: context.authenticatedGroup,
-      anonymousAllowed: context.anonymousAllowed,
-      anonymousGroups: context.anonymousGroups
-    });
-
-    const features = configCache.getFeatures?.() || {};
-    const required = Array.isArray(item.requiredFeatures) ? item.requiredFeatures : [];
-    const result = checkAccess({
-      type,
-      item,
-      subject,
-      groups,
-      models: allItems('models'),
-      featuresOff:
-        type === 'apps'
-          ? required.filter(
-              featureId =>
-                !FEATURE_IDS.includes(featureId) || !isFeatureEnabled(featureId, features)
-            )
-          : [],
-      integrationsOff:
-        type === 'apps'
-          ? missingAppIntegrations(item, configCache.getIntegrationContext?.() || {})
-          : [],
-      filterModelsForApp
-    });
-
-    res.json({
-      type,
-      id: item.id,
-      subject: {
-        kind: subject.kind,
-        id: subject.id,
-        name: subject.name,
-        groups: subject.groups,
-        notes: subject.notes
-      },
-      ...result
-    });
-  });
+  );
 
   /**
    * @swagger

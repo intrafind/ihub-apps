@@ -59,14 +59,18 @@ function defaultGroupId(groups) {
  * @param {'apps'|'models'} props.type
  * @param {string} props.id - The app or model id
  * @param {Array<{id: string, name: string, implicit?: boolean}>} props.groups - The
- *   groups to offer, from the item's access view
+ *   groups to offer, from the item's access view (for a content admin: the
+ *   content-access view, so only the groups they manage)
+ * @param {boolean} [props.allowUserCheck=true] - Offer "A user" next to "A group".
+ *   False for a content admin: the server checks users for full admins only.
  * @param {string} [props.className]
  * @returns {JSX.Element}
  */
-function AccessCheckPanel({ type, id, groups, className = '' }) {
+function AccessCheckPanel({ type, id, groups, allowUserCheck = true, className = '' }) {
   const { t } = useTranslation();
   const baseId = useId();
-  const [mode, setMode] = useState('group');
+  const [chosenMode, setMode] = useState('group');
+  const mode = allowUserCheck ? chosenMode : 'group';
   const [groupId, setGroupId] = useState(() => defaultGroupId(groups));
   const [userId, setUserId] = useState('');
   const [result, setResult] = useState(null);
@@ -111,28 +115,34 @@ function AccessCheckPanel({ type, id, groups, className = '' }) {
       <h4 id={`${baseId}-title`} className="text-sm font-semibold text-gray-900 dark:text-gray-100">
         {t('admin.access.check.title')}
       </h4>
-      <p className={HELP_CLASS}>{t('admin.access.check.description')}</p>
+      <p className={HELP_CLASS}>
+        {allowUserCheck
+          ? t('admin.access.check.description')
+          : t('admin.access.check.descriptionGroupsOnly')}
+      </p>
 
-      <fieldset className="mt-3">
-        <legend className="sr-only">{t('admin.access.check.subjectLegend')}</legend>
-        <div className="flex flex-wrap gap-4 text-sm text-gray-700 dark:text-gray-300">
-          {['group', 'user'].map(option => (
-            <label key={option} className="inline-flex items-center gap-2">
-              <input
-                type="radio"
-                name={`${baseId}-mode`}
-                value={option}
-                checked={mode === option}
-                onChange={() => setMode(option)}
-                className={RADIO_CLASS}
-              />
-              {option === 'group'
-                ? t('admin.access.check.byGroup')
-                : t('admin.access.check.byUser')}
-            </label>
-          ))}
-        </div>
-      </fieldset>
+      {allowUserCheck && (
+        <fieldset className="mt-3">
+          <legend className="sr-only">{t('admin.access.check.subjectLegend')}</legend>
+          <div className="flex flex-wrap gap-4 text-sm text-gray-700 dark:text-gray-300">
+            {['group', 'user'].map(option => (
+              <label key={option} className="inline-flex items-center gap-2">
+                <input
+                  type="radio"
+                  name={`${baseId}-mode`}
+                  value={option}
+                  checked={mode === option}
+                  onChange={() => setMode(option)}
+                  className={RADIO_CLASS}
+                />
+                {option === 'group'
+                  ? t('admin.access.check.byGroup')
+                  : t('admin.access.check.byUser')}
+              </label>
+            ))}
+          </div>
+        </fieldset>
+      )}
 
       <div className="mt-3 flex flex-col sm:flex-row sm:items-end gap-3">
         <div className="flex-1 min-w-0">

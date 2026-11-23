@@ -320,17 +320,17 @@ function AdminAppEditPage() {
                   resourceId={appId}
                   onSaved={handleAccessSaved}
                 />
-                {/* Restrict access (W3) and the access check read every group: full admins only. */}
-                {isFullAdmin && (
-                  <ItemAccessTools
-                    type="apps"
-                    id={appId}
-                    itemName={appName}
-                    refreshKey={accessVersion}
-                    onRestricted={handleRestricted}
-                    className="mt-6"
-                  />
-                )}
+                {/* Restrict access (W3) is for full admins; a content admin gets the
+                    access check for the groups they manage. */}
+                <ItemAccessTools
+                  type="apps"
+                  id={appId}
+                  itemName={appName}
+                  refreshKey={accessVersion}
+                  onRestricted={handleRestricted}
+                  fullAdmin={isFullAdmin}
+                  className="mt-6"
+                />
               </EditorGroup>
             </div>
           </div>

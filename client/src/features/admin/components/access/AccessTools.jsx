@@ -22,15 +22,17 @@ import { ITEM_KEYS, coveredByWildcard } from './accessExplanation';
  * @param {string} props.itemName - As the admin reads it, for the dialog title
  * @param {object|null} props.view - The item's access view
  * @param {(view: object) => void} props.onRestricted - Called with the view after the change
+ * @param {boolean} [props.fullAdmin=true] - False for a content admin: no "Restrict
+ *   access…" (full admins only) and the check offers groups only, never a user
  * @returns {JSX.Element|null}
  */
-function AccessTools({ type, id, itemName, view, onRestricted }) {
+function AccessTools({ type, id, itemName, view, onRestricted, fullAdmin = true }) {
   const { t } = useTranslation();
   const [restrictOpen, setRestrictOpen] = useState(false);
   if (!view) return null;
 
   const items = t(ITEM_KEYS[type] || ITEM_KEYS.apps);
-  const canRestrict = view.restrictable === true && coveredByWildcard(view);
+  const canRestrict = fullAdmin && view.restrictable === true && coveredByWildcard(view);
 
   return (
     <div className="space-y-4" data-testid="access-tools">
@@ -50,17 +52,19 @@ function AccessTools({ type, id, itemName, view, onRestricted }) {
         </div>
       )}
 
-      <AccessCheckPanel type={type} id={id} groups={view.groups} />
+      <AccessCheckPanel type={type} id={id} groups={view.groups} allowUserCheck={fullAdmin} />
 
-      <RestrictAccessDialog
-        isOpen={restrictOpen}
-        type={type}
-        id={id}
-        itemName={itemName}
-        groups={view.groups}
-        onClose={() => setRestrictOpen(false)}
-        onApplied={onRestricted}
-      />
+      {canRestrict && (
+        <RestrictAccessDialog
+          isOpen={restrictOpen}
+          type={type}
+          id={id}
+          itemName={itemName}
+          groups={view.groups}
+          onClose={() => setRestrictOpen(false)}
+          onApplied={onRestricted}
+        />
+      )}
     </div>
   );
 }
