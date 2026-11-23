@@ -14,16 +14,17 @@ import { STEP_INTRO, STEP_TITLE } from './connectStyles';
  * @param {Object} props
  * @param {Object|null} props.groupsFile - `GET /admin/groups` body, null when it could not be read
  * @param {string[]} props.wildcardGroups - Group ids with `models: ["*"]`
+ * @param {string[]} [props.defaultTokenGroups] - Group ids that grant "the default model"
+ *   (`@default`); passed only when the flow makes one of the new models the default
  * @param {{ mode: 'everyone'|'groups', groupIds: string[] }} props.access
  * @param {(access: Object) => void} props.onChange
  */
-function AccessStep({ groupsFile, wildcardGroups, access, onChange }) {
+function AccessStep({ groupsFile, wildcardGroups, defaultTokenGroups = [], access, onChange }) {
   const { t, i18n } = useTranslation();
   const groups = Object.entries(groupsFile?.groups || {});
   const groupName = (id, group) => getLocalizedContent(group?.name, i18n.language) || id;
-  const wildcardNames = wildcardGroups
-    .map(id => groupName(id, groupsFile?.groups?.[id]))
-    .join(', ');
+  const namesOf = ids => ids.map(id => groupName(id, groupsFile?.groups?.[id])).join(', ');
+  const wildcardNames = namesOf(wildcardGroups);
 
   const toggleGroup = (id, checked) => {
     const set = new Set(access.groupIds);
@@ -135,6 +136,20 @@ function AccessStep({ groupsFile, wildcardGroups, access, onChange }) {
             'admin.providers.connect.access.wildcardNote',
             'These groups can use every model, including the new ones, whatever you choose here: {{groups}}.',
             { groups: wildcardNames }
+          )}
+        </p>
+      )}
+
+      {defaultTokenGroups.length > 0 && (
+        <p
+          role="note"
+          data-testid="connect-default-token-note"
+          className="rounded-md bg-blue-50 dark:bg-blue-900/20 p-3 text-sm text-blue-800 dark:text-blue-300"
+        >
+          {t(
+            'admin.providers.connect.access.defaultTokenNote',
+            'You make one of these models the default. These groups grant "the default model", so they and every group that inherits from them can use it, whatever you choose here: {{groups}}.',
+            { groups: namesOf(defaultTokenGroups) }
           )}
         </p>
       )}

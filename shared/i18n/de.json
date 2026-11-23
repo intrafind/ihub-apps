@@ -2072,7 +2072,8 @@
           "everyoneHint": "Freigegeben für die Gruppe „authenticated“, zu der jeder angemeldete Benutzer gehört.",
           "groups": "Nur die Gruppen, die ich auswähle",
           "allModels": "(alle Modelle)",
-          "wildcardNote": "Diese Gruppen können jedes Modell nutzen, auch die neuen, unabhängig von Ihrer Auswahl hier: {{groups}}."
+          "wildcardNote": "Diese Gruppen können jedes Modell nutzen, auch die neuen, unabhängig von Ihrer Auswahl hier: {{groups}}.",
+          "defaultTokenNote": "Sie machen eines dieser Modelle zum Standardmodell. Diese Gruppen gewähren „das Standardmodell“, daher können sie und jede Gruppe, die von ihnen erbt, es nutzen, egal was Sie hier wählen: {{groups}}."
         },
         "tiles": {
           "openai": "GPT-Modelle von api.openai.com.",

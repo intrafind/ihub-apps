@@ -26,7 +26,8 @@ import {
   stepsForTile,
   suggestedIdPrefix,
   updateConnectionForm,
-  wildcardModelGroups
+  wildcardModelGroups,
+  defaultTokenModelGroups
 } from '../../utils/providerConnect';
 
 /**
@@ -237,6 +238,9 @@ export default function useProviderConnect({ initialTileId = null } = {}) {
   const candidates = defaultCandidates(picks);
   const currentDefault = findCurrentDefault(existingModels);
   const wildcardGroups = useMemo(() => wildcardModelGroups(groupsFile), [groupsFile]);
+  const defaultTokenGroups = useMemo(() => defaultTokenModelGroups(groupsFile), [groupsFile]);
+  // The flow makes one of the new models the platform default (not "keep").
+  const makesNewDefault = Boolean(defaultChoice && defaultChoice !== KEEP_DEFAULT);
 
   const canAdvance = (() => {
     switch (step) {
@@ -348,6 +352,8 @@ export default function useProviderConnect({ initialTileId = null } = {}) {
     setDefaultChoice,
     groupsFile,
     wildcardGroups,
+    defaultTokenGroups,
+    makesNewDefault,
     access,
     setAccess,
     canAdvance,

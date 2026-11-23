@@ -51,7 +51,8 @@ const GROUPS = {
   groups: {
     admins: { name: 'Admins', permissions: { models: ['*'] } },
     authenticated: { name: 'Authenticated', permissions: { models: ['gpt-4o'] } },
-    hr: { name: 'HR', permissions: { models: [] } }
+    hr: { name: 'HR', permissions: { models: [] } },
+    anonymous: { name: 'Anonymous', permissions: { models: ['@default'] } }
   }
 };
 const DISCOVERY = {
@@ -176,8 +177,12 @@ test('connects an OpenAI-compatible gateway with two models, an explicit default
   fireEvent.click(screen.getByLabelText(/llm-hub-qwen/));
   await next();
 
-  // Step 6: groups; the wildcard group is named.
-  expect(screen.getByRole('note')).toHaveTextContent('Admins');
+  // Step 6: groups; the wildcard group is named, and so are the groups that
+  // grant "the default model", since one of the new models becomes the default.
+  const [wildcardNote, defaultNote] = screen.getAllByRole('note');
+  expect(wildcardNote).toHaveTextContent('Admins');
+  expect(defaultNote).toHaveAttribute('data-testid', 'connect-default-token-note');
+  expect(defaultNote).toHaveTextContent('Anonymous');
   fireEvent.click(screen.getByLabelText('Only the groups I pick'));
   expect(screen.getByTestId('connect-next')).toBeDisabled();
   fireEvent.click(screen.getByLabelText('HR'));
@@ -248,6 +253,8 @@ test('a shipped provider with a stored key starts at the connection from ?vendor
   await next();
   fireEvent.click(screen.getByLabelText(/Keep GPT-4o/));
   await next();
+  // The default stays where it is: no note about "the default model".
+  expect(screen.queryByTestId('connect-default-token-note')).not.toBeInTheDocument();
   await next();
 
   expect(calls('/admin/providers/openai', 'PUT')).toHaveLength(0);

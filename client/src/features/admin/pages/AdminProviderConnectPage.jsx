@@ -195,6 +195,7 @@ function AdminProviderConnectPage() {
                 <AccessStep
                   groupsFile={flow.groupsFile}
                   wildcardGroups={flow.wildcardGroups}
+                  defaultTokenGroups={flow.makesNewDefault ? flow.defaultTokenGroups : []}
                   access={flow.access}
                   onChange={flow.setAccess}
                 />

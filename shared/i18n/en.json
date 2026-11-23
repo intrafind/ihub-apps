@@ -1601,7 +1601,8 @@
           "everyoneHint": "Granted to the \"authenticated\" group, which every signed-in user is in.",
           "groups": "Only the groups I pick",
           "allModels": "(all models)",
-          "wildcardNote": "These groups can use every model, including the new ones, whatever you choose here: {{groups}}."
+          "wildcardNote": "These groups can use every model, including the new ones, whatever you choose here: {{groups}}.",
+          "defaultTokenNote": "You make one of these models the default. These groups grant \"the default model\", so they and every group that inherits from them can use it, whatever you choose here: {{groups}}."
         },
         "tiles": {
           "openai": "GPT models from api.openai.com.",

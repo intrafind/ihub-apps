@@ -28,7 +28,8 @@ import {
   stepsForTile,
   suggestedIdPrefix,
   updateConnectionForm,
-  wildcardModelGroups
+  wildcardModelGroups,
+  defaultTokenModelGroups
 } from '../../../client/src/features/admin/utils/providerConnect';
 import { CUSTOM_PROVIDER_API_TYPES } from '../../../shared/llmProviders.js';
 
@@ -243,6 +244,15 @@ describe('groups', () => {
 
   it('names the groups that see every model anyway', () => {
     expect(wildcardModelGroups(groupsFile)).toEqual(['admins', 'users']);
+    expect(
+      defaultTokenModelGroups({
+        groups: {
+          anonymous: { permissions: { models: ['@default'] } },
+          both: { permissions: { models: ['*', '@default'] } },
+          hr: { permissions: { models: ['x'] } }
+        }
+      })
+    ).toEqual(['anonymous']);
   });
 
   it('grants "everyone" through the authenticated group', () => {

@@ -28,6 +28,7 @@ import {
   providerEnvKeyName
 } from '../../../../../shared/llmProviders.js';
 import { buildImportedModelConfig, isValidId, slugify } from './modelImport';
+import { DEFAULT_MODEL_TOKEN } from '../../../../../shared/modelPermissions.js';
 
 /**
  * Wizard steps in order. `bedrock` has no model listing, so its flow stops
@@ -483,6 +484,24 @@ export function findCurrentDefault(models) {
 export function wildcardModelGroups(groupsFile) {
   return Object.entries(groupsFile?.groups || {})
     .filter(([, group]) => (group?.permissions?.models || []).includes('*'))
+    .map(([id]) => id);
+}
+
+/**
+ * Groups that grant "the default model" (`@default`) without granting every
+ * model: whichever model is made the default, they can use it, and so can
+ * every group that inherits from them (on a new installation `anonymous`, which
+ * every signed-in user inherits).
+ *
+ * @param {Object} groupsFile - `GET /admin/groups` body (`{ groups: { id: group } }`)
+ * @returns {string[]} Group ids
+ */
+export function defaultTokenModelGroups(groupsFile) {
+  return Object.entries(groupsFile?.groups || {})
+    .filter(([, group]) => {
+      const models = group?.permissions?.models || [];
+      return models.includes(DEFAULT_MODEL_TOKEN) && !models.includes('*');
+    })
     .map(([id]) => id);
 }
 
