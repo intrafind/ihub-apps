@@ -113,6 +113,18 @@ describe('ContentAccessSection', () => {
     expect(salesOption).toHaveTextContent('Also inherited from: users');
   });
 
+  test('explains wildcard access in visible text, not only in a tooltip', async () => {
+    mockFetchContentAccess.mockResolvedValue(VIEW);
+
+    render(<ContentAccessSection resourceType="apps" resourceId="chat" />);
+
+    const note = await screen.findByTestId('content-access-wildcard-note');
+    expect(note).toHaveTextContent(/through a wildcard/);
+    const power = screen.getByText('Power Users').closest('span');
+    expect(power).not.toHaveAttribute('title');
+    expect(power).toHaveAttribute('aria-describedby', note.id);
+  });
+
   test('picking a group in the search dropdown grants it, and removing its chip revokes it', async () => {
     mockFetchContentAccess.mockResolvedValue(VIEW);
     const granted = {

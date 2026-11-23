@@ -39,9 +39,17 @@ const { default: configCache } = await import('../configCache.js');
 const { LLMError } = await import('../services/loop/contracts/errors.js');
 
 const chatModel = { id: 'gpt', modelId: 'gpt-x', provider: 'openai', enabled: true };
+// A disabled vLLM server without a key (key status `keyless`).
+const keylessModel = {
+  id: 'local-vllm',
+  modelId: 'qwen',
+  provider: 'local',
+  url: 'https://vllm.internal:8443/v1/chat/completions',
+  enabled: false
+};
 
 beforeAll(() => {
-  configCache.setCacheEntry('config/models.json', [chatModel]);
+  configCache.setCacheEntry('config/models.json', [chatModel, keylessModel]);
 });
 
 afterAll(() => {
@@ -85,6 +93,39 @@ describe('model administration routes: errors', () => {
     expect(res.body.details).toMatchObject({ messageKey: expect.any(String) });
     expect(typeof res.body.details.remediation).toBe('string');
     expect(typeof res.body.detail).toBe('string');
+  });
+
+  it('names the upstream status and host of a failed model test (AI-B10)', async () => {
+    state.completeError = new LLMError('LLM API request failed with status 503', {
+      code: 'PROVIDER_ERROR',
+      status: 503
+    });
+    const res = await request(app).post('/api/admin/models/local-vllm/_test').expect(502);
+    expect(res.body.details).toMatchObject({
+      messageKey: 'serverError',
+      upstreamStatus: 503,
+      host: 'vllm.internal:8443'
+    });
+  });
+
+  it('reports an untrusted certificate with its code (AI-B10)', async () => {
+    state.completeError = new LLMError('fetch failed', {
+      code: 'NETWORK',
+      providerCode: 'SELF_SIGNED_CERT_IN_CHAIN'
+    });
+    const res = await request(app).post('/api/admin/models/local-vllm/_test').expect(502);
+    expect(res.body.details).toMatchObject({
+      messageKey: 'certificateUntrusted',
+      errorCode: 'SELF_SIGNED_CERT_IN_CHAIN',
+      host: 'vllm.internal:8443'
+    });
+  });
+
+  it('never calls a 401 of a keyless model a rejected key (AI-B10)', async () => {
+    state.completeError = new LLMError('Unauthorized', { code: 'AUTH_FAILED', status: 401 });
+    const res = await request(app).post('/api/admin/models/local-vllm/_test').expect(502);
+    expect(res.body.details.messageKey).toBe('apiKeyRequired');
+    expect(res.body.details.upstreamStatus).toBe(401);
   });
 
   it('hides the reason of an unexpected failure of a model test', async () => {

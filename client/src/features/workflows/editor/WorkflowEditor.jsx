@@ -144,7 +144,8 @@ function NodePalette({ onAddNode }) {
  * @param {object} props
  * @param {object[]} props.initialNodes - Initial React Flow nodes
  * @param {object[]} props.initialEdges - Initial React Flow edges
- * @param {function} props.onSave - Save callback receiving (nodes, edges)
+ * @param {function} [props.onSave] - Save callback receiving (nodes, edges); without it the
+ *   editor shows no Save button (the page saves through its own bar)
  * @param {function} [props.onFlowChange] - Called with (nodes, edges) whenever the
  *   canvas changes, so the page can tell whether it holds unsaved edits
  */
@@ -540,12 +541,15 @@ function WorkflowEditorInner({ initialNodes, initialEdges, onSave, onFlowChange 
             >
               {t('workflows.editor.autoLayout', 'Auto Layout')}
             </button>
-            <button
-              onClick={() => onSave(nodes, edges)}
-              className="bg-blue-600 text-white text-xs px-3 py-1.5 rounded-sm hover:bg-blue-700 transition-colors"
-            >
-              {t('workflows.editor.save', 'Save')}
-            </button>
+            {/* A page that saves through its own bar passes no onSave. */}
+            {onSave && (
+              <button
+                onClick={() => onSave(nodes, edges)}
+                className="bg-blue-600 text-white text-xs px-3 py-1.5 rounded-sm hover:bg-blue-700 transition-colors"
+              >
+                {t('workflows.editor.save', 'Save')}
+              </button>
+            )}
           </Panel>
           {notice && (
             <Panel position="bottom-center">
@@ -596,7 +600,8 @@ function WorkflowEditorInner({ initialNodes, initialEdges, onSave, onFlowChange 
  * @param {object} props
  * @param {object[]} props.initialNodes - Initial React Flow nodes
  * @param {object[]} props.initialEdges - Initial React Flow edges
- * @param {function} props.onSave - Save callback receiving (nodes, edges)
+ * @param {function} [props.onSave] - Save callback receiving (nodes, edges); without it the
+ *   editor shows no Save button (the page saves through its own bar)
  * @param {function} [props.onFlowChange] - Called with (nodes, edges) on every canvas change
  */
 export function WorkflowEditor({ initialNodes, initialEdges, onSave, onFlowChange }) {

@@ -12,6 +12,8 @@ import {
   usePagedRows
 } from './useTablePagination';
 import { useSortedRows } from './useTableSort';
+import AdminLoadError from '../AdminLoadError';
+import { resolveListView } from '../../utils/listLoadState';
 
 /**
  * Shared admin data table.
@@ -32,6 +34,11 @@ import { useSortedRows } from './useTableSort';
  * @param {boolean} [props.loading]
  * @param {number} [props.loadingRows]
  * @param {{icon?: string, title: string, description?: string, action?: ReactNode}} [props.empty]
+ *   Shown when the list is empty, never while `error` is set (a failed load is not an empty list)
+ * @param {string|null} [props.error]  The load error, shown above the table with Retry. With no
+ *   rows only the error is shown; rows loaded before the failure stay visible below it.
+ * @param {() => (void|Promise<void>)} [props.onRetry]  Re-runs the failed load
+ * @param {string} [props.errorTitle]  Heading of the load error, e.g. "Error loading apps"
  * @param {'compact'|'normal'} [props.density]  Default 'normal'
  * @param {boolean} [props.stickyHeader]  Default true
  * @param {false|object} [props.pagination]  See useTablePagination.normalizePagination
@@ -52,6 +59,9 @@ function DataTable({
   loading = false,
   loadingRows,
   empty,
+  error = null,
+  onRetry,
+  errorTitle,
   density = 'normal',
   stickyHeader = true,
   pagination,
@@ -118,50 +128,66 @@ function DataTable({
 
   const hasActions = Array.isArray(actions) && actions.length > 0;
 
+  // One rule for every list (utils/listLoadState.js): a load error never renders as the empty state.
+  const view = resolveListView({ loading, error, rowCount: sortedRows.length });
+  const errorPanel = error ? (
+    <AdminLoadError
+      framed={false}
+      title={errorTitle}
+      message={error}
+      onRetry={onRetry}
+      className="mb-4"
+    />
+  ) : null;
+  if (view === 'error') return errorPanel;
+
   return (
-    <div className="bg-white dark:bg-gray-900 rounded-lg shadow-xs border border-gray-200 dark:border-gray-700 overflow-hidden">
-      <div className="overflow-x-auto">
-        <table
-          className="min-w-full divide-y divide-gray-200 dark:divide-gray-700"
-          aria-busy={loading || undefined}
-        >
-          <DataTableHeader
-            columns={columns}
-            sort={activeSort}
-            onSortChange={handleSortChange}
-            hasActions={hasActions}
-            stickyHeader={stickyHeader}
+    <>
+      {errorPanel}
+      <div className="bg-white dark:bg-gray-900 rounded-lg shadow-xs border border-gray-200 dark:border-gray-700 overflow-hidden">
+        <div className="overflow-x-auto">
+          <table
+            className="min-w-full divide-y divide-gray-200 dark:divide-gray-700"
+            aria-busy={loading || undefined}
+          >
+            <DataTableHeader
+              columns={columns}
+              sort={activeSort}
+              onSortChange={handleSortChange}
+              hasActions={hasActions}
+              stickyHeader={stickyHeader}
+            />
+            <DataTableBody
+              rows={visibleRows}
+              columns={columns}
+              actions={actions}
+              hasActions={hasActions}
+              kebabThreshold={kebabThreshold}
+              onRowClick={onRowClick}
+              getRowId={getRowId}
+              getRowExpansion={getRowExpansion}
+              rowClassName={rowClassName}
+              density={density}
+              loading={view === 'loading'}
+              loadingRows={loadingRows}
+              empty={empty}
+            />
+          </table>
+        </div>
+        {showPaginationFooter && (
+          <DataTablePagination
+            page={currentPage}
+            pageSize={currentPageSize}
+            pageSizeOptions={pageSizeOptions}
+            total={total}
+            onPageChange={handlePageChange}
+            onPageSizeChange={handlePageSizeChange}
+            cursorPaging={paginationConfig.cursorPaging}
+            labels={labels}
           />
-          <DataTableBody
-            rows={visibleRows}
-            columns={columns}
-            actions={actions}
-            hasActions={hasActions}
-            kebabThreshold={kebabThreshold}
-            onRowClick={onRowClick}
-            getRowId={getRowId}
-            getRowExpansion={getRowExpansion}
-            rowClassName={rowClassName}
-            density={density}
-            loading={loading}
-            loadingRows={loadingRows}
-            empty={empty}
-          />
-        </table>
+        )}
       </div>
-      {showPaginationFooter && (
-        <DataTablePagination
-          page={currentPage}
-          pageSize={currentPageSize}
-          pageSizeOptions={pageSizeOptions}
-          total={total}
-          onPageChange={handlePageChange}
-          onPageSizeChange={handlePageSizeChange}
-          cursorPaging={paginationConfig.cursorPaging}
-          labels={labels}
-        />
-      )}
-    </div>
+    </>
   );
 }
 

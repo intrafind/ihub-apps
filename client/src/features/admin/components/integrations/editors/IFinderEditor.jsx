@@ -15,7 +15,10 @@ import {
   LABEL_CLASS,
   MONO_INPUT_CLASS
 } from '../../formStyles';
-import useInstallationEditor, { useInstallationEditorDirty } from './useInstallationEditor';
+import useInstallationEditor, {
+  useInstallationEditorDirty,
+  useInstallationEditorSave
+} from './useInstallationEditor';
 import {
   AccessSection,
   ActionsSection,
@@ -149,14 +152,15 @@ function IFinderEditor({ instance, definition, onSaved, onCancel }) {
     allowedSearchProfiles: parseProfileList(allowedProfilesText)
   });
 
+  const save = async () => {
+    const problem = validateIFinderValues(values, { issuer });
+    if (problem) return editor.reject(problem.key, t(problem.messageKey, problem.messageDefault));
+    return editor.save(valuesToSend());
+  };
+  useInstallationEditorSave(editor, save);
   const submit = event => {
     event.preventDefault();
-    const problem = validateIFinderValues(values, { issuer });
-    if (problem) {
-      editor.reject(problem.key, t(problem.messageKey, problem.messageDefault));
-      return;
-    }
-    void editor.save(valuesToSend());
+    void save();
   };
 
   const numberValue = (key, fallback) => event => {

@@ -59,7 +59,8 @@ const providers = [
     apiType: 'openai',
     enabled: true
   },
-  { id: 'bedrock', name: 'AWS Bedrock', description: '', category: 'llm', enabled: true },
+  // `enabled: false` changes nothing on the server (it reads every provider): no badge for it.
+  { id: 'bedrock', name: 'Bedrock Frankfurt', description: '', category: 'llm', enabled: false },
   { id: 'old-key', name: 'Old generic key', description: '', category: 'custom', enabled: true }
 ];
 const models = [
@@ -137,6 +138,13 @@ test('marks only the provider that sets its own timeouts', async () => {
   ).not.toBeInTheDocument();
 });
 
+test('a provider stored with enabled: false gets no "Disabled" badge, since the flag has no effect', async () => {
+  renderPage();
+  const row = await rowOf('Bedrock Frankfurt');
+  expect(within(row).queryByText('Disabled')).not.toBeInTheDocument();
+  expect(screen.queryByText('Disabled')).not.toBeInTheDocument();
+});
+
 test('Import opens the models page with the provider preselected, where the API type allows it', async () => {
   renderPage();
   fireEvent.click(
@@ -146,10 +154,10 @@ test('Import opens the models page with the provider preselected, where the API 
   expect(screen.getByTestId('state')).toHaveTextContent('"importProviderId":"llmhub"');
 });
 
-test('Add provider opens the create page', async () => {
+test('Add provider opens the connect flow', async () => {
   renderPage();
   fireEvent.click(await screen.findByRole('button', { name: 'Add provider' }));
-  expect(screen.getByTestId('location')).toHaveTextContent('/admin/providers/new');
+  expect(screen.getByTestId('location')).toHaveTextContent('/admin/providers/connect');
 });
 
 test('entries of other categories wait in one collapsed group instead of leading the page', async () => {
@@ -169,6 +177,22 @@ test('the timeouts for all providers are one summary line above the list', async
   );
 });
 
+test('every row keeps Configure in the pinned actions column, and the search has a name', async () => {
+  renderPage();
+  const row = await rowOf('OpenAI');
+  const configure = within(row).getByRole('button', { name: 'Configure' });
+  // The shared DataTable pins its actions cell to the right edge, so at phone
+  // width the table scrolls under it instead of hiding it.
+  expect(configure.closest('td')).toHaveClass('sticky', 'right-0');
+  fireEvent.click(configure);
+  expect(screen.getByTestId('location')).toHaveTextContent('/admin/providers/openai');
+});
+
+test('the provider search has an accessible name, not only a placeholder', async () => {
+  renderPage();
+  expect(await screen.findByRole('searchbox', { name: 'Search providers' })).toBeInTheDocument();
+});
+
 test('without the models page there is no link to it: the count is plain text, Import is gone, no Models tab', async () => {
   mockPlatform.admin.pages = { models: false };
   renderPage();
@@ -177,4 +201,31 @@ test('without the models page there is no link to it: the count is plain text, I
   expect(within(row).getByText(/1 linked, 1 enabled/)).toBeInTheDocument();
   expect(screen.queryByRole('button', { name: 'Import models' })).not.toBeInTheDocument();
   expect(screen.queryByRole('tab', { name: /Models/ })).not.toBeInTheDocument();
+});
+
+test('asks before leaving the Providers page with an unsaved timeout, and not when nothing changed', async () => {
+  renderPage();
+  await screen.findByRole('tab', { name: 'Providers 5' });
+
+  // Nothing changed: the Models tab opens at once.
+  fireEvent.click(await screen.findByRole('button', { name: 'Edit' }));
+  expect(screen.queryByRole('region', { name: 'Save changes' })).not.toBeInTheDocument();
+
+  fireEvent.change(screen.getByLabelText('Connect timeout (ms)'), { target: { value: '5' } });
+  fireEvent.click(screen.getByRole('tab', { name: 'Models 3' }));
+
+  expect(screen.getByRole('alertdialog')).toBeInTheDocument();
+  expect(screen.queryByTestId('location')).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: 'Stay' }));
+  expect(screen.getByLabelText('Connect timeout (ms)')).toHaveValue(5);
+});
+
+test('lets the admin leave the Providers page when no timeout changed', async () => {
+  renderPage();
+  await screen.findByRole('tab', { name: 'Providers 5' });
+
+  fireEvent.click(screen.getByRole('tab', { name: 'Models 3' }));
+
+  expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
+  expect(screen.getByTestId('location')).toHaveTextContent('/admin/models');
 });

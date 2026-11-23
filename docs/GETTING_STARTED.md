@@ -61,11 +61,11 @@ On a fresh installation the browser opens the setup wizard:
   <img src="assets/screenshots/setup-wizard-provider.png" alt="Setup wizard: connect your first AI provider" width="45%">
 </p>
 
-You can add more providers and models at any time under **Admin → Models → Providers** and
-**Admin → Models** (including **Import from URL** for whole endpoints; OpenRouter ships as a
-provider whose key you enter there). API keys can also come from
-environment variables such as `GOOGLE_API_KEY`, `ANTHROPIC_API_KEY`, `OPENAI_API_KEY` or
-`MISTRAL_API_KEY` — see [Models](models.md) and [Environment Variables](environment-variables.md).
+You can add more providers and models at any time under **Admin → Models**, on the tabs
+**Providers** and **Models**. [Set up models in the admin UI](models.md#set-up-models-in-the-admin-ui)
+walks through it, including a company gateway, Azure OpenAI and a local server. API keys can also
+come from environment variables such as `GOOGLE_API_KEY`, `ANTHROPIC_API_KEY`,
+`OPENAI_API_KEY` or `MISTRAL_API_KEY` — see [Models](models.md) and [Environment Variables](environment-variables.md).
 
 ### Skipping or turning off the wizard
 
@@ -98,7 +98,7 @@ direct URL.
   in **Admin → Apps**.
 - **Providers** for OpenAI, Anthropic, Google, Mistral, OpenRouter, AWS Bedrock and local servers,
   with their API addresses filled in. No cloud model is preconfigured: **Admin → Models → Import
-  from provider** lists the models of a provider and adds the ones you pick. The disabled local
+  models** lists the models of a provider and adds the ones you pick. The disabled local
   models (vLLM chat, Voxtral transcription on vLLM, iAssistant) are ready to switch on.
 - **One marketplace registry**: the iHub Official Marketplace (90 apps, 98 skills, 19 models,
   6 workflows, 5 prompts).
@@ -111,6 +111,9 @@ direct URL.
 | **Anonymous visitors** (`anonymous` group) | The **Chat** app with the default model, the prompt library. No admin, no scheduled tasks. |
 | **Signed-in users** (`authenticated`, `users`) | All apps, models, prompts and skills; scheduled tasks |
 | **Administrators** (`admins`) | Everything, including the admin area |
+
+To limit an app or a model to some groups, see
+[Who can use apps, models and prompts](access-control.md).
 
 The shipped accounts are `admin` (group `admins`) and `user` (group `users`), both with the
 password `password123`, and the login page offers them as demo accounts. **Before you open iHub to

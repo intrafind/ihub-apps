@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
 /**
- * `describeModelTestFailure` (POST /admin/models/:id/_test) must always emit a
+ * `describeLlmFailure` (services/loop/llmFailureCause.js, used by POST /admin/models/:id/_test) must always emit a
  * `messageKey` alongside its English `userMessage` — that key is what the
  * admin UI translates (shared/i18n/*.json `admin.models.testResults.messages`)
  * instead of matching on the English headline text (github.com/intrafind/ihub-apps
@@ -10,7 +10,7 @@
  */
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { describeModelTestFailure } from '../routes/admin/models.js';
+import { describeLlmFailure } from '../services/loop/llmFailureCause.js';
 import { LLMError, LLM_ERROR_CODES } from '../services/loop/contracts/errors.js';
 
 test('a blackholed connect (UND_ERR_CONNECT_TIMEOUT) maps to connectionTimeout', () => {
@@ -18,7 +18,17 @@ test('a blackholed connect (UND_ERR_CONNECT_TIMEOUT) maps to connectionTimeout',
     code: LLM_ERROR_CODES.NETWORK,
     providerCode: 'UND_ERR_CONNECT_TIMEOUT'
   });
-  const { messageKey, userMessage } = describeModelTestFailure(err);
+  const { messageKey, userMessage } = describeLlmFailure(err);
+  assert.equal(messageKey, 'connectionTimeout');
+  assert.equal(userMessage, 'Connection timeout');
+});
+
+test("LLMClient's connect ceiling (TIMEOUT, CONNECT_TIMEOUT) maps to connectionTimeout", () => {
+  const err = new LLMError('Could not connect to provider openai within 30000 ms', {
+    code: LLM_ERROR_CODES.TIMEOUT,
+    providerCode: 'CONNECT_TIMEOUT'
+  });
+  const { messageKey, userMessage } = describeLlmFailure(err);
   assert.equal(messageKey, 'connectionTimeout');
   assert.equal(userMessage, 'Connection timeout');
 });
@@ -28,7 +38,7 @@ test('ECONNREFUSED maps to connectionRefused', () => {
     code: LLM_ERROR_CODES.NETWORK,
     providerCode: 'ECONNREFUSED'
   });
-  assert.equal(describeModelTestFailure(err).messageKey, 'connectionRefused');
+  assert.equal(describeLlmFailure(err).messageKey, 'connectionRefused');
 });
 
 test('ENOTFOUND maps to serviceNotFound', () => {
@@ -36,17 +46,17 @@ test('ENOTFOUND maps to serviceNotFound', () => {
     code: LLM_ERROR_CODES.NETWORK,
     providerCode: 'ENOTFOUND'
   });
-  assert.equal(describeModelTestFailure(err).messageKey, 'serviceNotFound');
+  assert.equal(describeLlmFailure(err).messageKey, 'serviceNotFound');
 });
 
 test('a NETWORK error with no recognized socket cause maps to networkError', () => {
   const err = new LLMError('boom', { code: LLM_ERROR_CODES.NETWORK });
-  assert.equal(describeModelTestFailure(err).messageKey, 'networkError');
+  assert.equal(describeLlmFailure(err).messageKey, 'networkError');
 });
 
 test('TIMEOUT maps to requestTimeout', () => {
   const err = new LLMError('slow', { code: LLM_ERROR_CODES.TIMEOUT });
-  assert.equal(describeModelTestFailure(err).messageKey, 'requestTimeout');
+  assert.equal(describeLlmFailure(err).messageKey, 'requestTimeout');
 });
 
 test('AUTH_FAILED with a missing API key maps to apiKeyNotConfigured', () => {
@@ -54,17 +64,17 @@ test('AUTH_FAILED with a missing API key maps to apiKeyNotConfigured', () => {
     code: LLM_ERROR_CODES.AUTH_FAILED,
     providerCode: 'API_KEY_MISSING'
   });
-  assert.equal(describeModelTestFailure(err).messageKey, 'apiKeyNotConfigured');
+  assert.equal(describeLlmFailure(err).messageKey, 'apiKeyNotConfigured');
 });
 
 test('AUTH_FAILED with a 403 (key present but rejected) maps to accessDenied', () => {
   const err = new LLMError('forbidden', { code: LLM_ERROR_CODES.AUTH_FAILED, status: 403 });
-  assert.equal(describeModelTestFailure(err).messageKey, 'accessDenied');
+  assert.equal(describeLlmFailure(err).messageKey, 'accessDenied');
 });
 
 test('AUTH_FAILED otherwise maps to authenticationFailed', () => {
   const err = new LLMError('bad key', { code: LLM_ERROR_CODES.AUTH_FAILED, status: 401 });
-  assert.equal(describeModelTestFailure(err).messageKey, 'authenticationFailed');
+  assert.equal(describeLlmFailure(err).messageKey, 'authenticationFailed');
 });
 
 test('an unreadable stored key maps to apiKeyUndecryptable, not apiKeyNotConfigured', () => {
@@ -72,7 +82,7 @@ test('an unreadable stored key maps to apiKeyUndecryptable, not apiKeyNotConfigu
     code: LLM_ERROR_CODES.AUTH_FAILED,
     providerCode: 'API_KEY_UNDECRYPTABLE'
   });
-  assert.equal(describeModelTestFailure(err).messageKey, 'apiKeyUndecryptable');
+  assert.equal(describeLlmFailure(err).messageKey, 'apiKeyUndecryptable');
 });
 
 test('a missing key still maps to apiKeyNotConfigured', () => {
@@ -80,32 +90,32 @@ test('a missing key still maps to apiKeyNotConfigured', () => {
     code: LLM_ERROR_CODES.AUTH_FAILED,
     providerCode: 'API_KEY_ERROR'
   });
-  assert.equal(describeModelTestFailure(err).messageKey, 'apiKeyNotConfigured');
+  assert.equal(describeLlmFailure(err).messageKey, 'apiKeyNotConfigured');
 });
 
 test('MODEL_NOT_FOUND maps to modelNotFound', () => {
   const err = new LLMError('nope', { code: LLM_ERROR_CODES.MODEL_NOT_FOUND });
-  assert.equal(describeModelTestFailure(err).messageKey, 'modelNotFound');
+  assert.equal(describeLlmFailure(err).messageKey, 'modelNotFound');
 });
 
 test('RATE_LIMITED maps to rateLimitExceeded', () => {
   const err = new LLMError('slow down', { code: LLM_ERROR_CODES.RATE_LIMITED });
-  assert.equal(describeModelTestFailure(err).messageKey, 'rateLimitExceeded');
+  assert.equal(describeLlmFailure(err).messageKey, 'rateLimitExceeded');
 });
 
 test('PROVIDER_ERROR with a 5xx status maps to serverError', () => {
   const err = new LLMError('oops', { code: LLM_ERROR_CODES.PROVIDER_ERROR, status: 500 });
-  assert.equal(describeModelTestFailure(err).messageKey, 'serverError');
+  assert.equal(describeLlmFailure(err).messageKey, 'serverError');
 });
 
 test('PROVIDER_ERROR with a non-5xx status falls back to testFailed', () => {
   const err = new LLMError('odd', { code: LLM_ERROR_CODES.PROVIDER_ERROR, status: 400 });
-  assert.equal(describeModelTestFailure(err).messageKey, 'testFailed');
+  assert.equal(describeLlmFailure(err).messageKey, 'testFailed');
 });
 
 test('an unmapped code falls back to testFailed', () => {
   const err = new LLMError('???', { code: LLM_ERROR_CODES.INVALID_REQUEST });
-  assert.equal(describeModelTestFailure(err).messageKey, 'testFailed');
+  assert.equal(describeLlmFailure(err).messageKey, 'testFailed');
 });
 
 test('every branch returns a non-empty userMessage, errorMessage and messageKey', () => {
@@ -125,9 +135,128 @@ test('every branch returns a non-empty userMessage, errorMessage and messageKey'
     new LLMError('m', { code: LLM_ERROR_CODES.INVALID_REQUEST })
   ];
   for (const err of errors) {
-    const { userMessage, errorMessage, messageKey } = describeModelTestFailure(err);
+    const { userMessage, errorMessage, messageKey } = describeLlmFailure(err);
     assert.ok(userMessage, `userMessage missing for code=${err.code}`);
     assert.ok(errorMessage, `errorMessage missing for code=${err.code}`);
     assert.ok(messageKey, `messageKey missing for code=${err.code}`);
   }
+});
+
+// AI-B10: the admin has to get from the error to the fix — the facts (status,
+// host, code) and a cause per fault, including TLS and keyless endpoints.
+
+test('an upstream 5xx maps to serverError and reports the status and host', () => {
+  const err = new LLMError('LLM API request failed with status 502', {
+    code: LLM_ERROR_CODES.PROVIDER_ERROR,
+    providerCode: 'SERVICE_UNAVAILABLE',
+    status: 502
+  });
+  const result = describeLlmFailure(err, {
+    url: 'https://llm.example.com:8443/v1/chat/completions?api-version=1'
+  });
+  assert.equal(result.messageKey, 'serverError');
+  assert.equal(result.upstreamStatus, 502);
+  assert.equal(result.host, 'llm.example.com:8443');
+  assert.equal(result.errorCode, null);
+});
+
+test('the host never carries credentials, the path or the query', () => {
+  const err = new LLMError('x', { code: LLM_ERROR_CODES.AUTH_FAILED, status: 401 });
+  const result = describeLlmFailure(err, {
+    url: 'https://user:s3cret@gw.internal/v1/chat/completions?key=abc'
+  });
+  assert.equal(result.host, 'gw.internal');
+  assert.doesNotMatch(JSON.stringify(result), /s3cret|key=abc|user:/);
+});
+
+test('a missing or unparsable URL reports no host', () => {
+  const err = new LLMError('x', { code: LLM_ERROR_CODES.TIMEOUT });
+  assert.equal(describeLlmFailure(err).host, null);
+  assert.equal(describeLlmFailure(err, { url: 'not a url' }).host, null);
+});
+
+test('401 and 403 say the key was rejected; 404 points at the path', () => {
+  const rejected = describeLlmFailure(
+    new LLMError('x', { code: LLM_ERROR_CODES.AUTH_FAILED, status: 401 })
+  );
+  assert.equal(rejected.messageKey, 'authenticationFailed');
+  assert.equal(rejected.upstreamStatus, 401);
+  const denied = describeLlmFailure(
+    new LLMError('x', { code: LLM_ERROR_CODES.AUTH_FAILED, status: 403 })
+  );
+  assert.equal(denied.messageKey, 'accessDenied');
+  const notFound = describeLlmFailure(
+    new LLMError('x', { code: LLM_ERROR_CODES.MODEL_NOT_FOUND, status: 404 })
+  );
+  assert.equal(notFound.messageKey, 'modelNotFound');
+  assert.match(notFound.errorMessage, /URL path/);
+});
+
+test('a keyless model answered with 401 needs a key — it was not rejected', () => {
+  const err = new LLMError('unauthorized', { code: LLM_ERROR_CODES.AUTH_FAILED, status: 401 });
+  const result = describeLlmFailure(err, {
+    url: 'http://vllm:8000/v1/chat/completions',
+    keyless: true
+  });
+  assert.equal(result.messageKey, 'apiKeyRequired');
+  assert.doesNotMatch(result.errorMessage, /contact your administrator|rejected/i);
+});
+
+test('a keyless model that answers 5xx is a server error, not a credentials problem', () => {
+  const err = new LLMError('oops', { code: LLM_ERROR_CODES.PROVIDER_ERROR, status: 503 });
+  assert.equal(describeLlmFailure(err, { keyless: true }).messageKey, 'serverError');
+});
+
+test('untrusted TLS certificates map to certificateUntrusted with their code', () => {
+  const cases = [
+    // LLMClient keeps the socket code as providerCode for a `fetch failed`
+    [
+      new LLMError('fetch failed', {
+        code: LLM_ERROR_CODES.NETWORK,
+        providerCode: 'UNABLE_TO_VERIFY_LEAF_SIGNATURE'
+      }),
+      'UNABLE_TO_VERIFY_LEAF_SIGNATURE'
+    ],
+    // The code only in the cause chain
+    [
+      new LLMError('fetch failed', {
+        code: LLM_ERROR_CODES.NETWORK,
+        cause: Object.assign(new Error('fetch failed'), {
+          cause: { code: 'SELF_SIGNED_CERT_IN_CHAIN', message: 'self-signed certificate in chain' }
+        })
+      }),
+      'SELF_SIGNED_CERT_IN_CHAIN'
+    ],
+    // Only the message names it (a client that reports no code)
+    [
+      new LLMError('request failed, reason: unable to verify the first certificate', {
+        code: LLM_ERROR_CODES.PROVIDER_ERROR
+      }),
+      'CERT_UNTRUSTED'
+    ],
+    [
+      new LLMError('fetch failed', {
+        code: LLM_ERROR_CODES.NETWORK,
+        details: 'unable to get local issuer certificate'
+      }),
+      'CERT_UNTRUSTED'
+    ]
+  ];
+  for (const [err, code] of cases) {
+    const result = describeLlmFailure(err, { url: 'https://llm.corp.local/v1' });
+    assert.equal(result.messageKey, 'certificateUntrusted', code);
+    assert.equal(result.errorCode, code);
+    assert.equal(result.host, 'llm.corp.local');
+    assert.match(result.errorMessage, /SSL domain whitelist/);
+  }
+});
+
+test('a socket error code is reported as errorCode', () => {
+  const err = new LLMError('fetch failed', {
+    code: LLM_ERROR_CODES.NETWORK,
+    providerCode: 'ECONNRESET'
+  });
+  const result = describeLlmFailure(err);
+  assert.equal(result.messageKey, 'networkError');
+  assert.equal(result.errorCode, 'ECONNRESET');
 });

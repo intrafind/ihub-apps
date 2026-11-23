@@ -150,7 +150,7 @@
             "error": {
               "at": "<ts>",
               "code": "ABORTED",
-              "message": "Replaced by a newer message in the same chat",
+              "message": "The model call was stopped",
               "providerCode": "ABORTED",
               "step": 1
             },
@@ -204,7 +204,7 @@
           {
             "at": "<ts>",
             "code": "ABORTED",
-            "message": "Replaced by a newer message in the same chat",
+            "message": "The model call was stopped",
             "providerCode": "ABORTED",
             "step": 1
           }
@@ -965,7 +965,7 @@
     {
       "data": {
         "code": "ABORTED",
-        "message": "Replaced by a newer message in the same chat",
+        "message": "The model call was stopped",
         "providerCode": "ABORTED",
         "recoverable": false,
         "status": null,

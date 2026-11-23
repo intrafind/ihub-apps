@@ -151,4 +151,77 @@ test.describe('The app builder under the base path', () => {
     await page.waitForLoadState('networkidle');
     expect(problems, 'the cold load of the editor').toEqual([]);
   });
+
+  // The chat-based app builder (#3898): a cold load of the conversation view,
+  // one turn and Apply, every request under the prefix. The stub model answers
+  // `e2e-revise-system` with a change of the instructions (e2e-llm-stub.mjs).
+  test('the conversation view loads cold, and a turn and Apply stay under the base path', async ({
+    page,
+    baseURL
+  }) => {
+    const id = `${APP_ID}-talk`;
+    const original = 'You answer briefly.';
+    const api = page.context().request;
+    const features = await (await api.get(`${BASE}/api/admin/features`)).json();
+    const featureWasOn =
+      features.features?.find(feature => feature.id === 'appBuilderChat')?.enabled === true;
+    const switched = await api.put(`${BASE}/api/admin/features`, {
+      data: { appBuilderChat: true }
+    });
+    expect(switched.ok(), await switched.text()).toBeTruthy();
+    try {
+      const created = await api.post(`${BASE}/api/admin/apps?origin=blank`, {
+        data: {
+          id,
+          name: { en: `${NAME} talk` },
+          description: { en: 'Revised under a prefix.' },
+          system: { en: original },
+          color: '#4F46E5',
+          icon: 'chat-bubbles',
+          enabled: false
+        }
+      });
+      expect(created.status(), await created.text()).toBe(201);
+
+      const problems = watchRequests(page, new URL(baseURL).origin);
+      await page.goto(`${BASE}/admin/apps/${id}?view=conversation`);
+      const talk = page.getByTestId('conversation-panel');
+      await expect(talk).toBeVisible();
+      await expect(page.getByText('Unable to connect to the server')).toHaveCount(0);
+      await expect(page.getByRole('complementary', { name: 'Test app' })).toBeVisible();
+      expect(new URL(page.url()).pathname).toBe(`${BASE}/admin/apps/${id}`);
+
+      const composer = talk.getByRole('textbox', { name: 'Tell the builder what to change' });
+      await composer.fill('Make it formal. e2e-revise-system');
+      const [turn] = await Promise.all([
+        page.waitForResponse(response => response.url().includes('/_revise')),
+        composer.press('Enter')
+      ]);
+      expect(new URL(turn.url()).pathname).toBe(`${BASE}/api/admin/apps/_revise`);
+      expect(turn.status(), await turn.text()).toBe(200);
+
+      const card = talk.getByTestId('change-card');
+      await expect(card.locator('ins')).toContainText('(e2e-revised)');
+      const [saved] = await Promise.all([
+        page.waitForResponse(
+          response =>
+            response.request().method() === 'PUT' &&
+            new URL(response.url()).pathname === `${BASE}/api/admin/apps/${id}`
+        ),
+        card.getByRole('button', { name: 'Apply' }).click()
+      ]);
+      expect(saved.status(), await saved.text()).toBe(200);
+      await expect(card.getByTestId('change-applied')).toHaveText('Applied. The test restarted.');
+
+      const stored = await (await api.get(`${BASE}/api/admin/apps/${id}`)).json();
+      expect(stored.system.en).toBe(`${original}\nAddress the reader formally. (e2e-revised)`);
+      await page.waitForLoadState('networkidle');
+      expect(problems, 'the conversation under the base path').toEqual([]);
+    } finally {
+      await api.delete(`${BASE}/api/admin/apps/${id}`);
+      if (!featureWasOn) {
+        await api.put(`${BASE}/api/admin/features`, { data: { appBuilderChat: false } });
+      }
+    }
+  });
 });

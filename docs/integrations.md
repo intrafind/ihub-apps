@@ -226,7 +226,7 @@ The tile opens the installation's page. Its quick actions are separate buttons: 
 
 `/admin/integrations/<installation id>` shows one installation. The header has its label, definition, id and pills, and the buttons **Test in chat** (see [Example apps and the chat test](#example-apps-and-the-chat-test)), **Test connection**, **Enable**/**Disable**, **Connected users** (per-user sign-in) and **Remove**, with the same confirmations as the tiles. The tabs (`?tab=`):
 
-- **Overview** (default): all key facts of its values, its description and documentation link, protocol, sign-in and groups, its actions with their side effect (read, write, destructive), their approval mode and whether they are off or unavailable, the installation's approval default and the mode for new or changed actions ([Tool Approval](tool-approval.md); saved on its own with **Save approval**, stored as `approval: { default, actions, newOrChanged }` keyed by action name), a **New** or **Changed** badge on every action whose name, declared side effect or input schema changed since the last review, with **Mark reviewed** per action and **Mark all reviewed** ([New and changed actions](tool-approval.md#new-and-changed-actions)), the apps that bind it (for a web search engine: the apps with web search on that name it or use Auto), each linking to the app editor, **Details** of every action ([Action detail](#action-detail-what-it-does-how-to-use-it-test-it)), the editable **Instructions for the model**, and the **Migration log** (the last 10 runs, newest first).
+- **Overview** (default): all key facts of its values, its description and documentation link, protocol, sign-in and groups, its actions with their side effect (read, write, destructive), their approval mode and whether they are off or unavailable, the installation's approval default and the mode for new or changed actions ([Tool Approval](tool-approval.md); saved with the bar at the bottom of the page together with the **Settings** tab and the instructions, stored as `approval: { default, actions, newOrChanged }` keyed by action name), a **New** or **Changed** badge on every action whose name, declared side effect or input schema changed since the last review, with **Mark reviewed** per action and **Mark all reviewed** ([New and changed actions](tool-approval.md#new-and-changed-actions)), the apps that bind it (for a web search engine: the apps with web search on that name it or use Auto), each linking to the app editor, **Details** of every action ([Action detail](#action-detail-what-it-does-how-to-use-it-test-it)), the editable **Instructions for the model** (**Edit instructions** opens the text for the current language; an edit shows the bar, saves with it and is dropped by **Discard** or **Cancel**; **Use the integration’s own** acts at once), and the **Migration log** (the last 10 runs, newest first).
 - **Settings** (`settings`): the installation's editor (below); read-only while a migration state refuses the save.
 - **Releases** (`releases`): the release history of its definition, when it has one.
 
@@ -256,7 +256,7 @@ Every action on the Overview has **Details** (`?action=<name>` opens the page wi
 
 **Try in chat** closes the panel and opens the installation's [chat test](#example-apps-and-the-chat-test).
 
-**Instructions** on the Overview are the integration-level guidance: the definition's `instructions`, or for an MCP server the `instructions` it sends when iHub connects. **Edit instructions** replaces them for the current language (stored as `instructions` on the installation); **Use the integration's own** removes the override.
+**Instructions** on the Overview are the integration-level guidance: the definition's `instructions`, or for an MCP server the `instructions` it sends when iHub connects. **Edit instructions** replaces them for the current language (stored as `instructions` on the installation). The edit is saved with the page's bar, after the Settings and the approval, and **Cancel** or **Discard** drops it. **Use the integration's own** removes the override at once.
 
 #### Guidance in the system prompt
 
@@ -314,7 +314,7 @@ For developers: an editor is a React component registered under its definition i
 
 ## Who may use an integration
 
-The groups decide, like for apps (#3093). `groups.json` → `permissions.integrations` lists what the members of a group may use, edited under **Admin → Groups → a group → Integrations**:
+The groups decide, like for apps (#3093). `groups.json` → `permissions.integrations` lists what the members of a group may use, edited under **Admin → Groups → a group → Integrations**. The section lists only what the group has been given, as chips, and **Add an integration** offers the rest (an installation, a definition, a type, or **All integrations**). **All integrations** (`*`) is shown as one chip and hides the individual entries. What the group inherits is shown read-only, with the group it comes from:
 
 | Entry | Grants |
 | --- | --- |

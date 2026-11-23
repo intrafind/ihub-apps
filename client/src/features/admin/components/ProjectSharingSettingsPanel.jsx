@@ -32,6 +32,7 @@ import {
   parsePercentShare,
   shareToPercentText
 } from '../utils/cacheSettings';
+import { useSaveSection } from './SaveSections';
 
 const NUMBER_INPUT_CLASS =
   'block w-32 rounded-md border border-admin-control-border dark:border-admin-control-border-dark bg-white dark:bg-gray-700 text-sm text-gray-900 dark:text-gray-100 px-3 py-2';
@@ -117,33 +118,20 @@ function shareInputsOf(settings) {
 }
 
 function ProjectSharingSettingsPanel() {
-  const { t } = useTranslation();
-  const [stored, setStored] = useState(null);
-  const [draft, setDraft] = useState(null);
-  const [limitInputs, setLimitInputs] = useState({});
-  // The heap shares of the caches, as typed (percent; empty: built-in budget).
-  const [shareInputs, setShareInputs] = useState({ index: '', text: '' });
+  const [initial, setInitial] = useState(null);
   const [forbidden, setForbidden] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const [saved, setSaved] = useState(false);
-  const [error, setError] = useState(null);
-  // The default app reaches the chat composers through the platform config.
-  const { refreshConfig } = usePlatformConfig() || {};
+  const [loadError, setLoadError] = useState(null);
 
   useEffect(() => {
     let active = true;
     fetchProjectSettings()
       .then(settings => {
-        if (!active) return;
-        setStored(settings);
-        setDraft(settings);
-        setLimitInputs(limitInputsOf(settings.limits));
-        setShareInputs(shareInputsOf(settings));
+        if (active) setInitial(settings);
       })
       .catch(err => {
         if (!active) return;
         if (err?.response?.status === 403 || err?.response?.status === 401) setForbidden(true);
-        else setError(getAdminApiErrorMessage(err));
+        else setLoadError(getAdminApiErrorMessage(err));
       });
     return () => {
       active = false;
@@ -151,13 +139,35 @@ function ProjectSharingSettingsPanel() {
   }, []);
 
   if (forbidden) return null;
-  if (!draft) {
-    return error ? (
+  if (!initial) {
+    return loadError ? (
       <p role="alert" className="mb-6 text-sm text-red-600 dark:text-red-400">
-        {error}
+        {loadError}
       </p>
     ) : null;
   }
+  return <ProjectSharingSettingsForm initial={initial} />;
+}
+
+/**
+ * The loaded settings. It registers with the page's save bar: there is no Save button of its
+ * own, and nothing is registered (so no bar) before the settings loaded.
+ *
+ * @param {Object} props
+ * @param {Object} props.initial - The settings as the server returned them
+ */
+function ProjectSharingSettingsForm({ initial }) {
+  const { t } = useTranslation();
+  const [stored, setStored] = useState(initial);
+  const [draft, setDraft] = useState(initial);
+  const [limitInputs, setLimitInputs] = useState(() => limitInputsOf(initial.limits));
+  // The heap shares of the caches, as typed (percent; empty: built-in budget).
+  const [shareInputs, setShareInputs] = useState(() => shareInputsOf(initial));
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const [error, setError] = useState(null);
+  // The default app reaches the chat composers through the platform config.
+  const { refreshConfig } = usePlatformConfig() || {};
 
   const ceiling = stored.maxFilesCeiling;
   const limits = parseLimits(limitInputs, stored.limits || {}, ceiling);
@@ -247,6 +257,16 @@ function ProjectSharingSettingsPanel() {
   };
 
   const save = async () => {
+    // The old Save button was disabled for these; the bar's Save says why it refuses.
+    if (limits.invalid.length > 0 || sharesInvalid) {
+      setError(
+        t(
+          'admin.projects.sharing.invalidInput',
+          'Fix the highlighted fields first (a number in the allowed range, or empty).'
+        )
+      );
+      return false;
+    }
     setSaving(true);
     setError(null);
     try {
@@ -297,12 +317,25 @@ function ProjectSharingSettingsPanel() {
       setLimitInputs(limitInputsOf(settings.limits));
       setShareInputs(shareInputsOf(settings));
       setSaved(true);
+      return true;
     } catch (err) {
       setError(getAdminApiErrorMessage(err));
+      return false;
     } finally {
       setSaving(false);
     }
   };
+
+  // Back to what is stored: the draft, the limit and share inputs as typed, the messages.
+  const discard = () => {
+    setDraft(stored);
+    setLimitInputs(limitInputsOf(stored.limits));
+    setShareInputs(shareInputsOf(stored));
+    setSaved(false);
+    setError(null);
+  };
+
+  useSaveSection('project-sharing', { dirty, saving, error, save, discard });
 
   const toggle = (key, label, help) => (
     <label className="flex items-start gap-2 text-sm text-gray-700 dark:text-gray-300">
@@ -677,26 +710,12 @@ function ProjectSharingSettingsPanel() {
             )}
           </p>
         </fieldset>
-        {error && (
-          <p role="alert" className="text-sm text-red-600 dark:text-red-400">
-            {error}
+        {/* The save error is shown by the page's bar; Save and Discard live there too. */}
+        {saved && !dirty && (
+          <p className="text-sm text-right text-green-700 dark:text-green-400">
+            {t('admin.projects.sharing.saved', 'Saved')}
           </p>
         )}
-        <div className="flex items-center justify-end gap-3">
-          {saved && !dirty && (
-            <span className="text-sm text-green-700 dark:text-green-400">
-              {t('admin.projects.sharing.saved', 'Saved')}
-            </span>
-          )}
-          <button
-            type="button"
-            onClick={save}
-            disabled={!dirty || saving || limits.invalid.length > 0 || sharesInvalid}
-            className="px-4 py-2 text-sm rounded-md bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-50"
-          >
-            {t('common.save', 'Save')}
-          </button>
-        </div>
       </div>
     </details>
   );

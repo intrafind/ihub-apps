@@ -393,7 +393,7 @@ export function setupMiddleware(app, platformConfig = {}) {
       'X-File-Name',
       'If-Match'
     ];
-    const REQUIRED_EXPOSED_HEADERS = ['Content-Disposition', 'ETag'];
+    const REQUIRED_EXPOSED_HEADERS = ['Content-Disposition', 'ETag', 'Default-Model-Assigned'];
     let allowedHeaders;
     if (Array.isArray(corsConfig.allowedHeaders) && corsConfig.allowedHeaders.length > 0) {
       const seen = new Set(corsConfig.allowedHeaders.map(h => String(h).toLowerCase()));
@@ -414,7 +414,8 @@ export function setupMiddleware(app, platformConfig = {}) {
       // side panel (origin chrome-extension://<id>) cannot see the filename
       // the server sent and has to fall back to the document title. Without
       // ETag a cross-origin admin client cannot read the config revision it
-      // must send back as If-Match.
+      // must send back as If-Match. Without Default-Model-Assigned it cannot
+      // tell the admin that saving a model made another one the default.
       exposedHeaders: Array.isArray(corsConfig.exposedHeaders)
         ? [
             ...corsConfig.exposedHeaders,

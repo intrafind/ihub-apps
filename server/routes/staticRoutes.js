@@ -15,6 +15,8 @@ import {
 } from '../utils/basePath.js';
 import configCache from '../configCache.js';
 import { pickRequestLanguage } from '../utils/uiTextRefs.js';
+import { getEmbedAuthOrigins } from '../utils/embedAuth.js';
+import { applyFrameAncestorsCsp } from '../utils/frameAncestors.js';
 import { buildIndexHtml, localizePwaConfig, resolvePwaConfig } from '../services/pwa/PwaService.js';
 
 /**
@@ -63,6 +65,13 @@ export default function registerStaticRoutes(app, { isPackaged, rootDir, basePat
       setHeaders: (res, filePath) => {
         if (isHashedAsset(staticPath, filePath)) {
           res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+        }
+        // `/index.html` asked for by name is served from here, not by the SPA handler below, and
+        // is the same page: it gets the same framing policy. Other HTML files keep what their
+        // own routes say (the Nextcloud embed pages set theirs).
+        if (filePath === path.join(staticPath, 'index.html')) {
+          const framingOrigins = getEmbedAuthOrigins(configCache.getPlatform());
+          if (framingOrigins.length > 0) applyFrameAncestorsCsp(res, framingOrigins);
         }
       }
     };
@@ -141,6 +150,9 @@ export default function registerStaticRoutes(app, { isPackaged, rootDir, basePat
       if (relativePath.startsWith('/share/')) {
         res.set('X-Robots-Tag', 'noindex, nofollow');
       }
+      // With host origins configured for the sign-in in a frame, only those sites may frame iHub.
+      const framingOrigins = getEmbedAuthOrigins(configCache.getPlatform());
+      if (framingOrigins.length > 0) applyFrameAncestorsCsp(res, framingOrigins);
       if (html !== null) {
         res.set('Content-Type', 'text/html; charset=utf-8');
         res.set('Cache-Control', 'no-cache');

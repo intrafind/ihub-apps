@@ -53,7 +53,9 @@ export const ifMatch = revision =>
  * @param {{language?: string}} [options]
  * @returns {Promise<{enabled: boolean, canCreate: boolean, canShare: boolean,
  *   canPublish: boolean, maxApps: number, used: number, generator: boolean,
- *   capabilities: Object}>} The `userApps` block of the answer.
+ *   generatorEnabled: boolean, capabilities: Object}>} The `userApps` block of the
+ *   answer. `generator` needs create rights; `generatorEnabled` says only that
+ *   drafting with AI is on, for the editor of an app the caller may change.
  */
 export const fetchUserAppsConfig = async ({ language } = {}) => {
   const data = await call(() =>
@@ -110,6 +112,47 @@ export const generateUserApp = ({ description, language, signal } = {}) =>
     apiClient.post(
       `${APPS_PATH}/_generate`,
       { description, ...(language ? { language } : {}) },
+      { timeout: USER_APP_DRAFT_TIMEOUT_MS, signal }
+    )
+  );
+
+/**
+ * Ask an AI model for one change to a personal app, or one question about it
+ * (`POST /api/apps/_revise`). Request and response are those of the admin
+ * route (`POST /api/admin/apps/_revise`); nothing is stored. Aborting the
+ * signal cancels the request, and the server then stops the model call.
+ *
+ * @param {Object} request
+ * @param {string} [request.appId] - The personal app the turn is for. The editor
+ *   always sends it: a caller who may edit the app but not create apps needs it.
+ * @param {Object} request.draft - The app's content as the editor holds it.
+ * @param {Array<{role: 'author'|'builder', kind?: string, text: string}>} request.conversation
+ * @param {string} [request.language] - The content language of the app.
+ * @param {string[]} [request.fields] - Restrict the change to these content keys.
+ * @param {boolean} [request.allowQuestions] - `false`: the answer is never a question.
+ * @param {AbortSignal} [request.signal]
+ * @returns {Promise<Object>} `{ reply, text, question, patch, changed, suggestions, warnings, model }`
+ */
+export const reviseUserApp = ({
+  appId,
+  draft,
+  conversation,
+  language,
+  fields,
+  allowQuestions,
+  signal
+} = {}) =>
+  call(() =>
+    apiClient.post(
+      `${APPS_PATH}/_revise`,
+      {
+        ...(appId ? { appId } : {}),
+        draft,
+        conversation,
+        ...(language ? { language } : {}),
+        ...(Array.isArray(fields) && fields.length > 0 ? { fields } : {}),
+        ...(typeof allowQuestions === 'boolean' ? { allowQuestions } : {})
+      },
       { timeout: USER_APP_DRAFT_TIMEOUT_MS, signal }
     )
   );

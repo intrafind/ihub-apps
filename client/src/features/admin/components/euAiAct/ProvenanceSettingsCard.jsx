@@ -12,7 +12,7 @@ import {
 } from '../../../../../../shared/provenanceSettings.js';
 import AdminLoadError from '../AdminLoadError';
 import EuAiActCard from './EuAiActCard';
-import { BUTTON_PRIMARY, BUTTON_SECONDARY, INPUT } from './KeyDialogs';
+import { INPUT } from './KeyDialogs';
 import {
   SERVER_FIELD,
   buildBody,
@@ -25,6 +25,8 @@ import {
 import EuAiActStateNote from './EuAiActStateNote';
 import { useUnsavedChanges } from '../../hooks/useUnsavedChanges';
 import UnsavedChangesDialog from '../UnsavedChangesDialog';
+import { useSaveSection } from '../SaveSections';
+import ImplicitSubmit from '../../../../shared/components/ImplicitSubmit';
 
 const FIELD_ORDER = [
   'retentionDays',
@@ -113,6 +115,8 @@ export default function ProvenanceSettingsCard({ onSaved }) {
   const [saving, setSaving] = useState(false);
   const formRef = useRef(null);
   const messageRef = useRef(null);
+  // Resolves the save the bar is waiting on while the confirmation dialog is open.
+  const confirmResolverRef = useRef(null);
 
   const load = useCallback(async () => {
     try {
@@ -210,6 +214,7 @@ export default function ProvenanceSettingsCard({ onSaved }) {
         )
       });
       onSaved?.();
+      return true;
     } catch (err) {
       const list = err?.response?.data?.errors;
       const fieldErrors = {};
@@ -228,13 +233,21 @@ export default function ProvenanceSettingsCard({ onSaved }) {
           getAdminApiErrorMessage(err)
       });
       focusFirst(fieldErrors);
+      return false;
     } finally {
       setSaving(false);
     }
   };
 
-  const submit = event => {
-    event.preventDefault();
+  const settleConfirmation = ok => {
+    const resolve = confirmResolverRef.current;
+    confirmResolverRef.current = null;
+    resolve?.(ok);
+  };
+
+  // The bar's Save: validate, ask for confirmation when the change is consequential (the save
+  // then waits for the answer), then write. Resolves false when nothing was saved.
+  const save = async () => {
     const problems = validateForm(form);
     if (Object.keys(problems).length > 0) {
       setErrors(
@@ -247,17 +260,40 @@ export default function ProvenanceSettingsCard({ onSaved }) {
         text: t('admin.euAiAct.settings.fixErrors', 'Fix the marked fields and save again.')
       });
       focusFirst(problems);
-      return;
+      return false;
     }
     const c = consequences(form, saved);
-    if (needsConfirmation(c)) setConfirming(c);
-    else void doSave();
+    if (needsConfirmation(c)) {
+      return new Promise(resolve => {
+        confirmResolverRef.current = resolve;
+        setConfirming(c);
+      });
+    }
+    return doSave();
+  };
+
+  const confirmSave = async () => {
+    const ok = await doSave();
+    settleConfirmation(ok);
+  };
+
+  const denySave = () => {
+    setConfirming(null);
+    settleConfirmation(false);
   };
 
   const reset = () => {
     setForm(saved);
     setErrors({});
     setMessage(null);
+    setConfirming(null);
+    settleConfirmation(false);
+  };
+
+  // Enter in a field saves, as the bar's Save does.
+  const submit = event => {
+    event.preventDefault();
+    if (dirty && !saving) void save();
   };
 
   const fieldProps = field => ({
@@ -272,6 +308,13 @@ export default function ProvenanceSettingsCard({ onSaved }) {
   const defaultText = value =>
     t('admin.euAiAct.settings.default', 'Default: {{value}}.', { value });
   const dirty = form && saved ? isDirty(form, saved) : false;
+  useSaveSection('provenance', {
+    dirty,
+    saving,
+    error: message?.type === 'error' ? message.text : null,
+    save,
+    discard: reset
+  });
 
   return (
     <EuAiActCard
@@ -293,6 +336,7 @@ export default function ProvenanceSettingsCard({ onSaved }) {
         />
       ) : !form ? null : (
         <form ref={formRef} onSubmit={submit} noValidate className="space-y-8">
+          <ImplicitSubmit disabled={saving} />
           <Group title={t('admin.euAiAct.settings.records', 'Output records')}>
             <Checkbox
               id="provenance-storeRecords"
@@ -574,17 +618,6 @@ export default function ProvenanceSettingsCard({ onSaved }) {
           </Group>
 
           <div className="flex flex-wrap items-center gap-3">
-            <button type="submit" disabled={saving || !dirty} className={BUTTON_PRIMARY}>
-              {t('common.save', 'Save')}
-            </button>
-            <button
-              type="button"
-              onClick={reset}
-              disabled={saving || !dirty}
-              className={BUTTON_SECONDARY}
-            >
-              {t('admin.euAiAct.settings.discard', 'Discard changes')}
-            </button>
             <div ref={messageRef} role="status" aria-live="polite">
               {message && (
                 <p
@@ -638,8 +671,8 @@ export default function ProvenanceSettingsCard({ onSaved }) {
         }
         confirmLabel={t('common.save', 'Save')}
         danger={Boolean(confirming?.retentionLowered)}
-        onConfirm={doSave}
-        onDeny={() => setConfirming(null)}
+        onConfirm={confirmSave}
+        onDeny={denySave}
       />
     </EuAiActCard>
   );

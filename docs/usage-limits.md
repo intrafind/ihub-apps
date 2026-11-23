@@ -19,7 +19,7 @@ Limits are set at four levels. Each level can only **lower** the limit of the le
 | --- | --- | --- |
 | Model | Admin → Models → *model* → **Usage limits (per user)** (`usageLimits` in the model's JSON) | The most one user may use of this model. The global ceiling. |
 | Platform | Admin → Usage Reports → **Limits & quotas** → *Budget across all models* (`platform.json` → `usageLimits.allModels`) | The most one user may use across all models together. |
-| Group | Admin → Groups → *group* → **Usage limits** (`usageLimits` in `groups.json`) | Lower limits for the members, per model, across all models, and for file storage. |
+| Group | Admin → Groups → *group* → **Usage limits** (`usageLimits` in `groups.json`) | Lower limits for the members, per model, across all models, and for file storage. The section shows only the limits that are set; **Add a limit** adds one (all models together, file storage, one model, or all other models) and **Remove** takes it away. |
 | User | Admin → Users → *user* → **Personal usage limits** (`usageLimits` in `users.json`) | Lower limits for one person. |
 
 Who may use a model at all is still decided by the group's `permissions.models`. Limits only apply to models a user can already use.

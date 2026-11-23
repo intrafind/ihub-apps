@@ -81,7 +81,11 @@ jest.unstable_mockModule('../configCache.js', () => ({
   resolveEnvVarsInObject: value => value,
   default: {
     getPlatform: () => ({ defaultLanguage: 'en' }),
-    getModels: () => ({ data: modelsInStore(), etag: 'm' }),
+    // Like the real cache: disabled models only when asked for.
+    getModels: includeDisabled => ({
+      data: modelsInStore().filter(model => includeDisabled || model.enabled !== false),
+      etag: 'm'
+    }),
     getProviders: () => ({ data: clone(store['config/providers.json'].providers), etag: 'p' }),
     getLocalizations: () => ({
       data: {
@@ -169,6 +173,23 @@ describe('allowsMissingApiKey', () => {
     expect(allowsMissingApiKey({ provider: 'openai', url: 'not a url' })).toBe(false);
     expect(allowsMissingApiKey({ provider: 'anthropic', url: 'http://localhost/v1' })).toBe(false);
     expect(allowsMissingApiKey(null)).toBe(false);
+  });
+
+  it('allows models of a custom provider that declares it needs no key', () => {
+    const lmStudio = { id: 'lm-studio', category: 'llm', apiType: 'openai', requiresApiKey: false };
+    expect(
+      allowsMissingApiKey(
+        { provider: 'openai', providerId: 'lm-studio', url: 'http://gpu01:1234/v1' },
+        lmStudio
+      )
+    ).toBe(true);
+    // Only an explicit false counts: a provider that says nothing keeps the requirement.
+    expect(
+      allowsMissingApiKey(
+        { provider: 'openai', providerId: 'gateway', url: 'https://gw/v1' },
+        { id: 'gateway', category: 'llm', apiType: 'openai' }
+      )
+    ).toBe(false);
   });
 });
 
@@ -278,6 +299,29 @@ describe('ApiKeyVerifier.verifyApiKey', () => {
     expect(await verifier.verifyApiKey({ id: 'loc', provider: 'local' })).toEqual({
       success: true,
       apiKey: null
+    });
+  });
+
+  // AI-B10: the admin model test calls disabled models; a disabled vLLM server
+  // was reported as "API key not found" because the lookup skipped it.
+  it('passes a disabled keyless model with no key (admin model test)', async () => {
+    addModel({
+      id: 'local-vllm',
+      provider: 'local',
+      url: 'http://vllm:8000/v1/chat/completions',
+      enabled: false
+    });
+    expect(
+      await verifier.verifyApiKey({ id: 'local-vllm', provider: 'local', enabled: false })
+    ).toEqual({ success: true, apiKey: null });
+  });
+
+  it('resolves the key of a disabled model only when asked to include it', async () => {
+    addModel({ id: 'off', provider: 'openai', apiKey: 'enc:sk-off', enabled: false });
+    expect((await resolveModelApiKey('off')).state).toBe('unknown-model');
+    expect(await resolveModelApiKey('off', { includeDisabled: true })).toMatchObject({
+      state: 'ok',
+      apiKey: 'sk-off'
     });
   });
 

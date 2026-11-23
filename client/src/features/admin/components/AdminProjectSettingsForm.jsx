@@ -3,7 +3,7 @@
 
 import { useTranslation } from 'react-i18next';
 import DynamicLanguageEditor from '../../../shared/components/DynamicLanguageEditor';
-import Icon from '../../../shared/components/Icon';
+import ImplicitSubmit from '../../../shared/components/ImplicitSubmit';
 import { MAX_PROJECT_ID_LENGTH } from '../utils/projectAdmin';
 import ProjectAppSelect from '../../projects/components/ProjectAppSelect';
 import ProjectAvailability from './ProjectAvailability';
@@ -182,8 +182,8 @@ export function ProjectCategoryTagsFields({
  * @param {string} props.tagsText - The tags as typed.
  * @param {(field: string, value: any) => void} props.onFieldChange
  * @param {(text: string) => void} props.onTagsTextChange
- * @param {(event: Event) => void} props.onSubmit
- * @param {() => void} props.onCancel
+ * @param {(event: Event) => void} props.onSubmit - Runs on submit: Enter in a field, or the page's save bar
+ * @param {import('react').Ref<HTMLFormElement>} [props.formRef] - Lets the page's save bar submit the form
  * @returns {JSX.Element}
  */
 function AdminProjectSettingsForm({
@@ -195,15 +195,17 @@ function AdminProjectSettingsForm({
   onFieldChange,
   onTagsTextChange,
   onSubmit,
-  onCancel
+  formRef
 }) {
   const { t } = useTranslation();
   return (
     <form
+      ref={formRef}
       onSubmit={onSubmit}
       noValidate
       className="bg-white dark:bg-gray-800 rounded-lg shadow-xs p-6 space-y-6"
     >
+      <ImplicitSubmit disabled={saving} />
       <div>
         <DynamicLanguageEditor
           label={t('admin.projects.fields.name', 'Name')}
@@ -212,6 +214,8 @@ function AdminProjectSettingsForm({
           onChange={value => onFieldChange('name', value)}
           placeholder={t('admin.projects.fields.namePlaceholder', 'Project name')}
           error={nameError}
+          // No error summary here: the line announces itself.
+          announceError
         />
       </div>
 
@@ -297,31 +301,13 @@ function AdminProjectSettingsForm({
         </div>
       </details>
 
-      <div className="flex items-center justify-between pt-2">
-        <button
-          type="button"
-          onClick={onCancel}
-          className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-600"
-        >
-          {t('common.cancel', 'Cancel')}
-        </button>
-        <p className="hidden sm:block flex-1 px-4 text-right text-xs text-gray-500 dark:text-gray-400">
-          {t(
-            'admin.projects.createHint',
-            'Next you add the documents. Until the project is linked to an app, only administrators see it.'
-          )}
-        </p>
-        <button
-          type="submit"
-          disabled={saving}
-          className="px-6 py-2 text-sm font-medium text-white bg-indigo-600 rounded-lg hover:bg-indigo-700 disabled:opacity-50 flex items-center"
-        >
-          {saving && <Icon name="arrow-path" className="animate-spin h-4 w-4 mr-2" />}
-          {saving
-            ? t('common.saving', 'Saving...')
-            : t('admin.projects.createAndContinue', 'Create and add items')}
-        </button>
-      </div>
+      {/* Create and Cancel are the page's save bar, which shows once something is typed. */}
+      <p className="text-xs text-gray-500 dark:text-gray-400">
+        {t(
+          'admin.projects.createHint',
+          'Next you add the documents. Until the project is linked to an app, only administrators see it.'
+        )}
+      </p>
     </form>
   );
 }

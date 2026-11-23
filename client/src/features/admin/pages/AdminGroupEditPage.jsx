@@ -1,27 +1,40 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
-import { useState, useEffect, useCallback } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
 import DualModeEditor from '../../../shared/components/DualModeEditor';
 import GroupFormEditor from '../components/GroupFormEditor';
 import { getAdminApiErrorMessage, makeAdminApiCall } from '../../../api/adminApi';
+import { etagOf, isConfigConflict } from '../../../api/adminConfigRevision';
 import { getSchemaByType } from '../../../utils/schemaService';
 import AdminLoadError from '../components/AdminLoadError';
+import GroupMembersSection from '../components/GroupMembersSection';
 import UsageLimitsEditor, { normalizeUsageLimits } from '../components/UsageLimitsEditor';
 import { useAdminResourceEditor } from '../hooks/useAdminResourceEditor';
-import AdminEditPageShell, {
-  AdminSaveCancelButtons
-} from '../../../shared/components/AdminEditPageShell';
+import AdminEditPageShell from '../../../shared/components/AdminEditPageShell';
+import AdminSaveBar from '../components/AdminSaveBar';
+import ImplicitSubmit from '../../../shared/components/ImplicitSubmit';
+import useSaveAttempts from '../hooks/useSaveAttempts';
+import { FIELD_KEYS } from '../utils/fieldErrors';
+import { groupCloneDraft } from '../utils/groupClone';
 
 function AdminGroupEditPage() {
   const { t } = useTranslation();
   const { groupId } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState(null);
+  // The save was refused (412) because groups.json changed after this form loaded it.
+  const [conflict, setConflict] = useState(false);
+  // The revision (`ETag`) of groups.json this form was loaded from; a save sends it as
+  // `If-Match`, so it cannot overwrite a change someone else saved in between.
+  const revisionRef = useRef(null);
+  // Bumped by Discard, so editors that keep their own view state start over.
+  const [editorGeneration, setEditorGeneration] = useState(0);
   const [resources, setResources] = useState({
     apps: [],
     models: [],
@@ -32,10 +45,25 @@ function AdminGroupEditPage() {
   const [jsonSchema, setJsonSchema] = useState(null);
   // Every group, so the editor can show what this one inherits.
   const [allGroups, setAllGroups] = useState({});
+  // What the form reports (`{ isValid, errors }`) and in which mode the editor is: a save
+  // from the form waits until the form is valid.
+  const [formValidation, setFormValidation] = useState({ isValid: true, errors: [] });
+  const [editorMode, setEditorMode] = useState('form');
+  // Save attempts that the form refused; from the first one on every error shows.
+  // Counted per resource: another resource or a blank "new" form opens without errors.
+  const [saveAttempts, countSaveAttempt] = useSaveAttempts(groupId);
+  // The ID the server refused as taken (409).
+  const [refusedId, setRefusedId] = useState(null);
+  const isNewGroup = groupId === 'new';
+  const takenIds = useMemo(() => {
+    const ids = isNewGroup ? Object.keys(allGroups) : [];
+    return refusedId ? [...ids, refusedId] : ids;
+  }, [allGroups, isNewGroup, refusedId]);
 
   const loadResource = useCallback(async id => {
     const response = await makeAdminApiCall('/admin/groups');
     const data = response.data;
+    revisionRef.current = etagOf(response);
 
     const groupData = data.groups[id];
     if (!groupData) {
@@ -46,8 +74,8 @@ function AdminGroupEditPage() {
     return groupData;
   }, []);
 
-  const makeDefault = useCallback(
-    () => ({
+  const makeDefault = useCallback(() => {
+    const defaults = {
       id: '',
       name: '',
       description: '',
@@ -61,30 +89,38 @@ function AdminGroupEditPage() {
       mappings: [],
       inherits: [],
       enabled: true
-    }),
-    []
-  );
+    };
+    const template = location.state?.templateGroup;
+    // A clone from the list opens with the original's settings, a proposed
+    // `<id>-copy` and no external mappings (see groupCloneDraft).
+    return template ? groupCloneDraft(defaults, template, location.state?.cloneId) : defaults;
+  }, [location.state]);
 
   const saveResource = useCallback(async (data, id) => {
     const method = id === 'new' ? 'POST' : 'PUT';
     const url = id === 'new' ? '/admin/groups' : `/admin/groups/${id}`;
 
-    await makeAdminApiCall(url, {
+    const headers = { 'Content-Type': 'application/json' };
+    if (method === 'PUT' && revisionRef.current) headers['If-Match'] = revisionRef.current;
+    const response = await makeAdminApiCall(url, {
       method,
-      headers: {
-        'Content-Type': 'application/json'
-      },
+      headers,
       // `null` clears limits saved before; the server drops empty parts.
       body: { ...data, usageLimits: normalizeUsageLimits(data.usageLimits) }
     });
+    // A later save from this form builds on what it just wrote.
+    revisionRef.current = etagOf(response) ?? revisionRef.current;
   }, []);
 
   const {
     data: group,
     setData: setGroup,
+    initialData,
+    isDirty,
     loading,
     error,
     save,
+    reload,
     blocker
   } = useAdminResourceEditor({ resourceId: groupId, loadResource, makeDefault, saveResource });
 
@@ -125,6 +161,12 @@ function AdminGroupEditPage() {
   const handleSave = async data => {
     if (!data) data = group;
 
+    // The form names what is missing at its fields and in its summary.
+    if (editorMode === 'form' && !formValidation.isValid) {
+      countSaveAttempt();
+      return;
+    }
+
     if (!data.id || !data.name) {
       setSaveError(
         t('admin.groups.validation.idAndNameRequired', 'Group ID and name are required')
@@ -135,14 +177,52 @@ function AdminGroupEditPage() {
     try {
       setSaving(true);
       setSaveError(null);
+      setConflict(false);
       await save();
-      // Success - axios doesn't have response.ok, successful responses are returned directly
-      navigate('/admin/groups');
+      // A new group opens on its own page, where its members are added; an
+      // edited one goes back to the list.
+      navigate(
+        groupId === 'new' ? `/admin/groups/${encodeURIComponent(data.id)}` : '/admin/groups'
+      );
     } catch (err) {
+      // A taken ID belongs to the ID field: the form says it there and in its summary.
+      // The JSON mode shows no form, so there the page says it.
+      if (isNewGroup && err?.response?.status === 409) {
+        setRefusedId(data.id);
+        countSaveAttempt();
+        if (editorMode === 'form') return;
+        setSaveError(t(FIELD_KEYS.idTaken));
+        return;
+      }
+      // Someone else saved the groups after this page loaded them: nothing was written, and
+      // the page keeps the admin's edits until they reload.
+      if (isConfigConflict(err)) {
+        setConflict(true);
+        return;
+      }
       setSaveError(getAdminApiErrorMessage(err));
     } finally {
       setSaving(false);
     }
+  };
+
+  /** Load the group as it is stored now (dropping this form's edits) after a conflict. */
+  const handleReloadAfterConflict = async () => {
+    try {
+      await reload();
+      setConflict(false);
+      setSaveError(null);
+      setEditorGeneration(generation => generation + 1);
+    } catch (err) {
+      setSaveError(getAdminApiErrorMessage(err));
+    }
+  };
+
+  const handleDiscard = () => {
+    setGroup(initialData);
+    setSaveError(null);
+    setConflict(false);
+    setEditorGeneration(generation => generation + 1);
   };
 
   const handleDataChange = newData => {
@@ -225,6 +305,37 @@ function AdminGroupEditPage() {
         </div>
       </div>
 
+      {conflict && (
+        <div
+          role="alert"
+          className="mb-6 bg-yellow-50 dark:bg-yellow-900/30 border border-yellow-200 dark:border-yellow-800 rounded-md p-4"
+        >
+          <div className="flex">
+            <div className="shrink-0">
+              <Icon name="warning" size="md" className="text-yellow-500" />
+            </div>
+            <div className="ml-3">
+              <h3 className="text-sm font-medium text-yellow-800 dark:text-yellow-200">
+                {t('admin.groups.edit.conflict.title', 'Changed by someone else')}
+              </h3>
+              <p className="mt-2 text-sm text-yellow-700 dark:text-yellow-300">
+                {t(
+                  'admin.groups.edit.conflict.message',
+                  'The groups were changed by someone else after you opened this page. Nothing was saved. Reload to see the current version, then make your changes again.'
+                )}
+              </p>
+              <button
+                type="button"
+                onClick={handleReloadAfterConflict}
+                className="mt-3 inline-flex items-center px-3 py-1.5 border border-yellow-300 dark:border-yellow-700 text-sm font-medium rounded-md text-yellow-800 dark:text-yellow-100 bg-white dark:bg-yellow-900/50 hover:bg-yellow-100 dark:hover:bg-yellow-900 focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-yellow-500"
+              >
+                {t('admin.groups.edit.conflict.reload', 'Reload')}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {saveError && (
         <div className="mb-6 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded-md p-4">
           <div className="flex">
@@ -241,15 +352,24 @@ function AdminGroupEditPage() {
         </div>
       )}
 
-      <form onSubmit={handleFormSubmit} className="space-y-8">
+      {/* noValidate: the form's own messages come first (see handleSave). */}
+      <form onSubmit={handleFormSubmit} noValidate className="space-y-8">
+        <ImplicitSubmit disabled={saving} />
         <DualModeEditor
           value={group}
+          savedValue={initialData}
           onChange={handleDataChange}
           formComponent={GroupFormEditor}
+          onValidationChange={setFormValidation}
+          onModeChange={setEditorMode}
           formProps={{
             resources,
             groups: allGroups,
-            jsonSchema
+            jsonSchema,
+            isNewGroup,
+            showAllErrors: saveAttempts > 0,
+            summaryFocusKey: saveAttempts,
+            takenIds
           }}
           jsonSchema={jsonSchema}
           title={
@@ -259,7 +379,22 @@ function AdminGroupEditPage() {
           }
         />
 
+        {groupId === 'new' ? (
+          <p className="text-sm text-gray-600 dark:text-gray-400" data-testid="group-members-hint">
+            {t(
+              'admin.groups.members.saveFirst',
+              'Save the group first, then add its members here.'
+            )}
+          </p>
+        ) : (
+          <GroupMembersSection
+            groupId={groupId}
+            hasExternalMappings={(group?.mappings || []).length > 0}
+          />
+        )}
+
         <UsageLimitsEditor
+          key={editorGeneration}
           level="group"
           value={group?.usageLimits}
           modelIds={group?.permissions?.models}
@@ -272,20 +407,14 @@ function AdminGroupEditPage() {
             })
           }
         />
-
-        {/* Save buttons */}
-        <AdminSaveCancelButtons
-          onCancel={() => navigate('/admin/groups')}
-          cancelLabel={t('admin.groups.edit.cancel', 'Cancel')}
-          saving={saving}
-          saveLabel={
-            groupId === 'new'
-              ? t('admin.groups.edit.create', 'Create Group')
-              : t('admin.groups.edit.save', 'Save Group')
-          }
-          savingLabel={t('admin.groups.edit.saving', 'Saving...')}
-        />
       </form>
+
+      <AdminSaveBar
+        dirty={isDirty}
+        saving={saving}
+        onSave={() => void handleSave(group)}
+        onDiscard={handleDiscard}
+      />
     </AdminEditPageShell>
   );
 }

@@ -7,6 +7,7 @@ import { useFilterState } from '../hooks/useFilterState';
 import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
 import AdminUserSkillsTab from '../components/AdminUserSkillsTab';
+import { SaveSectionsBar, SaveSectionsProvider } from '../components/SaveSections';
 import SystemSkillBadge from '../components/SystemSkillBadge';
 import {
   deleteSkill,
@@ -42,6 +43,9 @@ function AdminSkillsPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const requestedTab = searchParams.get('tab');
   const [activeTab, setActiveTab] = useState(TABS.includes(requestedTab) ? requestedTab : 'skills');
+  // The user-skills tab stays mounted (hidden) once opened: its unsaved settings, and the page's
+  // save bar and leave-guard that carry them, survive a switch to the other tab.
+  const [userOpened, setUserOpened] = useState(activeTab === 'user');
 
   const [skills, setSkills] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -219,7 +223,7 @@ function AdminSkillsPage() {
   /*  Render: loading state                                              */
   /* ------------------------------------------------------------------ */
 
-  if (loading && activeTab === 'skills') {
+  if (loading && activeTab === 'skills' && !userOpened) {
     return (
       <div className="flex justify-center items-center h-64">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
@@ -231,7 +235,7 @@ function AdminSkillsPage() {
   /*  Render: error-only state (before skills loaded)                    */
   /* ------------------------------------------------------------------ */
 
-  if (error && skills.length === 0 && activeTab === 'skills') {
+  if (error && skills.length === 0 && activeTab === 'skills' && !userOpened) {
     return (
       <AdminLoadError
         title={t('admin.skills.loadError', 'Error loading skills')}
@@ -246,348 +250,363 @@ function AdminSkillsPage() {
   /* ------------------------------------------------------------------ */
 
   return (
-    <div>
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Page header */}
-        <div className="sm:flex sm:items-center">
-          <div className="sm:flex-auto">
-            <h1
-              ref={headingRef}
-              tabIndex={-1}
-              className="text-2xl font-semibold text-gray-900 dark:text-gray-100 focus:outline-hidden focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 rounded-sm"
-            >
-              {activeTab === 'user'
-                ? t('admin.skills.userSkills.title', 'User Skills')
-                : t('admin.skills.title', 'Skill Management')}
-            </h1>
-            <p className="mt-2 text-sm text-gray-700 dark:text-gray-300">
-              {activeTab === 'user'
-                ? t(
-                    'admin.skills.userSkills.subtitle',
-                    'Skills your users wrote and shared with groups or everyone'
-                  )
-                : t(
-                    'admin.skills.subtitle',
-                    'Install, configure, and manage skills for your iHub Apps'
-                  )}
-            </p>
-          </div>
-          {activeTab === 'skills' && (
-            <div className="mt-4 sm:mt-0 sm:ml-16 sm:flex-none">
-              <div className="flex flex-wrap gap-2">
-                {/* Import / Upload skill button */}
-                <div className="relative">
-                  <input
-                    type="file"
-                    accept=".zip"
-                    onChange={handleImportSkill}
-                    className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-                    disabled={uploading}
-                  />
-                  <button
-                    type="button"
-                    className="inline-flex items-center justify-center rounded-md border border-transparent bg-indigo-600 px-4 py-2 text-sm font-medium text-white shadow-xs hover:bg-indigo-700 focus:outline-hidden focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
-                    disabled={uploading}
-                    title={t('admin.skills.importSkillTitle', 'Import Skill (.zip)')}
-                  >
-                    <Icon
-                      name={uploading ? 'refresh' : 'upload'}
-                      className={`h-4 w-4 mr-2 ${uploading ? 'animate-spin' : ''}`}
+    <SaveSectionsProvider>
+      <div>
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+          {/* Page header */}
+          <div className="sm:flex sm:items-center">
+            <div className="sm:flex-auto">
+              <h1
+                ref={headingRef}
+                tabIndex={-1}
+                className="text-2xl font-semibold text-gray-900 dark:text-gray-100 focus:outline-hidden focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 rounded-sm"
+              >
+                {activeTab === 'user'
+                  ? t('admin.skills.userSkills.title', 'User Skills')
+                  : t('admin.skills.title', 'Skill Management')}
+              </h1>
+              <p className="mt-2 text-sm text-gray-700 dark:text-gray-300">
+                {activeTab === 'user'
+                  ? t(
+                      'admin.skills.userSkills.subtitle',
+                      'Skills your users wrote and shared with groups or everyone'
+                    )
+                  : t(
+                      'admin.skills.subtitle',
+                      'Install, configure, and manage skills for your iHub Apps'
+                    )}
+              </p>
+            </div>
+            {activeTab === 'skills' && (
+              <div className="mt-4 sm:mt-0 sm:ml-16 sm:flex-none">
+                <div className="flex flex-wrap gap-2">
+                  {/* Import / Upload skill button */}
+                  <div className="relative">
+                    <input
+                      type="file"
+                      accept=".zip"
+                      onChange={handleImportSkill}
+                      className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                      disabled={uploading}
                     />
-                    {uploading
-                      ? t('admin.skills.uploading', 'Uploading...')
-                      : t('admin.skills.importSkill', 'Import Skill')}
-                  </button>
+                    <button
+                      type="button"
+                      className="inline-flex items-center justify-center rounded-md border border-transparent bg-indigo-600 px-4 py-2 text-sm font-medium text-white shadow-xs hover:bg-indigo-700 focus:outline-hidden focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                      disabled={uploading}
+                      title={t('admin.skills.importSkillTitle', 'Import Skill (.zip)')}
+                    >
+                      <Icon
+                        name={uploading ? 'refresh' : 'upload'}
+                        className={`h-4 w-4 mr-2 ${uploading ? 'animate-spin' : ''}`}
+                      />
+                      {uploading
+                        ? t('admin.skills.uploading', 'Uploading...')
+                        : t('admin.skills.importSkill', 'Import Skill')}
+                    </button>
+                  </div>
                 </div>
               </div>
+            )}
+          </div>
+
+          <div className="mt-6 border-b border-gray-200 dark:border-gray-700">
+            <nav
+              className="-mb-px flex space-x-8"
+              aria-label={t('admin.skills.tabs.label', 'Skill views')}
+            >
+              {TABS.map(tab => (
+                <button
+                  key={tab}
+                  type="button"
+                  onClick={() => {
+                    if (tab === 'user') setUserOpened(true);
+                    setActiveTab(tab);
+                  }}
+                  aria-current={activeTab === tab ? 'page' : undefined}
+                  className={`whitespace-nowrap pb-4 px-1 border-b-2 font-medium text-sm ${
+                    activeTab === tab
+                      ? 'border-indigo-500 text-indigo-600 dark:text-indigo-400'
+                      : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-400 dark:hover:text-gray-300'
+                  }`}
+                >
+                  <Icon
+                    name={tab === 'user' ? 'users' : 'sparkles'}
+                    className="inline-block h-5 w-5 mr-2"
+                  />
+                  {tab === 'user'
+                    ? t('admin.skills.tabs.userSkills', 'User skills')
+                    : t('admin.skills.tabs.skills', 'Skills')}
+                </button>
+              ))}
+            </nav>
+          </div>
+
+          {userOpened && (
+            <div hidden={activeTab !== 'user'}>
+              <AdminUserSkillsTab onGlobalSkillsChanged={loadSkills} />
             </div>
           )}
-        </div>
-
-        <div className="mt-6 border-b border-gray-200 dark:border-gray-700">
-          <nav
-            className="-mb-px flex space-x-8"
-            aria-label={t('admin.skills.tabs.label', 'Skill views')}
-          >
-            {TABS.map(tab => (
-              <button
-                key={tab}
-                type="button"
-                onClick={() => setActiveTab(tab)}
-                aria-current={activeTab === tab ? 'page' : undefined}
-                className={`whitespace-nowrap pb-4 px-1 border-b-2 font-medium text-sm ${
-                  activeTab === tab
-                    ? 'border-indigo-500 text-indigo-600 dark:text-indigo-400'
-                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-400 dark:hover:text-gray-300'
-                }`}
-              >
-                <Icon
-                  name={tab === 'user' ? 'users' : 'sparkles'}
-                  className="inline-block h-5 w-5 mr-2"
+          {activeTab !== 'user' && (
+            <>
+              {/* Inline error banner (shown alongside data; the only place a reload error shows once the user tab is open) */}
+              {error && (skills.length > 0 || userOpened) && (
+                <AdminLoadError
+                  message={error}
+                  framed={false}
+                  className="mt-4"
+                  action={{ label: t('common.dismiss', 'Dismiss'), onClick: () => setError(null) }}
                 />
-                {tab === 'user'
-                  ? t('admin.skills.tabs.userSkills', 'User skills')
-                  : t('admin.skills.tabs.skills', 'Skills')}
-              </button>
-            ))}
-          </nav>
-        </div>
+              )}
 
-        {activeTab === 'user' ? (
-          <AdminUserSkillsTab onGlobalSkillsChanged={loadSkills} />
-        ) : (
-          <>
-            {/* Inline error banner (shown alongside data) */}
-            {error && skills.length > 0 && (
-              <AdminLoadError
-                message={error}
-                framed={false}
+              <AdminStatusNotice
+                message={notice}
+                onDismiss={() => setNotice('')}
                 className="mt-4"
-                action={{ label: t('common.dismiss', 'Dismiss'), onClick: () => setError(null) }}
               />
-            )}
 
-            <AdminStatusNotice message={notice} onDismiss={() => setNotice('')} className="mt-4" />
-
-            {/* Search and filter controls */}
-            <div className="mt-8 flex flex-col sm:flex-row gap-4">
-              <div className="flex-1">
-                <div className="relative">
-                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                    <Icon name="search" className="h-5 w-5 text-gray-500" />
+              {/* Search and filter controls */}
+              <div className="mt-8 flex flex-col sm:flex-row gap-4">
+                <div className="flex-1">
+                  <div className="relative">
+                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                      <Icon name="search" className="h-5 w-5 text-gray-500" />
+                    </div>
+                    <input
+                      type="text"
+                      className="block w-full pl-10 pr-3 py-2 border border-admin-control-border dark:border-admin-control-border-dark rounded-md leading-5 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 focus:outline-hidden focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                      placeholder={t('admin.skills.searchPlaceholder', 'Search skills...')}
+                      value={searchTerm}
+                      onChange={e => setSearchTerm(e.target.value)}
+                    />
                   </div>
-                  <input
-                    type="text"
-                    className="block w-full pl-10 pr-3 py-2 border border-admin-control-border dark:border-admin-control-border-dark rounded-md leading-5 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 focus:outline-hidden focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
-                    placeholder={t('admin.skills.searchPlaceholder', 'Search skills...')}
-                    value={searchTerm}
-                    onChange={e => setSearchTerm(e.target.value)}
-                  />
+                </div>
+                <div className="sm:w-48">
+                  <select
+                    value={filterEnabled}
+                    onChange={e => setFilterEnabled(e.target.value)}
+                    className="block w-full px-3 py-2 border border-admin-control-border dark:border-admin-control-border-dark rounded-md shadow-xs bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-hidden focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                  >
+                    <option value="all">{t('admin.skills.filterAll', 'All Skills')}</option>
+                    <option value="enabled">
+                      {t('admin.skills.filterEnabled', 'Enabled Only')}
+                    </option>
+                    <option value="disabled">
+                      {t('admin.skills.filterDisabled', 'Disabled Only')}
+                    </option>
+                  </select>
                 </div>
               </div>
-              <div className="sm:w-48">
-                <select
-                  value={filterEnabled}
-                  onChange={e => setFilterEnabled(e.target.value)}
-                  className="block w-full px-3 py-2 border border-admin-control-border dark:border-admin-control-border-dark rounded-md shadow-xs bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-hidden focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
-                >
-                  <option value="all">{t('admin.skills.filterAll', 'All Skills')}</option>
-                  <option value="enabled">{t('admin.skills.filterEnabled', 'Enabled Only')}</option>
-                  <option value="disabled">
-                    {t('admin.skills.filterDisabled', 'Disabled Only')}
-                  </option>
-                </select>
-              </div>
-            </div>
 
-            {/* Skills table */}
-            <div className="mt-8 flex flex-col">
-              <div className="-my-2 -mx-4 overflow-x-auto sm:-mx-6 lg:-mx-8">
-                <div className="inline-block min-w-full py-2 align-middle md:px-6 lg:px-8">
-                  <div className="overflow-hidden shadow-sm ring-1 ring-black/5 md:rounded-lg">
-                    <table className="min-w-full divide-y divide-gray-300 dark:divide-gray-700">
-                      <thead className="bg-gray-50 dark:bg-gray-800">
-                        <tr>
-                          <th
-                            scope="col"
-                            className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider"
-                          >
-                            {t('admin.skills.table.name', 'Name')}
-                          </th>
-                          <th
-                            scope="col"
-                            className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider"
-                          >
-                            {t('admin.skills.table.description', 'Description')}
-                          </th>
-                          <th
-                            scope="col"
-                            className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider"
-                          >
-                            {t('admin.skills.table.version', 'Version')}
-                          </th>
-                          <th
-                            scope="col"
-                            className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider"
-                          >
-                            {t('admin.skills.table.status', 'Status')}
-                          </th>
-                          <th scope="col" className="relative px-6 py-3">
-                            <span className="sr-only">
-                              {t('admin.skills.table.actions', 'Actions')}
-                            </span>
-                          </th>
-                        </tr>
-                      </thead>
-                      <tbody className="bg-white dark:bg-gray-900 divide-y divide-gray-200 dark:divide-gray-700">
-                        {sortedSkills.map(skill => (
-                          <tr
-                            key={skill.name}
-                            className="hover:bg-gray-50 dark:hover:bg-gray-800 cursor-pointer"
-                            onClick={() => navigate(`/admin/skills/${skill.name}`)}
-                          >
-                            {/* Name cell */}
-                            <td className="px-6 py-4">
-                              <div className="flex items-center">
-                                <div className="shrink-0 h-8 w-8">
-                                  <div className="h-8 w-8 rounded-full bg-indigo-100 dark:bg-indigo-900 flex items-center justify-center">
-                                    <Icon
-                                      name="sparkles"
-                                      className="h-4 w-4 text-indigo-600 dark:text-indigo-400"
-                                    />
-                                  </div>
-                                </div>
-                                <div className="ml-4">
-                                  <div className="text-sm font-medium text-gray-900 dark:text-gray-100 flex items-center gap-2">
-                                    {skill.displayName || skill.name}
-                                    {skill.isSystem && <SystemSkillBadge />}
-                                  </div>
-                                  <div className="text-sm text-gray-500 dark:text-gray-400">
-                                    {skill.name}
-                                  </div>
-                                </div>
-                              </div>
-                            </td>
-
-                            {/* Description cell */}
-                            <td className="px-6 py-4">
-                              <div className="text-sm text-gray-900 dark:text-gray-100 max-w-xs truncate">
-                                {skill.description || '-'}
-                              </div>
-                            </td>
-
-                            {/* Version cell */}
-                            <td className="px-6 py-4 text-sm text-gray-900 dark:text-gray-100">
-                              {skill.metadata?.version ? (
-                                <code className="text-xs bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded-sm">
-                                  {skill.metadata.version}
-                                </code>
-                              ) : (
-                                <span className="text-gray-500">-</span>
-                              )}
-                            </td>
-
-                            {/* Status cell */}
-                            <td className="px-6 py-4">
-                              <span
-                                className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                                  skill.enabled !== false
-                                    ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300'
-                                    : 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300'
-                                }`}
-                              >
-                                {skill.enabled !== false
-                                  ? t('admin.skills.enabled', 'Enabled')
-                                  : t('admin.skills.disabled', 'Disabled')}
+              {/* Skills table */}
+              <div className="mt-8 flex flex-col">
+                <div className="-my-2 -mx-4 overflow-x-auto sm:-mx-6 lg:-mx-8">
+                  <div className="inline-block min-w-full py-2 align-middle md:px-6 lg:px-8">
+                    <div className="overflow-hidden shadow-sm ring-1 ring-black/5 md:rounded-lg">
+                      <table className="min-w-full divide-y divide-gray-300 dark:divide-gray-700">
+                        <thead className="bg-gray-50 dark:bg-gray-800">
+                          <tr>
+                            <th
+                              scope="col"
+                              className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider"
+                            >
+                              {t('admin.skills.table.name', 'Name')}
+                            </th>
+                            <th
+                              scope="col"
+                              className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider"
+                            >
+                              {t('admin.skills.table.description', 'Description')}
+                            </th>
+                            <th
+                              scope="col"
+                              className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider"
+                            >
+                              {t('admin.skills.table.version', 'Version')}
+                            </th>
+                            <th
+                              scope="col"
+                              className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider"
+                            >
+                              {t('admin.skills.table.status', 'Status')}
+                            </th>
+                            <th scope="col" className="relative px-6 py-3">
+                              <span className="sr-only">
+                                {t('admin.skills.table.actions', 'Actions')}
                               </span>
-                            </td>
+                            </th>
+                          </tr>
+                        </thead>
+                        <tbody className="bg-white dark:bg-gray-900 divide-y divide-gray-200 dark:divide-gray-700">
+                          {sortedSkills.map(skill => (
+                            <tr
+                              key={skill.name}
+                              className="hover:bg-gray-50 dark:hover:bg-gray-800 cursor-pointer"
+                              onClick={() => navigate(`/admin/skills/${skill.name}`)}
+                            >
+                              {/* Name cell */}
+                              <td className="px-6 py-4">
+                                <div className="flex items-center">
+                                  <div className="shrink-0 h-8 w-8">
+                                    <div className="h-8 w-8 rounded-full bg-indigo-100 dark:bg-indigo-900 flex items-center justify-center">
+                                      <Icon
+                                        name="sparkles"
+                                        className="h-4 w-4 text-indigo-600 dark:text-indigo-400"
+                                      />
+                                    </div>
+                                  </div>
+                                  <div className="ml-4">
+                                    <div className="text-sm font-medium text-gray-900 dark:text-gray-100 flex items-center gap-2">
+                                      {skill.displayName || skill.name}
+                                      {skill.isSystem && <SystemSkillBadge />}
+                                    </div>
+                                    <div className="text-sm text-gray-500 dark:text-gray-400">
+                                      {skill.name}
+                                    </div>
+                                  </div>
+                                </div>
+                              </td>
 
-                            {/* Actions cell */}
-                            <td className="px-6 py-4 text-right text-sm font-medium">
-                              <div className="flex items-center justify-end space-x-2">
-                                {/* Toggle enabled/disabled */}
-                                {!skill.isSystem && (
+                              {/* Description cell */}
+                              <td className="px-6 py-4">
+                                <div className="text-sm text-gray-900 dark:text-gray-100 max-w-xs truncate">
+                                  {skill.description || '-'}
+                                </div>
+                              </td>
+
+                              {/* Version cell */}
+                              <td className="px-6 py-4 text-sm text-gray-900 dark:text-gray-100">
+                                {skill.metadata?.version ? (
+                                  <code className="text-xs bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded-sm">
+                                    {skill.metadata.version}
+                                  </code>
+                                ) : (
+                                  <span className="text-gray-500">-</span>
+                                )}
+                              </td>
+
+                              {/* Status cell */}
+                              <td className="px-6 py-4">
+                                <span
+                                  className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                                    skill.enabled !== false
+                                      ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300'
+                                      : 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300'
+                                  }`}
+                                >
+                                  {skill.enabled !== false
+                                    ? t('admin.skills.enabled', 'Enabled')
+                                    : t('admin.skills.disabled', 'Disabled')}
+                                </span>
+                              </td>
+
+                              {/* Actions cell */}
+                              <td className="px-6 py-4 text-right text-sm font-medium">
+                                <div className="flex items-center justify-end space-x-2">
+                                  {/* Toggle enabled/disabled */}
+                                  {!skill.isSystem && (
+                                    <button
+                                      onClick={e => {
+                                        e.stopPropagation();
+                                        void handleToggleSkill(skill.name);
+                                      }}
+                                      className={`p-2 rounded-full ${
+                                        skill.enabled !== false
+                                          ? 'text-red-600 hover:bg-red-50 dark:hover:bg-red-900/30'
+                                          : 'text-green-700 hover:bg-green-50 dark:hover:bg-green-900/30'
+                                      }`}
+                                      title={
+                                        skill.enabled !== false
+                                          ? t('admin.skills.disable', 'Disable')
+                                          : t('admin.skills.enable', 'Enable')
+                                      }
+                                    >
+                                      <Icon
+                                        name={skill.enabled !== false ? 'eye-slash' : 'eye'}
+                                        className="h-4 w-4"
+                                      />
+                                    </button>
+                                  )}
+
+                                  {/* Export */}
                                   <button
                                     onClick={e => {
                                       e.stopPropagation();
-                                      void handleToggleSkill(skill.name);
+                                      void handleExportSkill(skill.name);
                                     }}
-                                    className={`p-2 rounded-full ${
-                                      skill.enabled !== false
-                                        ? 'text-red-600 hover:bg-red-50 dark:hover:bg-red-900/30'
-                                        : 'text-green-700 hover:bg-green-50 dark:hover:bg-green-900/30'
-                                    }`}
+                                    className="p-2 text-green-700 hover:bg-green-50 dark:hover:bg-green-900/30 rounded-full"
+                                    title={t('admin.skills.exportTitle', 'Export Skill')}
+                                  >
+                                    <Icon name="download" className="h-4 w-4" />
+                                  </button>
+
+                                  {/* Edit / view detail */}
+                                  <button
+                                    onClick={e => {
+                                      e.stopPropagation();
+                                      navigate(`/admin/skills/${skill.name}`);
+                                    }}
+                                    className="p-2 text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-900/30 rounded-full"
                                     title={
-                                      skill.enabled !== false
-                                        ? t('admin.skills.disable', 'Disable')
-                                        : t('admin.skills.enable', 'Enable')
+                                      skill.isSystem
+                                        ? t('admin.skills.view', 'View')
+                                        : t('admin.skills.edit', 'Edit')
                                     }
                                   >
                                     <Icon
-                                      name={skill.enabled !== false ? 'eye-slash' : 'eye'}
+                                      name={skill.isSystem ? 'eye' : 'pencil'}
                                       className="h-4 w-4"
                                     />
                                   </button>
-                                )}
 
-                                {/* Export */}
-                                <button
-                                  onClick={e => {
-                                    e.stopPropagation();
-                                    void handleExportSkill(skill.name);
-                                  }}
-                                  className="p-2 text-green-700 hover:bg-green-50 dark:hover:bg-green-900/30 rounded-full"
-                                  title={t('admin.skills.exportTitle', 'Export Skill')}
-                                >
-                                  <Icon name="download" className="h-4 w-4" />
-                                </button>
+                                  {/* Delete (system skills ship with iHub and cannot be removed) */}
+                                  {!skill.isSystem && (
+                                    <button
+                                      onClick={e => {
+                                        e.stopPropagation();
+                                        void handleDeleteSkill(skill.name);
+                                      }}
+                                      className="p-2 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/30 rounded-full"
+                                      title={t('admin.skills.delete', 'Delete')}
+                                    >
+                                      <Icon name="trash" className="h-4 w-4" />
+                                    </button>
+                                  )}
+                                </div>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
 
-                                {/* Edit / view detail */}
-                                <button
-                                  onClick={e => {
-                                    e.stopPropagation();
-                                    navigate(`/admin/skills/${skill.name}`);
-                                  }}
-                                  className="p-2 text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-900/30 rounded-full"
-                                  title={
-                                    skill.isSystem
-                                      ? t('admin.skills.view', 'View')
-                                      : t('admin.skills.edit', 'Edit')
-                                  }
-                                >
-                                  <Icon
-                                    name={skill.isSystem ? 'eye' : 'pencil'}
-                                    className="h-4 w-4"
-                                  />
-                                </button>
-
-                                {/* Delete (system skills ship with iHub and cannot be removed) */}
-                                {!skill.isSystem && (
-                                  <button
-                                    onClick={e => {
-                                      e.stopPropagation();
-                                      void handleDeleteSkill(skill.name);
-                                    }}
-                                    className="p-2 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/30 rounded-full"
-                                    title={t('admin.skills.delete', 'Delete')}
-                                  >
-                                    <Icon name="trash" className="h-4 w-4" />
-                                  </button>
-                                )}
-                              </div>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-
-                    {/* Empty state */}
-                    {sortedSkills.length === 0 && (
-                      <div className="text-center py-12 bg-gray-50 dark:bg-gray-800">
-                        <Icon
-                          name="sparkles"
-                          className="mx-auto h-12 w-12 text-gray-500 dark:text-gray-400"
-                        />
-                        <h3 className="mt-2 text-sm font-medium text-gray-900 dark:text-gray-100">
-                          {t('admin.skills.noSkills', 'No skills found')}
-                        </h3>
-                        <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-                          {t(
-                            'admin.skills.noSkillsDescription',
-                            'Get started by importing a skill package.'
-                          )}
-                        </p>
-                      </div>
-                    )}
+                      {/* Empty state */}
+                      {sortedSkills.length === 0 && (
+                        <div className="text-center py-12 bg-gray-50 dark:bg-gray-800">
+                          <Icon
+                            name="sparkles"
+                            className="mx-auto h-12 w-12 text-gray-500 dark:text-gray-400"
+                          />
+                          <h3 className="mt-2 text-sm font-medium text-gray-900 dark:text-gray-100">
+                            {t('admin.skills.noSkills', 'No skills found')}
+                          </h3>
+                          <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                            {t(
+                              'admin.skills.noSkillsDescription',
+                              'Get started by importing a skill package.'
+                            )}
+                          </p>
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </div>
               </div>
-            </div>
-          </>
-        )}
+            </>
+          )}
+        </div>
+        <ConfirmDialog {...confirmDialogProps} />
+        <SaveSectionsBar leaveGuard />
       </div>
-      <ConfirmDialog {...confirmDialogProps} />
-    </div>
+    </SaveSectionsProvider>
   );
 }
 

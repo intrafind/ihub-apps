@@ -20,6 +20,7 @@ import {
   continuesRun
 } from '../../../../../shared/run/runReducer.js';
 import { projectMessageRuns } from '../runToMessage';
+import { failureCauseMessage } from '../utils/failureCause';
 import { toolApprovalAnswer } from '../toolApprovalAnswer';
 import { fetchAllLedgerEvents, lastLifecycleType } from '../../../shared/run/ledgerPages';
 import { fetchWithAuthRetry, hasSseAuthProvider } from '../../../shared/utils/openSseStream';
@@ -765,7 +766,9 @@ function useAppChat({
         if (messageId && !isCancellingRef.current) {
           const currentMessage = messagesRef.current.find(m => m.id === messageId);
           const errorMessage =
-            data?.message || t('error.streamingError', 'An error occurred during streaming');
+            failureCauseMessage(t, data) ||
+            data?.message ||
+            t('error.streamingError', 'An error occurred during streaming');
           updateAssistantMessage(
             messageId,
             (currentMessage?.content || '') + '\n\n' + errorMessage,
@@ -796,7 +799,8 @@ function useAppChat({
       const isChildFrame = rootRun !== run;
       const childRuns = getRuns(streamState).filter(r => r.parentRunId === rootRun.runId);
       const { content, loading, extras } = projectMessageRuns(rootRun, childRuns, {
-        fallbackErrorMessage: t('error.streamingError', 'An error occurred during streaming')
+        fallbackErrorMessage: t('error.streamingError', 'An error occurred during streaming'),
+        errorMessageFor: error => failureCauseMessage(t, error)
       });
 
       switch (isChildFrame ? 'child-frame' : type) {

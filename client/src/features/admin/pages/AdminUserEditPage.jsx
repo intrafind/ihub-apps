@@ -6,9 +6,9 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
 import { useAdminResourceEditor } from '../hooks/useAdminResourceEditor';
-import AdminEditPageShell, {
-  AdminSaveCancelButtons
-} from '../../../shared/components/AdminEditPageShell';
+import AdminEditPageShell from '../../../shared/components/AdminEditPageShell';
+import AdminSaveBar from '../components/AdminSaveBar';
+import ImplicitSubmit from '../../../shared/components/ImplicitSubmit';
 import ConfirmDialog from '../../../shared/components/ConfirmDialog';
 import DualModeEditor from '../../../shared/components/DualModeEditor';
 import UserFormEditor from '../components/UserFormEditor';
@@ -22,10 +22,12 @@ import { getSchemaByType } from '../../../utils/schemaService';
 import AdminLoadError from '../components/AdminLoadError';
 import UsageLimitsEditor from '../components/UsageLimitsEditor';
 import { buildUserSavePayload } from '../utils/userSavePayload';
+import { FIELD_KEYS } from '../utils/fieldErrors';
 import { apiErrorMessage } from '../../../utils/apiErrorMessage';
 import { useAuth } from '../../../shared/contexts/AuthContext';
 import QuotaBar from '../../../shared/components/QuotaBar';
 import { windowLabel, localizedName } from '../../../shared/utils/usageFormat';
+import useSaveAttempts from '../hooks/useSaveAttempts';
 
 /**
  * Bytes as "12.3 MB" for the file storage bar.
@@ -230,6 +232,16 @@ function AdminUserEditPage() {
   // save that fails after the editor moved on to another user does not force
   // `active` into that user's save (and one that succeeds does not clear it).
   const activeUncertainRef = useRef(null);
+  // The same flag as state, so the save bar stays while a failed save left the server's
+  // `active` unknown: reverting the field to the loaded value must still be savable.
+  const [uncertainFor, setUncertainFor] = useState(null);
+  // What the form reports (`{ isValid, errors }`) and in which mode the editor is: a save
+  // from the form waits until the form is valid.
+  const [formValidation, setFormValidation] = useState({ isValid: true, errors: [] });
+  const [editorMode, setEditorMode] = useState('form');
+  // Save attempts that the form refused; from the first one on every error shows.
+  // Counted per resource: another resource or a blank "new" form opens without errors.
+  const [saveAttempts, countSaveAttempt] = useSaveAttempts(userId);
 
   // Generate a unique ID for new users
   const generateUserId = () => `user_${crypto.randomUUID().replaceAll('-', '_')}`;
@@ -241,6 +253,7 @@ function AdminUserEditPage() {
     error,
     isNew: isNewUser,
     initialData: acceptedUser,
+    isDirty,
     save,
     blocker
   } = useAdminResourceEditor({
@@ -301,10 +314,16 @@ function AdminUserEditPage() {
           body: apiData
         });
       } catch (err) {
-        if (!isNew && 'active' in apiData) activeUncertainRef.current = id;
+        if (!isNew && 'active' in apiData) {
+          activeUncertainRef.current = id;
+          setUncertainFor(id);
+        }
         throw err;
       }
-      if (activeUncertainRef.current === id) activeUncertainRef.current = null;
+      if (activeUncertainRef.current === id) {
+        activeUncertainRef.current = null;
+        setUncertainFor(null);
+      }
     }
   });
 
@@ -337,8 +356,14 @@ function AdminUserEditPage() {
   };
 
   const handleSave = async () => {
+    // The form names what is missing at its fields and in its summary.
+    if (editorMode === 'form' && !formValidation.isValid) {
+      countSaveAttempt();
+      return;
+    }
+
     if (!user.username) {
-      setSaveError(t('admin.users.validation.usernameRequired', 'Username is required'));
+      setSaveError(t(FIELD_KEYS.usernameRequired));
       return;
     }
 
@@ -364,6 +389,12 @@ function AdminUserEditPage() {
   const handleFormSubmit = async e => {
     e.preventDefault();
     await handleSave();
+  };
+
+  const formRef = useRef(null);
+  const handleDiscard = () => {
+    setUser(acceptedUser);
+    setSaveError(null);
   };
 
   if (!loading && error) {
@@ -450,13 +481,20 @@ function AdminUserEditPage() {
         </div>
       )}
 
-      <form onSubmit={handleFormSubmit} className="space-y-8">
+      {/* noValidate: the form's own messages come first (see handleSave). */}
+      <form ref={formRef} onSubmit={handleFormSubmit} noValidate className="space-y-8">
+        <ImplicitSubmit disabled={saving} />
         <DualModeEditor
           value={user}
+          savedValue={acceptedUser}
           onChange={handleDataChange}
           formComponent={UserFormEditor}
+          onValidationChange={setFormValidation}
+          onModeChange={setEditorMode}
           formProps={{
             isNewUser,
+            showAllErrors: saveAttempts > 0,
+            summaryFocusKey: saveAttempts,
             isSelf: !isNewUser && Boolean(currentUser?.id) && currentUser.id === user?.id,
             jsonSchema,
             availableGroups
@@ -494,18 +532,15 @@ function AdminUserEditPage() {
             />
           </>
         )}
-
-        {/* Save buttons */}
-        <AdminSaveCancelButtons
-          onCancel={() => navigate('/admin/users')}
-          cancelLabel={t('admin.users.edit.cancel', 'Cancel')}
-          saving={saving}
-          saveLabel={t('admin.users.edit.save', isNewUser ? 'Create User' : 'Save User')}
-          savingLabel={t('admin.users.edit.saving', 'Saving...')}
-          cancelClassName="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-xs text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-          saveClassName="px-4 py-2 border border-transparent rounded-md shadow-xs text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50"
-        />
       </form>
+
+      <AdminSaveBar
+        dirty={isDirty || uncertainFor === userId}
+        saving={saving}
+        saveLabel={isNewUser ? t('admin.ui.saveBar.create', 'Create') : undefined}
+        onSave={() => formRef.current?.requestSubmit()}
+        onDiscard={handleDiscard}
+      />
     </AdminEditPageShell>
   );
 }

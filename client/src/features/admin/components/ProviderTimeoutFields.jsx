@@ -3,11 +3,7 @@
 
 import { useTranslation } from 'react-i18next';
 import { LLM_TIMEOUT_KEYS, LLM_TIMEOUT_MAX_MS } from '../../../../../shared/llmProviders.js';
-
-const INPUT =
-  'w-full px-3 py-2 border border-admin-control-border dark:border-admin-control-border-dark rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white';
-const LABEL = 'block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2';
-const HINT = 'mt-1 text-xs text-gray-500 dark:text-gray-400';
+import { HELP_CLASS, INPUT_CLASS, LABEL_CLASS } from './formStyles';
 
 /**
  * The transport ceilings of an LLM provider entry. An empty field inherits the
@@ -32,7 +28,7 @@ function ProviderTimeoutFields({ data, onChange, inherited = {} }) {
       <legend className="text-sm font-semibold text-gray-900 dark:text-gray-100 mb-1">
         {t('admin.providers.timeouts.providerTitle', 'Timeouts')}
       </legend>
-      <p className={`${HINT} mb-3`}>
+      <p className={`${HELP_CLASS} mb-3`}>
         {t(
           'admin.providers.timeouts.providerDescription',
           'Apply to all models of this provider. Leave a field empty to use the installation value; a model can still set its own. 0 turns a ceiling off.'
@@ -41,7 +37,7 @@ function ProviderTimeoutFields({ data, onChange, inherited = {} }) {
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         {LLM_TIMEOUT_KEYS.map(key => (
           <div key={key}>
-            <label htmlFor={`provider-${key}`} className={LABEL}>
+            <label htmlFor={`provider-${key}`} className={LABEL_CLASS}>
               {fields[key]}
             </label>
             <input
@@ -56,10 +52,10 @@ function ProviderTimeoutFields({ data, onChange, inherited = {} }) {
                 onChange(key, e.target.value === '' ? undefined : Number(e.target.value))
               }
               aria-describedby={`provider-${key}-hint`}
-              className={INPUT}
+              className={INPUT_CLASS}
             />
             {inherited[key] !== undefined && (
-              <p id={`provider-${key}-hint`} className={HINT}>
+              <p id={`provider-${key}-hint`} className={HELP_CLASS}>
                 {t('admin.providers.timeouts.inherited', 'Inherited: {{value}} ms (installation)', {
                   value: inherited[key]
                 })}

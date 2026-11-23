@@ -56,7 +56,7 @@ jest.mock('../../../client/src/api/integrationsAdminApi', () => ({
 }));
 
 jest.mock('../../../client/src/features/admin/hooks/useUnsavedChanges', () => ({
-  useUnsavedChanges: () => ({ blocker: { state: 'unblocked' }, markSaved: () => {} })
+  useUnsavedChanges: () => ({ isDirty: true, blocker: { state: 'unblocked' }, markSaved: () => {} })
 }));
 
 jest.mock('../../../client/src/features/admin/components/AdminBreadcrumb', () => ({
@@ -370,7 +370,7 @@ describe('builder page', () => {
     });
     expect(screen.getByDisplayValue('legacy')).toBeDisabled();
     await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: /^Save$/ }));
+      fireEvent.click(screen.getByRole('button', { name: /^Save Changes$/ }));
     });
     expect(mockApi.saveCustomIntegration).toHaveBeenCalledWith(
       'legacy',
@@ -400,7 +400,7 @@ describe('builder page', () => {
       renderPage('/admin/integrations/builder/orders');
     });
     await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: /^Save$/ }));
+      fireEvent.click(screen.getByRole('button', { name: /^Save Changes$/ }));
     });
     expect(screen.getByRole('alert')).toHaveTextContent('auth.credentialRef');
     expect(screen.getByRole('tab', { name: 'Sign-in' })).toHaveAttribute('aria-selected', 'true');

@@ -1,12 +1,13 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { fetchUsageBreakdown } from '../../../api/usageReportsAdminApi';
 import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { getLocalizedContent, DEFAULT_LANGUAGE } from '../../../utils/localizeContent';
 import {
+  assignedDefaultModelId,
   fetchMarketplaceInstallations,
   getAdminApiErrorMessage,
   makeAdminApiCall
@@ -16,12 +17,20 @@ import Icon from '../../../shared/components/Icon';
 import DualModeEditor from '../../../shared/components/DualModeEditor';
 import ModelFormEditor from '../components/ModelFormEditor';
 import ChangeHistoryDrawer from '../components/ChangeHistoryDrawer';
+import ItemAccessCard from '../components/access/ItemAccessCard';
 import { useAdminResourceEditor } from '../hooks/useAdminResourceEditor';
 import AdminEditPageShell from '../../../shared/components/AdminEditPageShell';
+import AdminSaveBar from '../components/AdminSaveBar';
+import ImplicitSubmit from '../../../shared/components/ImplicitSubmit';
 import MarketplaceModelReviewNotice from '../components/marketplace/MarketplaceModelReviewNotice';
 import AdminLoadError from '../components/AdminLoadError';
 import { UsageLimitBucketFields, normalizeLimitBucket } from '../components/UsageLimitsEditor';
-import { normalizeModelHint } from '../components/ModelHintSection';
+import { withoutDroppedParts } from '../utils/modelPayload';
+import useSaveAttempts from '../hooks/useSaveAttempts';
+import { FIELD_KEYS } from '../utils/fieldErrors';
+import { runModelTest } from '../utils/modelTestMessages';
+import ModelTestResult from '../components/ModelTestResult';
+import { useDeletedResourceRestore } from '../hooks/useDeletedResourceRestore';
 
 /**
  * A number field that accepts 0. `''`/null/undefined mean "not set" and drop
@@ -91,6 +100,13 @@ function AdminModelEditPage() {
   const isNewModel = modelId === 'new';
 
   const [historyOpen, setHistoryOpen] = useState(false);
+  // The page error above the form. Save sits at the bottom of a long form, so a
+  // refused save moves there; otherwise the admin sees nothing happen.
+  const pageErrorRef = useRef(null);
+  const [pageErrorFocusKey, setPageErrorFocusKey] = useState(0);
+  // The last test of the saved model (`{ modelId, result }`), and whether one is running.
+  const [lastTest, setLastTest] = useState(null);
+  const [testing, setTesting] = useState(false);
   // The model id the marketplace lookup found installed, so a stale answer for
   // a previous model id never shows on another one.
   const [marketplaceModelId, setMarketplaceModelId] = useState(null);
@@ -99,6 +115,21 @@ function AdminModelEditPage() {
   const [apps, setApps] = useState([]);
   const [usage, setUsage] = useState(null);
   const [jsonSchema, setJsonSchema] = useState(null);
+  // What the form reports (`{ isValid, errors }`) and in which mode the editor is: a save
+  // from the form waits until the form is valid; the JSON mode keeps the server's check.
+  const [formValidation, setFormValidation] = useState({ isValid: true, errors: [] });
+  const [editorMode, setEditorMode] = useState('form');
+  // Save attempts that the form refused; from the first one on every error shows.
+  // Counted per resource: another resource or a blank "new" form opens without errors.
+  const [saveAttempts, countSaveAttempt] = useSaveAttempts(modelId);
+  // IDs of the existing models, so a new model hears "taken" before it is saved, and the ID
+  // the server refused as taken (409) after a save.
+  const [existingIds, setExistingIds] = useState([]);
+  const [refusedId, setRefusedId] = useState(null);
+  const takenIds = useMemo(
+    () => (refusedId ? [...existingIds, refusedId] : existingIds),
+    [existingIds, refusedId]
+  );
 
   const makeDefault = useCallback(() => {
     if (location.state?.templateModel) {
@@ -106,7 +137,8 @@ function AdminModelEditPage() {
       return {
         ...DEFAULT_MODEL_DATA,
         ...tpl,
-        id: '',
+        // A clone from the list proposes `<id>-copy` (or the next free one).
+        id: location.state.cloneId ?? '',
         enabled: tpl.enabled !== undefined ? tpl.enabled : true,
         default: false
       };
@@ -203,9 +235,6 @@ function AdminModelEditPage() {
     // Remove helper fields that shouldn't be sent to backend
     delete dataToSend.apiKeySet;
     delete dataToSend.apiKeyMasked;
-    // The `tts` block is only valid on a text-to-speech model (the schema
-    // rejects it elsewhere): switching the type away leaves it behind.
-    if (dataToSend.modelType !== 'tts') delete dataToSend.tts;
     // Only a chat model can be the default; the checkbox is hidden for the
     // other types, so a flag left over from before the type changed goes.
     if ((dataToSend.modelType || 'chat') !== 'chat') dataToSend.default = false;
@@ -222,15 +251,14 @@ function AdminModelEditPage() {
     // previously saved budget; a new model simply leaves it out.
     dataToSend.usageLimits =
       normalizeLimitBucket(data.usageLimits) || (id === 'new' ? undefined : {});
-    // Empty languages are dropped; a hint without any text is removed.
-    dataToSend.hint = normalizeModelHint(data.hint);
-    // A language added without a voice yet means nothing to save.
-    if (dataToSend.tts?.voices) {
-      const voices = Object.entries(dataToSend.tts.voices).filter(([, voice]) => voice);
-      dataToSend.tts = { ...dataToSend.tts };
-      if (voices.length) dataToSend.tts.voices = Object.fromEntries(voices);
-      else delete dataToSend.tts.voices;
-    }
+    // A `tts` block on a model that is no longer text-to-speech, voices without
+    // an ID and hint languages without text are dropped; the form validates the
+    // same result (withoutDroppedParts), so they never block a save.
+    const cleaned = withoutDroppedParts(dataToSend);
+    delete dataToSend.tts;
+    delete dataToSend.hint;
+    if (cleaned.tts) dataToSend.tts = cleaned.tts;
+    dataToSend.hint = cleaned.hint;
 
     // Remove empty and undefined fields (but preserve API key placeholder)
     Object.keys(dataToSend).forEach(key => {
@@ -246,7 +274,9 @@ function AdminModelEditPage() {
     const url = id === 'new' ? '/admin/models' : `/admin/models/${id}`;
     const method = id === 'new' ? 'POST' : 'PUT';
 
-    await makeAdminApiCall(url, {
+    // The response carries `Default-Model-Assigned` when the save made the
+    // server pick a default model on its own; the page reads it after the save.
+    return makeAdminApiCall(url, {
       method,
       headers: {
         'Content-Type': 'application/json'
@@ -265,12 +295,30 @@ function AdminModelEditPage() {
     retryLoad,
     save,
     reload,
+    initialData,
     isDirty,
     blocker
   } = useAdminResourceEditor({ resourceId: modelId, loadResource, makeDefault, saveResource });
   // A failed load leaves `data` null; the shell then shows the load error instead
   // of the form. The blank form only keeps the header expressions from crashing.
   const formData = loadedData ?? DEFAULT_MODEL_DATA;
+  // A deleted model's page offers to restore it from its change history.
+  const { restorable } = useDeletedResourceRestore({
+    resource: 'model',
+    resourceId: modelId,
+    notFound: !isNewModel && loadError?.status === 404
+  });
+
+  // A test result belongs to the model it ran on.
+  const testResult = lastTest?.modelId === modelId ? lastTest.result : null;
+
+  /** Tests the model as it is stored (unsaved edits are not part of the test). */
+  const handleTest = async () => {
+    setTesting(true);
+    const result = await runModelTest(modelId, t, makeAdminApiCall);
+    setLastTest({ modelId, result });
+    setTesting(false);
+  };
 
   useEffect(() => {
     const loadJsonSchema = async () => {
@@ -287,6 +335,23 @@ function AdminModelEditPage() {
     loadUsageData();
     void loadJsonSchema();
   }, [modelId, isNewModel]); // eslint-disable-line @eslint-react/exhaustive-deps
+
+  // A new model's ID must not be taken; the list is checked while the admin types.
+  useEffect(() => {
+    if (!isNewModel) return undefined;
+    let cancelled = false;
+    makeAdminApiCall('/admin/models')
+      .then(response => {
+        const items = response?.data?.items;
+        if (!cancelled && Array.isArray(items)) setExistingIds(items.map(model => model.id));
+      })
+      .catch(() => {
+        // Without the list the server still refuses a taken ID on save.
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [isNewModel]);
 
   // Models installed from the marketplace ask to be reviewed before they are
   // tested or enabled. Without the marketplace (feature off) there is nothing to show.
@@ -331,9 +396,40 @@ function AdminModelEditPage() {
     setFormData(newData);
   };
 
+  // After a refused save: focus the page error and bring it into view.
+  useEffect(() => {
+    if (!pageErrorFocusKey) return;
+    const target = pageErrorRef.current;
+    if (!target) return;
+    const reduceMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches;
+    target.focus?.({ preventScroll: true });
+    target.scrollIntoView?.({ block: 'center', behavior: reduceMotion ? 'auto' : 'smooth' });
+  }, [pageErrorFocusKey]);
+
+  /**
+   * The form saves only when it is valid: otherwise every error shows, with the summary on
+   * top. Checks the form leaves to the browser (`required` of provider-specific fields) come
+   * next, with the browser's own message.
+   */
   const handleFormSubmit = async e => {
     e.preventDefault();
+    if (editorMode === 'form' && !formValidation.isValid) {
+      countSaveAttempt();
+      return;
+    }
+    if (typeof e.currentTarget?.reportValidity === 'function' && !e.currentTarget.reportValidity())
+      return;
     await handleSave();
+  };
+
+  const formRef = useRef(null);
+  const [templateDiscarded, setTemplateDiscarded] = useState(false);
+  const handleDiscard = () => {
+    setFormData(initialData);
+    setError(null);
+    // Discarding the draft of a template or clone puts it back and ends the "can be created
+    // at once": the bar is for edits again.
+    setTemplateDiscarded(true);
   };
 
   const handleSave = async () => {
@@ -341,18 +437,50 @@ function AdminModelEditPage() {
       setSaving(true);
       setError(null);
 
-      await save();
-
-      navigate('/admin/models');
+      const response = await save();
+      // The list says which model became the default when the server picked one (AI-B13).
+      const assigned = assignedDefaultModelId(response);
+      if (assigned) navigate('/admin/models', { state: { defaultAssigned: assigned } });
+      else navigate('/admin/models');
     } catch (err) {
+      // A taken ID belongs to the ID field: the form says it there and in its summary.
+      // The JSON mode shows no form, so there the page says it.
+      if (isNewModel && err?.response?.status === 409) {
+        setRefusedId(formData.id);
+        countSaveAttempt();
+        if (editorMode === 'form') return;
+        setError(t(FIELD_KEYS.idTaken));
+        setPageErrorFocusKey(key => key + 1);
+        return;
+      }
+      // Shown on the page (an alert above the form); the edits stay. Not re-thrown: the
+      // submit handler is the last one to see it, and a re-throw ends as an unhandled
+      // rejection in the console.
       setError(getAdminApiErrorMessage(err));
-      throw err; // Re-throw to let DualModeEditor handle it
+      setPageErrorFocusKey(key => key + 1);
     } finally {
       setSaving(false);
     }
   };
 
-  return (
+  const historyDrawer = (
+    <ChangeHistoryDrawer
+      isOpen={historyOpen}
+      onClose={() => setHistoryOpen(false)}
+      resource="model"
+      resourceId={modelId}
+      onRestored={
+        loadError
+          ? () => {
+              setHistoryOpen(false);
+              retryLoad();
+            }
+          : undefined
+      }
+    />
+  );
+
+  const page = (
     <AdminEditPageShell
       loading={loading}
       loadingFallback={
@@ -373,27 +501,27 @@ function AdminModelEditPage() {
             : (formData?.name?.en ?? modelId)
         }
       ]}
-      extra={
-        <ChangeHistoryDrawer
-          isOpen={historyOpen}
-          onClose={() => setHistoryOpen(false)}
-          resource="model"
-          resourceId={modelId}
-        />
-      }
+      extra={historyDrawer}
       blocker={blocker}
       loadError={loadError}
       onRetry={retryLoad}
       resourceLabel={t('admin.models.edit.resource', 'model "{{id}}"', { id: modelId })}
-      notFoundAction={{
-        label: t('admin.models.edit.backToModels'),
-        onClick: () => navigate('/admin/models')
-      }}
+      notFoundAction={
+        restorable
+          ? {
+              label: t('admin.restoreDeleted.action', 'Restore from History'),
+              onClick: () => setHistoryOpen(true)
+            }
+          : {
+              label: t('admin.models.edit.backToModels'),
+              onClick: () => navigate('/admin/models')
+            }
+      }
     >
       {/* Header */}
       <div className="mb-8">
-        <div className="flex items-center justify-between">
-          <div>
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div className="min-w-0">
             <h1 className="text-2xl font-semibold text-gray-900 dark:text-gray-100">
               {isNewModel ? t('admin.models.edit.titleNew') : t('admin.models.edit.title')}
             </h1>
@@ -405,7 +533,7 @@ function AdminModelEditPage() {
                   })}
             </p>
           </div>
-          <div className="flex space-x-3">
+          <div className="flex flex-wrap gap-2">
             {!isNewModel && (
               <button
                 type="button"
@@ -423,6 +551,27 @@ function AdminModelEditPage() {
               >
                 <Icon name="download" className="h-4 w-4 mr-2" />
                 {t('common.download')}
+              </button>
+            )}
+            {!isNewModel && (
+              <button
+                type="button"
+                onClick={handleTest}
+                disabled={testing}
+                title={
+                  isDirty
+                    ? t(
+                        'admin.models.edit.testSavedHint',
+                        'Tests the saved model. Save first to test your changes.'
+                      )
+                    : undefined
+                }
+                className="inline-flex items-center px-4 py-2 border border-gray-300 dark:border-gray-600 shadow-xs text-sm font-medium rounded-md text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50"
+              >
+                <Icon name="play" className="h-4 w-4 mr-2" />
+                {testing
+                  ? t('admin.models.edit.testing', 'Testing…')
+                  : t('admin.models.test', 'Test')}
               </button>
             )}
             {modelId !== 'new' && (
@@ -447,26 +596,55 @@ function AdminModelEditPage() {
 
       {/* Error display */}
       {error && (
-        <AdminLoadError
-          title={t('common.error')}
-          message={error}
-          framed={false}
-          className="mb-6"
-          action={null}
-        />
+        <div
+          ref={pageErrorRef}
+          tabIndex={-1}
+          data-testid="model-page-error"
+          className="rounded-md focus:outline-hidden focus-visible:ring-2 focus-visible:ring-admin-accent dark:focus-visible:ring-admin-accent-fg-dark"
+        >
+          <AdminLoadError
+            title={t('common.error')}
+            message={error}
+            framed={false}
+            className="mb-6"
+            action={null}
+          />
+        </div>
+      )}
+
+      {testResult && (
+        <div className="mb-6 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-4">
+          {isDirty && (
+            <p className="mb-2 text-xs text-gray-500 dark:text-gray-400">
+              {t(
+                'admin.models.edit.testSavedHint',
+                'Tests the saved model. Save first to test your changes.'
+              )}
+            </p>
+          )}
+          <ModelTestResult result={testResult} onDismiss={() => setLastTest(null)} />
+        </div>
       )}
 
       {fromMarketplace && <MarketplaceModelReviewNotice className="mb-6" />}
 
-      <form onSubmit={handleFormSubmit} className="space-y-8">
+      {/* noValidate: the form's own messages come first (see handleFormSubmit). */}
+      <form ref={formRef} onSubmit={handleFormSubmit} noValidate className="space-y-8">
+        <ImplicitSubmit disabled={saving} />
         <div className="space-y-8">
           {/* Main Form Editor */}
           <DualModeEditor
             value={formData}
+            savedValue={initialData}
             onChange={handleDataChange}
             formComponent={ModelFormEditor}
+            onValidationChange={setFormValidation}
+            onModeChange={setEditorMode}
             formProps={{
               isNewModel,
+              showAllErrors: saveAttempts > 0,
+              summaryFocusKey: saveAttempts,
+              takenIds,
               apps,
               usage,
               jsonSchema,
@@ -519,6 +697,13 @@ function AdminModelEditPage() {
           {/* Usage Stats and Apps List - integrated as sections */}
           {!isNewModel && (
             <div className="space-y-8">
+              {/* Who can use this model: groups, wildcards, restrict, access check */}
+              <ItemAccessCard
+                type="models"
+                id={modelId}
+                itemName={getLocalizedContent(formData.name, currentLanguage) || modelId}
+              />
+
               {/* Usage Stats */}
               <div className="bg-white dark:bg-gray-800 shadow-sm rounded-lg">
                 <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
@@ -609,30 +794,29 @@ function AdminModelEditPage() {
             </div>
           )}
         </div>
-
-        {/* Save buttons */}
-        <div className="flex justify-end space-x-4">
-          <button
-            type="button"
-            onClick={() => navigate('/admin/models')}
-            className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-xs text-sm font-medium text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-          >
-            {t('common.cancel')}
-          </button>
-          <button
-            type="submit"
-            disabled={saving}
-            className="inline-flex justify-center px-4 py-2 border border-transparent shadow-xs text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50"
-          >
-            {saving
-              ? t('admin.models.edit.saving')
-              : isNewModel
-                ? t('admin.models.edit.createModel')
-                : t('admin.models.edit.saveChanges')}
-          </button>
-        </div>
       </form>
+
+      <AdminSaveBar
+        // A model made from a template or a clone is complete as it opens.
+        dirty={
+          isDirty || (isNewModel && Boolean(location.state?.templateModel) && !templateDiscarded)
+        }
+        saving={saving}
+        saveLabel={isNewModel ? t('admin.ui.saveBar.create', 'Create') : undefined}
+        onSave={() => formRef.current?.requestSubmit()}
+        onDiscard={handleDiscard}
+      />
     </AdminEditPageShell>
+  );
+
+  // The shell leaves out `extra` while the model did not load; the page of a deleted
+  // model still needs the drawer, to restore the model from its history.
+  if (!loadError) return page;
+  return (
+    <>
+      {page}
+      {historyDrawer}
+    </>
   );
 }
 

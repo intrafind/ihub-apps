@@ -81,7 +81,7 @@ export function buildSetupSteps({
       href: '/admin/users',
       ...(!adminDone && demoAccountsKnown ? { hint: 'shippedPassword' } : {})
     },
-    { id: 'provider', done: providerReady, optional: false, href: '/admin/providers' }
+    { id: 'provider', done: providerReady, optional: false, href: '/admin/providers/connect' }
   ];
 
   if (overviewStats?.apps?.total === 0) {
