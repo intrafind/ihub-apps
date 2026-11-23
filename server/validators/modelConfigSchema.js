@@ -404,6 +404,11 @@ const baseModelConfigSchema = z
     // can opt out and the adapter ignores `sampling` instead of failing every
     // request. Defaults to true (unset) so existing model configs are unchanged.
     supportsTemperature: z.boolean().optional(),
+    // Opt-out of the feature `parallelToolCalls`: `false` makes a chat on this
+    // model run its tool calls one at a time even when the feature is on (for a
+    // model that orders its calls on purpose). Unset or `true` follows the
+    // feature. It never turns the feature on.
+    parallelToolCalls: z.boolean().optional(),
     supportsUsageTracking: z.boolean().optional(),
     // Per-user token budget of this model per reset window — the ceiling
     // groups and users can only lower (services/quota/limitResolver.js).

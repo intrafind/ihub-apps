@@ -10,6 +10,13 @@
  *   preTool(ctx, info)                   before a tool runs; return `{ handled: true, message?, messages?,
  *                                        execution?, terminate?: { status, finishReason, pendingInteraction? } }`
  *                                        to take the call over
+ *   mayTakeOver(ctx, info)               whether `preTool` of this seam may take the call over: pause the
+ *                                        turn for a person, answer in the tool's place or end the turn.
+ *                                        Synchronous and without effects; `info` is `{ call, toolDef,
+ *                                        toolId, name, args }`. The loop asks it before the calls of a
+ *                                        step are grouped (`parallelMode: 'readOnly'`): a call that a
+ *                                        seam may take over never runs side by side with another one. A
+ *                                        seam whose `preTool` can return `handled` has this hook
  *   postTool(ctx, info, outcome)         after a tool ran; may mutate `outcome.message`, set
  *                                        `outcome.knowledgeSource`
  *   stepEnd(ctx, step)                   after each model response was consumed

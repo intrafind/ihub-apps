@@ -1496,6 +1496,41 @@ function ModelFormEditor({
                           </p>
                         </div>
                       </div>
+                      {isChat && (
+                        <div className="flex items-start">
+                          <div className="flex items-center h-5">
+                            <input
+                              id="parallelToolCalls"
+                              name="parallelToolCalls"
+                              type="checkbox"
+                              checked={data.parallelToolCalls !== false}
+                              onChange={handleInputChange}
+                              aria-describedby="parallelToolCalls-help"
+                              className={CHECKBOX_CLASS}
+                            />
+                          </div>
+                          <div className="ml-3 text-sm">
+                            <label
+                              htmlFor="parallelToolCalls"
+                              className="font-medium text-gray-700 dark:text-gray-300"
+                            >
+                              {t(
+                                'admin.models.fields.parallelToolCalls',
+                                'Read-only tool calls side by side'
+                              )}
+                            </label>
+                            <p
+                              id="parallelToolCalls-help"
+                              className="text-gray-500 dark:text-gray-400"
+                            >
+                              {t(
+                                'admin.models.hints.parallelToolCalls',
+                                'Only has an effect while the feature "Read-only tool calls side by side" is on (Admin → Features). Turn it off for a model whose tool calls should run one after the other.'
+                              )}
+                            </p>
+                          </div>
+                        </div>
+                      )}
                       <div className="flex items-start">
                         <div className="flex items-center h-5">
                           <input

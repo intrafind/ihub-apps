@@ -1,0 +1,26 @@
+{
+  "id": "read_inbox",
+  "name": {
+    "en": "Read Inbox"
+  },
+  "description": {
+    "en": "Read the items in your bound inbox. Optionally filter by status (open/done/all)."
+  },
+  "script": "agentTools.js",
+  "method": "readInbox",
+  "isAgentTool": true,
+  "parameters": {
+    "type": "object",
+    "properties": {
+      "inboxId": {
+        "type": "string",
+        "description": "Override inbox id (defaults to your profile inbox)"
+      },
+      "status": {
+        "type": "string",
+        "enum": ["open", "done", "all"],
+        "default": "all"
+      }
+    }
+  }
+}

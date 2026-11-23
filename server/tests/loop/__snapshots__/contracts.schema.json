@@ -1033,6 +1033,11 @@
                 "type": "integer",
                 "minimum": 0,
                 "maximum": 9007199254740991
+              },
+              "callIndex": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
               }
             },
             "required": ["step", "callId", "toolId", "name", "args", "execution"],
@@ -3194,6 +3199,10 @@
               "parallel": {
                 "type": "boolean"
               },
+              "parallelMode": {
+                "type": "string",
+                "enum": ["targets", "readOnly"]
+              },
               "maxParallel": {
                 "type": "integer",
                 "exclusiveMinimum": 0,
@@ -3211,6 +3220,7 @@
               "maxRateLimitFailures",
               "maxConsecutiveFailures",
               "parallel",
+              "parallelMode",
               "maxParallel",
               "applyDefaults",
               "choice"
@@ -5260,6 +5270,16 @@
               "execution": {
                 "type": "string",
                 "enum": ["server", "caller", "clarification", "passthrough"]
+              },
+              "parallelGroup": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              "callIndex": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
               },
               "mcpApp": {
                 "type": "object",

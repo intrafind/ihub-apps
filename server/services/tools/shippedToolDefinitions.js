@@ -87,6 +87,10 @@ export function expandShippedTool(tool) {
     parameters: cfg.parameters || {},
     method: fn,
     passthrough: cfg.passthrough || tool.passthrough || false,
+    // What the function does to the system it talks to (`utils/toolApproval`):
+    // its own declaration, else the file's. A file whose functions differ
+    // (`evidence`) declares it per function.
+    ...(cfg.sideEffect || tool.sideEffect ? { sideEffect: cfg.sideEffect || tool.sideEffect } : {}),
     // What the function is in the chat (`services/tools/toolCategory`): its own, else the file's.
     ...(cfg.activity || tool.activity ? { activity: cfg.activity || tool.activity } : {})
   }));

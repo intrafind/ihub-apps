@@ -13,7 +13,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
@@ -47,20 +47,23 @@ const DEFINITION_FILE = path.join(
   'integration-definitions/com.intrafind__ihub/integration.json'
 );
 const sha256 = text => createHash('sha256').update(text).digest('hex');
-// The files as V199 found them shipped. `knowledge.json` has changed since
-// (#3539: its descriptions name the document list of a searched project); a
-// copy seeded before then still matches the frozen hash, so the migration is
-// tested against that copy, kept as a fixture.
-const SHIPPED_AT_V199 = {
-  knowledge: path.join(
-    path.dirname(fileURLToPath(import.meta.url)),
-    'fixtures/migration-v199/knowledge.v199.json'
-  )
+// The files as V199 found them shipped, kept as fixtures
+// (`fixtures/migration-v199/<id>.v199.json`). The shipped files have changed
+// since: `knowledge.json` with #3539 (its descriptions name the document list
+// of a searched project), and every file with #2485 (each declares its
+// `sideEffect`). A copy that was seeded before then still matches the frozen
+// hash, so the migration is tested against those copies. A file without a
+// fixture is read as it ships today.
+const FIXTURES_AT_V199 = path.join(
+  path.dirname(fileURLToPath(import.meta.url)),
+  'fixtures/migration-v199'
+);
+const TOOLS_DIR_OF_TEST = path.join(DEFAULTS_DIR, 'tools');
+const shipped = id => {
+  const fixture = path.join(FIXTURES_AT_V199, `${id}.v199.json`);
+  const file = existsSync(fixture) ? fixture : path.join(TOOLS_DIR_OF_TEST, `${id}.json`);
+  return JSON.parse(readFileSync(file, 'utf8'));
 };
-const shipped = id =>
-  JSON.parse(
-    readFileSync(SHIPPED_AT_V199[id] || path.join(DEFAULTS_DIR, `tools/${id}.json`), 'utf8')
-  );
 
 function makeCtx(files) {
   const logs = [];
@@ -171,7 +174,15 @@ describe('V202 iHub integration keeps only the chat tools', () => {
       const file = ctx.files[`tools/${id}.json`];
       assert.ok(file, `tools/${id}.json is written`);
       assert.equal(file.enabled, false);
-      assert.equal(contentHash(file, sha256), SHIPPED_HASHES[id], 'the shipped file as shipped');
+      // The file is written from the shipped definition as it is when the
+      // migration runs. That is no longer the file V199 hashed: every shipped
+      // file declares its `sideEffect` since #2485. No later migration reads
+      // the hash of such a file, and nothing reads `contents/tools/` any more.
+      const shippedToday = JSON.parse(
+        readFileSync(path.join(TOOLS_DIR_OF_TEST, `${id}.json`), 'utf8')
+      );
+      assert.deepEqual(file, { ...shippedToday, enabled: false }, 'the shipped file as it ships');
+      assert.notEqual(contentHash(file, sha256), SHIPPED_HASHES[id]);
     }
     assert.equal('tools/read_memory.json' in ctx.files, false, 'a tool left on gets no file');
     assert.deepEqual(ctx.warnings, []);

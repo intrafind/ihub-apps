@@ -7,6 +7,7 @@
     "en": "Read the items in your bound inbox. Optionally filter by status (open/done/all)."
   },
   "script": "agentTools.js",
+  "sideEffect": "read",
   "method": "readInbox",
   "isAgentTool": true,
   "parameters": {

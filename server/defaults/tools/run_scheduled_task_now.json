@@ -9,6 +9,7 @@
     "de": "Einen Lauf einer geplanten Aufgabe des Nutzers sofort starten, außerhalb ihres Zeitplans. Das Ergebnis wird ein eigener Chat, verlinkt bei der Aufgabe."
   },
   "script": "scheduledTaskTools.js",
+  "sideEffect": "write",
   "method": "runScheduledTaskNow",
   "parameters": {
     "type": "object",

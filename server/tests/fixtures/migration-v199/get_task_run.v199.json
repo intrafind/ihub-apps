@@ -1,0 +1,36 @@
+{
+  "id": "get_task_run",
+  "name": {
+    "en": "Get Task Run",
+    "de": "Aufgabenlauf lesen"
+  },
+  "description": {
+    "en": "Only available inside a scheduled run of a task that keeps notes between runs. Read what an earlier run of this task answered, by its run number from list_task_runs. With include 'conversation' it also returns what the owner wrote in that run's chat afterwards and the replies to it. Use it to check what you reported before, and to see whether the owner asked for something.",
+    "de": "Nur in einem geplanten Lauf einer Aufgabe verfügbar, die zwischen den Läufen Notizen führt. Lesen, was ein früherer Lauf dieser Aufgabe geantwortet hat, über seine Laufnummer aus list_task_runs. Mit include 'conversation' kommt auch zurück, was der Nutzer danach im Chat dieses Laufs geschrieben hat, samt den Antworten darauf. Damit prüfen, was du früher gemeldet hast, und ob der Nutzer etwas gewünscht hat."
+  },
+  "script": "scheduledTaskTools.js",
+  "method": "getTaskRun",
+  "parameters": {
+    "type": "object",
+    "properties": {
+      "runNumber": {
+        "type": "integer",
+        "minimum": 1,
+        "description": {
+          "en": "The run number, as listed by list_task_runs",
+          "de": "Die Laufnummer, wie von list_task_runs aufgelistet"
+        }
+      },
+      "include": {
+        "type": "string",
+        "enum": ["answer", "conversation"],
+        "default": "answer",
+        "description": {
+          "en": "'answer' (default): the final answer of that run. 'conversation': the answer plus everything said in that run's chat after it.",
+          "de": "'answer' (Standard): die endgültige Antwort dieses Laufs. 'conversation': die Antwort plus alles, was danach in diesem Lauf-Chat gesagt wurde."
+        }
+      }
+    },
+    "required": ["runNumber"]
+  }
+}

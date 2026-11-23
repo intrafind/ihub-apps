@@ -290,6 +290,8 @@ async function offeredTools(app, language, context, nodeTools) {
           script: 'workflowRunner.js',
           isWorkflowTool: true,
           workflowId: wfId,
+          // No `sideEffect`: what a workflow does depends on its steps, so the
+          // tool resolves to `unknown` and is never a trusted read (#2485).
           passthrough: true,
           parameters: buildWorkflowToolParams(wf, language || 'en')
         });
@@ -365,6 +367,8 @@ async function offeredTools(app, language, context, nodeTools) {
         name: getLocalizedString({ en: 'Activate Skill', de: 'Skill aktivieren' }, lang),
         description: getLocalizedString(activateDesc, lang),
         isInternalTool: true,
+        // Loads a skill's instructions into the turn; changes nothing.
+        sideEffect: 'read',
         parameters: {
           type: 'object',
           properties: {
@@ -379,6 +383,7 @@ async function offeredTools(app, language, context, nodeTools) {
         name: getLocalizedString({ en: 'Read Skill Resource', de: 'Skill-Ressource lesen' }, lang),
         description: getLocalizedString(readDesc, lang),
         isInternalTool: true,
+        sideEffect: 'read',
         parameters: {
           type: 'object',
           properties: {
@@ -406,6 +411,7 @@ async function offeredTools(app, language, context, nodeTools) {
             lang
           ),
           isInternalTool: true,
+          sideEffect: 'read',
           parameters: {
             type: 'object',
             properties: {

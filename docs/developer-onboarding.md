@@ -923,6 +923,8 @@ await expect(shown(page, /E2E tool result seen/)).toBeVisible();
 expect(await counter.count(key)).toBe(1);
 ```
 
+`counter.hold()` makes every read of `e2e_counter_read` wait until `counter.release()`, and `counter.waiting()` lists the keys of the reads that wait. Two keys in the list were read at the same time, which is how a spec shows that two tool calls ran side by side without a timer (`parallel-tools.spec.js`). A spec that holds resets the counter in `afterEach`, which also ends the hold.
+
 For content from outside, write it into the counter and let the model read it: `e2e-tool:e2e_counter_read:{"key":"…"}`. A page reader pointed at the test machine does not work: iHub refuses to fetch from a private address. Use these tools, not a fixture of your own.
 
 The two tools are all that `NODE_ENV=test` switches on in the suite's server. Only two server files read that value: the module of the test tools, and `server/utils/killPoint.js`, which stays inert because the suite never sets `IHUB_TEST_KILLPOINT`. `server/tests/killPoint-inventory.test.js` fails when a third file starts to.

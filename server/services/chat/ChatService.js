@@ -21,6 +21,7 @@ import { logInteraction as defaultLogInteraction, inspectModelApiKey } from '../
 import { isAdmin } from '../../utils/authorization.js';
 import { runTool as defaultRunTool } from '../tools/runTool.js';
 import configCache from '../../configCache.js';
+import { isFeatureEnabled } from '../../featureRegistry.js';
 import { findByIdCaseInsensitive } from '../../utils/resourceLookup.js';
 import {
   abortChatRequest,
@@ -180,6 +181,33 @@ export function chatCompactThresholdTokens(model) {
  */
 export function chatContextPolicies(model) {
   return { compactThresholdTokens: chatCompactThresholdTokens(model), strategy: 'digest' };
+}
+
+/**
+ * How a chat turn (and an app run as a tool) runs the tool calls of one model
+ * step (`policies.tools`).
+ *
+ * One call at a time, as always, unless the feature `parallelToolCalls` is on
+ * and the model does not opt out (`parallelToolCalls: false` in its config):
+ * then the calls of a step that are all trusted reads run side by side, at
+ * most four at once (`segmentPlanner`, mode `readOnly`). A call that changes
+ * something, asks a person or needs an approval makes its step serial again.
+ *
+ * @param {Object} params
+ * @param {Object} params.app - the app (its `toolChoice`)
+ * @param {Object} [params.model] - resolved model config
+ * @param {Object} [params.features] - feature configuration (default: the cached one)
+ * @returns {Object} `policies.tools`
+ * @example
+ * chatToolPolicies({ app: {}, model: { id: 'm' }, features: {} })
+ * // → { parallel: false, choice: undefined }
+ */
+export function chatToolPolicies({ app, model, features = configCache.getFeatures() }) {
+  const sideBySide =
+    isFeatureEnabled('parallelToolCalls', features) && model?.parallelToolCalls !== false;
+  return sideBySide
+    ? { parallel: true, parallelMode: 'readOnly', maxParallel: 4, choice: app?.toolChoice }
+    : { parallel: false, choice: app?.toolChoice };
 }
 
 /**
@@ -1085,9 +1113,9 @@ class ChatService {
                 }
               : {})
           },
-          // Chat tools have side effects and the client renders tool frames in
-          // order — run one call at a time.
-          tools: { parallel: false, choice: app.toolChoice },
+          // Chat tools have side effects — one call at a time, except the
+          // trusted reads of a step when the feature is on (`chatToolPolicies`).
+          tools: chatToolPolicies({ app, model }),
           context: chatContextPolicies(model)
         },
         summaryModel: chatCompactionModel({ model, user }),
@@ -2071,7 +2099,7 @@ class ChatService {
         toolExecution: 'server',
         policies: {
           budgets: { maxToolRounds: CHAT_MAX_TOOL_ROUNDS, maxWallClockMs },
-          tools: { parallel: false, choice: app.toolChoice },
+          tools: chatToolPolicies({ app, model }),
           context: chatContextPolicies(model)
         },
         summaryModel: chatCompactionModel({ model, user }),

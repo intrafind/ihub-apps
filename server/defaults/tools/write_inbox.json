@@ -7,6 +7,7 @@
     "en": "Update an inbox. mode='add' appends a new item; 'markDone' marks an existing item done by matching its text; 'replace' rewrites the full body."
   },
   "script": "agentTools.js",
+  "sideEffect": "write",
   "method": "writeInbox",
   "isAgentTool": true,
   "parameters": {

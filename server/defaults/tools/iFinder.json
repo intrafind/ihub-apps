@@ -9,6 +9,7 @@
     "de": "Umfassende Dokumentensuche, Inhaltsabruf und -verwaltung für das iFinder-System"
   },
   "script": "iFinder.js",
+  "sideEffect": "read",
   "functions": {
     "search": {
       "description": {

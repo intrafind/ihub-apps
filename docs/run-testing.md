@@ -518,6 +518,8 @@ A test of "this write ran exactly once" needs a write whose effect a killed serv
 | `e2e_counter_write` | adds one to the counter of a `key`; a write, never read-only |
 | `e2e_counter_read` | returns the count and the values written for a `key`; a read, marked as content from outside iHub (`untrustedInput`) |
 
+A test of "these two calls ran at the same time" needs calls that are still running when the test looks. The counter can hold its reads for that: after `POST /__counter/hold` (`counter.hold()` in the agents helpers) a read is not answered until `POST /__counter/release` (`counter.release()`), and `GET /__counter/waiting` (`counter.waiting()`) lists the keys of the reads that wait, in the order they arrived. Two keys in that list were read at the same time; no timer is involved. Writes are never held, and `POST /__counter/reset` ends a hold. `tests/e2e-agents/parallel-tools.spec.js` uses it.
+
 The counter itself (`tests/config/test-counter.mjs`) lives in the process of the test. The tools reach it through `httpFetch`, at the address in `IHUB_TEST_COUNTER_URL`. Every write counts, so two writes for one tool call show as 2. A write also names the server process it came from (its process id, in the header `x-ihub-test-writer`); `counter.writers(key)` returns them, for a test of a server with two workers.
 
 No installation has these tools. The connector is registered only with both variables set, and it logs one warning line when it is. iHub ships no definition that names the connector: the definition and the installation are written into the contents directory of the test (`tests/config/test-tools-contents.mjs`). The agents browser suite uses the same tools on the same counter.

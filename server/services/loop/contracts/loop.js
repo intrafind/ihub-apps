@@ -42,11 +42,20 @@ export const budgetPoliciesSchema = z.object({
   maxWallClockMs: z.number().int().positive().optional()
 });
 
+/** Which calls of one model step may run side by side (`policies.tools.parallelMode`). */
+export const PARALLEL_MODES = Object.freeze(['targets', 'readOnly']);
+
 export const toolPoliciesSchema = z.object({
   maxRateLimitFailures: z.number().int().positive().prefault(2),
   maxConsecutiveFailures: z.number().int().positive().prefault(3),
   /** Run independent tool calls of one assistant turn concurrently. */
   parallel: z.boolean().prefault(true),
+  /**
+   * Which calls may share a batch (`segmentPlanner`): `targets` (read-only
+   * calls, and calls whose arguments do not overlap) or `readOnly` (only calls
+   * of tools that are trusted reads; one other call makes the round serial).
+   */
+  parallelMode: z.enum(PARALLEL_MODES).prefault('targets'),
   maxParallel: z.number().int().positive().prefault(4),
   /** Apply schema defaults to omitted arguments. */
   applyDefaults: z.boolean().prefault(true),

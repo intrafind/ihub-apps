@@ -22,6 +22,7 @@ import {
 import { getProtocolAdapter } from './protocols/index.js';
 import { localized } from './definitions/installedValues.js';
 import { fingerprintOfTool, fingerprintsOfActions, observeInBackground } from './actionReview.js';
+import { isTrustedReadOnly } from '../../utils/toolApproval.js';
 import {
   actionOverrideOf,
   integrationInstructionsOf,
@@ -97,7 +98,7 @@ export function toolFromAction(resolved, rawAction, language, fingerprint = null
   const { instance, definition, label } = resolved;
   const action = withActionOverrides(rawAction, instance, language);
   const title = action.title || action.name;
-  return {
+  const tool = {
     id: action.toolId,
     name: `${label}: ${title}`,
     description: action.description || title,
@@ -122,7 +123,8 @@ export function toolFromAction(resolved, rawAction, language, fingerprint = null
     },
     sideEffect: action.sideEffect,
     dataFlow: action.dataFlow,
-    readOnly: action.sideEffect === 'read',
+    // Set below, from the trusted declaration.
+    readOnly: false,
     examples: action.examples,
     sources: action.sources,
     ...activityOfAction(definition, action),
@@ -130,6 +132,12 @@ export function toolFromAction(resolved, rawAction, language, fingerprint = null
     // A connector may add fields of its own (a people directory's or an LDAP browser's marker).
     ...(action.extras && typeof action.extras === 'object' ? action.extras : {})
   };
+  // What the segment planner may run side by side (#2485): a read that the
+  // definition declares or an admin set on the action, never the bare value of
+  // `sideEffect` (see `isTrustedReadOnly`). An action that declares nothing is
+  // `unknown` and is never batched.
+  tool.readOnly = isTrustedReadOnly(tool, instance);
+  return tool;
 }
 
 /**

@@ -46,6 +46,10 @@ export function questionSeam({
 } = {}) {
   return {
     name: 'question',
+    /** A question is put to a person, or answered in the tool's place: never beside another call. */
+    mayTakeOver(_ctx, info) {
+      return info?.toolDef?.interactive === true;
+    },
     async preTool(ctx, info) {
       const { toolDef, call } = info;
       if (!toolDef || toolDef.interactive !== true) return null;

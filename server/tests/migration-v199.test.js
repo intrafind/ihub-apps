@@ -5,7 +5,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
@@ -23,18 +23,23 @@ import { KNOWLEDGE_TOOL_FILE_ID } from '../services/knowledge/knowledgeTools.js'
 
 const TOOLS_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), '../defaults/tools');
 const sha256 = text => createHash('sha256').update(text).digest('hex');
-// The files as V199 found them shipped. `knowledge.json` has changed since
-// (#3539: its descriptions name the document list of a searched project); a
-// copy seeded before then still matches the frozen hash, so the migration is
-// tested against that copy, kept as a fixture.
-const SHIPPED_AT_V199 = {
-  knowledge: path.join(
-    path.dirname(fileURLToPath(import.meta.url)),
-    'fixtures/migration-v199/knowledge.v199.json'
-  )
+// The files as V199 found them shipped, kept as fixtures
+// (`fixtures/migration-v199/<id>.v199.json`). The shipped files have changed
+// since: `knowledge.json` with #3539 (its descriptions name the document list
+// of a searched project), and every file with #2485 (each declares its
+// `sideEffect`). A copy that was seeded before then still matches the frozen
+// hash, so the migration is tested against those copies. A file without a
+// fixture is read as it ships today.
+const FIXTURES_AT_V199 = path.join(
+  path.dirname(fileURLToPath(import.meta.url)),
+  'fixtures/migration-v199'
+);
+const TOOLS_DIR_OF_TEST = TOOLS_DIR;
+const shipped = id => {
+  const fixture = path.join(FIXTURES_AT_V199, `${id}.v199.json`);
+  const file = existsSync(fixture) ? fixture : path.join(TOOLS_DIR_OF_TEST, `${id}.json`);
+  return JSON.parse(readFileSync(file, 'utf8'));
 };
-const shipped = id =>
-  JSON.parse(readFileSync(SHIPPED_AT_V199[id] || path.join(TOOLS_DIR, `${id}.json`), 'utf8'));
 
 function makeCtx(files) {
   const logs = [];

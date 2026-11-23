@@ -7,6 +7,7 @@
     "en": "Enqueue a new task on the run task queue. The drain loop will process it. Refused if depth would exceed dynamicTasks.maxDepth."
   },
   "script": "agentTools.js",
+  "sideEffect": "write",
   "method": "createTask",
   "isAgentTool": true,
   "parameters": {

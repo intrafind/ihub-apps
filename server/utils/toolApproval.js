@@ -13,6 +13,8 @@
  *                      `definition`, `annotation`, `default`)
  * - `dataFlow`         `internal | external`
  * - `approvalSource`   which layer set the effective mode (for audit and the admin UI)
+ * - `readOnly`         whether the tool is a **trusted** read ({@link isTrustedReadOnly}):
+ *                      what the segment planner batches side by side (#2485)
  *
  * ## Precedence
  *
@@ -46,6 +48,7 @@
 import logger from './logger.js';
 import { actionReviewState } from './actionFingerprint.js';
 import { redact } from '../middleware/auditLogger.js';
+import { categoryOf } from '../services/tools/toolCategory.js';
 import {
   APPROVAL_MODES,
   DATA_FLOWS,
@@ -148,36 +151,137 @@ export function actionNameOf(toolDef) {
  * 1. The installation's admin override (`actions.overrides[action].sideEffect`).
  * 2. A tool's own `sideEffect` (a platform tool's shipped definition).
  * 3. An integration action's declared side effect (definition, OpenAPI method).
+ *    Steps 2 and 3 never hold for a tool of a remote MCP server or A2A agent
+ *    (`_mcp`, `_a2a`): what such a tool carries is what the remote side says
+ *    about itself, so only step 1 declares it.
  * 4. MCP annotations — **untrusted**, see the module docs.
  * 5. `readOnly: true` (iHub's own connectors) or an internal tool → `read`.
  * 6. `unknown`.
+ *
+ * Steps 1 to 3 are a **declaration** by someone iHub trusts (the admin, the
+ * shipped definition, the tool's own code). Steps 4 and 5 are not: an
+ * annotation is what a remote server says about itself, and step 5 is a
+ * fallback for a tool that says nothing. The approval gate accepts a `read`
+ * of step 5; {@link isTrustedReadOnly} accepts neither.
  *
  * @param {Object} toolDef
  * @param {Object|null} [installation] - the tool's installed integration
  * @returns {{sideEffect: string, sideEffectSource: string}}
  */
 export function resolveSideEffect(toolDef, installation = null) {
+  const { sideEffect, sideEffectSource } = sideEffectOf(toolDef, installation);
+  return { sideEffect, sideEffectSource };
+}
+
+/**
+ * {@link resolveSideEffect} plus whether the value was declared (steps 1 to 3).
+ *
+ * @param {Object} toolDef
+ * @param {Object|null} installation
+ * @returns {{sideEffect: string, sideEffectSource: string, declared: boolean}}
+ */
+function sideEffectOf(toolDef, installation) {
   const action = actionNameOf(toolDef);
   const override = action ? installation?.actions?.overrides?.[action]?.sideEffect : undefined;
-  if (SIDE_EFFECTS.includes(override)) return { sideEffect: override, sideEffectSource: 'admin' };
+  if (SIDE_EFFECTS.includes(override)) {
+    return { sideEffect: override, sideEffectSource: 'admin', declared: true };
+  }
   const declared = toolDef?.sideEffect;
   const isMcp = Boolean(toolDef?._mcp);
-  if (SIDE_EFFECTS.includes(declared) && declared !== 'unknown' && !isMcp) {
+  // A remote tool's own `sideEffect` is never a declaration: nobody iHub
+  // trusts wrote it. Only the admin's override above declares such a tool.
+  const isRemote = isMcp || Boolean(toolDef?._a2a);
+  if (SIDE_EFFECTS.includes(declared) && declared !== 'unknown' && !isRemote) {
     return {
       sideEffect: declared,
-      sideEffectSource: toolDef?._integration ? 'definition' : 'tool'
+      sideEffectSource: toolDef?._integration ? 'definition' : 'tool',
+      declared: true
     };
   }
   if (isMcp) {
     const fromAnnotations = sideEffectFromAnnotations(toolDef._mcp.annotations);
     if (fromAnnotations !== 'unknown') {
-      return { sideEffect: fromAnnotations, sideEffectSource: 'annotation' };
+      return { sideEffect: fromAnnotations, sideEffectSource: 'annotation', declared: false };
     }
   }
   if (toolDef?.readOnly === true || toolDef?.isInternalTool === true) {
-    return { sideEffect: 'read', sideEffectSource: 'tool' };
+    return { sideEffect: 'read', sideEffectSource: 'tool', declared: false };
   }
-  return { sideEffect: 'unknown', sideEffectSource: 'default' };
+  return { sideEffect: 'unknown', sideEffectSource: 'default', declared: false };
+}
+
+/** Sources of a side effect that someone iHub trusts declared. */
+const TRUSTED_SIDE_EFFECT_SOURCES = Object.freeze(['admin', 'definition', 'tool']);
+
+/**
+ * Whether a tool only reads, **declared by a source iHub trusts** (#2485,
+ * #3785). This is what lets a call run without waiting for the call before it
+ * (the segment planner's `readOnly`), so it fails closed:
+ *
+ * - true only for `sideEffect: 'read'` that an admin set on the action
+ *   (`actions.overrides[action].sideEffect`), that the definition of an
+ *   integration declares, or that the tool's own shipped definition or code
+ *   declares;
+ * - never for a `read` that only an MCP server's `readOnlyHint` annotation
+ *   claims, never for a tool that declares nothing (the internal-tool and
+ *   `readOnly: true` fallback of {@link resolveSideEffect}), never for a tool
+ *   of a remote MCP server or A2A agent without an admin's override, and never
+ *   for `unknown`.
+ *
+ * A stamped tool ({@link stampToolApproval}) is answered from its stamp; any
+ * other tool is resolved here.
+ *
+ * @param {Object|null|undefined} toolDef
+ * @param {Object|null} [installation] - the tool's installed integration (its admin overrides)
+ * @returns {boolean}
+ * @example
+ * isTrustedReadOnly({ id: 'read_url', sideEffect: 'read' })                              // true
+ * isTrustedReadOnly({ id: 'x__list', _mcp: { annotations: { readOnlyHint: true } } })    // false
+ * isTrustedReadOnly({ id: 'recall', isInternalTool: true })                              // false
+ */
+export function isTrustedReadOnly(toolDef, installation = null) {
+  if (!toolDef || typeof toolDef !== 'object') return false;
+  if (typeof toolDef.approvalSource === 'string') {
+    return (
+      toolDef.readOnly === true &&
+      toolDef.sideEffect === 'read' &&
+      TRUSTED_SIDE_EFFECT_SOURCES.includes(toolDef.sideEffectSource)
+    );
+  }
+  const resolved = sideEffectOf(toolDef, installation);
+  return resolved.declared && resolved.sideEffect === 'read';
+}
+
+/**
+ * Whether what a tool returns is content from outside iHub's control, which a
+ * run must not take as an instruction (#3785): a page, a document, a file, the
+ * answer of another system.
+ *
+ * True for a tool that declares it (`untrustedInput: true`, also set by an
+ * admin on the action: `actions.overrides[action].untrustedInput`), for every
+ * tool whose data flow is `external`, for every tool of a remote MCP server
+ * or A2A agent, and for every search and every read of a page, a document or
+ * a file (the tool's declared activity, `services/tools/toolCategory`).
+ *
+ * The flag can only be added: `untrustedInput: false` on a tool or in an
+ * override never clears what the rules above set.
+ *
+ * @param {Object|null|undefined} toolDef
+ * @param {Object|null} [installation] - the tool's installed integration (its admin overrides)
+ * @returns {boolean}
+ * @example
+ * resolveUntrustedInput({ id: 'read_url', dataFlow: 'external' })   // true
+ * resolveUntrustedInput({ id: 'write_memory', sideEffect: 'write' }) // false
+ */
+export function resolveUntrustedInput(toolDef, installation = null) {
+  if (!toolDef || typeof toolDef !== 'object') return false;
+  if (toolDef.untrustedInput === true) return true;
+  const action = actionNameOf(toolDef);
+  if (action && installation?.actions?.overrides?.[action]?.untrustedInput === true) return true;
+  if (toolDef._mcp || toolDef._a2a) return true;
+  if (resolveDataFlow(toolDef, installation) === 'external') return true;
+  const { kind } = categoryOf(toolDef);
+  return kind === 'search' || kind === 'fetch';
 }
 
 /**
@@ -338,7 +442,16 @@ export function stampToolApproval(tools, app, platform, { getInstallation } = {}
     if (!tool || typeof tool !== 'object') return tool;
     const instanceId = tool._integration?.instanceId;
     const installation = instanceId && getInstallation ? getInstallation(instanceId) : null;
-    return { ...tool, ...resolveToolApproval(tool, app, platform, { installation }) };
+    // Decided on the tool as it was loaded: the stamp below overwrites
+    // `sideEffect` with the resolved value, annotation and fallback included.
+    const trustedRead = isTrustedReadOnly(tool, installation);
+    const stamped = { ...tool, ...resolveToolApproval(tool, app, platform, { installation }) };
+    // `readOnly` is what the segment planner batches by. It is the trusted
+    // value, never the tool's own claim: set for a declared read, and taken
+    // away from a tool that says `readOnly` without a declared side effect.
+    if (trustedRead) stamped.readOnly = true;
+    else if (stamped.readOnly !== undefined) stamped.readOnly = false;
+    return stamped;
   });
 }
 

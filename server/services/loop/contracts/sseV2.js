@@ -297,6 +297,14 @@ export const toolStartedData = z.object({
   publicHits: z.literal(true).optional(),
   args: z.any(),
   execution: z.enum(['server', 'caller', 'clarification', 'passthrough']).prefault('server'),
+  /**
+   * Set together, and only on a call that runs side by side with other calls
+   * of its step: the batch (`parallelGroup`, per step) and the call's place in
+   * the model's order (`callIndex`). The client orders the rows of one batch by
+   * `callIndex`; it never works out a batch or an order from anything else.
+   */
+  parallelGroup: z.number().int().nonnegative().optional(),
+  callIndex: z.number().int().nonnegative().optional(),
   mcpApp: mcpAppRefSchema.optional()
 });
 

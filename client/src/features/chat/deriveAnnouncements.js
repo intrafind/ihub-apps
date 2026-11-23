@@ -10,6 +10,7 @@
  * a short script instead, decided here:
  *
  *   - a call starts (once it is shown): "Creating web artifact"
+ *   - several calls start side by side: "3 searches running", once for the batch
  *   - a call is waiting for approval, was cut off or refused, was stopped
  *   - a file is done: "Created web artifact"
  *   - the size has not grown for a while (the stall caption)
@@ -144,6 +145,32 @@ function announceEndedCall(collector, item, { t }) {
 
 const ANNOUNCED_EMPTY_ORIGINS = new Set(['web', 'project', 'ifinder', 'iassistant', 'documents']);
 
+/**
+ * Calls the server ran side by side (`item.batch`) start with one sentence for
+ * the batch, "3 searches running", instead of one per call. Said as soon as one
+ * of them is shown; the starts of its calls then count as said. A batch whose
+ * calls were already announced one by one, or with one call left to say, is
+ * left to the single announcements.
+ */
+function announceBatchStarts(collector, items, { t, now }) {
+  const batches = new Map();
+  for (const item of items) {
+    if (!item.batch || item.status !== 'running' || collector.done[`${item.id}:start`]) continue;
+    batches.set(item.batch, [...(batches.get(item.batch) || []), item]);
+  }
+  for (const [batch, members] of batches) {
+    if (members.length < 2 || !members.some(item => isPainted(item, now))) continue;
+    const key = members.every(item => item.kind === 'search') ? 'searches' : 'calls';
+    const fallback = key === 'searches' ? '{{count}} searches running' : '{{count}} calls running';
+    collector.say(
+      `batch:${batch}:start`,
+      t(`toolActivity.announce.batch.${key}`, fallback, { count: members.length }),
+      'normal'
+    );
+    for (const item of members) collector.done[`${item.id}:start`] = true;
+  }
+}
+
 /** The idle line, once per model step, after it has been up for a while. */
 function announceIdle(collector, idle, idleSince, { t, now }) {
   const key = `idle:${idle.kind}:${idle.step ?? 0}`;
@@ -182,6 +209,7 @@ export function deriveAnnouncements(state, messages, context) {
   const collector = createCollector(previous.done);
   const idleSince = { ...previous.idleSince };
   const activity = message.toolActivity;
+  announceBatchStarts(collector, activity?.items || [], context);
   for (const item of activity?.items || []) {
     // A skill is not a call the user waits for.
     if (item.kind === 'skill') continue;

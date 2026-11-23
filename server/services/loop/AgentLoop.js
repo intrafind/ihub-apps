@@ -159,6 +159,40 @@ function serializeToolContent(result) {
   }
 }
 
+/**
+ * Whether a seam may take a call over before it runs: hold it for a person's
+ * approval, put a question, hand the turn to a passthrough tool. Asked of
+ * every seam that has the hook `mayTakeOver`; a seam that fails to answer
+ * counts as yes, so a call is never put beside another one by mistake.
+ *
+ * The planner reads the approval stamp of a tool; the seam resolves the
+ * policy itself, also for a tool nobody stamped (the loop's own
+ * `recall_tool_result`, `search_tools`). Asking the seam keeps the two from
+ * disagreeing about a call that pauses the turn.
+ *
+ * @param {Array<Object>} seams
+ * @param {Object} ctx - the run context
+ * @param {{call: Object, toolDef: Object|null, args: Object}} item - a resolved call
+ * @returns {boolean}
+ */
+function seamsMayTakeOver(seams, ctx, item) {
+  const info = {
+    call: item.call,
+    toolDef: item.toolDef,
+    toolId: item.toolDef?.id || item.call?.function?.name,
+    name: item.call?.function?.name,
+    args: item.args
+  };
+  return seams.some(seam => {
+    if (typeof seam?.mayTakeOver !== 'function') return false;
+    try {
+      return seam.mayTakeOver(ctx, info) === true;
+    } catch {
+      return true;
+    }
+  });
+}
+
 async function runHooks(seams, hook, ...args) {
   for (const seam of seams) {
     const fn = seam?.[hook];
@@ -987,7 +1021,9 @@ export class AgentLoop {
           const args = applyParameterDefaults(repair.args, toolDef);
           return { call, toolDef, args, argsRepaired: repair.repaired };
         });
-        const batches = planToolBatches(resolved, policies.tools);
+        const batches = planToolBatches(resolved, policies.tools, {
+          mayTakeOver: item => seamsMayTakeOver(seams, ctx, item)
+        });
         const outcomes = new Array(resolved.length);
         let aborted = false;
 
@@ -1006,6 +1042,7 @@ export class AgentLoop {
                 seams,
                 iteration,
                 groupIndex,
+                groupSize: batch.length,
                 toolExecution
               }).catch(err => ({ position: item.position, error: err }))
             )
@@ -1281,7 +1318,7 @@ export class AgentLoop {
    * @private
    * @returns {Promise<{position:number, messages:Array, terminate?:Object}>}
    */
-  async _executeOne(ctx, item, { seams, iteration, groupIndex, toolExecution }) {
+  async _executeOne(ctx, item, { seams, iteration, groupIndex, groupSize = 1, toolExecution }) {
     const { call, toolDef, args, argsRepaired, position } = item;
     const toolId = toolDef?.id || call.function.name;
     const name = call.function.name;
@@ -1289,7 +1326,21 @@ export class AgentLoop {
     const runId = ctx.runId;
     const started = Date.now();
     const messages = [];
-    const info = { call, toolDef, toolId, name, args, argsRepaired, iteration, groupIndex };
+    // A call that shares its batch with others says so, and where it stands
+    // in the model's order: its row is placed by that, whichever call of the
+    // batch starts or finishes first. A call that runs alone carries neither.
+    const sideBySide = groupSize > 1 ? { parallelGroup: groupIndex, callIndex: position } : null;
+    const info = {
+      call,
+      toolDef,
+      toolId,
+      name,
+      args,
+      argsRepaired,
+      iteration,
+      groupIndex,
+      ...(sideBySide ? { sideBySide } : {})
+    };
     const display = startedDisplayOf(toolDef);
 
     if (ctx.signal?.aborted) throw abortError('Agent loop aborted (cancelled or timed out)');
@@ -1309,7 +1360,8 @@ export class AgentLoop {
         args,
         argsRepaired,
         execution: toolExecution,
-        parallelGroup: groupIndex
+        parallelGroup: groupIndex,
+        ...(sideBySide ? { callIndex: position } : {})
       });
       this._ledger(ledgerId, RUN_LOG_EVENTS.TOOL_RESULT, {
         step: iteration,
@@ -1337,7 +1389,8 @@ export class AgentLoop {
         args,
         argsRepaired,
         execution: handled.execution || (toolDef?.passthrough ? 'passthrough' : 'clarification'),
-        parallelGroup: groupIndex
+        parallelGroup: groupIndex,
+        ...(sideBySide ? { callIndex: position } : {})
       });
       if (handled.message) messages.push(handled.message);
       if (Array.isArray(handled.messages)) messages.push(...handled.messages);
@@ -1353,7 +1406,8 @@ export class AgentLoop {
       args,
       argsRepaired,
       execution: toolExecution,
-      parallelGroup: groupIndex
+      parallelGroup: groupIndex,
+      ...(sideBySide ? { callIndex: position } : {})
     });
     if (ctx.channel?.onToolStart) await ctx.channel.onToolStart(info, ctx);
 

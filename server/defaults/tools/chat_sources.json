@@ -9,8 +9,9 @@
     "de": "Die Quellen auflisten und lesen, die frühere Antworten dieses Chats gefunden haben: Webergebnisse, gelesene Seiten und Dokumente. Wird automatisch hinzugefügt, wenn eine frühere Antwort Quellen hat."
   },
   "script": "chatSources.js",
+  "sideEffect": "read",
+  "untrustedInput": true,
   "enabled": true,
-  "readOnly": true,
   "functions": {
     "list": {
       "name": {

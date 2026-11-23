@@ -18,6 +18,8 @@ const KIT = ARTIFACT_LIBRARIES.map(
 
 export const CREATE_WEB_ARTIFACT_TOOL = {
   id: 'create_web_artifact',
+  // Creates or changes a file of the chat (`utils/toolApproval`).
+  sideEffect: 'write',
   outputKind: 'webArtifact',
   name: { en: 'Create interactive web artifact', de: 'Interaktives Web-Artefakt erstellen' },
   description: {
@@ -70,6 +72,8 @@ export const CREATE_WEB_ARTIFACT_TOOL = {
 
 export const EDIT_WEB_ARTIFACT_TOOL = {
   id: 'edit_web_artifact',
+  // Creates or changes a file of the chat (`utils/toolApproval`).
+  sideEffect: 'write',
   name: { en: 'Edit web artifact', de: 'Web-Artefakt bearbeiten' },
   description: {
     en: 'Change an interactive HTML or SVG artifact this chat already created, by exact text replacements, instead of writing the whole file again. Each "oldText" must occur exactly once in the current file; it is replaced by "newText". All edits apply or none. The result is the file\'s new version in the Artifacts panel, checked like a new one. Use it to fix the problems create_web_artifact reports and for every change the user asks for that touches part of the file. Write a new file with create_web_artifact only for a rewrite or a file that was cut off.',

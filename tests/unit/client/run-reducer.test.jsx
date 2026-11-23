@@ -642,3 +642,112 @@ describe('runReducer — knowledge.refresh (the turn waits for outdated document
     expect(run.knowledgeRefresh).toBeNull();
   });
 });
+
+describe('runReducer — tool calls that run side by side (#2485)', () => {
+  const started = (seq, callId, extra = {}) =>
+    env(seq, 'run-a', 'tool/started', {
+      step: 1,
+      callId,
+      toolId: 'braveSearch',
+      name: 'braveSearch',
+      args: { query: callId },
+      execution: 'server',
+      ...extra
+    });
+  const completed = (seq, callId) =>
+    env(seq, 'run-a', 'tool/completed', {
+      step: 1,
+      callId,
+      toolId: 'braveSearch',
+      name: 'braveSearch',
+      resultPreview: {}
+    });
+  const begin = env(1, 'run-a', 'run/started', { kind: 'chat', refs: { chatId: 'chat-1' } });
+  const rows = state => getRun(state, 'run-a').tools.map(tool => tool.callId);
+
+  test('the rows of a batch stand in the order the server gave, whichever call starts first', () => {
+    const batch = { parallelGroup: 0 };
+    const inOrder = fold([
+      begin,
+      started(2, 'c1', { ...batch, callIndex: 0 }),
+      started(3, 'c2', { ...batch, callIndex: 1 }),
+      started(4, 'c3', { ...batch, callIndex: 2 })
+    ]);
+    const reversed = fold([
+      begin,
+      started(2, 'c3', { ...batch, callIndex: 2 }),
+      started(3, 'c2', { ...batch, callIndex: 1 }),
+      started(4, 'c1', { ...batch, callIndex: 0 })
+    ]);
+    const mixed = fold([
+      begin,
+      started(2, 'c2', { ...batch, callIndex: 1 }),
+      started(3, 'c3', { ...batch, callIndex: 2 }),
+      started(4, 'c1', { ...batch, callIndex: 0 })
+    ]);
+    for (const state of [inOrder, reversed, mixed]) expect(rows(state)).toEqual(['c1', 'c2', 'c3']);
+    expect(getRun(reversed, 'run-a').tools[0]).toMatchObject({ parallelGroup: 0, callIndex: 0 });
+  });
+
+  test('a call that finishes first keeps its row where it is', () => {
+    const batch = { parallelGroup: 0 };
+    const state = fold([
+      begin,
+      started(2, 'c1', { ...batch, callIndex: 0 }),
+      started(3, 'c2', { ...batch, callIndex: 1 }),
+      completed(4, 'c2'),
+      completed(5, 'c1')
+    ]);
+    expect(rows(state)).toEqual(['c1', 'c2']);
+    expect(getRun(state, 'run-a').tools.map(tool => tool.status)).toEqual([
+      'completed',
+      'completed'
+    ]);
+  });
+
+  test('a batch never moves in front of the calls before it', () => {
+    const state = fold([
+      begin,
+      started(2, 'alone'),
+      completed(3, 'alone'),
+      started(4, 'c2', { parallelGroup: 1, callIndex: 2 }),
+      started(5, 'c1', { parallelGroup: 1, callIndex: 1 }),
+      // The next batch of the same step: its rows follow, in their own order.
+      started(6, 'd2', { parallelGroup: 2, callIndex: 4 }),
+      started(7, 'd1', { parallelGroup: 2, callIndex: 3 })
+    ]);
+    expect(rows(state)).toEqual(['alone', 'c1', 'c2', 'd1', 'd2']);
+  });
+
+  test('a batch of a later step does not sort into one of an earlier step', () => {
+    const state = fold([
+      begin,
+      started(2, 'a2', { parallelGroup: 0, callIndex: 1 }),
+      started(3, 'a1', { parallelGroup: 0, callIndex: 0 }),
+      env(4, 'run-a', 'tool/started', {
+        step: 2,
+        callId: 'b1',
+        toolId: 'braveSearch',
+        name: 'braveSearch',
+        args: {},
+        parallelGroup: 0,
+        callIndex: 0
+      })
+    ]);
+    expect(rows(state)).toEqual(['a1', 'a2', 'b1']);
+  });
+
+  test('without the two fields a call takes the end of the list, as before', () => {
+    const state = fold([begin, started(2, 'c2'), started(3, 'c1')]);
+    expect(rows(state)).toEqual(['c2', 'c1']);
+    expect('parallelGroup' in getRun(state, 'run-a').tools[0]).toBe(false);
+    expect('callIndex' in getRun(state, 'run-a').tools[0]).toBe(false);
+    // One field without the other names no batch.
+    const half = fold([
+      begin,
+      started(2, 'c2', { callIndex: 1 }),
+      started(3, 'c1', { callIndex: 0 })
+    ]);
+    expect(rows(half)).toEqual(['c2', 'c1']);
+  });
+});

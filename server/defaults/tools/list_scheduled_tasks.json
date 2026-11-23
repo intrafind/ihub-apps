@@ -9,6 +9,7 @@
     "de": "Die geplanten Aufgaben des Nutzers mit Zeitplan, nächstem Lauf und Status des letzten Laufs auflisten. Vor dem Ändern, Starten oder Löschen einer Aufgabe verwenden, um ihre taskId zu finden."
   },
   "script": "scheduledTaskTools.js",
+  "sideEffect": "read",
   "method": "listScheduledTasks",
   "parameters": {
     "type": "object",
