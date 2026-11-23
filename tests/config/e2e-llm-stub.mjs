@@ -37,7 +37,8 @@
  * gets the default reply above.
  *
  * - `e2e-slow:<ms>:<n>`: the words `slow-1` … `slow-<n>`, one every `<ms>`
- *   milliseconds (the first after `<ms>` too).
+ *   milliseconds (the first after `<ms>` too). At most 60 000 ms per word, 500
+ *   words and two minutes in all; a marker past a limit gets the default reply.
  * - `e2e-hang:<key>` (not `.` or `..`, which the release path cannot carry): sends the first (role) chunk and then nothing, until
  *   `POST /__release/<key>` (or `POST /__release-all`); the answer then is
  *   `E2E released: <key>`. A hang nobody releases ends by itself after
@@ -311,6 +312,8 @@ const MAX_KEPT_REQUESTS = 2000;
 /** Upper bounds of `e2e-slow`, so a typo cannot keep a socket open for hours. */
 const MAX_SLOW_MS = 60_000;
 const MAX_SLOW_WORDS = 500;
+/** Upper bound of the whole timed reply (`<ms>` times `<n>`): two minutes, like a hang. */
+const MAX_SLOW_TOTAL_MS = 120_000;
 
 const MARKER = /e2e-(slow|hang|tools-parallel|tool|script):(\S.*)/s;
 
@@ -355,16 +358,24 @@ function leadingJson(text) {
 }
 
 /**
- * A user message without the argument JSON of its `e2e-tool:` or
- * `e2e-tools-parallel:` marker, so a word in a tool argument (`e2e-fail`,
+ * A user message without the argument JSON of every `e2e-tool:` and
+ * `e2e-tools-parallel:` marker in it, so a word in a tool argument (`e2e-fail`,
  * `e2e-auth`, `e2e-slow`) is not read as a marker of its own.
  */
 function withoutToolArguments(text) {
-  const match = /e2e-(?:tools-parallel|tool):[A-Za-z0-9_,-]+:/.exec(text);
-  if (!match) return text;
-  const start = match.index + match[0].length;
-  const length = leadingJsonLength(text.slice(start));
-  return length ? text.slice(0, start) + text.slice(start + length) : text;
+  const pattern = /e2e-(?:tools-parallel|tool):[A-Za-z0-9_,-]+:/g;
+  let result = '';
+  let cursor = 0;
+  let match;
+  while ((match = pattern.exec(text))) {
+    const start = match.index + match[0].length;
+    const length = leadingJsonLength(text.slice(start));
+    if (!length) continue;
+    result += text.slice(cursor, start);
+    cursor = start + length;
+    pattern.lastIndex = cursor;
+  }
+  return result + text.slice(cursor);
 }
 
 /** The text of anything thrown, even a value that is no `Error` (`throw null`). */
@@ -406,6 +417,7 @@ export function parseMarker(text) {
     const ms = Number(slow[1]);
     const count = Number(slow[2]);
     if (count < 1 || ms > MAX_SLOW_MS || count > MAX_SLOW_WORDS) return null;
+    if (ms * count > MAX_SLOW_TOTAL_MS) return null;
     return { kind: 'slow', ms, count };
   }
 
