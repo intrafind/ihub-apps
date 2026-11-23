@@ -8310,7 +8310,15 @@
       "resultCount_other": "{{count}} results",
       "collapseAll": "Collapse all",
       "expandAll": "Expand all",
-      "tableLabel": "Table"
+      "tableLabel": "Table",
+      "helpLink": "Help: {{topic}}",
+      "helpTopics": {
+        "models": "Set up models",
+        "providers": "Connect a provider",
+        "apps": "Build your first app",
+        "prompts": "Manage prompts",
+        "access": "Who can use apps, models and prompts"
+      }
     },
     "aiDisclosure": {
       "title": "AI notice",

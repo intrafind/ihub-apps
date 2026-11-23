@@ -26,6 +26,7 @@ import { useConfirmAction } from '../hooks/useConfirmAction';
 import { buildBulkToggleConfirm } from '../utils/bulkToggleConfirm';
 import { deleteConfirmText } from '../utils/confirmText';
 import { copyId } from '../utils/copyId';
+import DocsLink from '../components/DocsLink';
 
 function PromptNameCell({ prompt, currentLanguage }) {
   return (
@@ -379,17 +380,20 @@ function AdminPromptsPage() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="sm:flex sm:items-center">
           <div className="sm:flex-auto">
-            <h1
-              ref={headingRef}
-              tabIndex={-1}
-              className="text-2xl font-semibold text-gray-900 dark:text-gray-100 focus:outline-hidden"
-            >
-              {activeTab === 'variables'
-                ? t('admin.promptVariables.title', 'Global Prompt Variables')
-                : activeTab === 'user'
-                  ? t('admin.prompts.userPrompts.title', 'User Prompts')
-                  : t('admin.prompts.title', 'Prompt Management')}
-            </h1>
+            <div className="flex items-center gap-2">
+              <h1
+                ref={headingRef}
+                tabIndex={-1}
+                className="text-2xl font-semibold text-gray-900 dark:text-gray-100 focus:outline-hidden"
+              >
+                {activeTab === 'variables'
+                  ? t('admin.promptVariables.title', 'Global Prompt Variables')
+                  : activeTab === 'user'
+                    ? t('admin.prompts.userPrompts.title', 'User Prompts')
+                    : t('admin.prompts.title', 'Prompt Management')}
+              </h1>
+              <DocsLink topic="prompts" />
+            </div>
             <p className="mt-2 text-sm text-gray-700 dark:text-gray-300">
               {activeTab === 'variables'
                 ? t(

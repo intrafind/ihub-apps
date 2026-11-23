@@ -4,6 +4,7 @@
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import AdminTabs from './AdminTabs';
+import DocsLink from './DocsLink';
 import useAdminPageAccess from '../hooks/useAdminPageAccess';
 
 /**
@@ -58,9 +59,12 @@ function ModelsTabsHeader({ modelCount, providerCount, actions }) {
     <div className="mb-6">
       <div className="sm:flex sm:items-start sm:justify-between sm:gap-4">
         <div>
-          <h1 className="text-2xl font-semibold text-gray-900 dark:text-gray-100">
-            {t('admin.models.areaTitle', 'Models')}
-          </h1>
+          <div className="flex items-center gap-2">
+            <h1 className="text-2xl font-semibold text-gray-900 dark:text-gray-100">
+              {t('admin.models.areaTitle', 'Models')}
+            </h1>
+            <DocsLink topic={activeId} />
+          </div>
           <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
             {t(
               'admin.models.areaSubtitle',
