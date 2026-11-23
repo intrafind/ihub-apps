@@ -54,6 +54,7 @@ const SEARCHED = [
   'steerApproval.test.js',
   'runHumanEventsRoute.test.js',
   'routeInventory.test.js',
+  'chatTurnStart.test.js',
   'fixtures/scriptedModel',
   'fixtures/sideBySide'
 ];

@@ -691,7 +691,8 @@ describe('the ratchet of raw app lookups', () => {
 
   it('the converted call sites ask the resolver of personal apps', () => {
     for (const file of [
-      'server/routes/chat/sessionRoutes.js',
+      // The chat POST resolves its app in the turn start it hands the turn to.
+      'server/services/chat/chatTurnStart.js',
       'server/routes/generalRoutes.js',
       'server/routes/magicPromptRoutes.js',
       'server/routes/integrations/scopes.js',

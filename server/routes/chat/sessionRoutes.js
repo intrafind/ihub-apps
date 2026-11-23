@@ -2,15 +2,6 @@
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
 import configCache from '../../configCache.js';
-import { resolveChatProjects } from '../../services/knowledge/chatProjects.js';
-import {
-  checkProjectTestChat,
-  projectTestOrigin,
-  resolveProjectTestScope
-} from '../../services/knowledge/projectTestScope.js';
-import { appendMcpAppContext, renderMcpAppContext } from '../../services/mcp/mcpAppContext.js';
-import { isPriorAnswer } from '../../services/loop/contextTracker.js';
-import { logInteraction, trackSession } from '../../utils.js';
 import llmClient, {
   usageToOpenAI,
   isLLMError,
@@ -20,34 +11,21 @@ import {
   clients,
   abortChatRequest,
   abortChatRequestOnDisconnect,
-  clearChatDurable,
   closeChatClient,
   hasActiveChatRequest,
   hasChatClient,
   isChatDurable,
-  locateChatClient,
-  markChatDurable,
   openChatPostStream,
   postStreams,
   writeStreamStart
 } from '../../sse.js';
 import { resumeChatRun } from '../../services/chat/chatResume.js';
-import { RunStreamEmitter, buildEnvelope, getStreamRun } from '../../services/loop/RunStream.js';
+import { RunStreamEmitter, getStreamRun } from '../../services/loop/RunStream.js';
 import runLog, { newRunId, isValidRunId } from '../../services/loop/RunLog.js';
 import { resolveActorId } from '../../services/loop/runIdentity.js';
-import { dropRun } from '../../services/loop/partialRunState.js';
 import { authorizeInteraction } from '../../services/loop/runAccess.js';
 import interactionService from '../../services/loop/InteractionService.js';
-import { prepareChatApproval } from '../../services/chat/chatToolApproval.js';
-import {
-  isUnresolvedUserAppId,
-  noteUserAppRun,
-  resolveAppForChat
-} from '../../services/userApps/resolveApp.js';
-import { prepareConnectResume } from '../../services/chat/chatConnectResume.js';
-import { getIntegrationConnectionService } from '../../services/integrations/auth/IntegrationConnectionService.js';
 import { SSE_V2_EVENTS, RUN_LOG_EVENTS } from '../../../shared/runEvents.js';
-import { KNOWLEDGE_REFRESH_PHASE } from '../../../shared/run/knowledgeRefresh.js';
 import { createSseChannel } from '../../utils/sseChannel.js';
 import {
   authRequired,
@@ -57,34 +35,24 @@ import {
 import { aiAcknowledgementRequired } from '../../middleware/aiAcknowledgementRequired.js';
 
 import ChatService from '../../services/chat/ChatService.js';
+import {
+  prepareTurn,
+  principalRefOf,
+  refusalError,
+  runPreparedTurn
+} from '../../services/chat/chatTurnStart.js';
 import { authorizeChat } from '../../services/chat/chatAccess.js';
 import { emitFailedRun } from '../../services/chat/failedRun.js';
-import { tryHandleMentionWorkflow } from '../../services/workflow/mentionWorkflow.js';
-import {
-  getChatRepository,
-  isPersistableChatId,
-  normalizeChatSettings,
-  chatTurnSettings,
-  normalizeChatVariables
-} from '../../services/chat/ChatRepository.js';
-import { resolveChatStorage } from '../../services/chat/chatPersistence.js';
-import { isNewGuest, resolveChatOwner } from '../../services/chat/chatOwner.js';
-import { isVoiceTurn, VOICE_INPUT_MODE } from '../../services/chat/voiceMode.js';
 import validate from '../../validators/validate.js';
 import { chatTestSchema, chatPostSchema, chatConnectSchema } from '../../validators/index.js';
 import { buildServerPath } from '../../utils/basePath.js';
 import logger from '../../utils/logger.js';
 import { describeCause, userAbortCause } from '../../services/chat/abortCause.js';
 import { findByIdCaseInsensitive } from '../../utils/resourceLookup.js';
-import { resolveChatScopes } from '../../services/integrations/scopes/index.js';
 import { ServiceError } from '../../utils/ServiceError.js';
-import { codeOfStatus, toErrorResponse } from '../../utils/errorResponse.js';
+import { codeOfStatus } from '../../utils/errorResponse.js';
 import { drainPendingFinish } from '../../services/workflow/chatBridge.js';
 import { cancelChatWorkflow, replayChatWorkflowProgress } from '../../tools/workflowRunner.js';
-import {
-  hydrateHistoryForPrompt,
-  prepareTurnFiles
-} from '../../services/chatFiles/ChatFileService.js';
 
 /**
  * The error a refusal answers with: its own code, else the one of its status. A route throws it
@@ -97,32 +65,6 @@ import {
  */
 function refusal(status, message, { code, details } = {}) {
   return new ServiceError(code ?? codeOfStatus(status), message, { status, details });
-}
-
-/**
- * The frames that answer a refusal or failure after a POST stream committed,
- * when no status line can carry it any more: `stream/error`, then the turn's
- * `run/ended { status: 'error' }`. The error is described exactly as its
- * problem+json body would be (`toErrorResponse`): the same code, and a 5xx
- * message only when it is safe to show.
- *
- * @param {string} chatId
- * @param {string} runId - The turn's run
- * @param {Error} error
- * @returns {Object[]} SSE v2 envelopes
- */
-function lateRefusalFrames(chatId, runId, error) {
-  const { body } = toErrorResponse(error);
-  const frame = (type, data) => buildEnvelope({ streamId: chatId, runId, type, data });
-  const described = { code: body.code, message: body.detail };
-  return [
-    frame(SSE_V2_EVENTS.STREAM_ERROR, {
-      ...described,
-      retryable: false,
-      details: { ...body.details, status: body.status }
-    }),
-    frame(SSE_V2_EVENTS.RUN_ENDED, { status: 'error', finishReason: 'error', error: described })
-  ];
 }
 
 /**
@@ -142,93 +84,92 @@ function wantsEventStream(req) {
 }
 
 /**
- * Chat-shaped view of a persisted transcript: role, content, and any hydrated
- * `fileData` payloads.
+ * The chat POST as a turn request: everything the turn reads from the request,
+ * as plain data (`TurnRequest` of `services/chat/chatTurnStart.js`). What the
+ * body left out stays `undefined`: the chat's stored setup fills it in.
  *
- * Everything else on a stored message — ids, usage, the error of a failed turn,
- * attachment descriptors — is bookkeeping for the history UI and has no place
- * in a model prompt. Contentless turns are dropped with it: an aborted or
- * failed turn is stored with an empty answer, and several providers reject a
- * blank message outright.
+ * The body is checked by `chatPostSchema`, so `messages` is a list. Its last
+ * entry is the new message; how many came before it is `clientHistory`, which
+ * the turn start refuses, after it checked who is asking.
  *
- * @param {Array<Object>} stored - Messages as `ChatRepository` returns them.
- * @returns {Array<{role: string, content: string, fileData?: Array<Object>, activeSkills?: Array<Object>}>} An answer
- *   keeps the skills it activated (`activity.activeSkills`), so they stay active.
+ * @param {import('express').Request} req
+ * @returns {import('../../services/chat/chatTurnStart.js').TurnRequest}
  */
-export function historyForPrompt(stored) {
-  return stored
-    .filter(
-      entry =>
-        entry?.role &&
-        ((typeof entry.content === 'string' && entry.content.trim()) || Boolean(entry.fileData))
-    )
-    .map(entry => {
-      // The skills an answer activated stay active in the chat; the request
-      // builder reads them from here and re-checks access every turn.
-      // A stored answer carries them in `activity`; a history rebuilt from the file
-      // store (`hydrateHistoryForPrompt`) already has them as `activeSkills`.
-      const skills =
-        entry.role === 'assistant' ? (entry.activity?.activeSkills ?? entry.activeSkills) : null;
-      return {
-        role: entry.role,
-        content: typeof entry.content === 'string' ? entry.content : '',
-        ...(entry.fileData ? { fileData: entry.fileData } : {}),
-        ...(Array.isArray(skills) && skills.length > 0 ? { activeSkills: skills } : {})
-      };
-    });
+export function turnRequestOf(req) {
+  const { appId, chatId } = req.params;
+  const { messages } = req.body;
+  const message = messages.at(-1);
+  let messageId = null;
+  if (message && message.messageId) {
+    messageId = message.messageId;
+    logger.debug('Using client-provided messageId', { component: 'sessionRoutes', messageId });
+  }
+  return {
+    chatId,
+    appId,
+    principalRef: principalRefOf(req.user),
+    messageId,
+    message,
+    clientHistory: Math.max(messages.length - 1, 0),
+    modelId: req.body.modelId,
+    style: req.body.style,
+    outputFormat: req.body.outputFormat,
+    sendChatHistory: req.body.sendChatHistory,
+    thinkingEnabled: req.body.thinkingEnabled,
+    thinkingLevel: req.body.thinkingLevel,
+    thinkingThoughts: req.body.thinkingThoughts,
+    enabledTools: req.body.enabledTools,
+    websearchEnabled: req.body.websearchEnabled,
+    imageAspectRatio: req.body.imageAspectRatio,
+    imageQuality: req.body.imageQuality,
+    integrationScopes: req.body.integrationScopes,
+    language: req.body.language || req.headers['accept-language']?.split(',')[0],
+    // The chat POST carries no time zone.
+    clientTimezone: null,
+    toolApprovalCapable: req.body.toolApprovalCapable,
+    // A message somebody sent: the only origin this route has.
+    origin: 'person',
+    bypassAppPrompts: req.body.bypassAppPrompts,
+    requestedSkills: req.body.requestedSkills,
+    documentIds: req.body.documentIds,
+    replaceFromMessageId: req.body.replaceFromMessageId,
+    ephemeral: req.body.ephemeral,
+    mcpAppContext: req.body.mcpAppContext,
+    voiceMode: req.body.voiceMode,
+    projectId: req.body.projectId,
+    projects: req.body.projects,
+    testProjectId: req.body.testProjectId,
+    client: {
+      sessionId: req.headers['x-session-id'],
+      userAgent: req.headers['user-agent'],
+      ip: req.ip,
+      url: req.originalUrl || req.baseUrl || req.url || ''
+    }
+  };
 }
 
-/**
- * Who brought a skill into the turn, by the route `resolveSkillsForTurn`
- * found it by: picked in the composer or `/name` in the message is the user's
- * (`requested`, `message`), `skillSettings.autoActivate` is the app's, and one
- * an earlier turn activated is kept (`chat`). The model's own activation is
- * announced by the `activate_skill` tool, not here.
- */
-const SKILL_ACTIVATOR_OF_ORIGIN = Object.freeze({
-  requested: 'user',
-  message: 'user',
-  app: 'app',
-  chat: 'chat'
-});
+// These helpers of a turn live with the turn start; the names stay importable from here.
+export {
+  announcedSkills,
+  historyForPrompt,
+  messageAttachments
+} from '../../services/chat/chatTurnStart.js';
 
 /**
- * The skills a turn announces on its run (`skill.activation`): every skill in
- * force, each saying who brought it in: the user, the app, or an earlier
- * message of the chat. A skill is shown once, in the activity block, with its
- * reason, so a carried-over skill is announced too.
+ * The JSON answer of a chat POST whose turn was told on the chat's GET stream.
+ * A refused turn is not answered here: the handler throws it once the turn has
+ * let go of the chat.
  *
- * @param {Array<{name: string, displayName: string, description?: string, origin: string}>} [skills]
- *   `activeSkills` of the prepared request
- * @returns {Array<{skillName: string, skillId: string, activatedBy: 'user'|'app'|'chat', description: string}>}
+ * @param {import('express').Response} res
+ * @param {string} chatId
+ * @param {import('../../services/chat/chatTurnStart.js').TurnOutcome} outcome
  */
-export function announcedSkills(skills) {
-  return (Array.isArray(skills) ? skills : []).map(skill => ({
-    skillName: skill.displayName,
-    skillId: skill.name,
-    activatedBy: SKILL_ACTIVATOR_OF_ORIGIN[skill.origin] || 'user',
-    description: skill.description || ''
-  }));
-}
-
-/**
- * Upload descriptors carried by a chat message, for the materializer to
- * normalize. The base64 payloads stay in the request: what a stored message
- * keeps is the fact that a file was attached, not the file.
- *
- * Each of the three fields is a single object for one upload and an array for
- * several — the shape the chat client has always sent and `RequestBuilder`
- * already handles — so they are flattened here. Without that an array is
- * `typeof 'object'` and survives as one opaque descriptor, turning three named
- * PDFs into a single nameless `{ type: 'file' }`.
- *
- * @param {Object} message - The new user message from the request.
- * @returns {Array<Object>}
- */
-export function messageAttachments(message) {
-  return [message?.fileData, message?.imageData, message?.audioData]
-    .flatMap(value => (Array.isArray(value) ? value : value ? [value] : []))
-    .filter(entry => entry && typeof entry === 'object');
+function answerTurnAsJson(res, chatId, outcome) {
+  if (outcome.status === 'failed') {
+    res.json({ status: 'error', message: outcome.error.message, code: outcome.error.code });
+  } else if (outcome.status === 'ran') {
+    res.json({ status: 'streaming', chatId });
+  }
 }
 
 /**
@@ -241,6 +182,10 @@ export function messageAttachments(message) {
  * rights, and a question the message skips past is superseded by its owner's
  * message. So both ask run access with the intent `answer`; an admin whose
  * message reaches somebody else's chat settles nothing.
+ *
+ * It reads no request: `prepareTurn` takes it as `settleClarifications`. It
+ * stays in this module because it decides through run access, and the route
+ * inventory lists every route module that does (`RUN_ACCESS_ROUTE_FILES`).
  *
  * @param {Object} params
  * @param {string} params.chatId
@@ -811,57 +756,6 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
   );
 
   /**
-   * Run one chat turn through the shared chat service. The turn streams over
-   * the chat's channel and this resolves once it ended.
-   *
-   * `persistence` is the durable-chat context the POST handler assembled, or
-   * null when this turn is not stored — the service treats null as "behave
-   * exactly as you did before chat persistence existed".
-   */
-  async function processChatRequest({
-    prep,
-    buildLogData,
-    messageId,
-    activatedSkills = [],
-    chatId,
-    DEFAULT_TIMEOUT,
-    getLocalizedError,
-    clientLanguage,
-    user,
-    persistence = null,
-    toolApproval = null,
-    connectResume = null,
-    canApproveTools = false,
-    runId = null,
-    continueRun = null,
-    priorContext = null,
-    promptResent = false
-  }) {
-    await logInteraction('chat_request', buildLogData(true));
-
-    return chatService.runTurn({
-      prep,
-      chatId,
-      messageId,
-      ...(runId ? { runId } : {}),
-      ...(continueRun ? { continueRun } : {}),
-      activatedSkills,
-      streaming: true,
-      buildLogData,
-      timeoutMs: DEFAULT_TIMEOUT,
-      getLocalizedError,
-      language: clientLanguage,
-      user,
-      persistence,
-      toolApproval,
-      connectResume,
-      canApproveTools,
-      priorContext,
-      promptResent
-    });
-  }
-
-  /**
    * @swagger
    * /apps/{appId}/chat/{chatId}:
    *   post:
@@ -1008,826 +902,43 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
     aiAcknowledgementRequired,
     validate(chatPostSchema),
     async (req, res) => {
-      // Destructured outside the try, and the durable mark tracked next to it,
-      // so the finally below can release the chat even when the handler throws
-      // before it ever reaches the turn.
-      const { appId, chatId } = req.params;
-      let durableTurn = false;
-      // A tool approval this request answered, and how to put it back if the
-      // turn never reached its loop (see `commitApproval`).
-      let restoreApproval = null;
-      let toolApproval = null;
-      // The same for the call a connect resumes (#3752).
-      let restoreConnect = null;
-      let connectResume = null;
-
+      const { chatId } = req.params;
       // A client that accepts `text/event-stream` gets the turn's frames on this
       // response instead of over its GET stream; without the header the answer
-      // is the JSON it always was. Opened at the commit point below: every
-      // refusal before it is problem+json either way.
-      const wantsStream = wantsEventStream(req);
-      // This request's own stream (`openChatPostStream`) and the turn's run, for
-      // a refusal that can only be told as frames.
-      let postStream = null;
-      let postStreamRunId = null;
+      // is the JSON it always was. The stream is opened at the commit point of
+      // the turn: every refusal before it is problem+json either way, and one
+      // after it is a `stream/error` frame.
+      const sink = wantsEventStream(req)
+        ? { open: turn => openChatPostStream({ req, res, ...turn }) }
+        : { answer: outcome => answerTurnAsJson(res, chatId, outcome) };
       try {
-        const {
-          messages,
-          language,
-          bypassAppPrompts,
-          requestedSkills,
-          documentIds,
-          replaceFromMessageId,
-          ephemeral,
-          mcpAppContext,
-          voiceMode,
-          projectId: requestedProjectId,
-          projects: requestedProjects,
-          testProjectId: requestedTestProjectId,
-          toolApprovalCapable
-        } = req.body;
-
-        // `chatAuthRequired` authorizes the app, never the chat id. Once chats
-        // are stored, anyone who guesses one could otherwise append a turn to
-        // — and, through the stream, read back — another user's chat.
-        const access = await authorizeChat(chatId, req.user, { intent: 'write' });
-        if (!access.ok) {
-          if (isNewGuest(req.user)) {
-            // The chat exists but this request came without the guest cookie
-            // that owns it, so its browser does not keep cookies for this site.
-            throw refusal(
-              404,
-              'This chat cannot be continued: the browser did not keep the guest cookie it was started with',
-              { code: 'GUEST_COOKIE_MISSING' }
-            );
-          }
-          throw new ServiceError('NOT_FOUND', 'Chat session not found');
-        }
-        // What the request left out is what the chat was last answered with,
-        // never the app's defaults: an approval or clarification answer, or an
-        // API caller, sends only part of the setup (`chatTurnSettings`).
-        const {
-          modelId,
-          style,
-          outputFormat,
-          sendChatHistory,
-          thinkingEnabled,
-          thinkingLevel,
-          thinkingThoughts,
-          enabledTools,
-          websearchEnabled,
-          imageAspectRatio,
-          imageQuality,
-          integrationScopes: requestedScopes
-        } = chatTurnSettings(req.body, access.chat);
-        // The chat's container project and the projects attached from the
-        // picker (#1036): checked against the caller's access here, carried
-        // on the request to the prompt builder, persisted with the chat.
-        const defaultLang = configCache.getPlatform()?.defaultLanguage || 'en';
-        const clientLanguage =
-          language || req.headers['accept-language']?.split(',')[0] || defaultLang;
-        // A project test (#3309) puts one admin project in scope for this turn
-        // and keeps the chat temporary; the picker's fields do not apply to it.
-        let projectTest = null;
-        if (requestedTestProjectId !== undefined) {
-          projectTest = await resolveProjectTestScope({
-            user: req.user,
-            testProjectId: requestedTestProjectId
-          });
-          // A test runs in a temporary chat that a test of this project started
-          // (or one nothing has been said in yet), never in a kept chat and never
-          // in another conversation: that would put answers from a project that
-          // may be disabled into the admin's history, or read an unrelated chat.
-          const refused = projectTest.ok
-            ? checkProjectTestChat(access.chat, projectTest.projectId)
-            : projectTest;
-          if (refused) {
-            throw refusal(
-              refused.status,
-              await getLocalizedError(refused.messageKey, {}, clientLanguage),
-              { code: refused.code }
-            );
-          }
-        }
-        // The app this turn runs, decided once for the request from the
-        // signed-in user and never from the body (`resolveAppForChat`, which
-        // asks `getAppForRequest` for an admin app): the published app, or
-        // one that is not published yet when a content admin tries it. For
-        // everyone else such an app is null here, as an unknown id is, and
-        // the request builder below answers APP_NOT_FOUND.
-        // Ids match regardless of case, as the request builder matches them: a
-        // missed app would skip its `userProjects` gate.
-        // A personal app (feature `userApps`) comes from its store with what
-        // the ceiling grants this caller; `personalApp` then says how tool
-        // calls are approved in it.
-        const appForChat = await resolveAppForChat(appId, req.user, { req });
-        // A personal-shaped id that did not resolve is refused here. It must
-        // not fall through to the lookup of the request builder, which would
-        // find a config app that was given the id of a personal app.
-        if (isUnresolvedUserAppId(appId, appForChat)) {
-          throw new ServiceError('NOT_FOUND', 'App not found');
-        }
-        const requestApp = appForChat?.app ?? null;
-        const personalApp = appForChat?.userApp ?? null;
-        // Whoever did not write a personal app cannot allow a tool for the
-        // whole chat: its instructions could repeat the tool with any
-        // arguments (design 6.3). Every other chat keeps the grant.
-        const chatGrants = personalApp ? personalApp.approval.chatGrants === true : true;
-        const chatProjects = await resolveChatProjects({
-          req,
-          chat: access.chat,
-          app: requestApp,
-          projectId: projectTest ? undefined : requestedProjectId,
-          projects: projectTest ? undefined : requestedProjects
-        });
-        if (!chatProjects.ok) {
-          throw refusal(chatProjects.status, chatProjects.message, {
-            code: chatProjects.code
-          });
-        }
-        let messageId = null;
-        if (messages && Array.isArray(messages) && messages.length > 0) {
-          const lastMessage = messages.at(-1);
-          if (lastMessage && lastMessage.messageId) {
-            messageId = lastMessage.messageId;
-            logger.debug('Using client-provided messageId', {
-              component: 'sessionRoutes',
-              messageId
-            });
-          }
-        }
-        const userSessionId = req.headers['x-session-id'];
-        // A clarification (`ask_user`) is answered by the next message: settle the
-        // pending interaction (channel `chat`) before the turn runs; any other
-        // message supersedes clarifications the user chose not to answer.
-        const answeredClarification = await settleChatClarifications({
-          chatId,
+        const prepared = await prepareTurn(turnRequestOf(req), {
           user: req.user,
-          lastMessage: Array.isArray(messages) ? messages.at(-1) : null
-        });
-        let model;
-        let llmMessages;
-        function buildLogData(streaming, extra = {}) {
-          return {
-            messageId,
-            appId,
-            modelId: model?.id,
-            sessionId: chatId,
-            userSessionId,
-            user: req.user,
-            messages: llmMessages,
-            options: { style, outputFormat, language: clientLanguage, streaming },
-            ...extra
-          };
-        }
-        logger.debug('Processing chat', { component: 'sessionRoutes', language: clientLanguage });
-        if (!messages || !Array.isArray(messages)) {
-          const errorMessage = await getLocalizedError('messagesRequired', {}, clientLanguage);
-          throw new ServiceError('BAD_REQUEST', errorMessage);
-        }
-
-        // --- the server owns the history ---
-        // Every chat is stored, so a turn posts exactly one message — the new
-        // one — and the server reads the rest back out of the store: a client
-        // can no longer rewrite what it already said. A chat the user does not
-        // want to keep (incognito, an anonymous visitor, an installation
-        // without chat history) is stored the same way, as a temporary chat
-        // that is never listed and expires on its own.
-        const repository = getChatRepository();
-        const storage = resolveChatStorage({
-          features: configCache.getFeatures(),
-          platformConfig: configCache.getPlatform(),
-          user: req.user,
-          // A scratch chat of a project test is never kept (#3309).
-          ephemeral: projectTest ? true : ephemeral
-        });
-        // An id the store cannot key cannot be a chat any more.
-        if (!isPersistableChatId(chatId)) throw new ServiceError('BAD_REQUEST', 'Invalid chat id');
-        if (!storage.stored || !repository.isAvailable()) {
-          // No browser-held fallback: a conversation nobody can continue is
-          // not an answer. The provider failure itself was logged at boot.
-          throw refusal(503, 'Chat storage is unavailable', {
-            code: 'CHAT_STORAGE_UNAVAILABLE'
-          });
-        }
-        if (messages.length > 1) {
-          // The code alone tells an integrator nothing about what to do
-          // instead, and this is the one refusal they can hit by doing exactly
-          // what the documentation told them to do before chats were stored.
-          throw refusal(400, 'The chat history is kept by the server: send only the new message', {
-            code: 'CLIENT_HISTORY_NOT_ALLOWED',
-            details: {
-              hint:
-                'Chats are stored server-side: post only the new message as a single-element ' +
-                'messages array (send ephemeral: true for a chat that is not kept in the history). ' +
-                'To send the whole conversation yourself, use the stateless OpenAI-compatible ' +
-                'chat completions endpoint instead.'
-            }
-          });
-        }
-        if (messages.length === 0) {
-          const errorMessage = await getLocalizedError('messagesRequired', {}, clientLanguage);
-          throw new ServiceError('BAD_REQUEST', errorMessage);
-        }
-        // Resolved once here and carried on the turn: `resolvePrincipal` is
-        // async and hits the filesystem, and the run finishes with no request
-        // in scope. The mode travels with the id so that an admin changing
-        // `runLog.identityMode` later cannot orphan this chat. An anonymous
-        // caller owns its chats through its guest cookie, set on this very
-        // response when it had none.
-        const owner = await resolveChatOwner(req.user, {
-          mode: access.chat?.identityMode || runLog.identityMode()
-        });
-        if (!owner) {
-          throw refusal(403, 'This chat has no owner to be stored under', {
-            code: 'CHAT_OWNER_REQUIRED'
-          });
-        }
-        // Fixed when the chat is created: a later turn's `ephemeral` neither
-        // hides a kept chat nor keeps a temporary one (that is
-        // `PATCH /api/chats/:id { temporary: false }`).
-        const temporaryChat = access.chat ? access.chat.temporary === true : storage.temporary;
-
-        // A tool approval (#2945) is answered by the next message, like a
-        // clarification: `approvalResponse` is checked here and answered
-        // (exactly once) only after the turn is prepared (`commitApproval`
-        // below), so a request that fails first does not use it up; any other
-        // message supersedes a pending approval.
-        const approvals = await prepareChatApproval({
-          chatId,
-          user: req.user,
-          chat: access.chat || null,
-          lastMessage: messages[0],
-          repository,
-          chatGrants
-        });
-        if (approvals.refusal) {
-          throw refusal(approvals.refusal.status, approvals.refusal.message, {
-            code: approvals.refusal.code
-          });
-        }
-        // A connect resumes the call that stopped on a missing connection
-        // (#3752): `connectResume { id }` is checked here and the record is
-        // taken (exactly once) only after the turn is prepared, like an
-        // approval. Any other message supersedes the record.
-        const connectResumePrep = await prepareConnectResume({
-          chatId,
-          user: req.user,
-          appId,
-          chat: access.chat || null,
-          ownerId: owner.id,
-          lastMessage: messages[0],
-          repository,
-          req,
-          isConnected: async (userId, integration) => {
-            const resolved = await getIntegrationConnectionService()
-              .resolve({ type: 'user', id: userId }, integration)
-              .catch(() => null);
-            return resolved?.ok === true;
-          }
-        });
-        if (connectResumePrep.refusal) {
-          throw refusal(connectResumePrep.refusal.status, connectResumePrep.refusal.message, {
-            code: connectResumePrep.refusal.code
-          });
-        }
-        toolApproval = { grants: approvals.grants, resume: null, chatGrants };
-        /**
-         * Answer the approval once the turn can run. Returns a refusal to send
-         * instead of running the turn, or null. A turn refused after this
-         * (before its loop started) puts the approval back (`restoreApproval`).
-         */
-        const commitApproval = async () => {
-          if (!approvals.commit) return null;
-          const committed = await approvals.commit();
-          if (committed.refusal) return committed.refusal;
-          toolApproval.grants = committed.grants;
-          toolApproval.resume = committed.resume;
-          restoreApproval = committed.restore;
-          return null;
-        };
-
-        let conversation = messages;
-        let persistence = null;
-        let priorContext = null;
-        const newMessage = messages[0];
-        const stored = await repository.getMessages(chatId);
-        let history = stored.messages;
-        let forkStoredId = null;
-        let replacedMessage = null;
-        if (connectResumePrep.record) {
-          // The answer that carries the card is the last message of the chat
-          // (a resume that failed again left a chain of them); the
-          // continuation is built from the question before them.
-          const record = connectResumePrep.record;
-          const answerRuns = new Set([...(record.continues || []), record.runId]);
-          const last = history[history.length - 1];
-          if (replaceFromMessageId || last?.role !== 'assistant' || last.runId !== record.runId) {
-            throw refusal(409, 'Nothing is waiting to be continued in this chat', {
-              code: 'CONNECT_RESUME_NOT_PENDING'
-            });
-          }
-          while (
-            history.length > 0 &&
-            history[history.length - 1].role === 'assistant' &&
-            answerRuns.has(history[history.length - 1].runId)
-          ) {
-            history = history.slice(0, -1);
-          }
-        }
-        if (replaceFromMessageId) {
-          // Either id the client can know this message by: the stored id it
-          // was given on hydrate, or — for a turn made in the session that
-          // is still open, which never learns the stored id — the exchange
-          // id it sent and the store filed as `clientMessageId`. Without the
-          // second, regenerating the answer you just got would carry no fork
-          // id at all and the retry would be appended to the untouched
-          // history, duplicating the exchange.
-          const forkAt = history.findIndex(
-            entry =>
-              entry.id === replaceFromMessageId || entry.clientMessageId === replaceFromMessageId
-          );
-          // Appending onto the untouched history instead would silently
-          // duplicate everything the edit meant to replace, so refuse.
-          if (forkAt === -1) {
-            throw refusal(400, 'The message to continue from is not in this chat', {
-              code: 'UNKNOWN_MESSAGE'
-            });
-          }
-          // Carry the *stored* id onward. The store matches on `id` alone,
-          // so forwarding the client's value forked the prompt here and not
-          // the transcript: a regenerate in a session that never hydrated
-          // sends its exchange id, which this lookup resolves and the store
-          // then rejects with UNKNOWN_MESSAGE. `materializeUserTurn` logs
-          // and returns null, the chat document has already been updated,
-          // and the answer lands at the end — so the stored history keeps
-          // the exchange the user replaced and, for an edit, never records
-          // the edited question at all. Permanent, and replayed to the model
-          // every turn after.
-          replacedMessage = history[forkAt];
-          forkStoredId = history[forkAt].id;
-          history = history.slice(0, forkAt);
-        }
-        // An app that opted out of chat history stays a one-shot prompt:
-        // storing the transcript must not start feeding it back to the
-        // model. The viewer's own "Include chat history in requests" toggle
-        // says the same thing for one turn: with the client posting a single
-        // message either way, this field is the only channel it has left.
-        const chatApp = requestApp;
-        // The app variables are chat state: a turn that sets them (the
-        // start form's, or any turn of an app that asks for them beside the
-        // chat) stores them, and a turn that does not gets the stored ones —
-        // for the system prompt, never as a re-rendered `prompt` template.
-        const turnVariables = normalizeChatVariables(newMessage.variables);
-        const chatVariables =
-          turnVariables ||
-          (chatApp?.variables?.length
-            ? normalizeChatVariables((await repository.getChat(chatId))?.variables)
-            : null);
-        // The prompt reads the variables as they are stored, so this turn and
-        // the ones after it render them alike (`false` is "false" in both).
-        const promptMessage = chatVariables
-          ? { ...newMessage, variables: chatVariables }
-          : newMessage;
-
-        // Where the chat's integrations search and whom they ask (#3050): the
-        // scopes this turn names, or else the ones the chat was answered with,
-        // checked against what each integration offers this user. A pinned
-        // scope replaces the request's; one the user may not use refuses the
-        // turn rather than quietly searching somewhere else.
-        const scopeResolution = chatApp
-          ? await resolveChatScopes({
-              requested: requestedScopes,
-              user: req.user,
-              app: chatApp,
-              model: findByIdCaseInsensitive(
-                configCache.getModels()?.data || [],
-                modelId || chatApp.preferredModel
-              ),
-              language: clientLanguage
-            })
-          : { ok: true, scopes: {} };
-        if (!scopeResolution.ok) {
-          throw refusal(403, scopeResolution.message, {
-            code: scopeResolution.code,
-            details: { integrationId: scopeResolution.integrationId }
-          });
-        }
-        const integrationScopes = scopeResolution.scopes;
-        const { message: preparedPromptMessage, attachments: turnFileAttachments } =
-          await prepareTurnFiles({
-            chatId,
-            ownerId: owner.id,
-            message: promptMessage,
-            inheritedAttachments: replacedMessage?.attachments,
-            appConfig: chatApp,
-            store: repository.fileStore?.()
-          });
-        // `prepareTurnFiles` already describes the images and audio of the turn next to its
-        // documents; adding them again here stored every image and audio file twice.
-        const persistedAttachments =
-          turnFileAttachments.length > 0 ? turnFileAttachments : messageAttachments(newMessage);
-        const includeHistory = chatApp?.sendChatHistory !== false && sendChatHistory !== false;
-        const hydratedHistory = includeHistory
-          ? await hydrateHistoryForPrompt(chatId, history, {
-              store: repository.fileStore?.()
-            })
-          : [];
-        // An e-mail, meeting or page is sent with every turn and stored once per
-        // chat: when this turn carries it again, earlier turns do not repeat it.
-        const currentItemIds = new Set(
-          [preparedPromptMessage?.fileData]
-            .flat()
-            .filter(file => file && ['email', 'meeting', 'page'].includes(file.origin))
-            .map(file => file.fileId || file.id)
-            .filter(Boolean)
-        );
-        const repeatsHostItem =
-          currentItemIds.size > 0 &&
-          hydratedHistory.some(entry =>
-            entry.fileData?.some?.(file => currentItemIds.has(file.fileId || file.id))
-          );
-        // What the last answer's prompt held, stored with it: the context
-        // figure of this turn starts from it rather than counting the history
-        // again — only when this turn resends that prompt as it was. The
-        // history is already cut at an edit or a regenerate; an item this turn
-        // carries again is taken out of the earlier turn, which changes it.
-        // The answer is the one the tracker finds (`isPriorAnswer`).
-        priorContext =
-          includeHistory && !repeatsHostItem
-            ? history.findLast(isPriorAnswer)?.context || null
-            : null;
-        const dedupedHistory =
-          currentItemIds.size === 0
-            ? hydratedHistory
-            : hydratedHistory
-                .map(entry =>
-                  entry.fileData
-                    ? {
-                        ...entry,
-                        fileData: entry.fileData.filter(
-                          file => !currentItemIds.has(file.fileId || file.id)
-                        )
-                      }
-                    : entry
-                )
-                .map(entry =>
-                  entry.fileData && entry.fileData.length === 0
-                    ? (({ fileData: _dropped, ...rest }) => rest)(entry)
-                    : entry
-                )
-                .filter(entry => entry.fileData || (entry.content || '').trim());
-        if (connectResumePrep.record) {
-          // No new message: the history ends with the question that failed.
-          conversation =
-            includeHistory && dedupedHistory.length > 0
-              ? historyForPrompt(dedupedHistory)
-              : [{ role: 'user', content: connectResumePrep.record.question || '' }];
-        } else if (includeHistory) {
-          conversation = [...historyForPrompt(dedupedHistory), preparedPromptMessage];
-        } else {
-          conversation = [preparedPromptMessage];
-        }
-
-        persistence = {
-          repository,
-          ownerId: owner.id,
-          identityMode: owner.mode,
-          temporary: temporaryChat,
-          // The stored history is never client-asserted; the message being
-          // sent necessarily is — it only exists in this request.
-          content: typeof newMessage.content === 'string' ? newMessage.content : '',
-          // A resume after a connect stores no user message.
-          silent: Boolean(connectResumePrep.record),
-          clientMessageId: messageId,
-          attachments: persistedAttachments,
-          variables: turnVariables,
-          replaceFromMessageId: forkStoredId,
-          // A message spoken in voice mode is marked, so the history can show
-          // it. Only when voice mode is on, like the request builder.
-          message: isVoiceTurn({
-            voiceMode,
-            platform: configCache.getPlatform(),
-            features: configCache.getFeatures()
-          })
-            ? { metadata: { inputMode: VOICE_INPUT_MODE } }
-            : undefined,
-          // The container project and the attached projects this turn
-          // names (`chatProjects`): written with the question under the
-          // chat lock, against the chat as it stands then — a container
-          // claimed by a racing first turn refuses this one with 409 — and
-          // a new container records the chat in its project once that is
-          // stored (`materializeUserTurn`), on the @workflow path too.
-          ...(chatProjects.projectPatch ? { projects: chatProjects.projectPatch } : {}),
-          projectId: chatProjects.containerId,
-          // A test chat is marked as one, on every turn: the chat a turn creates
-          // starts with it, and one a file upload created before the first
-          // message gets it now. It is what keeps the chat out of the history.
-          ...(projectTest
-            ? {
-                origin: projectTestOrigin(projectTest.projectId),
-                chat: { origin: projectTestOrigin(projectTest.projectId) }
-              }
-            : {}),
-          // How this turn is being answered, so reopening the chat comes
-          // back with the same setup rather than the app's defaults. These
-          // are the request's values over the stored ones
-          // (`chatTurnSettings`); the repository merges them over what
-          // earlier turns recorded, and `undefined` means neither has one.
-          settings: normalizeChatSettings({
-            style,
-            outputFormat,
-            sendChatHistory,
-            thinkingEnabled,
-            thinkingLevel,
-            thinkingThoughts,
-            enabledTools,
-            websearchEnabled,
-            imageAspectRatio,
-            imageQuality,
-            integrationScopes
-          })
-        };
-
-        trackSession(chatId, { appId, userSessionId, userAgent: req.headers['user-agent'] });
-
-        // A project test hands nothing on: an @mention stays plain text, for
-        // the workflow would run with its own projects (#3309).
-        const mention = projectTest
-          ? { handled: false }
-          : await tryHandleMentionWorkflow({
-              messages,
-              conversation,
-              chatId,
-              appId,
-              messageId,
-              modelId,
-              user: req.user,
-              clientLanguage,
-              persistence
-            });
-        if (mention.handled) {
-          // A refusal carries its status; its body is `{ error, code }` or `{ message }`.
-          if (mention.statusCode >= 400) {
-            throw refusal(mention.statusCode, mention.response.error ?? mention.response.message, {
-              code: mention.response.code
-            });
-          }
-          return res.json(mention.response);
-        }
-
-        // Both branches below prepare the very same request; they differ in what
-        // they do with the outcome. Built once so they cannot drift apart.
-        const chatRequestOptions = {
-          appId,
-          modelId,
-          messages: conversation,
-          style,
-          outputFormat,
-          language: clientLanguage,
-          bypassAppPrompts,
-          thinkingEnabled,
-          thinkingLevel,
-          thinkingThoughts,
-          enabledTools,
-          websearchEnabled,
-          imageAspectRatio,
-          imageQuality,
-          requestedSkills,
-          documentIds,
-          voiceMode,
-          user: req.user,
-          chatId,
-          projectId: chatProjects.containerId,
-          attachedProjectIds: chatProjects.attachedIds,
-          ...(projectTest ? { testProjectId: projectTest.projectId } : {}),
-          integrationScopes,
-          // The only place `resolvedApp` is set: this route is the one way to
-          // run an app that is not published (see `requestApp` above).
-          resolvedApp: requestApp
-        };
-
-        // The answer reaches the browser over the chat's stream only. In
-        // cluster mode that stream may be held by another worker, opened a
-        // moment ago — before this worker heard of it — so make sure it is
-        // known here before the turn's first frame is routed (#3674). With no
-        // stream anywhere the turn still runs and is stored; its frames have
-        // nowhere to go.
-        //
-        // A turn streamed on its own POST needs none of that: its frames are
-        // written here, to the response this worker holds.
-        if (!wantsStream) await locateChatClient(chatId);
-
-        // From here the turn owns the chat. A kept chat's turn has to survive
-        // the browser closing — its answer is written to the store either way —
-        // so the three paths that abort a run on disconnect must leave it alone
-        // until the finally below releases the mark. A temporary chat's turn is
-        // not: like the ephemeral turn it replaces, it stops when nobody is left
-        // to read it, so an anonymous or incognito visitor who closes the tab is
-        // not billed for the rest.
-        if (!persistence.temporary) {
-          markChatDurable(chatId);
-          durableTurn = true;
-        }
-
-        // Note that `hasChatClient` (inside `locateChatClient`) refreshed
-        // lastActivity on the existing map entry in place rather than
-        // replacing it: the SSE GET handler pins that object reference via
-        // `myEntry` to identify a stale `req.on('close')` after a reconnect,
-        // and replacing the entry would defeat that check, letting a dead
-        // socket's close handler bail out and leak the Map entry +
-        // activeRequests controller for up to 5 minutes until
-        // cleanupInactiveClients evicts it.
-        //
-        // The turn's run is named before its preparation (#3622): while the
-        // prompt is built, the refresh of outdated project documents it
-        // waits for is shown on that run, and the turn then runs as it (or
-        // fails as it, so the status line ends with the turn).
-        //
-        // A turn that answers a paused one (a clarification above, a tool
-        // approval) is named after the paused run: it continues that run, so
-        // one answer is one run (`ChatService.runTurn` falls back to a new id
-        // when the run cannot be continued).
-        const pausedTurn = answeredClarification || approvals.pausedTurn || null;
-        const continuesRun = pausedTurn && isValidRunId(pausedTurn.runId);
-        const turnRunId = continuesRun ? pausedTurn.runId : newRunId('chat');
-        // The commit point of a POST stream: the SSE headers go out now, so the
-        // wait for outdated documents below already streams. From here on a
-        // refusal is a `stream/error` frame (see the catch below).
-        if (wantsStream) {
-          postStream = openChatPostStream({
-            req,
-            res,
-            chatId,
-            runId: turnRunId,
-            durable: !persistence.temporary
-          });
-          postStreamRunId = turnRunId;
-          // Whether the reader is still there when a durable turn ends (the
-          // stored answer is marked unread otherwise): this stream, or a GET
-          // the client re-attached with after losing it.
-          persistence.clientConnected = () => postStream.isOpen() || hasChatClient(chatId);
-        }
-        const refreshStatus = new RunStreamEmitter({ streamId: chatId, runId: turnRunId });
-        const prep = await chatService.prepareChatRequest({
-          ...chatRequestOptions,
-          onKnowledgeRefresh: ({ total, done }) =>
-            refreshStatus.emit(SSE_V2_EVENTS.TOOL_PROGRESS, {
-              phase: KNOWLEDGE_REFRESH_PHASE,
-              data: { total, done }
-            })
-        });
-        if (!prep.success) {
-          const errMsg = await getLocalizedError(
-            prep.error.code || 'internalError',
-            {},
-            clientLanguage
-          );
-          emitFailedRun(chatId, {
-            messageId,
-            code: prep.error.code,
-            message: errMsg,
-            // Not the paused run's id: a second request answering the same
-            // pause must not end the run the first one may be continuing.
-            runId: continuesRun ? null : turnRunId
-          });
-          // A POST stream carried those frames itself; the finally ends it.
-          if (postStream) return;
-          return res.json({ status: 'error', message: errMsg, code: prep.error.code });
-        }
-        if (connectResumePrep.commit) {
-          const committed = await connectResumePrep.commit();
-          if (committed.refusal) {
-            emitFailedRun(chatId, {
-              runId: turnRunId,
-              messageId,
-              code: committed.refusal.code,
-              message: committed.refusal.message
-            });
-            // The failed run's frames (with the code) were the answer on a POST stream.
-            if (postStream) return;
-            throw refusal(committed.refusal.status, committed.refusal.message, {
-              code: committed.refusal.code
-            });
-          }
-          connectResume = committed.resume;
-          restoreConnect = committed.restore;
-        }
-        const approvalRefusal = await commitApproval();
-        if (approvalRefusal) {
-          emitFailedRun(chatId, {
-            // Not the paused run's id: a refused second answer must not end
-            // the run the first one is continuing.
-            runId: continuesRun ? null : turnRunId,
-            messageId,
-            code: approvalRefusal.code,
-            message: approvalRefusal.message
-          });
-          // The failed run's frames (with the code) were the answer on a POST stream.
-          if (postStream) return;
-          throw refusal(approvalRefusal.status, approvalRefusal.message, {
-            code: approvalRefusal.code
-          });
-        }
-        // A temporary chat's client that went away while the turn was prepared
-        // has nobody left to answer: the disconnect could not abort a turn that
-        // had not started yet.
-        if (postStream && !postStream.isOpen() && persistence.temporary) return;
-        model = prep.data.model;
-        // What open MCP App views reported since the last turn; model-only.
-        appendMcpAppContext(prep.data.llmMessages, mcpAppContext);
-        llmMessages = prep.data.llmMessages;
-
-        // Skills in force this turn are announced on the run: the usable
-        // subset the request builder put in the system prompt, never a skill
-        // the app or the user may not use. Each says who brought it in (the
-        // user's `/name` or composer pick, the app, or an earlier message).
-        const activatedSkills = announcedSkills(prep.data.activeSkills);
-
-        // The prompt holds the history the last answer's context counted only
-        // when the file budget left nothing of it out. A next turn resends this
-        // prompt as it is only when, besides, nothing in it is this turn's
-        // alone: the app's prompt template around the message, a host item
-        // rendered from the request, what open views reported.
-        const historyFilesOmitted = prep.data.historyFilesOmitted > 0;
-        const turnOnlyContext = Boolean(
-          (preparedPromptMessage?.promptTemplate && preparedPromptMessage?.variables) ||
-          preparedPromptMessage?.hostContext ||
-          renderMcpAppContext(mcpAppContext)
-        );
-        // The turn runs a personal app: note its use, and which revision of
-        // its instructions this chat ran with (one audit entry per chat and
-        // revision).
-        if (personalApp) await noteUserAppRun({ req, chatId, userApp: personalApp });
-        const outcome = await processChatRequest({
-          prep: prep.data,
-          buildLogData,
-          messageId,
-          activatedSkills,
-          chatId,
-          DEFAULT_TIMEOUT,
           getLocalizedError,
-          clientLanguage,
-          user: req.user,
-          persistence,
-          toolApproval,
-          connectResume,
-          // Only a client that draws the approval card can answer one.
-          canApproveTools: toolApprovalCapable === true,
-          runId: turnRunId,
-          priorContext: historyFilesOmitted ? null : priorContext,
-          promptResent:
-            includeHistory && !repeatsHostItem && !historyFilesOmitted && !turnOnlyContext,
-          ...(continuesRun ? { continueRun: { interactionId: pausedTurn.interactionId } } : {})
+          settleClarifications: settleChatClarifications
         });
-        // Refused at persistence: the chat's container changed under the
-        // turn (`settleUserTurn`), and nothing of it was stored.
-        if (outcome?.refusal) {
-          // The failed run's frames, when ChatService emitted them, were the
-          // answer on a POST stream (a refusal before the run started has none).
-          if (postStream?.hasEnded(turnRunId)) return;
-          throw refusal(409, outcome.refusal.message, {
-            code: outcome.refusal.code
-          });
+        if (prepared.refusal) throw refusalError(prepared.refusal);
+        // An `@workflow` mention: the workflow took the message and runs on the GET stream.
+        if (prepared.answer) {
+          res.json(prepared.answer);
+          return;
         }
 
-        // A POST stream ends in the finally, after the turn's last frame.
-        if (postStream) return;
-        return res.json({ status: 'streaming', chatId });
+        const outcome = await runPreparedTurn(prepared.turn, {
+          sink,
+          chatService,
+          getLocalizedError,
+          timeoutMs: DEFAULT_TIMEOUT
+        });
+        // Refused when it was about to run, with no stream to say so: answered
+        // here, after the turn let go of the chat.
+        if (outcome.status === 'refused' && !outcome.told) throw refusalError(outcome.refusal);
       } catch (error) {
         const expected = error instanceof ServiceError || isLLMError(error);
         // Only an unexpected failure is logged here.
         if (!expected) logger.error('Error in app chat', { component: 'sessionRoutes', error });
-        // Past the commit point the status line is gone: the refusal is a frame.
-        if (postStream) {
-          // A run that already ended on this stream has said its last word.
-          if (!postStream.hasEnded(postStreamRunId)) {
-            for (const frame of lateRefusalFrames(chatId, postStreamRunId, error)) {
-              postStream.write(frame);
-            }
-          }
-          return;
-        }
         // A refusal and a failing model call are answered as they are.
         throw error;
-      } finally {
-        // The turn is over however it ended, so a disconnect from here on has
-        // nothing to protect and should abort again.
-        try {
-          if (durableTurn) clearChatDurable(chatId);
-          // Answered, but the turn was refused (or failed) before its loop
-          // could run the call: put the approval back, with its answer, so the
-          // same decision can be sent again.
-          if (restoreApproval && !toolApproval?.started) await restoreApproval();
-          // Never after the loop started: the call may have run.
-          if (restoreConnect && !connectResume?.started) await restoreConnect();
-        } finally {
-          // Ended however the restores went: the client is waiting for it.
-          postStream?.end();
-          // A run refused late ended with frames written straight to the
-          // response, past the emit observer that frees its partial state.
-          if (postStreamRunId) dropRun(postStreamRunId);
-        }
       }
     }
   );

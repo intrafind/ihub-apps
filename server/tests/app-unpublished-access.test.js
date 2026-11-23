@@ -752,25 +752,26 @@ describe('RequestBuilder.prepareChatRequest', () => {
       .filter(file => /\bresolvedApp\b/.test(fsSync.readFileSync(file, 'utf8')))
       .map(file => path.relative(repoRoot, file))
       .sort();
+    // The chat route hands its turn to the turn start, which resolves the app.
     assert.deepEqual(users, [
-      'server/routes/chat/sessionRoutes.js',
-      'server/services/chat/RequestBuilder.js'
+      'server/services/chat/RequestBuilder.js',
+      'server/services/chat/chatTurnStart.js'
     ]);
     const route = fsSync.readFileSync(
-      path.join(repoRoot, 'server/routes/chat/sessionRoutes.js'),
+      path.join(repoRoot, 'server/services/chat/chatTurnStart.js'),
       'utf8'
     );
     assert.deepEqual(
       route.match(/\bresolvedApp\b.*/g).filter(line => !line.includes('`')),
-      ['resolvedApp: requestApp']
+      ['resolvedApp: draft.requestApp']
     );
-    // The route asks the resolver of personal apps (increment 2), which hands
-    // an admin app to `getAppForRequest` unchanged: nothing of the request
-    // but the path's id and the signed-in user decides.
-    assert.equal(route.match(/const requestApp = (.*);/)?.[1], 'appForChat?.app ?? null');
+    // The turn start asks the resolver of personal apps (increment 2), which
+    // hands an admin app to `getAppForRequest` unchanged: nothing of the
+    // request but the path's id and the signed-in user decides.
+    assert.equal(route.match(/draft\.requestApp = (.*);/)?.[1], 'appForChat?.app ?? null');
     assert.equal(
       route.match(/const appForChat = (.*);/)?.[1],
-      'await resolveAppForChat(appId, req.user, { req })'
+      'await resolveAppForChat(request.appId, draft.user, { req: principal })'
     );
     const resolver = fsSync.readFileSync(
       path.join(repoRoot, 'server/services/userApps/resolveApp.js'),
