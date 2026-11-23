@@ -17,6 +17,11 @@ import configCache from '../configCache.js';
 import logger from '../utils/logger.js';
 import { getClearAuthCookieOptions } from '../utils/cookieSettings.js';
 import { oauthClientsFile } from '../utils/contentsPath.js';
+import {
+  EMBED_SESSION_COOKIE,
+  isSameOriginRequest,
+  serializeClearEmbedSessionCookie
+} from '../utils/embedAuth.js';
 
 import { ServiceError } from '../utils/ServiceError.js';
 /**
@@ -126,7 +131,13 @@ export default async function jwtAuthMiddleware(req, res, next) {
   const authHeader = req.headers.authorization;
   const headerToken =
     authHeader && authHeader.startsWith('Bearer ') ? authHeader.substring(7) : null;
-  const cookieToken = req.cookies?.authToken || null;
+  // The session cookie of a framed iHub (see utils/embedAuth.js). It is
+  // `SameSite=None`, so unlike `authToken` the browser does not keep a forged
+  // request from carrying it: it counts only for requests the iHub page itself
+  // made. Any other request is answered as if the cookie were not there.
+  const embedToken = req.cookies?.[EMBED_SESSION_COOKIE];
+  const framedSessionToken = embedToken && isSameOriginRequest(req) ? embedToken : null;
+  const cookieToken = framedSessionToken || req.cookies?.authToken || null;
 
   if (headerToken) {
     return authenticateToken(req, res, next, headerToken, {
@@ -159,6 +170,8 @@ async function authenticateToken(req, res, next, token, { fromHeader, cookieFall
   const dropCookie = () => {
     if (req.cookies?.authToken === token) {
       res.clearCookie('authToken', getClearAuthCookieOptions(req));
+    } else if (req.cookies?.[EMBED_SESSION_COOKIE] === token) {
+      res.append('Set-Cookie', serializeClearEmbedSessionCookie());
     }
   };
 

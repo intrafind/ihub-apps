@@ -20,8 +20,10 @@ import request from 'supertest';
 jest.unstable_mockModule('../utils/logger.js', () => ({
   default: { info: jest.fn(), warn: jest.fn(), error: jest.fn(), debug: jest.fn() }
 }));
+// The platform configuration of the test; `embedAuth` is switched on per test.
+const platform = {};
 jest.unstable_mockModule('../configCache.js', () => ({
-  default: { getUI: () => ({ data: {} }) }
+  default: { getUI: () => ({ data: {} }), getPlatform: () => platform }
 }));
 
 const { default: registerStaticRoutes, isAdminDocsPagePath } =
@@ -118,5 +120,30 @@ describe('isAdminDocsPagePath', () => {
     ['/docs/x.md', false]
   ])('%s → %p', (p, expected) => {
     expect(isAdminDocsPagePath(p)).toBe(expected);
+  });
+});
+
+describe('who may show the app in a frame', () => {
+  const ORIGIN = 'https://ifinder.example.com';
+
+  afterEach(() => {
+    delete platform.embedAuth;
+  });
+
+  test('is not restricted while no host origin is configured', async () => {
+    const res = await request(buildApp()).get('/apps');
+    expect(res.status).toBe(200);
+    expect(res.headers['content-security-policy']).toBeUndefined();
+  });
+
+  test('is limited to iHub and the configured origins once the sign-in in a frame is set up', async () => {
+    platform.embedAuth = { allowedHostOrigins: [ORIGIN, 'not a url'] };
+
+    const res = await request(buildApp()).get('/apps');
+
+    expect(res.status).toBe(200);
+    expect(res.headers['content-security-policy']).toBe(`frame-ancestors 'self' ${ORIGIN}`);
+    expect(res.headers['x-frame-options']).toBeUndefined();
+    expect(res.text).toContain(INDEX_MARKER);
   });
 });

@@ -38,6 +38,7 @@ import {
   settleLoginAttempt
 } from '../utils/loginLockout.js';
 import { pickRequestLanguage, resolveUiText } from '../utils/uiTextRefs.js';
+import { isEmbedAuthEnabled, serializeClearEmbedSessionCookie } from '../utils/embedAuth.js';
 
 /**
  * Reduce a client-supplied `returnUrl` to a same-origin path (with query and
@@ -646,6 +647,8 @@ export default function registerAuthRoutes(app) {
 
     // Clear the authentication cookie
     res.clearCookie('authToken', getClearAuthCookieOptions(req));
+    // The session of a framed iHub is a cookie of its own; a logout from the frame ends it.
+    res.append('Set-Cookie', serializeClearEmbedSessionCookie());
     // Only clear the hint here when it WON'T be used - i.e. when the client
     // will redirect straight to /?logout=true and never call
     // GET /api/auth/oidc-logout at all. When oidcLogoutRequired is true, that
@@ -754,6 +757,8 @@ export default function registerAuthRoutes(app) {
       // token so it stops sending it.
       bearerTokenRejected: req.bearerTokenRejected === true,
       autoRedirect,
+      // iHub may be signed in to from a frame of another site, through a popup.
+      embedSignIn: isEmbedAuthEnabled(platform),
       user:
         req.user && req.user.id !== 'anonymous'
           ? {

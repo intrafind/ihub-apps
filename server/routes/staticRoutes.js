@@ -15,6 +15,8 @@ import {
 } from '../utils/basePath.js';
 import configCache from '../configCache.js';
 import { pickRequestLanguage } from '../utils/uiTextRefs.js';
+import { getEmbedAuthOrigins } from '../utils/embedAuth.js';
+import { applyFrameAncestorsCsp } from '../utils/frameAncestors.js';
 import { buildIndexHtml, localizePwaConfig, resolvePwaConfig } from '../services/pwa/PwaService.js';
 
 /**
@@ -141,6 +143,9 @@ export default function registerStaticRoutes(app, { isPackaged, rootDir, basePat
       if (relativePath.startsWith('/share/')) {
         res.set('X-Robots-Tag', 'noindex, nofollow');
       }
+      // With host origins configured for the sign-in in a frame, only those sites may frame iHub.
+      const framingOrigins = getEmbedAuthOrigins(configCache.getPlatform());
+      if (framingOrigins.length > 0) applyFrameAncestorsCsp(res, framingOrigins);
       if (html !== null) {
         res.set('Content-Type', 'text/html; charset=utf-8');
         res.set('Cache-Control', 'no-cache');
