@@ -210,16 +210,19 @@ const REVISION_KEY_RULES = {
 
 /**
  * Remove the marks of the data blocks from a text that goes into one: every
- * run of three or more `<` or `>`. A run is removed whole, so the characters
- * around it never form a new one; single angle brackets (`<b>`, `->`) stay.
+ * run of three or more `<` or `>` becomes one space. Removing a run outright
+ * could join its neighbours into a new mark (`<<` + `>>>` + `<LATEST…` would
+ * leave `<<<LATEST…`); the space keeps them apart, so one pass leaves no mark.
+ * Single and double angle brackets (`<b>`, `->`, `<<`) stay.
  *
  * @param {string} text
  * @returns {string}
  * @example
- * withoutBlockMarks('a >>> b <<<< c -> d'); // → 'a  b  c -> d'
+ * withoutBlockMarks('a >>> b <<<< c -> d'); // → 'a   b   c -> d'
+ * withoutBlockMarks('<<>>><X'); // → '<< <X'
  */
 export function withoutBlockMarks(text) {
-  return String(text ?? '').replace(/<{3,}|>{3,}/g, '');
+  return String(text ?? '').replace(/<{3,}|>{3,}/g, ' ');
 }
 
 /** A JSON value with the block marks removed from every string in it. */

@@ -14,6 +14,7 @@ import {
   setRevisionHeaders
 } from '../../utils/configRevision.js';
 import { assertValidId, assertValidIds } from '../../utils/pathSecurity.js';
+import { prepareStoredResource } from '../../resourceLoaders.js';
 import logger from '../../utils/logger.js';
 import { removeMarketplaceInstallation } from '../../utils/installationCleanup.js';
 import { logAudit } from '../../services/AuditLogService.js';
@@ -620,9 +621,11 @@ export default function registerAdminAppsRoutes(app) {
    *   get:
    *     summary: Get one application
    *     description: |
-   *       The app as the server runs it. The `ETag` header carries the revision of
-   *       the stored app file; send it as `If-Match` on `PUT /api/admin/apps/{appId}`
-   *       to refuse a save over a change someone else saved in the meantime.
+   *       The app as the server runs it: the stored app file with the schema's
+   *       defaults applied. The `ETag` header carries the revision of that same
+   *       stored file; send it as `If-Match` on `PUT /api/admin/apps/{appId}`
+   *       (or on `POST /api/admin/apps/{appId}/_toggle`) to refuse a change over
+   *       one someone else saved in the meantime.
    *     tags:
    *       - Admin
    *       - Applications
@@ -657,17 +660,20 @@ export default function registerAdminAppsRoutes(app) {
     // Validate appId for security
     assertValidId(appId, 'app');
 
-    const { data: apps } = configCache.getApps(true);
-    const app = apps.find(a => a.id === appId);
-
-    if (!app) {
+    // Body and revision come from one read of the stored file. The cache can lag
+    // behind a save (between a PUT's write and the cache refresh, or a save on
+    // another worker): an old cached body sent with the new file's revision would
+    // let the client save its stale copy over the newer change.
+    const stored = await readStoredApp(appId);
+    if (!stored || stored.id !== appId) {
       throw new ServiceError('NOT_FOUND', 'App not found');
     }
 
-    // The revision of the stored file, not of the cached app: what `If-Match` on
-    // PUT /api/admin/apps/{appId} is compared against (utils/configRevision.js).
-    setRevisionHeaders(res, revisionOf(await readStoredApp(appId)));
-    res.json(app);
+    // The revision of the stored file: what `If-Match` on PUT /api/admin/apps/{appId}
+    // is compared against (utils/configRevision.js). The body is that file in the
+    // shape the cache holds it (schema defaults applied), as before.
+    setRevisionHeaders(res, revisionOf(stored));
+    res.json(prepareStoredResource('apps', stored, `apps/${appId}.json`));
   });
 
   /**
@@ -1200,6 +1206,13 @@ export default function registerAdminAppsRoutes(app) {
    *       - Use comma-separated IDs: "app1,app2,app3"
    *       - Use '*' for all applications
    *       - Only updates apps that need status change (performance optimization)
+   *       - Only the `enabled` flag of each stored app file changes
+   *
+   *       **One app:** for a single app ID the answer carries the app's new
+   *       revision as `ETag`, and an optional `If-Match` (the `ETag` of
+   *       `GET /api/admin/apps/{appId}`) refuses the toggle with 412 when the
+   *       app was saved by someone else since it was read. The app editor uses
+   *       both, so its next save builds on the toggled file.
    *     tags:
    *       - Admin
    *       - Applications
@@ -1214,6 +1227,14 @@ export default function registerAdminAppsRoutes(app) {
    *         schema:
    *           type: string
    *           example: "chat-assistant,code-reviewer,translator"
+   *       - in: header
+   *         name: If-Match
+   *         required: false
+   *         schema:
+   *           type: string
+   *         description: |
+   *           One app only: the `ETag` of the `GET /api/admin/apps/{appId}` the
+   *           toggle is based on. Refused with 400 for several apps or `*`.
    *     requestBody:
    *       required: true
    *       description: Target enabled state for all specified applications
@@ -1232,6 +1253,11 @@ export default function registerAdminAppsRoutes(app) {
    *     responses:
    *       200:
    *         description: Applications successfully toggled
+   *         headers:
+   *           ETag:
+   *             description: For one app, the revision of its stored file after the toggle
+   *             schema:
+   *               type: string
    *         content:
    *           application/json:
    *             schema:
@@ -1250,7 +1276,9 @@ export default function registerAdminAppsRoutes(app) {
    *                   enabled: false
    *                   ids: ["*"]
    *       400:
-   *         description: Bad request - missing enabled flag
+   *         description: "`BAD_REQUEST`: missing enabled flag, or `If-Match` for more than one app"
+   *       412:
+   *         description: "`PRECONDITION_FAILED` (`details.resource` `app`): `If-Match` does not name the stored revision; nothing was written"
    *       500:
    *         description: Internal server error
    */
@@ -1266,24 +1294,33 @@ export default function registerAdminAppsRoutes(app) {
 
       // Validate appIds for security
       const ids = assertValidIds(appIds, 'app');
+      // One named app: the answer carries its new revision, and `If-Match` is honoured.
+      const single = ids.length === 1 && ids[0] !== '*';
+      if (!single && parseIfMatch(req.get('If-Match')) !== null) {
+        throw new ServiceError('BAD_REQUEST', 'If-Match is accepted for one app only');
+      }
 
       const { data: apps } = configCache.getApps(true);
       const resolvedIds = ids.includes('*') ? apps.map(a => a.id) : ids;
+      let stored = null;
       for (const id of resolvedIds) {
-        const app = apps.find(a => a.id === id);
-        if (!app) continue;
-        if (app.enabled !== enabled) {
-          app.enabled = enabled;
-          // Find the actual file for this app ID (may not match ${id}.json)
-          const appFilePath = await configStore.resolveIdToPath('apps', id, {
-            createIfMissing: false
-          });
-          if (!appFilePath) {
-            logger.warn('App file not found', { component: 'AdminApps', id });
-            continue;
-          }
-          await configStore.writeJson(appFilePath, app);
+        if (!single && !apps.some(a => a.id === id)) continue;
+        // Find the actual file for this app ID (may not match ${id}.json)
+        const appFilePath = await configStore.resolveIdToPath('apps', id, {
+          createIfMissing: false
+        });
+        if (!appFilePath) {
+          logger.warn('App file not found', { component: 'AdminApps', id });
+          continue;
         }
+        // Only the flag of the stored file changes, under the file's update lock; with
+        // `If-Match` (one app) the comparison runs on the body the change replaces.
+        const { data } = await configStore.updateJson(appFilePath, current => {
+          if (single) assertIfMatch(req, current, 'app');
+          if (!current || (current.enabled !== false) === enabled) return undefined;
+          return { ...current, enabled };
+        });
+        stored = data;
       }
 
       await configCache.refreshAppsCache();
@@ -1294,6 +1331,9 @@ export default function registerAdminAppsRoutes(app) {
         resourceId: resolvedIds.join(','),
         summary: `Batch ${enabled ? 'enabled' : 'disabled'} ${resolvedIds.length} apps`
       });
+      // The revision of the stored file after the toggle: a form that edits this app
+      // keeps saving with `If-Match` from it.
+      if (single && stored) setRevisionHeaders(res, revisionOf(stored));
       res.json({
         enabled,
         ids: resolvedIds

@@ -28,7 +28,8 @@ export const APP_REVISE_LIMITER = 'appRevise';
  * Response `code` to message key. `null` means "show nothing" (the author
  * pressed Cancel). `RATE_LIMITED` is also the code of a throttled model
  * provider, so its message is picked by `details.limiter`;
- * `APP_GENERATOR_INVALID_ANSWER` by `details.reason`. `other` stands for a
+ * `APP_GENERATOR_INVALID_ANSWER` by `details.reason`; `APP_REVISE_TOO_LONG` by
+ * `details.field`. `other` stands for a
  * response without that detail.
  */
 export const REVISE_ERROR_KEYS = Object.freeze({
@@ -39,7 +40,11 @@ export const REVISE_ERROR_KEYS = Object.freeze({
     truncated: 'admin.apps.conversation.error.truncated',
     other: 'admin.apps.conversation.error.unreadable'
   }),
-  APP_REVISE_TOO_LONG: 'admin.apps.conversation.error.tooLong',
+  // Picked by `details.field`: the instructions, or any other content key.
+  APP_REVISE_TOO_LONG: Object.freeze({
+    system: 'admin.apps.conversation.error.tooLong',
+    other: 'admin.apps.conversation.error.contentTooLong'
+  }),
   QUOTA_EXCEEDED: 'admin.apps.conversation.error.quota',
   FEATURE_DISABLED: 'admin.apps.conversation.error.off',
   USER_APPS_DISABLED: 'admin.apps.conversation.error.userAppsOff',
@@ -100,7 +105,12 @@ export function reviseErrorMessage(error) {
     if (entry === null) return null;
     if (typeof entry === 'string') return { key: entry };
     const details = isRecord(problem.details) ? problem.details : {};
-    const reason = code === 'RATE_LIMITED' ? details.limiter : details.reason;
+    const reason =
+      code === 'RATE_LIMITED'
+        ? details.limiter
+        : code === 'APP_REVISE_TOO_LONG'
+          ? details.field
+          : details.reason;
     const picked = typeof reason === 'string' && Object.hasOwn(entry, reason) ? reason : 'other';
     return { key: entry[picked] };
   }

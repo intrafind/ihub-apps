@@ -77,9 +77,11 @@ editing the form. This works in the admin app editor and in the editor of person
 When two administrators edited the same app, the later save replaced the earlier one without a
 word. The admin app editor now saves only if the app has not changed since it was opened.
 Otherwise it says **Changed by someone else**, saves nothing and keeps your edits; **Reload**
-loads the current version. For scripts: `GET /api/admin/apps/{appId}` returns an `ETag`; send it
-as `If-Match` with `PUT /api/admin/apps/{appId}` to get `412` instead of overwriting a newer
-change. Without `If-Match` the save works as before.
+loads the current version. **Publish** and **Unpublish** in the editor follow the same rule. For
+scripts: `GET /api/admin/apps/{appId}` returns an `ETag`; send it as `If-Match` with
+`PUT /api/admin/apps/{appId}` or `POST /api/admin/apps/{appId}/_toggle` to get `412` instead of
+overwriting a newer change. Both answer with the new `ETag`. Without `If-Match` they work as
+before.
 
 ## Models: Connect a Provider in One Guided Flow
 

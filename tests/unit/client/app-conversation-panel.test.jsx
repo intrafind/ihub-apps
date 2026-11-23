@@ -481,6 +481,158 @@ describe('Apply and Undo', () => {
   });
 });
 
+describe('Apply and Undo with other unsaved changes in the form', () => {
+  /** Changes a setting outside the content keys in the form, then goes back to the conversation. */
+  function editModelInForm(model = 'big-model') {
+    fireEvent.click(viewButton(TEXT.view.form));
+    fireEvent.change(screen.getByLabelText('Preferred model'), { target: { value: model } });
+  }
+
+  test('without them the change card says nothing more', async () => {
+    await renderEditor();
+    server.revise.push(changeAnswer());
+    await say('Be formal');
+    expect(screen.queryByTestId('change-also-saves')).not.toBeInTheDocument();
+  });
+
+  test('the card says Apply saves them too, and Apply saves them', async () => {
+    await renderEditor();
+    server.revise.push(changeAnswer());
+    await say('Be formal');
+    editModelInForm();
+    fireEvent.click(viewButton(TEXT.view.conversation));
+
+    const card = await screen.findByTestId('change-card');
+    const line = within(card).getByTestId('change-also-saves');
+    expect(line).toHaveTextContent(TEXT.change.alsoSaves);
+    const apply = within(card).getByRole('button', { name: TEXT.change.apply });
+    expect(apply).toBeEnabled();
+    expect(apply.getAttribute('aria-describedby')).toContain(line.id);
+
+    await act(async () => {
+      fireEvent.click(apply);
+    });
+    expect(puts()).toHaveLength(1);
+    expect(server.state.app.preferredModel).toBe('big-model');
+    expect(server.state.app.system).toEqual({ en: 'Address the reader formally.' });
+  });
+
+  test('a form that is not valid is not saved by Apply, and the card says why', async () => {
+    await renderEditor();
+    server.revise.push(changeAnswer());
+    await say('Be formal');
+    editModelInForm();
+    fireEvent.click(screen.getByRole('button', { name: 'report one error' }));
+    fireEvent.click(viewButton(TEXT.view.conversation));
+
+    await act(async () => {
+      fireEvent.click(await screen.findByRole('button', { name: TEXT.change.apply }));
+    });
+
+    expect(puts()).toHaveLength(0);
+    const card = screen.getByTestId('change-card');
+    expect(within(card).getByRole('alert')).toHaveTextContent(EDIT.validationErrorsExist);
+    expect(within(card).getByRole('button', { name: TEXT.change.apply })).toBeEnabled();
+  });
+
+  test('the same holds for Undo', async () => {
+    await renderEditor();
+    server.revise.push(changeAnswer());
+    await say('Be formal');
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: TEXT.change.apply }));
+    });
+    editModelInForm();
+    fireEvent.click(viewButton(TEXT.view.conversation));
+
+    expect(await screen.findByTestId('change-undo-also-saves')).toHaveTextContent(
+      TEXT.change.undoAlsoSaves
+    );
+    fireEvent.click(viewButton(TEXT.view.form));
+    fireEvent.click(screen.getByRole('button', { name: 'report one error' }));
+    fireEvent.click(viewButton(TEXT.view.conversation));
+    await act(async () => {
+      fireEvent.click(await screen.findByRole('button', { name: TEXT.change.undo }));
+    });
+    expect(puts()).toHaveLength(1);
+    expect(screen.getByTestId('change-card')).toHaveTextContent(EDIT.validationErrorsExist);
+  });
+});
+
+describe('Publish and Unpublish keep the editor revision', () => {
+  const saveButton = () => screen.getByRole('button', { name: 'Save Changes' });
+  const toggles = () => server.calls.filter(call => call.url === `${APP_URL}/_toggle`);
+
+  async function publish() {
+    fireEvent.click(screen.getByRole('button', { name: EDIT.publish.action }));
+    const dialog = await screen.findByRole('alertdialog');
+    await act(async () => {
+      fireEvent.click(within(dialog).getByRole('button', { name: EDIT.publish.action }));
+    });
+    await waitFor(() => expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument());
+  }
+
+  test('publish, then save, no 412', async () => {
+    await renderEditor({ path: APP_URL });
+    await publish();
+    expect(toggles()[0].ifMatch).toBe('"1"');
+    expect(server.state.revision).toBe(2);
+
+    fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Chat 2' } });
+    await act(async () => {
+      fireEvent.click(saveButton());
+    });
+
+    expect(puts().map(call => call.ifMatch)).toEqual(['"2"']);
+    expect(server.state.app).toMatchObject({ name: { en: 'Chat 2' }, enabled: true });
+    expect(screen.queryByRole('heading', { name: EDIT.conflict.title })).not.toBeInTheDocument();
+  });
+
+  test('publish, then Apply in the conversation, no 412', async () => {
+    await renderEditor();
+    await publish();
+    server.revise.push(changeAnswer());
+    await say('Be formal');
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: TEXT.change.apply }));
+    });
+
+    expect(puts().map(call => call.ifMatch)).toEqual(['"2"']);
+    expect(server.state.app.system).toEqual({ en: 'Address the reader formally.' });
+    expect(screen.getByTestId('change-applied')).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: EDIT.conflict.title })).not.toBeInTheDocument();
+  });
+
+  test('unpublish, then save, no 412', async () => {
+    await renderEditor({ path: APP_URL, app: { ...APP, enabled: true } });
+    fireEvent.click(screen.getByRole('button', { name: EDIT.more }));
+    fireEvent.click(
+      within(screen.getByRole('menu')).getByRole('menuitem', { name: EDIT.unpublish.action })
+    );
+    const dialog = await screen.findByRole('alertdialog');
+    await act(async () => {
+      fireEvent.click(within(dialog).getByRole('button', { name: EDIT.unpublish.action }));
+    });
+    expect(server.state.app.enabled).toBe(false);
+
+    fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Chat 2' } });
+    await act(async () => {
+      fireEvent.click(saveButton());
+    });
+    expect(puts().map(call => call.ifMatch)).toEqual(['"2"']);
+    expect(server.state.app.name).toEqual({ en: 'Chat 2' });
+  });
+
+  test('publish over a newer change is refused: nothing toggled, the conflict shown', async () => {
+    await renderEditor({ path: APP_URL });
+    server.bumpRevision();
+    await publish();
+
+    expect(server.state.app.enabled).toBe(false);
+    expect(screen.getByRole('heading', { name: EDIT.conflict.title })).toBeInTheDocument();
+  });
+});
+
 describe('the editor save with If-Match', () => {
   const saveButton = () => screen.getByRole('button', { name: 'Save Changes' });
 

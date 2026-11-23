@@ -163,6 +163,28 @@ export function contentChangedSince(form, baseSnapshot, target) {
 }
 
 /**
+ * Whether the form has unsaved changes outside the content keys of the target
+ * (a model, the upload settings, a personal app's capabilities): Apply and
+ * Undo save the whole form, so they would save those too, and the change card
+ * says so. Changes to the content keys are what a change replaces or is
+ * stale against, so they do not count here.
+ *
+ * @param {object|null} form - The app as the editor holds it.
+ * @param {object|null} saved - The app as it was last loaded or saved.
+ * @param {'admin'|'personal'} target
+ * @returns {boolean}
+ * @example
+ * unsavedOutsideContent({ name: 'B', preferredModel: 'x' }, { name: 'A', preferredModel: 'x' }, 'admin'); // → false
+ * unsavedOutsideContent({ preferredModel: 'y' }, { preferredModel: 'x' }, 'admin'); // → true
+ */
+export function unsavedOutsideContent(form, saved, target) {
+  if (!isPlainObject(form) || !isPlainObject(saved)) return false;
+  const content = new Set(appRevisionKeys(target));
+  const keys = new Set([...Object.keys(form), ...Object.keys(saved)]);
+  return [...keys].some(key => !content.has(key) && !sameValue(form[key], saved[key]));
+}
+
+/**
  * The suggestions of an answer the form does not have yet: web search when it
  * is off, and the connected systems that are not bound.
  *
@@ -436,6 +458,9 @@ export function changedLanguages(key, before, after, language) {
 /** The storage key of an app's conversation. */
 export const conversationStorageKey = (target, appId) => `ihub.appConversation.${target}.${appId}`;
 
+/** The status a change is read back with when its save was still running. */
+const UNSETTLED_STATUS = Object.freeze({ applying: 'proposed', undoing: 'applied' });
+
 /** An empty conversation. */
 export const EMPTY_CONVERSATION = Object.freeze({ entries: [], turns: 0, nextId: 1 });
 
@@ -456,10 +481,12 @@ export function readConversation(key) {
       entry => isPlainObject(entry) && (entry.role === 'author' || entry.role === 'builder')
     );
     return {
-      // A turn that was running when the page went away has no answer coming.
-      entries: entries.map(entry =>
-        entry.status === 'applying' ? { ...entry, status: 'proposed' } : entry
-      ),
+      // A save that was running when the page went away has no answer coming: an
+      // Apply goes back to the proposal, an Undo to the applied change.
+      entries: entries.map(entry => {
+        const settled = UNSETTLED_STATUS[entry.status];
+        return settled ? { ...entry, status: settled } : entry;
+      }),
       turns: Number.isInteger(parsed.turns) ? parsed.turns : 0,
       nextId: Number.isInteger(parsed.nextId) ? parsed.nextId : entries.length + 1
     };

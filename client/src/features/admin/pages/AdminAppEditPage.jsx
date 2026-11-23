@@ -17,6 +17,7 @@ import AppFormEditor from '../components/AppFormEditor';
 import { CALLOUT_CLASS, SECONDARY_BUTTON_CLASS } from '../components/formStyles';
 import ConversationPanel from '../components/app-conversation/ConversationPanel';
 import { adminStakes } from '../components/app-conversation/stakes';
+import { unsavedOutsideContent } from '../components/app-conversation/conversationState';
 import {
   CONVERSATION_VIEW,
   VIEW_PARAM,
@@ -104,6 +105,8 @@ function AdminAppEditPage() {
 
   // The revision (`ETag`) of the app this editor loaded: a save sends it as
   // `If-Match`, so it cannot overwrite a change someone else saved in between.
+  // Every write of the editor to the app file (save, Apply, Undo, Publish,
+  // Unpublish) takes the new revision; a restore from the history reloads it.
   const revisionRef = useRef(null);
   const requests = useMemo(
     () => ({
@@ -112,6 +115,7 @@ function AdminAppEditPage() {
     }),
     []
   );
+  const publishApp = useMemo(() => (id, published) => setPublished(id, published, revisionRef), []);
   const editor = useAppEditorState({ appId, ...requests });
   const { app, savedApp, isDirty, loading, loadError } = editor;
   const { models, uiConfig, jsonSchema } = useEditorResources(EDITOR_RESOURCES);
@@ -174,28 +178,34 @@ function AdminAppEditPage() {
     return true;
   };
 
-  const { saving, saveError, save, saveValue, conflict, clearConflict } = useEditorSave({
-    ready: Boolean(app),
-    valid: validationState.isValid,
-    persist: editor.save,
-    persistValue: editor.saveValue,
-    // The JSON editor has no field to lead to; there the sentence stands in.
-    explainInvalid: () => (showFirstError() ? null : t('admin.apps.edit.validationErrorsExist')),
-    describeError,
-    isConflict: isAppSaveConflict,
-    onSaved: () => {
-      setTestRun(run => run + 1);
-      showToast(t('admin.apps.edit.saved'));
-    }
-  });
+  const { saving, saveError, save, saveValue, conflict, clearConflict, reportConflict } =
+    useEditorSave({
+      ready: Boolean(app),
+      valid: validationState.isValid,
+      persist: editor.save,
+      persistValue: editor.saveValue,
+      // The JSON editor has no field to lead to; there the sentence stands in.
+      explainInvalid: () => (showFirstError() ? null : t('admin.apps.edit.validationErrorsExist')),
+      describeError,
+      isConflict: isAppSaveConflict,
+      onSaved: () => {
+        setTestRun(run => run + 1);
+        showToast(t('admin.apps.edit.saved'));
+      }
+    });
+
+  // Apply and Undo save the whole form: unsaved changes outside the content keys go with them.
+  const savesOtherChanges = unsavedOutsideContent(app, savedApp, 'admin');
 
   /**
    * The conversation's Apply and Undo: the editor's own save, conditional on
-   * the revision this editor loaded. The test chat restarts on the saved app;
-   * below `lg`, where the test is a dialog, a toast points to it.
+   * the revision this editor loaded. When the form holds other unsaved changes
+   * they are saved too, so the form's validity check runs as for Save. The
+   * test chat restarts on the saved app; below `lg`, where the test is a
+   * dialog, a toast points to it.
    */
   const persistFromConversation = async next => {
-    const outcome = await saveValue(next);
+    const outcome = await saveValue(next, { checkForm: savesOtherChanges });
     if (outcome.status !== 'saved') return outcome;
     setTestRun(run => run + 1);
     if (!wide) showToast(t('admin.apps.conversation.toast'));
@@ -240,7 +250,7 @@ function AdminAppEditPage() {
   const publishing = useAppPublishing({
     appId,
     isDirty,
-    setPublished,
+    setPublished: publishApp,
     saveFirst: save,
     // The toggle changed the stored flag only; it is not an edit of the form.
     onChanged: enabled => {
@@ -250,6 +260,9 @@ function AdminAppEditPage() {
       if (enabled) headingRef.current?.focus();
     },
     describeError,
+    // Someone else saved the app since it was loaded: the conflict notice offers to reload.
+    isConflict: isAppSaveConflict,
+    onConflict: reportConflict,
     // Groups may have changed since the page loaded; say who sees the app now.
     onAskPublish: refreshAccess
   });
@@ -408,6 +421,7 @@ function AdminAppEditPage() {
                 persist={persistFromConversation}
                 stakes={stakes}
                 testOpen={testOpen && wide}
+                savesOtherChanges={savesOtherChanges}
               />
             </div>
           ) : (
@@ -501,14 +515,13 @@ function AdminAppEditPage() {
         onClose={() => setHistoryOpen(false)}
         resource="app"
         resourceId={appId}
-        onRestored={
-          loadError
-            ? () => {
-                setHistoryOpen(false);
-                editor.retryLoad();
-              }
-            : undefined
-        }
+        // A rollback rewrites the app file: the editor loads the restored app and its
+        // revision, or its next save would be refused as a conflict.
+        onRestored={() => {
+          setHistoryOpen(false);
+          clearConflict();
+          editor.retryLoad();
+        }}
       />
     </div>
   );

@@ -17,7 +17,7 @@ import {
   fetchAdminModels,
   fetchContentAccess,
   makeAdminApiCall,
-  toggleApps
+  toggleApp
 } from '../../../../api/adminApi';
 import { etagOf } from '../../../../api/adminConfigRevision';
 import { fetchModels, fetchUIConfig } from '../../../../api';
@@ -69,13 +69,26 @@ export const saveApp = async (app, appId, revision) => {
     ...(sent ? { headers: { 'If-Match': sent } } : {}),
     body: cleanAppForSave(app)
   });
-  if (revision) {
-    const written = etagOf(response);
-    if (written) revision.current = written;
-    else if (sent) revision.current = etagOf(await makeAdminApiCall(appUrl(appId)));
-  }
+  await adoptRevision(response, appId, revision, sent);
   return response;
 };
+
+/**
+ * After a write of the app file: the holder takes the revision the answer
+ * carries. Without an `ETag` in the answer the revision is read again, since
+ * the file changed and the old revision would refuse the form's next save.
+ *
+ * @param {object} response - The answer of the write.
+ * @param {string} appId
+ * @param {{current: string|null}} [revision] - The form's revision holder.
+ * @param {string|null} sent - The revision the write was conditional on.
+ */
+async function adoptRevision(response, appId, revision, sent) {
+  if (!revision) return;
+  const written = etagOf(response);
+  if (written) revision.current = written;
+  else if (sent) revision.current = etagOf(await makeAdminApiCall(appUrl(appId)));
+}
 
 /**
  * Whether a failed save was refused because the app changed since the form
@@ -95,13 +108,26 @@ export const isAppSaveConflict = error => error?.response?.status === 412;
 export const loadAccess = appId => fetchContentAccess('apps', appId);
 
 /**
- * Publishes or unpublishes the app. Only the flag changes on the server.
+ * Publishes or unpublishes the app. Only the flag changes on the server, but
+ * that rewrites the app file, so its revision changes too.
+ *
+ * With a revision holder the toggle is conditional (`If-Match`): it is
+ * refused (412 `PRECONDITION_FAILED`) when someone else saved the app since
+ * the form loaded it, like a save. Afterwards the holder takes the app's new
+ * revision, so the form's next save, Apply or Undo is not refused although
+ * nobody else saved.
  *
  * @param {string} appId
  * @param {boolean} published
- * @returns {Promise<unknown>}
+ * @param {{current: string|null}} [revision] - The form's revision holder.
+ * @returns {Promise<unknown>} Rejects when the server refuses the toggle.
  */
-export const setPublished = (appId, published) => toggleApps([appId], published);
+export const setPublished = async (appId, published, revision) => {
+  const sent = revision?.current || null;
+  const response = await toggleApp(appId, published, { ifMatch: sent });
+  await adoptRevision(response, appId, revision, sent);
+  return response.data;
+};
 
 /**
  * The chat models the app can be set to (AI-B9). An admin gets the admin model

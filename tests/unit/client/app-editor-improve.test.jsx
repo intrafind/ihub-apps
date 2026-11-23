@@ -151,6 +151,49 @@ describe('the dialog', () => {
     expect(onClose).toHaveBeenCalled();
   });
 
+  test('reads instructions kept under a region tag from that tag, as the server writes them', async () => {
+    const onUse = jest.fn();
+    const answer = {
+      ...CHANGE,
+      patch: { system: { 'de-DE': 'Beantworte kurz.' } }
+    };
+    render(
+      <ImproveInstructionsDialog
+        isOpen
+        onClose={() => {}}
+        refine={async () => answer}
+        draft={{ system: { 'de-DE': 'Beantworte Fragen.' } }}
+        language="de-DE"
+        onUse={onUse}
+      />
+    );
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: IMPROVE.chips.shorter }));
+    });
+    expect(screen.getByTestId('improve-before')).toHaveTextContent('Beantworte Fragen.');
+    expect(screen.getByTestId('improve-after')).toHaveTextContent('Beantworte kurz.');
+    fireEvent.click(screen.getByRole('button', { name: IMPROVE.use }));
+    expect(onUse).toHaveBeenCalledWith({ 'de-DE': 'Beantworte kurz.' });
+  });
+
+  test('reads the base language when the region tag has no text', async () => {
+    render(
+      <ImproveInstructionsDialog
+        isOpen
+        onClose={() => {}}
+        refine={async () => ({ ...CHANGE, patch: { system: { de: 'Kurz.', en: 'Answer.' } } })}
+        draft={{ system: { de: 'Beantworte Fragen.', en: 'Answer.' } }}
+        language="de-DE"
+        onUse={() => {}}
+      />
+    );
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: IMPROVE.chips.shorter }));
+    });
+    expect(screen.getByTestId('improve-before')).toHaveTextContent('Beantworte Fragen.');
+    expect(screen.getByTestId('improve-after')).toHaveTextContent('Kurz.');
+  });
+
   test('an answer without a new text offers nothing to use', async () => {
     renderDialog({ ...CHANGE, reply: 'message', patch: {}, changed: [], text: 'Already fine.' });
     await act(async () => {

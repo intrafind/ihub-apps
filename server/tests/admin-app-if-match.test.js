@@ -190,3 +190,74 @@ describe('PUT /api/admin/apps/{appId} with If-Match', () => {
     expect(res.body.code).toBe('VALIDATION_FAILED');
   });
 });
+
+describe('GET /api/admin/apps/{appId} while the cache lags behind', () => {
+  test('answers the stored body with its revision, not a stale cached body', async () => {
+    const etag = (await get()).headers.etag;
+    // Another worker saved: the file is new, this worker's cache still holds the old app.
+    await fs.writeFile(appFile('helper'), JSON.stringify(withSystem('Saved elsewhere.'), null, 2));
+    expect(state.apps[0].system).toEqual({ en: 'You help.' });
+
+    const res = await get();
+
+    expect(res.body.system).toEqual({ en: 'Saved elsewhere.' });
+    expect(res.headers.etag).not.toBe(etag);
+    // The ETag is what the next PUT compares against: a save built on this body goes
+    // through, one built on the old body is refused.
+    expect((await put(withSystem('Built on the stale body.'), etag)).status).toBe(412);
+    expect((await put(withSystem('Built on the new body.'), res.headers.etag)).status).toBe(200);
+  });
+
+  test('answers the body in the shape of the cache: schema defaults applied', async () => {
+    const res = await get();
+    expect(res.body.enabled).toBe(false);
+    // Keys the schema adds by default are there although the file does not hold them.
+    expect(Object.keys(res.body).length).toBeGreaterThan(Object.keys(APP).length);
+  });
+
+  test('answers 404 for an app with no stored file', async () => {
+    const res = await request(server()).get('/api/admin/apps/missing');
+    expect(res.status).toBe(404);
+  });
+});
+
+describe('POST /api/admin/apps/{appId}/_toggle', () => {
+  const toggle = (enabled, ifMatch, ids = 'helper') => {
+    const req = request(server()).post(`/api/admin/apps/${ids}/_toggle`);
+    if (ifMatch !== undefined) req.set('If-Match', ifMatch);
+    return req.send({ enabled });
+  };
+
+  test('answers the new revision of one app: the next save with it goes through', async () => {
+    const etag = (await get()).headers.etag;
+
+    const res = await toggle(true, etag);
+
+    expect(res.status).toBe(200);
+    expect(res.headers.etag).toBe((await get()).headers.etag);
+    expect(res.headers.etag).not.toBe(etag);
+    expect((await put(withSystem('Saved after publishing.'), res.headers.etag)).status).toBe(200);
+  });
+
+  test('changes only the flag of the stored file', async () => {
+    expect((await toggle(true)).status).toBe(200);
+    expect(JSON.parse(await readText())).toEqual({ ...APP, enabled: true });
+  });
+
+  test('a stale If-Match is 412 and writes nothing', async () => {
+    const etag = (await get()).headers.etag;
+    await put(withSystem('Saved elsewhere.'));
+    const stored = await readText();
+
+    const res = await toggle(true, etag);
+
+    expect(res.status).toBe(412);
+    expect(res.body.code).toBe('PRECONDITION_FAILED');
+    expect(await readText()).toBe(stored);
+  });
+
+  test('refuses If-Match for several apps', async () => {
+    const res = await toggle(true, '"x"', 'helper,other');
+    expect(res.status).toBe(400);
+  });
+});

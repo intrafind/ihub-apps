@@ -17,12 +17,16 @@ const isSaveShortcut = event =>
  *
  * A form that is not valid is not sent. The page then leads the author to the
  * field; where it cannot (`explainInvalid` returns a sentence), that sentence
- * is the error. `saveValue` does not ask the form: its value was checked by
- * the server that proposed it, and the save route checks it again.
+ * is the error. `saveValue` asks the form only when told to (`checkForm`):
+ * the content it changes was checked by the server that proposed it, and the
+ * save route checks it again; but when the form also holds other unsaved
+ * changes, those are saved with it and pass the same check as a Save.
  *
  * A save the server refused because the app changed since the editor loaded
  * it (`isConflict`) is not an error line: `conflict` turns true, and the page
- * says so and offers to reload. The next successful save clears it.
+ * says so and offers to reload. The next successful save clears it. Another
+ * write of the editor that was refused the same way (Publish) reports it with
+ * `reportConflict`.
  *
  * @param {object} options
  * @param {boolean} options.ready - There is a loaded app to save.
@@ -42,11 +46,15 @@ const isSaveShortcut = event =>
  *   saveError: string|null,
  *   conflict: boolean,
  *   clearConflict: () => void,
+ *   reportConflict: () => void,
  *   save: () => Promise<boolean>,
- *   saveValue: (value: object) => Promise<{status: 'saved'|'conflict'|'failed', message?: string|null}>
+ *   saveValue: (value: object, options?: {checkForm?: boolean}) =>
+ *     Promise<{status: 'saved'|'conflict'|'failed', message?: string|null}>
  * }} `save` resolves with whether the app was stored; it never rejects. A call
  *   while a save is running sends nothing and resolves with that save's result.
  *   `saveValue` waits for a running save, then stores `value`; it never rejects.
+ *   With `checkForm` and a form that is not valid it sends nothing and resolves
+ *   with `failed` and the sentence of `explainInvalid`.
  *
  * @example
  * const { saving, saveError, save } = useEditorSave({
@@ -109,10 +117,12 @@ export function useEditorSave({
     return runningRef.current;
   };
 
-  const saveValue = async value => {
+  const saveValue = async (value, { checkForm = false } = {}) => {
     // A save that is running stores what the form held; this one comes after it.
     if (runningRef.current) await runningRef.current;
     if (!ready || !persistValue) return { status: 'failed', message: null };
+    // The form's other unsaved changes go with the value: the same check as a Save.
+    if (checkForm && !valid) return { status: 'failed', message: explainInvalid() ?? null };
     const outcome = attempt(() => persistValue(value));
     runningRef.current = outcome.then(result => result.status === 'saved');
     return outcome;
@@ -136,6 +146,7 @@ export function useEditorSave({
     saveError,
     conflict,
     clearConflict: () => setConflict(false),
+    reportConflict: () => setConflict(true),
     save,
     saveValue
   };

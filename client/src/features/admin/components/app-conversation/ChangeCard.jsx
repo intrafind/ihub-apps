@@ -178,6 +178,8 @@ function ChangeSection({ section, before, patch, language }) {
  * @param {boolean} props.undoAvailable - Every part the change set still holds the applied value.
  * @param {Array<{key: string, values?: object}>} [props.stakes] - Who gets the change.
  * @param {boolean} [props.testOpen=false] - The test chat is beside the conversation.
+ * @param {boolean} [props.savesOtherChanges=false] - The form has unsaved changes outside
+ *   the content keys; Apply and Undo save the whole form, so they are saved too.
  * @param {(ticked: { webSearch: boolean, integrationIds: string[] }) => void} props.onApply
  * @param {() => void} props.onDismiss
  * @param {() => void} props.onUndo
@@ -194,6 +196,7 @@ function ChangeCard({
   undoAvailable,
   stakes = [],
   testOpen = false,
+  savesOtherChanges = false,
   onApply,
   onDismiss,
   onUndo,
@@ -214,6 +217,11 @@ function ChangeCard({
   const warningKeys = [...new Set((entry.warnings || []).map(warningKey))];
   const staleId = `${baseId}-stale`;
   const undoBlockedId = `${baseId}-undo-blocked`;
+  const alsoSavesId = `${baseId}-also-saves`;
+  /** The ids that describe Apply: why it is off, and what else it saves. */
+  const applyDescription =
+    [stale ? staleId : null, savesOtherChanges ? alsoSavesId : null].filter(Boolean).join(' ') ||
+    undefined;
 
   const toggleSystem = (id, checked) =>
     setTicked(held => ({
@@ -312,6 +320,15 @@ function ChangeCard({
               {t('admin.apps.conversation.change.stale')}
             </p>
           )}
+          {savesOtherChanges && (
+            <p
+              id={alsoSavesId}
+              data-testid="change-also-saves"
+              className="text-sm text-gray-700 dark:text-gray-300"
+            >
+              {t('admin.apps.conversation.change.alsoSaves')}
+            </p>
+          )}
           <div className="flex flex-wrap justify-end gap-2">
             <button
               type="button"
@@ -326,7 +343,7 @@ function ChangeCard({
               className={PRIMARY_BUTTON_CLASS}
               onClick={() => onApply(ticked)}
               disabled={stale || status === 'applying'}
-              aria-describedby={stale ? staleId : undefined}
+              aria-describedby={applyDescription}
             >
               {status === 'applying'
                 ? t('admin.apps.conversation.change.applying')
@@ -362,7 +379,9 @@ function ChangeCard({
                 className={LINK_BUTTON_CLASS}
                 onClick={onUndo}
                 disabled={!undoAvailable || status === 'undoing'}
-                aria-describedby={undoAvailable ? undefined : undoBlockedId}
+                aria-describedby={
+                  undoAvailable ? (savesOtherChanges ? alsoSavesId : undefined) : undoBlockedId
+                }
               >
                 {status === 'undoing'
                   ? t('admin.apps.conversation.change.undoing')
@@ -373,6 +392,15 @@ function ChangeCard({
           {status === 'applied' && !undoAvailable && (
             <p id={undoBlockedId} className="text-sm text-gray-600 dark:text-gray-400">
               {t('admin.apps.conversation.change.undoChanged')}
+            </p>
+          )}
+          {status === 'applied' && undoAvailable && savesOtherChanges && (
+            <p
+              id={alsoSavesId}
+              data-testid="change-undo-also-saves"
+              className="text-sm text-gray-600 dark:text-gray-400"
+            >
+              {t('admin.apps.conversation.change.undoAlsoSaves')}
             </p>
           )}
           {status === 'applied' && entry.problem === 'conflict' && (

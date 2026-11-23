@@ -5,7 +5,10 @@ import { useEffect, useId, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import Modal from '../../../../shared/components/Modal';
 import { INPUT_CLASS, PRIMARY_BUTTON_CLASS, SECONDARY_BUTTON_CLASS } from '../formStyles';
-import { REVISE_AUTHOR_TEXT_MAX } from '../../../../../../shared/appRevision.js';
+import {
+  REVISE_AUTHOR_TEXT_MAX,
+  revisionLanguageKey
+} from '../../../../../../shared/appRevision.js';
 import { reviseErrorMessage } from '../app-conversation/reviseErrors';
 
 /**
@@ -93,7 +96,10 @@ function ImprovePanel({ onClose, refine, draft, language, onUse }) {
     if (result) resultRef.current?.focus();
   }, [result]);
 
-  const current = typeof draft?.system?.[language] === 'string' ? draft.system[language] : '';
+  // The key the server reads the instructions from and writes the new text under:
+  // `de-DE` for instructions kept under `de-DE`, else the base language.
+  const textKey = revisionLanguageKey(draft?.system, language);
+  const current = typeof draft?.system?.[textKey] === 'string' ? draft.system[textKey] : '';
 
   const ask = async text => {
     const message = typeof text === 'string' ? text.trim() : '';
@@ -115,7 +121,7 @@ function ImprovePanel({ onClose, refine, draft, language, onUse }) {
       });
       if (controller.signal.aborted) return;
       const system = answer?.patch?.system;
-      const proposed = typeof system?.[language] === 'string' ? system[language] : null;
+      const proposed = typeof system?.[textKey] === 'string' ? system[textKey] : null;
       setResult(
         answer?.reply === 'change' && proposed !== null && proposed !== current
           ? { system, text: proposed, note: answer.text || '' }

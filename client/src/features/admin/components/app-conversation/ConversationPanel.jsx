@@ -30,6 +30,9 @@ import { useConversation } from './useConversation';
  * @param {(next: object) => Promise<{ status: string, value?: object, message?: string|null }>} props.persist
  * @param {Array<{key: string, values?: object}>} [props.stakes] - The stakes line of a change.
  * @param {boolean} [props.testOpen=false] - The test chat is beside the conversation.
+ * @param {boolean} [props.savesOtherChanges=false] - The form has unsaved changes outside
+ *   the content keys (see `unsavedOutsideContent`): the change cards say that Apply and
+ *   Undo save them too.
  * @returns {JSX.Element}
  */
 function ConversationPanel({
@@ -40,7 +43,8 @@ function ConversationPanel({
   refine,
   persist,
   stakes = [],
-  testOpen = false
+  testOpen = false,
+  savesOtherChanges = false
 }) {
   const { t } = useTranslation();
   const composerId = useId();
@@ -112,6 +116,7 @@ function ConversationPanel({
         working={working}
         stakes={stakes}
         testOpen={testOpen}
+        savesOtherChanges={savesOtherChanges}
         onSend={send}
         onApply={(id, ticked) => void conversation.apply(id, ticked)}
         onDismiss={conversation.dismiss}
