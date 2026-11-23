@@ -48,6 +48,7 @@ function UserNameCell({ user }) {
 }
 
 function AuthMethodCell({ user }) {
+  const { t } = useTranslation();
   const methods = user.authMethods || ['local'];
   return (
     <div className="flex flex-col">
@@ -77,15 +78,24 @@ function AuthMethodCell({ user }) {
           {user.oidcData.provider}
         </div>
       )}
-      {user.proxyData && <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">Proxy</div>}
+      {user.proxyData && (
+        <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+          {t('admin.overview.auth.proxy', 'Proxy')}
+        </div>
+      )}
     </div>
   );
 }
 
 function GroupsCell({ user }) {
+  const { t } = useTranslation();
   const groups = user.internalGroups || [];
   if (groups.length === 0) {
-    return <span className="text-sm text-gray-500 dark:text-gray-400">No groups</span>;
+    return (
+      <span className="text-sm text-gray-500 dark:text-gray-400">
+        {t('admin.users.list.noGroups', 'No groups')}
+      </span>
+    );
   }
   return (
     <div className="flex flex-wrap gap-1">
@@ -112,7 +122,9 @@ function StatusCell({ user, onToggle }) {
             : 'bg-red-100 dark:bg-red-900/50 text-red-800 dark:text-red-300'
         }`}
       >
-        {user.active !== false ? 'Active' : 'Inactive'}
+        {user.active !== false
+          ? t('admin.users.view.active', 'Active')
+          : t('admin.users.view.inactive', 'Inactive')}
       </span>
       <Switch
         size="sm"
@@ -131,16 +143,23 @@ function StatusCell({ user, onToggle }) {
 }
 
 function LastActiveCell({ user }) {
+  const { t } = useTranslation();
   // Captured once per mount — the static "days ago" label needs no live clock
   const [now] = useState(() => Date.now());
   if (!user.lastActiveDate) {
-    return <span className="text-gray-500 dark:text-gray-400">Never</span>;
+    return (
+      <span className="text-gray-500 dark:text-gray-400">
+        {t('admin.users.list.never', 'Never')}
+      </span>
+    );
   }
   const daysAgo = Math.floor((now - new Date(user.lastActiveDate)) / (1000 * 60 * 60 * 24));
   return (
     <div className="flex flex-col">
       <span>{new Date(user.lastActiveDate).toLocaleDateString()}</span>
-      <span className="text-xs text-gray-500 dark:text-gray-400">{daysAgo} days ago</span>
+      <span className="text-xs text-gray-500 dark:text-gray-400">
+        {t('admin.users.list.daysAgo', '{{count}} days ago', { count: daysAgo })}
+      </span>
     </div>
   );
 }
@@ -181,7 +200,12 @@ function AdminUsersPage() {
       const usersArray = Object.values(data.users || {});
       setUsers(usersArray);
     } catch (error) {
-      setMessage({ type: 'error', text: `Failed to load users: ${error.message}` });
+      setMessage({
+        type: 'error',
+        text: t('admin.users.list.loadError', 'Failed to load users: {{error}}', {
+          error: error.message
+        })
+      });
     } finally {
       setLoading(false);
     }
@@ -199,13 +223,15 @@ function AdminUsersPage() {
         setConfirmDialog(null);
         try {
           await makeAdminApiCall(`/admin/auth/users/${userId}`, { method: 'DELETE' });
-          setMessage({ type: 'success', text: 'User deleted successfully!' });
+          setMessage({ type: 'success', text: t('admin.users.list.deleted', 'User deleted.') });
           void loadUsers();
         } catch (error) {
           // A refusal (your own account, the last admin) says why, from its code.
           setMessage({
             type: 'error',
-            text: `Failed to delete user: ${apiErrorMessage(error, t, getAdminApiErrorMessage(error))}`
+            text: t('admin.users.list.deleteError', 'Failed to delete user: {{error}}', {
+              error: apiErrorMessage(error, t, getAdminApiErrorMessage(error))
+            })
           });
         }
       }
@@ -228,13 +254,17 @@ function AdminUsersPage() {
       });
       setMessage({
         type: 'success',
-        text: `User ${newStatus ? 'enabled' : 'disabled'} successfully!`
+        text: newStatus
+          ? t('admin.users.list.enabled', 'User enabled.')
+          : t('admin.users.list.disabled', 'User disabled.')
       });
       void loadUsers();
     } catch (error) {
       setMessage({
         type: 'error',
-        text: `Failed to update user status: ${apiErrorMessage(error, t, getAdminApiErrorMessage(error))}`
+        text: t('admin.users.list.statusError', 'Failed to update user status: {{error}}', {
+          error: apiErrorMessage(error, t, getAdminApiErrorMessage(error))
+        })
       });
     }
   };
@@ -297,33 +327,33 @@ function AdminUsersPage() {
   const columns = [
     {
       key: 'name',
-      header: 'User',
+      header: t('admin.users.list.colUser', 'User'),
       sortable: true,
       sortAccessor: u => (u.name || u.username || '').toLowerCase(),
       render: u => <UserNameCell user={u} />
     },
     {
       key: 'authMethods',
-      header: 'Auth Method',
+      header: t('admin.users.list.colAuthMethod', 'Auth Method'),
       hideBelow: 'md',
       render: u => <AuthMethodCell user={u} />
     },
     {
       key: 'groups',
-      header: 'Groups',
+      header: t('admin.users.groups', 'Groups'),
       hideBelow: 'lg',
       render: u => <GroupsCell user={u} />
     },
     {
       key: 'status',
-      header: 'Status',
+      header: t('common.status', 'Status'),
       sortable: true,
       sortAccessor: u => (u.active !== false ? 1 : 0),
       render: u => <StatusCell user={u} onToggle={handleToggleUserStatus} />
     },
     {
       key: 'lastActive',
-      header: 'Last Active',
+      header: t('admin.users.list.colLastActive', 'Last Active'),
       sortable: true,
       hideBelow: 'lg',
       sortAccessor: u => (u.lastActiveDate ? new Date(u.lastActiveDate).getTime() : 0),
@@ -355,20 +385,20 @@ function AdminUsersPage() {
   const actions = [
     {
       id: 'view',
-      label: 'View user',
+      label: t('admin.users.list.viewUser', 'View user'),
       icon: 'eye',
       onClick: u => navigate(`/admin/users/${u.id}/view`)
     },
     {
       id: 'edit',
-      label: 'Edit user',
+      label: t('admin.users.list.editUser', 'Edit user'),
       icon: 'edit',
       priority: 'primary',
       onClick: u => navigate(`/admin/users/${u.id}`)
     },
     {
       id: 'delete',
-      label: 'Delete user',
+      label: t('admin.users.list.deleteUser', 'Delete user'),
       icon: 'trash',
       destructive: true,
       onClick: u => handleDeleteUser(u.id)
@@ -399,10 +429,13 @@ function AdminUsersPage() {
           <div className="flex justify-between items-center">
             <div>
               <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100">
-                User Management
+                {t('admin.users.list.title', 'User Management')}
               </h1>
               <p className="text-gray-600 dark:text-gray-400 mt-1">
-                Manage local authentication users and their permissions
+                {t(
+                  'admin.users.list.subtitle',
+                  'Manage local authentication users and their permissions'
+                )}
               </p>
             </div>
             <div className="flex items-center gap-3">
@@ -416,7 +449,7 @@ function AdminUsersPage() {
                 className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-xs text-white bg-blue-600 hover:bg-blue-700 focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
               >
                 <Icon name="plus" size="md" className="mr-2" />
-                Add User
+                {t('admin.users.list.addUser', 'Add User')}
               </button>
             </div>
           </div>
@@ -469,7 +502,10 @@ function AdminUsersPage() {
           <SearchInput
             value={searchTerm}
             onChange={setSearchTerm}
-            placeholder="Search by ID, name, email, group, or auth method…"
+            placeholder={t(
+              'admin.users.list.searchPlaceholder',
+              'Search by ID, name, email, group, or auth method…'
+            )}
           />
         </div>
 
@@ -478,45 +514,45 @@ function AdminUsersPage() {
               columns pushed the last filter past the card when labels or options are long. */}
           <div className="flex flex-wrap items-center gap-x-6 gap-y-3">
             <FilterSelect
-              label="Auth Method"
+              label={t('admin.users.list.colAuthMethod', 'Auth Method')}
               value={authMethodFilter}
               onChange={setAuthMethodFilter}
               options={[
-                { value: 'all', label: 'All Methods' },
-                { value: 'local', label: 'Local' },
+                { value: 'all', label: t('admin.users.list.allMethods', 'All Methods') },
+                { value: 'local', label: t('admin.overview.auth.local', 'Local') },
                 { value: 'oidc', label: 'OIDC' },
-                { value: 'proxy', label: 'Proxy' }
+                { value: 'proxy', label: t('admin.overview.auth.proxy', 'Proxy') }
               ]}
             />
             <FilterSelect
-              label="Group"
+              label={t('admin.groups.fields.group', 'Group')}
               value={groupFilter}
               onChange={setGroupFilter}
               options={[
-                { value: 'all', label: 'All Groups' },
+                { value: 'all', label: t('admin.users.list.allGroups', 'All Groups') },
                 ...allGroups.map(g => ({ value: g, label: g }))
               ]}
             />
             <FilterSelect
-              label="Status"
+              label={t('common.status', 'Status')}
               value={statusFilter}
               onChange={setStatusFilter}
               options={[
-                { value: 'all', label: 'All Status' },
-                { value: 'active', label: 'Active' },
-                { value: 'inactive', label: 'Inactive' }
+                { value: 'all', label: t('admin.users.list.allStatus', 'All Statuses') },
+                { value: 'active', label: t('admin.users.view.active', 'Active') },
+                { value: 'inactive', label: t('admin.users.view.inactive', 'Inactive') }
               ]}
             />
             <FilterSelect
-              label="Last Active"
+              label={t('admin.users.list.colLastActive', 'Last Active')}
               value={lastActiveDaysFilter}
               onChange={setLastActiveDaysFilter}
               options={[
-                { value: 'all', label: 'Any Time' },
-                { value: '7', label: 'Last 7 days' },
-                { value: '30', label: 'Last 30 days' },
-                { value: '90', label: 'Last 90 days' },
-                { value: 'never', label: 'Never' }
+                { value: 'all', label: t('admin.users.list.anyTime', 'Any Time') },
+                { value: '7', label: t('admin.users.list.last7', 'Last 7 days') },
+                { value: '30', label: t('admin.users.list.last30', 'Last 30 days') },
+                { value: '90', label: t('admin.users.list.last90', 'Last 90 days') },
+                { value: 'never', label: t('admin.users.list.never', 'Never') }
               ]}
             />
             {ackEnabled && (

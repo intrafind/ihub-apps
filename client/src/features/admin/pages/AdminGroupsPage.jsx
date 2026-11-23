@@ -42,7 +42,7 @@ function PermissionsCell({ group, t }) {
         </span>
         {isWildcard ? (
           <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 dark:bg-green-900/50 text-green-800 dark:text-green-300">
-            All Apps (*)
+            {t('admin.groups.list.allApps', 'All Apps (*)')}
           </span>
         ) : (
           <>
@@ -56,7 +56,7 @@ function PermissionsCell({ group, t }) {
             ))}
             {apps.length > 3 && (
               <span className="text-xs text-gray-500 dark:text-gray-400">
-                +{apps.length - 3} more
+                {t('admin.groups.list.more', '+{{count}} more', { count: apps.length - 3 })}
               </span>
             )}
           </>
@@ -65,7 +65,7 @@ function PermissionsCell({ group, t }) {
       {group.permissions?.adminAccess && (
         <div>
           <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-red-100 dark:bg-red-900/50 text-red-800 dark:text-red-300">
-            Admin Access
+            {t('admin.groups.adminAccess', 'Admin Access')}
           </span>
         </div>
       )}
@@ -114,7 +114,12 @@ function AdminGroupsPage() {
       const data = response.data;
       setGroups(data.groups || {});
     } catch (error) {
-      setMessage({ type: 'error', text: `Failed to load groups: ${error.message}` });
+      setMessage({
+        type: 'error',
+        text: t('admin.groups.list.loadError', 'Failed to load groups: {{error}}', {
+          error: error.message
+        })
+      });
     } finally {
       setLoading(false);
     }
@@ -133,7 +138,7 @@ function AdminGroupsPage() {
         try {
           await makeAdminApiCall(`/admin/groups/${groupId}`, { method: 'DELETE' });
           setConfirmDialog(null);
-          setMessage({ type: 'success', text: 'Group deleted successfully!' });
+          setMessage({ type: 'success', text: t('admin.groups.list.deleted', 'Group deleted.') });
           void loadGroups();
         } catch (error) {
           // A refusal (another group inherits from this one: GROUP_IN_USE) keeps
@@ -230,7 +235,7 @@ function AdminGroupsPage() {
               className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-xs text-white bg-blue-600 hover:bg-blue-700 focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
             >
               <Icon name="plus" size="md" className="mr-2" />
-              Add Group
+              {t('admin.groups.list.addGroup', 'Add Group')}
             </button>
           </div>
         </div>

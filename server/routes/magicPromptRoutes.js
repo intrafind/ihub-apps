@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
 import configCache from '../configCache.js';
+import { resolveAppForChat } from '../services/userApps/resolveApp.js';
 import { recordMagicPromptUsage } from '../telemetry/metrics.js';
 import validate from '../validators/validate.js';
 import { magicPromptSchema } from '../validators/index.js';
@@ -51,9 +52,13 @@ export default function registerMagicPromptRoutes(app, { llmClient = defaultLlmC
       // the platform defaults apply.
       let magicConfig = {};
       if (appId && appId !== 'direct') {
-        const { data: apps = [] } = configCache.getApps();
-        const appConfig = findByIdCaseInsensitive(apps || [], appId);
-        if (!appConfig || !canUserAccessResource(req.user, 'apps', appConfig.id)) {
+        // A personal app is granted by its owner and its shares, not by groups.
+        const found = await resolveAppForChat(appId, req.user, { req });
+        const appConfig = found?.app;
+        if (
+          !appConfig ||
+          (!found.userApp && !canUserAccessResource(req.user, 'apps', appConfig.id))
+        ) {
           throw new ServiceError('NOT_FOUND', 'App not found');
         }
         magicConfig = appConfig.features?.magicPrompt || {};

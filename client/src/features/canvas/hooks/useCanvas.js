@@ -3,6 +3,7 @@
 
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { markdownToHtml, isMarkdown } from '../../../utils/markdownUtils';
+import { htmlToPlainText } from '../../../utils/htmlText';
 
 /**
  * Unified canvas hook that combines content management, editing, and edit result application
@@ -85,7 +86,7 @@ function useCanvas(appId, onContentChange, refs = {}, handlePromptSubmit) {
   }, []);
 
   const getTextContent = useCallback(() => {
-    return contentRef.current.replace(/<[^>]*>/g, '').trim();
+    return htmlToPlainText(contentRef.current).trim();
   }, []);
 
   const clearContent = useCallback(() => {

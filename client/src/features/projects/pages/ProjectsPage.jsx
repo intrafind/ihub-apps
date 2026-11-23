@@ -18,6 +18,7 @@ import {
 } from '../hooks/useProjects';
 import { projectErrorMessage } from '../utils/projectErrors';
 import { localizedText } from '../utils/projectItems';
+import { CREATE_INTENT } from '../../../utils/createIntent';
 import {
   PROJECT_LIST_FILTERS,
   countProjectGroups,
@@ -163,6 +164,15 @@ export default function ProjectsPage() {
     mine: t('projects.list.filters.mine', 'Mine'),
     shared: t('projects.list.filters.shared', 'Shared with me')
   };
+
+  // The sidebar's "Create → Project" lands here with `state.create`: open the
+  // dialog once the configuration says creating is allowed, then drop the
+  // request so a reload or a step back does not open it again.
+  useEffect(() => {
+    if (location.state?.create !== CREATE_INTENT.project || !config) return;
+    if (creation.allowed) setCreating(true);
+    navigate(location.pathname, { replace: true, state: null });
+  }, [location.state, location.pathname, navigate, config, creation.allowed]);
 
   const handleCreated = project => {
     setCreating(false);

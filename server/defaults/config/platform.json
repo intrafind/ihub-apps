@@ -525,6 +525,30 @@
       "restrictToGroups": []
     }
   },
+  "userApps": {
+    "limits": {
+      "maxAppsPerUser": 20,
+      "maxOpenOffersPerUser": 5,
+      "ownerSnapshotMaxAgeDays": 30
+    },
+    "sharing": {
+      "allowUsers": true,
+      "allowGroups": true,
+      "allowEveryone": false,
+      "allowPublish": false
+    },
+    "capabilities": {
+      "modelChoice": true,
+      "upload": true,
+      "webSearch": false,
+      "skills": false,
+      "integrations": []
+    },
+    "publishing": {
+      "adminEnables": "withTools"
+    },
+    "blockedOwners": []
+  },
   "artifacts": {
     "enabled": true,
     "maxBytes": 10485760,
