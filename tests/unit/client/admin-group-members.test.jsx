@@ -135,6 +135,37 @@ describe('GroupMembersSection', () => {
     expect(await screen.findByTestId('group-members-empty')).toBeInTheDocument();
   });
 
+  test('refreshes in place after an add or remove: no loading state, focus on the search box', async () => {
+    renderSection();
+    await screen.findByTestId('group-members-list');
+    const search = screen.getByRole('searchbox');
+    const list = screen.getByTestId('group-members-list');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Remove Alice from group' }));
+
+    await screen.findByTestId('group-members-empty');
+    // The panel never fell back to its loading text, and the search box is the same element.
+    expect(screen.queryByText('Loading members…')).not.toBeInTheDocument();
+    expect(screen.getByRole('searchbox')).toBe(search);
+    expect(search).toHaveFocus();
+    expect(list).not.toBeInTheDocument();
+  });
+
+  test('Enter in the search box does not submit the form around the panel', async () => {
+    renderSection();
+    await screen.findByTestId('group-members-list');
+
+    const notPrevented = fireEvent.keyDown(screen.getByRole('searchbox'), {
+      key: 'Enter',
+      code: 'Enter'
+    });
+
+    // fireEvent returns false when a handler called preventDefault.
+    expect(notPrevented).toBe(false);
+    // Other keys are left alone.
+    expect(fireEvent.keyDown(screen.getByRole('searchbox'), { key: 'a', code: 'KeyA' })).toBe(true);
+  });
+
   test('shows the refusal of the server and keeps the member', async () => {
     removeFailure = {
       response: {

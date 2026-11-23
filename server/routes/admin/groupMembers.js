@@ -240,8 +240,8 @@ export default function registerAdminGroupMemberRoutes(app) {
    *   delete:
    *     summary: Remove a user from a group
    *     description: |
-   *       Removes the group from the user's `internalGroups`. Refused with 409 `LAST_ADMIN` or
-   *       `SELF_LOCKOUT` when that would leave no administrator who can sign in.
+   *       Removes the group from the user's `internalGroups`. Refused with 409 `LAST_ADMIN`
+   *       when that would leave no administrator who can sign in.
    *     tags:
    *       - Admin
    *       - Groups

@@ -1725,7 +1725,19 @@
     }
   },
   "GET /api/admin/groups/:groupId/members": {
-    "skipped": "its parent list has no entry in the seed"
+    "status": 200,
+    "shape": {
+      "items": [
+        {
+          "active": "boolean",
+          "authMethods": "array",
+          "email": "string",
+          "id": "string",
+          "name": "string",
+          "username": "string"
+        }
+      ]
+    }
   },
   "GET /api/admin/groups/resources": {
     "status": 200,

@@ -159,6 +159,25 @@ describe('UsageLimitsEditor (group)', () => {
     expect(onValue).toHaveBeenLastCalledWith({ allModels: { day: 1000 } });
   });
 
+  test('keeps the "All other models" card while its fields are cleared, without a * permission', async () => {
+    const onValue = jest.fn();
+    render(
+      <Harness initial={{ models: { '*': { day: 5 } } }} modelIds={['gpt']} onValue={onValue} />
+    );
+    const daily = await screen.findByLabelText('All other models – Daily');
+
+    fireEvent.change(daily, { target: { value: '' } });
+
+    expect(onValue).toHaveBeenLastCalledWith(undefined);
+    // Clearing the last field removed the stored `*` entry, but the card stays until Remove.
+    expect(screen.getByLabelText('All other models – Daily')).toBeInTheDocument();
+    fireEvent.click(screen.getByLabelText('Remove limit: All other models'));
+    expect(screen.queryByLabelText('All other models – Daily')).not.toBeInTheDocument();
+    // Without the * permission it is not offered again.
+    await waitFor(() => expect(optionLabels()).toContain('GPT'));
+    expect(optionLabels()).not.toContain('All other models');
+  });
+
   test('offers only the models the group can use when none is a wildcard', async () => {
     render(<Harness initial={undefined} modelIds={['gpt']} />);
     await waitFor(() => expect(optionLabels()).toContain('GPT'));

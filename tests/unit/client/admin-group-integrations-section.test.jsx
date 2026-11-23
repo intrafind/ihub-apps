@@ -177,6 +177,33 @@ describe('GroupIntegrationsSection', () => {
     ).toContain('MCP servers');
   });
 
+  it('lists "All integrations" last, so an arrow key on the closed list cannot grant everything', async () => {
+    renderSection({ id: 'g', permissions: { integrations: [] } });
+    await screen.findByLabelText('Add integration');
+    const labels = optionLabels();
+    expect(labels[0]).toBe('Add an integration…');
+    expect(labels[labels.length - 1]).toBe('All integrations');
+  });
+
+  it('still offers "All integrations" when the installed list could not be loaded', async () => {
+    mockFetchInstalled.mockRejectedValueOnce(new Error('offline'));
+    const onChange = renderSection({ id: 'g', permissions: { integrations: ['corp'] } });
+    await waitFor(() => expect(screen.getByRole('alert')).toBeInTheDocument());
+    // What needs no installed list stays: the type entries and "All integrations", last.
+    expect(optionLabels()).toEqual([
+      'Add an integration…',
+      'All people directories',
+      'All web search engines',
+      'All storage providers',
+      'All integrations'
+    ]);
+    fireEvent.change(picker(), { target: { value: '*' } });
+    expect(onChange).toHaveBeenLastCalledWith(['*']);
+    // An entry that is already there stays removable.
+    fireEvent.click(screen.getByLabelText('Remove corp'));
+    expect(onChange).toHaveBeenLastCalledWith([]);
+  });
+
   it('adds an installation, a type and everything', async () => {
     const onChange = renderSection({ id: 'g', permissions: { integrations: ['corp'] } });
     await screen.findByLabelText('Add integration');

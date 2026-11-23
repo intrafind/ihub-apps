@@ -469,7 +469,8 @@ function UsageLimitsEditor({ value, onChange, modelIds, level = 'group', disable
 
   const showAll = isShown(ADD_ALL_MODELS);
   const showFiles = isShown(ADD_FILES);
-  const showOthers = wildcard && isShown(ADD_OTHER_MODELS);
+  // A card the admin is editing stays, even when clearing it removed its `*` entry.
+  const showOthers = isShown(ADD_OTHER_MODELS);
   const anyShown = showAll || showFiles || showOthers || modelKeys.length > 0;
 
   // The "Add a limit" options: what is not shown yet.

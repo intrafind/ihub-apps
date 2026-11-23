@@ -242,7 +242,7 @@ function GroupIntegrationsSection({ group, groups = {}, onChange }) {
         </p>
       )}
 
-      {!loading && !error && canAdd && (
+      {!loading && canAdd && (
         <div>
           <label htmlFor={addId} className="sr-only">
             {t('admin.groups.integrations.addLabel', 'Add integration')}
@@ -254,15 +254,12 @@ function GroupIntegrationsSection({ group, groups = {}, onChange }) {
             className={INPUT_CLASS}
           >
             <option value="">
-              {addGroups.length > 0
+              {addGroups.length > 0 || error
                 ? t('admin.groups.integrations.addPlaceholder', 'Add an integration…')
                 : t(
                     'admin.groups.integrations.nothingToAdd',
                     'Everything installed has been added.'
                   )}
-            </option>
-            <option value={ALL_INTEGRATIONS}>
-              {t('admin.groups.integrations.all', 'All integrations')}
             </option>
             {addGroups.map(section => {
               const [titleKey, titleDefault] = SECTION_TITLES[section.id];
@@ -276,6 +273,10 @@ function GroupIntegrationsSection({ group, groups = {}, onChange }) {
                 </optgroup>
               );
             })}
+            {/* Last, not first: a stray arrow key on the closed list must not grant everything. */}
+            <option value={ALL_INTEGRATIONS}>
+              {t('admin.groups.integrations.all', 'All integrations')}
+            </option>
           </select>
           <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
             {t(

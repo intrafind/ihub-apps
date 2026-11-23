@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
-import { useCallback, useEffect, useId, useMemo, useState } from 'react';
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
 import { getAdminApiErrorMessage, makeAdminApiCall } from '../../../api/adminApi';
@@ -49,6 +49,7 @@ function UserLine({ user }) {
 function GroupMembersSection({ groupId, hasExternalMappings = false }) {
   const { t } = useTranslation();
   const searchId = useId();
+  const searchRef = useRef(null);
   const [members, setMembers] = useState([]);
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -58,28 +59,33 @@ function GroupMembersSection({ groupId, hasExternalMappings = false }) {
   const [query, setQuery] = useState('');
   const [selected, setSelected] = useState(() => new Set());
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    setLoadError(null);
-    try {
-      const [membersResponse, usersResponse] = await Promise.all([
-        makeAdminApiCall(`/admin/groups/${encodeURIComponent(groupId)}/members`),
-        makeAdminApiCall('/admin/auth/users')
-      ]);
-      setMembers(membersResponse.data?.items || []);
-      setUsers(Object.values(usersResponse.data?.users || {}));
-    } catch (error) {
-      setLoadError(
-        apiErrorMessage(
-          error,
-          t,
-          t('admin.groups.members.loadError', 'The members could not be loaded.')
-        )
-      );
-    } finally {
-      setLoading(false);
-    }
-  }, [groupId, t]);
+  // `showLoading: false` refreshes in place after an add or remove, so the list, the search
+  // box and the buttons stay mounted and keyboard focus is not lost.
+  const load = useCallback(
+    async ({ showLoading = true } = {}) => {
+      if (showLoading) setLoading(true);
+      setLoadError(null);
+      try {
+        const [membersResponse, usersResponse] = await Promise.all([
+          makeAdminApiCall(`/admin/groups/${encodeURIComponent(groupId)}/members`),
+          makeAdminApiCall('/admin/auth/users')
+        ]);
+        setMembers(membersResponse.data?.items || []);
+        setUsers(Object.values(usersResponse.data?.users || {}));
+      } catch (error) {
+        setLoadError(
+          apiErrorMessage(
+            error,
+            t,
+            t('admin.groups.members.loadError', 'The members could not be loaded.')
+          )
+        );
+      } finally {
+        setLoading(false);
+      }
+    },
+    [groupId, t]
+  );
 
   useEffect(() => {
     void load();
@@ -132,7 +138,8 @@ function GroupMembersSection({ groupId, hasExternalMappings = false }) {
     if (ok) {
       setSelected(new Set());
       setQuery('');
-      await load();
+      await load({ showLoading: false });
+      searchRef.current?.focus();
     }
   };
 
@@ -145,7 +152,11 @@ function GroupMembersSection({ groupId, hasExternalMappings = false }) {
         ),
       t('admin.groups.members.removeError', 'The user could not be removed.')
     );
-    if (ok) await load();
+    if (ok) {
+      await load({ showLoading: false });
+      // The removed row's button is gone: keep the keyboard where the admin works.
+      searchRef.current?.focus();
+    }
   };
 
   return (
@@ -263,9 +274,14 @@ function GroupMembersSection({ groupId, hasExternalMappings = false }) {
               <div className="mt-1">
                 <input
                   id={searchId}
+                  ref={searchRef}
                   type="search"
                   value={query}
                   onChange={event => setQuery(event.target.value)}
+                  onKeyDown={event => {
+                    // The panel sits inside the group form: Enter here must not save it.
+                    if (event.key === 'Enter') event.preventDefault();
+                  }}
                   placeholder={t(
                     'admin.groups.members.searchPlaceholder',
                     'Search by name, username or email'

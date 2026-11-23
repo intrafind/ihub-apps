@@ -189,8 +189,24 @@ export function firstId(body) {
         if (id) return id;
       }
     }
+    // A keyed map of records (`{ groups: { admins: { id: 'admins', … } } }`): its first key.
+    // Only a map whose records carry their own key as `id` counts, so a settings object
+    // (`{ metadata: { version: '1' } }`) is never read as a list.
+    for (const value of Object.values(body)) {
+      const key = keyedRecordsFirstKey(value);
+      if (key !== null) return key;
+    }
   }
   return null;
+}
+
+/** The first key of an object whose values are records with `id` equal to their key, or null. */
+function keyedRecordsFirstKey(value) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+  const [first] = Object.entries(value);
+  if (!first) return null;
+  const [key, record] = first;
+  return record && typeof record === 'object' && record.id === key ? key : null;
 }
 
 function freePort() {
