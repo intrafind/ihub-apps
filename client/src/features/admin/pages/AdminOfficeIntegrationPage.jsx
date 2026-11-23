@@ -14,6 +14,7 @@ import { useAdminConfigLoad } from '../hooks/useAdminConfigLoad';
 import { buildApiUrl } from '../../../utils/runtimeBasePath';
 import { getLocalizedContent } from '../../../utils/localizeContent';
 import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
+import AdminSaveBar from '../components/AdminSaveBar';
 import UnsavedChangesDialog from '../components/UnsavedChangesDialog';
 import { useSavedBaseline } from '../hooks/useSavedBaseline';
 import ConfirmDialog from '../../../shared/components/ConfirmDialog';
@@ -145,6 +146,8 @@ function AdminOfficeIntegrationPage() {
   const [regeneratingId, setRegeneratingId] = useState(false);
   const [confirmingRegenerate, setConfirmingRegenerate] = useState(false);
   const [message, setMessage] = useState(null);
+  // Why the last save failed, shown next to the save bar (the banner above may be off screen).
+  const [saveError, setSaveError] = useState(null);
   const [status, setStatus] = useState(null);
 
   const [displayName, setDisplayName] = useState({});
@@ -205,7 +208,7 @@ function AdminOfficeIntegrationPage() {
     ]
   );
   const { baseline, captureBaseline } = useSavedBaseline(editedValues);
-  const { blocker } = useUnsavedChanges(baseline, editedValues);
+  const { isDirty, blocker } = useUnsavedChanges(baseline, editedValues);
 
   // Stable client-side ids are used as React keys while the prompt list is edited.
   // They are stripped before persisting so the server never sees them.
@@ -569,19 +572,19 @@ function AdminOfficeIntegrationPage() {
     // opposite of what choosing "only selected apps" means — so it is refused
     // here, and by the server, rather than saved.
     if (appAccessDirty && appAccessEmpty) {
-      setMessage({
-        type: 'error',
-        text: t(
-          'admin.officeIntegration.allowedAppsEmptyError',
-          'Select at least one app, or choose "All apps the user can access". An empty list would mean no restriction.'
-        )
-      });
+      const text = t(
+        'admin.officeIntegration.allowedAppsEmptyError',
+        'Select at least one app, or choose "All apps the user can access". An empty list would mean no restriction.'
+      );
+      setMessage({ type: 'error', text });
+      setSaveError(text);
       return;
     }
 
     try {
       setSaving(true);
       setMessage(null);
+      setSaveError(null);
 
       // Strip the client-only `_id` — the server must never see or persist it.
       const cleanedPrompts = starterPrompts
@@ -625,15 +628,31 @@ function AdminOfficeIntegrationPage() {
       setTimeout(() => setMessage(null), 3000);
     } catch (err) {
       // The server names the offending field; the generic string does not.
-      setMessage({
-        type: 'error',
-        text:
-          getAdminApiErrorMessage(err) ||
-          t('admin.officeIntegration.saveError', 'Failed to save configuration')
-      });
+      const text =
+        getAdminApiErrorMessage(err) ||
+        t('admin.officeIntegration.saveError', 'Failed to save configuration');
+      setMessage({ type: 'error', text });
+      setSaveError(text);
     } finally {
       setSaving(false);
     }
+  };
+
+  // Back to the loaded values: every field the save bar's Save would send, the allowed apps
+  // included.
+  const handleDiscard = () => {
+    if (!baseline) return;
+    setDisplayName(baseline.displayName);
+    setDescription(baseline.description);
+    setStarterPrompts(baseline.starterPrompts);
+    setOfficeJsMode(baseline.officeJsMode);
+    setOfficeJsCdnUrl(baseline.officeJsCdnUrl);
+    setOfficeJsCustomUrl(baseline.officeJsCustomUrl);
+    setStartPage(baseline.startPage);
+    setAppAccess(baseline.appAccess);
+    setDefaultMailAction(baseline.defaultMailAction);
+    setMessage(null);
+    setSaveError(null);
   };
 
   const handlePromptChange = (index, field, value) => {
@@ -1583,17 +1602,6 @@ function AdminOfficeIntegrationPage() {
                   ))}
                 </div>
               )}
-
-              <div className="mt-6 flex justify-end">
-                <button
-                  type="button"
-                  onClick={handleSaveConfig}
-                  disabled={saving}
-                  className="rounded-lg bg-indigo-600 text-white px-4 py-2 text-sm font-medium hover:bg-indigo-700 disabled:opacity-60"
-                >
-                  {saving ? '…' : t('admin.officeIntegration.save', 'Save')}
-                </button>
-              </div>
             </div>
 
             {/* Setup Instructions */}
@@ -1639,6 +1647,13 @@ function AdminOfficeIntegrationPage() {
           </>
         )}
       </div>
+      <AdminSaveBar
+        dirty={ready && !loading && isDirty}
+        saving={saving}
+        onSave={() => void handleSaveConfig()}
+        onDiscard={handleDiscard}
+        message={saveError}
+      />
       <UnsavedChangesDialog blocker={blocker} />
       <ConfirmDialog
         isOpen={confirmingRegenerate}

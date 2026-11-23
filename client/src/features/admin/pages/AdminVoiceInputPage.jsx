@@ -26,6 +26,7 @@ import { stop as stopReadAloud } from '../../voice/utils/readAloud';
 import { CHECKBOX_CLASS, INPUT_CLASS } from '../components/formStyles';
 import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
 import UnsavedChangesDialog from '../components/UnsavedChangesDialog';
+import AdminSaveBar from '../components/AdminSaveBar';
 
 /** Playback id of the read-aloud test, apart from every chat message. */
 const READ_ALOUD_TEST_ID = 'admin-read-aloud-test';
@@ -96,7 +97,7 @@ function AdminVoiceInputPage() {
   // next save is refused again until the page reloads or the admin chooses
   // "Keep my changes and overwrite" (which re-reads into this holder).
   const revisionRef = useRef(null);
-  const { blocker } = useUnsavedChanges(hasLoaded ? savedConfig : null, config);
+  const { blocker, isDirty } = useUnsavedChanges(hasLoaded ? savedConfig : null, config);
   const [azureTesting, setAzureTesting] = useState(false);
   const [azureTestResult, setAzureTestResult] = useState(null);
   const [transcriptionModels, setTranscriptionModels] = useState(null);
@@ -268,6 +269,14 @@ function AdminVoiceInputPage() {
       default:
         return result.message;
     }
+  };
+
+  // Back to the settings as loaded or last saved: the form, the result of an Azure test made
+  // with the discarded values, and the banner of a refused save.
+  const handleDiscard = () => {
+    setConfig(savedConfig);
+    setAzureTestResult(null);
+    setMessage('');
   };
 
   const setAzure = (field, value) => {
@@ -706,17 +715,6 @@ function AdminVoiceInputPage() {
           </p>
         </div>
 
-        <div className="flex justify-end">
-          <button
-            type="button"
-            onClick={handleSave}
-            disabled={saving}
-            className="inline-flex items-center px-4 py-2 rounded-md bg-indigo-600 text-white text-sm font-medium hover:bg-indigo-700 disabled:opacity-50"
-          >
-            {saving ? t('common.saving', 'Saving...') : t('common.save', 'Save')}
-          </button>
-        </div>
-
         <VoiceInputTestPanel
           speech={toPublicSpeech(savedConfig, dictationModels)}
           models={transcriptionModels}
@@ -726,6 +724,13 @@ function AdminVoiceInputPage() {
           language={i18n.language}
         />
       </div>
+      <AdminSaveBar
+        dirty={isDirty}
+        saving={saving}
+        onSave={() => void handleSave()}
+        onDiscard={handleDiscard}
+        message={message?.type === 'error' ? message.text : undefined}
+      />
       <UnsavedChangesDialog blocker={blocker} />
     </div>
   );

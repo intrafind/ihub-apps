@@ -28,8 +28,7 @@ const GUARD = /useUnsavedChanges|useAdminResourceEditor|AdminEditPageShell|Admin
 const BASELINE = new Map([
   // Not in the finding lists of the unsaved-guards PR; follow-ups.
   ['AdminAppsPage.jsx', 'app order draft (Save order)'],
-  ['AdminPromptsPage.jsx', 'global prompt variables'],
-  ['AdminOAuthServerPage.jsx', 'OAuth server settings']
+  ['AdminPromptsPage.jsx', 'global prompt variables']
 ]);
 
 function pageFiles() {

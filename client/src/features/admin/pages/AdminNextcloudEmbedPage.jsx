@@ -10,6 +10,7 @@ import AdminLoadGate from '../components/AdminLoadGate';
 import { useAdminConfigLoad } from '../hooks/useAdminConfigLoad';
 import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
 import UnsavedChangesDialog from '../components/UnsavedChangesDialog';
+import AdminSaveBar from '../components/AdminSaveBar';
 import { useSavedBaseline } from '../hooks/useSavedBaseline';
 
 function AdminNextcloudEmbedPage() {
@@ -18,6 +19,8 @@ function AdminNextcloudEmbedPage() {
   const [saving, setSaving] = useState(false);
   const [toggling, setToggling] = useState(false);
   const [message, setMessage] = useState(null);
+  // Why the last save failed, shown next to the save bar (the banner above may be off screen).
+  const [saveError, setSaveError] = useState(null);
   const [status, setStatus] = useState(null);
 
   const [displayName, setDisplayName] = useState({});
@@ -32,7 +35,7 @@ function AdminNextcloudEmbedPage() {
     [displayName, description, starterPrompts, allowedHostOrigins]
   );
   const { baseline, captureBaseline } = useSavedBaseline(editedValues);
-  const { blocker } = useUnsavedChanges(baseline, editedValues);
+  const { isDirty, blocker } = useUnsavedChanges(baseline, editedValues);
 
   const emptyPrompt = () => ({
     _id: crypto.randomUUID(),
@@ -189,6 +192,7 @@ function AdminNextcloudEmbedPage() {
     try {
       setSaving(true);
       setMessage(null);
+      setSaveError(null);
 
       const cleanedPrompts = starterPrompts
         .map(p => ({
@@ -211,13 +215,24 @@ function AdminNextcloudEmbedPage() {
       setTimeout(() => setMessage(null), 3000);
     } catch (err) {
       console.error('[nextcloud-embed] saveConfig failed', err);
-      setMessage({
-        type: 'error',
-        text: t('admin.nextcloudEmbed.saveError', 'Failed to save configuration')
-      });
+      const text = t('admin.nextcloudEmbed.saveError', 'Failed to save configuration');
+      setMessage({ type: 'error', text });
+      setSaveError(text);
     } finally {
       setSaving(false);
     }
+  };
+
+  // Back to the loaded values: every field of the form and the origin being typed.
+  const handleDiscard = () => {
+    if (!baseline) return;
+    setDisplayName(baseline.displayName);
+    setDescription(baseline.description);
+    setStarterPrompts(baseline.starterPrompts);
+    setAllowedHostOrigins(baseline.allowedHostOrigins);
+    setNewOrigin('');
+    setMessage(null);
+    setSaveError(null);
   };
 
   const handlePromptChange = (index, field, value) => {
@@ -549,17 +564,6 @@ function AdminNextcloudEmbedPage() {
                   ))}
                 </div>
               )}
-
-              <div className="mt-6 flex justify-end">
-                <button
-                  type="button"
-                  onClick={handleSaveConfig}
-                  disabled={saving}
-                  className="rounded-lg bg-indigo-600 text-white px-4 py-2 text-sm font-medium hover:bg-indigo-700 disabled:opacity-60"
-                >
-                  {saving ? '…' : t('admin.nextcloudEmbed.save', 'Save')}
-                </button>
-              </div>
             </div>
 
             {status?.enabled && (
@@ -598,6 +602,13 @@ function AdminNextcloudEmbedPage() {
           </>
         )}
       </div>
+      <AdminSaveBar
+        dirty={ready && !loading && isDirty}
+        saving={saving}
+        onSave={() => void handleSaveConfig()}
+        onDiscard={handleDiscard}
+        message={saveError}
+      />
       <UnsavedChangesDialog blocker={blocker} />
     </div>
   );

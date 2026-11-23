@@ -9,6 +9,7 @@ import { useUIConfig } from '../../../shared/contexts/UIConfigContext';
 import TranslationOverridesEditor from '../components/TranslationOverridesEditor';
 import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
 import UnsavedChangesDialog from '../components/UnsavedChangesDialog';
+import AdminSaveBar from '../components/AdminSaveBar';
 import { INPUT_CLASS } from '../components/formStyles';
 
 /**
@@ -37,7 +38,7 @@ function AdminLocalizationPage() {
   const [loaded, setLoaded] = useState(false);
   // The default language as last loaded or saved; null until it loaded.
   const [savedDefaultLanguage, setSavedDefaultLanguage] = useState(null);
-  const { blocker } = useUnsavedChanges(savedDefaultLanguage, defaultLanguage);
+  const { blocker, isDirty } = useUnsavedChanges(savedDefaultLanguage, defaultLanguage);
   // The revision of the configuration this form loaded (or last saved): its
   // save sends exactly this as If-Match, whatever other reads in the tab saw.
   const revisionRef = useRef(null);
@@ -129,6 +130,12 @@ function AdminLocalizationPage() {
     } finally {
       setSaving(false);
     }
+  };
+
+  // Back to the language as loaded or last saved, with the banner of a refused save gone.
+  const handleDiscard = () => {
+    setDefaultLanguage(savedDefaultLanguage);
+    setMessage('');
   };
 
   if (loading) {
@@ -240,25 +247,22 @@ function AdminLocalizationPage() {
             </div>
           </div>
         </div>
-
-        <div className="mt-6 flex justify-end border-t border-gray-200 dark:border-gray-700 pt-5">
-          <button
-            type="button"
-            onClick={handleSave}
-            disabled={saving || !loaded}
-            className="inline-flex items-center rounded-lg border border-transparent bg-indigo-600 px-4 py-2 text-sm font-medium text-white shadow-xs hover:bg-indigo-700 focus:outline-hidden focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            {saving
-              ? t('admin.localization.saving', 'Saving...')
-              : t('admin.localization.save', 'Save')}
-          </button>
-        </div>
       </div>
 
       <TranslationOverridesEditor
         languages={availableLanguages.filter(l => !l.untranslated).map(l => l.code)}
         initialLanguage={defaultLanguage}
       />
+      {/* No bar until the stored language is known: the initial 'en' must never be saved over it. */}
+      {loaded && (
+        <AdminSaveBar
+          dirty={isDirty}
+          saving={saving}
+          onSave={() => void handleSave()}
+          onDiscard={handleDiscard}
+          message={message?.type === 'error' ? message.text : undefined}
+        />
+      )}
       <UnsavedChangesDialog blocker={blocker} />
     </div>
   );

@@ -33,27 +33,14 @@ const OTHER = 'edit page, still to convert';
 /** Pages with a save control and no bar yet. Shrink-only. */
 const BASELINE = new Map([
   ['AdminAppsPage.jsx', `${OTHER}: app order draft (Save order)`],
-  ['AdminAuthPage.jsx', SETTINGS],
-  ['AdminBrowserExtensionPage.jsx', SETTINGS],
-  ['AdminChatHistoryPage.jsx', SETTINGS],
-  ['AdminCopilotAgentPage.jsx', SETTINGS],
   ['AdminCredentialsPage.jsx', OTHER],
-  ['AdminFeaturesPage.jsx', SETTINGS],
-  ['AdminFeedbackPage.jsx', SETTINGS],
   ['AdminInstallationPage.jsx', OTHER],
   ['AdminIntegrationBuilderPage.jsx', OTHER],
-  ['AdminLocalizationPage.jsx', SETTINGS],
   ['AdminLoggingPage.jsx', CARDS],
-  ['AdminMcpGatewayPage.jsx', SETTINGS],
-  ['AdminNextcloudEmbedPage.jsx', SETTINGS],
-  ['AdminOAuthServerPage.jsx', SETTINGS],
-  ['AdminOfficeIntegrationPage.jsx', SETTINGS],
   ['AdminProjectEditPage.jsx', OTHER],
   ['AdminPromptsPage.jsx', `${OTHER}: global prompt variables`],
   ['AdminScheduledTasksPage.jsx', OTHER],
   ['AdminSecurityPage.jsx', CARDS],
-  ['AdminTelemetryPage.jsx', SETTINGS],
-  ['AdminVoiceInputPage.jsx', SETTINGS],
   ['WorkflowEditorPage.jsx', `${OTHER}: the canvas editor renders its own Save`]
 ]);
 
@@ -126,8 +113,8 @@ describe('admin save bar coverage', () => {
   });
 
   it('recognizes a page with its own Save button', () => {
-    expect(SAVE_CONTROL.test(read('AdminTelemetryPage.jsx'))).toBe(true);
-    expect(SAVE_BAR.test(read('AdminTelemetryPage.jsx'))).toBe(false);
+    expect(SAVE_CONTROL.test(read('AdminCredentialsPage.jsx'))).toBe(true);
+    expect(SAVE_BAR.test(read('AdminCredentialsPage.jsx'))).toBe(false);
   });
 
   it('every admin page that saves shows the save bar (or is baselined)', () => {

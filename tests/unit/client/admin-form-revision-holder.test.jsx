@@ -243,15 +243,28 @@ async function expectRefusedUntilOverwrite(saveControl) {
 }
 
 /** A successful save advances the holder: the next save sends the new revision. */
-async function expectSaveAdvancesRevision(saveControl) {
+async function expectSaveAdvancesRevision(saveControl, editAgain = () => {}) {
   fireEvent.click(saveControl());
   await waitFor(() => expect(posts()).toHaveLength(1));
+  // A page with a save bar is clean after its save: the next save needs another change.
+  await act(async () => {});
+  editAgain();
   await waitFor(() => expect(saveControl()).not.toBeDisabled());
   fireEvent.click(saveControl());
   await waitFor(() => expect(posts()).toHaveLength(2));
   expect(posts()).toEqual([etagOf(1), etagOf(2)]);
   expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
 }
+
+/**
+ * The save of a page that saves through the bottom bar (the bar shows only while the form
+ * has an unsaved change): the bar's last button, Discard comes first.
+ */
+const barSave = () => {
+  const bar = screen.getByRole('region', { name: /save changes/i });
+  const buttons = within(bar).getAllByRole('button');
+  return buttons[buttons.length - 1];
+};
 
 const renderWithNotice = element =>
   render(
@@ -266,12 +279,20 @@ const FORMS = [
   {
     name: 'Telemetry',
     element: <AdminTelemetryPage />,
-    save: () => screen.getByRole('button', { name: 'Save Telemetry Settings' })
+    // The bar shows once a setting changed.
+    ready: () => screen.getAllByRole('checkbox')[0],
+    edit: () => fireEvent.click(screen.getAllByRole('checkbox')[0]),
+    save: barSave
   },
   {
     name: 'Voice input',
     element: <AdminVoiceInputPage />,
-    save: () => screen.getByRole('button', { name: 'Save' })
+    ready: () => screen.getByLabelText('Speech recognition'),
+    edit: () =>
+      fireEvent.change(screen.getByLabelText('Speech recognition'), {
+        target: { value: 'azure' }
+      }),
+    save: barSave
   },
   {
     name: 'OAuth clients → enable toggle',
@@ -288,14 +309,22 @@ const FORMS = [
     element: <AdminOAuthServerPage />,
     // The settings are shown while the authorization server is on.
     platform: { oauth: { enabled: { authz: true } } },
-    save: () => screen.getByRole('button', { name: /Save Settings/i })
+    ready: () => screen.getByDisplayValue('60'),
+    edit: () => fireEvent.change(screen.getByDisplayValue('60'), { target: { value: '61' } }),
+    save: barSave
   }
 ];
 
-describe.each(FORMS)('$name', ({ element, save, platform }) => {
+describe.each(FORMS)('$name', ({ element, save, platform, ready, edit }) => {
   test('a refused save stays refused after Close, until "Keep my changes and overwrite"', async () => {
     if (platform) server.platform = platform;
     renderWithNotice(element);
+    if (edit) {
+      // Pages with the save bar offer Save once something changed.
+      await waitFor(() => expect(ready()).toBeInTheDocument());
+      await act(async () => {});
+      edit();
+    }
     await waitFor(() => expect(save()).toBeInTheDocument());
     // The load's read finished (it set the form's revision).
     await waitFor(() =>
@@ -313,9 +342,12 @@ describe.each(FORMS)('$name', ({ element, save, platform }) => {
 describe('a successful save advances the form revision', () => {
   test('Telemetry: two saves in a row send rev-1, then the rev-2 the first save returned', async () => {
     renderWithNotice(<AdminTelemetryPage />);
-    const save = () => screen.getByRole('button', { name: 'Save Telemetry Settings' });
-    await waitFor(() => expect(save()).toBeInTheDocument());
-    await expectSaveAdvancesRevision(save);
+    const toggle = () => screen.getAllByRole('checkbox')[0];
+    await waitFor(() => expect(toggle()).toBeInTheDocument());
+    await act(async () => {});
+    fireEvent.click(toggle());
+    // The bar is gone after the first save; the second save needs another change.
+    await expectSaveAdvancesRevision(barSave, () => fireEvent.click(toggle()));
   });
 });
 
@@ -405,7 +437,10 @@ describe('cards that share their page with other platform.json writers save with
       fireEvent.change(screen.getByRole('combobox'), { target: { value: 'anonymous' } });
       fireEvent.click(saveButton());
       await waitFor(() => expect(server.revision).toBe(3));
-      await waitFor(() => expect(saveButton()).toBeDisabled());
+      // Saved: nothing is left to save, so the bar is gone.
+      await waitFor(() =>
+        expect(screen.queryByRole('button', { name: 'Save Changes' })).not.toBeInTheDocument()
+      );
 
       // Storage on again, after the mode save moved the revision on.
       fireEvent.click(storeSwitch());
