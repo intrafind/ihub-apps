@@ -288,7 +288,13 @@ describe('the test override of the chat POST timeout', () => {
     // …in a function that leaves before it when the build is not a development build.
     const fn = source.slice(source.indexOf('const chatPostConfig = () => {'));
     const body = fn.slice(0, fn.indexOf('\n};'));
-    expect(body.split('\n')[1].trim()).toBe('if (!import.meta.env.DEV) return undefined;');
+    expect(body.split('\n')[1].trim()).toBe('if (!IS_DEV_BUILD) return undefined;');
+    // The flag is the build's own: Vite replaces `import.meta.env.DEV` with `false` in production.
+    const client = fs.readFileSync(path.join(repoRoot, 'client/src/api/client.js'), 'utf8');
+    expect(client).toContain('const IS_DEV_BUILD = import.meta.env.DEV;');
+    expect(source).toContain(
+      "import { apiClient, streamingApiClient, IS_DEV_BUILD } from '../client';"
+    );
     expect(body).toContain('window.__ihubStreamTimeoutMs');
     expect(body).toContain('shortenedTimeout(');
   });

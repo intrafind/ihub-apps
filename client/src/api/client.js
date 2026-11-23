@@ -9,6 +9,13 @@ import { expireSession } from './utils/apiErrors';
 // Use dynamic API URL based on runtime base path detection
 const API_URL = import.meta.env.VITE_API_URL || buildApiUrl('');
 const API_REQUEST_TIMEOUT = 30000; // 30 seconds timeout
+
+/**
+ * Whether this is a development build. Read here, where `import.meta` is already read, so that
+ * the endpoint modules stay free of it: jest loads them as CommonJS, and the client tests mock
+ * this module. A production build replaces `import.meta.env.DEV` with `false`.
+ */
+const IS_DEV_BUILD = import.meta.env.DEV;
 const STREAMING_REQUEST_TIMEOUT = 300000; // 5 minutes for streaming requests
 
 // Create axios instance with request timeout
@@ -125,4 +132,10 @@ const addResponseInterceptor = client => {
 addResponseInterceptor(apiClient);
 addResponseInterceptor(streamingApiClient);
 
-export { apiClient, streamingApiClient, API_REQUEST_TIMEOUT, STREAMING_REQUEST_TIMEOUT };
+export {
+  apiClient,
+  streamingApiClient,
+  API_REQUEST_TIMEOUT,
+  STREAMING_REQUEST_TIMEOUT,
+  IS_DEV_BUILD
+};

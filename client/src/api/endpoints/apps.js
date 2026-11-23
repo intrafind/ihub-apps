@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
-import { apiClient, streamingApiClient } from '../client';
+import { apiClient, streamingApiClient, IS_DEV_BUILD } from '../client';
 import { handleApiResponse } from '../utils/requestHandler';
 import { shortenedTimeout } from '../utils/devTimeout';
 
@@ -14,8 +14,8 @@ import { shortenedTimeout } from '../utils/devTimeout';
  * wait that long.
  *
  * A production build never reads the window property: Vite replaces
- * `import.meta.env.DEV` with `false` there, and the bundler drops what follows
- * the `return`. In a development build the value can only shorten the timeout
+ * `import.meta.env.DEV` with `false` there (`IS_DEV_BUILD` in `../client`), so
+ * the function returns before it. In a development build the value can only shorten the timeout
  * (`shortenedTimeout`), never lengthen or remove it, and a POST that times out
  * early stops nothing: the client asks whether the turn is running and keeps
  * listening (`sendPendingMessage`).
@@ -23,7 +23,7 @@ import { shortenedTimeout } from '../utils/devTimeout';
  * @returns {{timeout: number}|undefined}
  */
 const chatPostConfig = () => {
-  if (!import.meta.env.DEV) return undefined;
+  if (!IS_DEV_BUILD) return undefined;
   const timeout = shortenedTimeout(
     window.__ihubStreamTimeoutMs,
     streamingApiClient.defaults.timeout
