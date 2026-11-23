@@ -186,9 +186,9 @@ export default function AdminAgentInboxEditPage() {
       <div className="max-w-3xl mx-auto py-8 px-4">
         <AdminBreadcrumb
           crumbs={[
-            { label: 'Admin', href: '/admin' },
-            { label: 'Agents', href: '/admin/agents' },
-            { label: 'Inboxes', href: '/admin/agents/inboxes' },
+            { label: t('documentTitle.admin', 'Admin'), href: '/admin' },
+            { label: t('admin.nav.agents', 'Agents'), href: '/admin/agents' },
+            { label: t('admin.breadcrumbs.inboxes', 'Inboxes'), href: '/admin/agents/inboxes' },
             { label: inboxId }
           ]}
         />

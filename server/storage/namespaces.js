@@ -169,6 +169,25 @@ export const RUNTIME_NAMESPACES = Object.freeze({
    */
   userSkillShares: 'user-skill-shares',
   /**
+   * Personal apps: apps users build themselves, one document per app, filed
+   * under the owner so "my apps" is an index read. Admin apps stay
+   * configuration in the raw `apps` namespace; these never reach
+   * `configCache.getApps()`.
+   */
+  userApps: 'user-apps',
+  /**
+   * Share markers of personal apps, one per member target, filed under the
+   * principal they reach (`user:<id>`, `group:<name>`, `everyone`), plus one
+   * marker of kind `offer` for the receiver of an open ownership offer. An
+   * index, never the authority: the app's member list and `pendingOwner` decide.
+   */
+  userAppShares: 'user-app-shares',
+  /**
+   * The last content states of a personal app, keyed `<appId>.<revision>` and
+   * filed under the app id: what the audit trail points at.
+   */
+  userAppRevisions: 'user-app-revisions',
+  /**
    * Artifacts — content a run produced that is worth keeping in its own
    * right. One document per artifact, keyed `<scopeType>__<scopeId>__<id>`.
    *

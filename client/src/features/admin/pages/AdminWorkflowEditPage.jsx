@@ -301,9 +301,13 @@ function AdminWorkflowEditPage() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <AdminBreadcrumb
           crumbs={[
-            { label: 'Admin', href: '/admin' },
-            { label: 'Workflows', href: '/admin/workflows' },
-            { label: isNewWorkflow ? 'New Workflow' : (workflowData?.name?.en ?? id) }
+            { label: t('documentTitle.admin', 'Admin'), href: '/admin' },
+            { label: t('admin.nav.workflows', 'Workflows'), href: '/admin/workflows' },
+            {
+              label: isNewWorkflow
+                ? t('admin.breadcrumbs.newWorkflow', 'New Workflow')
+                : (workflowData?.name?.en ?? id)
+            }
           ]}
         />
         {/* Header */}

@@ -139,43 +139,52 @@ function PlatformFormEditor({
       {/* Primary Authentication Mode Selection */}
       <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xs border border-gray-200 dark:border-gray-700 p-6">
         <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">
-          Primary Authentication Mode
+          {t('admin.auth.mode.title', 'Primary Authentication Mode')}
         </h3>
         <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
-          Select the primary authentication mode for default behavior and routing.
+          {t(
+            'admin.auth.mode.help',
+            'Select the primary authentication mode for default behavior and routing.'
+          )}
         </p>
         <div className="space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {[
               {
                 mode: 'proxy',
-                title: 'Proxy Mode',
-                desc: 'Authentication via reverse proxy or JWT tokens'
+                title: t('admin.auth.mode.proxy', 'Proxy Mode'),
+                desc: t(
+                  'admin.auth.mode.proxyDesc',
+                  'Authentication via reverse proxy or JWT tokens'
+                )
               },
               {
                 mode: 'local',
-                title: 'Local Mode',
-                desc: 'Built-in username/password authentication'
+                title: t('admin.auth.mode.local', 'Local Mode'),
+                desc: t('admin.auth.mode.localDesc', 'Built-in username/password authentication')
               },
               {
                 mode: 'oidc',
-                title: 'OIDC Mode',
-                desc: 'OpenID Connect with external providers'
+                title: t('admin.auth.mode.oidc', 'OIDC Mode'),
+                desc: t('admin.auth.mode.oidcDesc', 'OpenID Connect with external providers')
               },
               {
                 mode: 'ldap',
-                title: 'LDAP Mode',
-                desc: 'LDAP/Active Directory authentication'
+                title: t('admin.auth.mode.ldap', 'LDAP Mode'),
+                desc: t('admin.auth.mode.ldapDesc', 'LDAP/Active Directory authentication')
               },
               {
                 mode: 'ntlm',
-                title: 'NTLM Mode',
-                desc: 'Windows Integrated Authentication (NTLM/Kerberos)'
+                title: t('admin.auth.mode.ntlm', 'NTLM Mode'),
+                desc: t(
+                  'admin.auth.mode.ntlmDesc',
+                  'Windows Integrated Authentication (NTLM/Kerberos)'
+                )
               },
               {
                 mode: 'anonymous',
-                title: 'Anonymous Mode',
-                desc: 'No authentication required (default)'
+                title: t('admin.auth.mode.anonymous', 'Anonymous Mode'),
+                desc: t('admin.auth.mode.anonymousDesc', 'No authentication required (default)')
               }
             ].map(modeOption => (
               <div
@@ -216,8 +225,10 @@ function PlatformFormEditor({
           {t('admin.auth.methods', 'Authentication Methods')}
         </h3>
         <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
-          Enable multiple authentication methods simultaneously. Users can choose their preferred
-          login method.
+          {t(
+            'admin.auth.methodsHelp',
+            'Enable multiple authentication methods simultaneously. Users can choose their preferred login method.'
+          )}
         </p>
         <div className="space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -229,10 +240,10 @@ function PlatformFormEditor({
                   onChange={e => toggleAuthMethod('proxyAuth', e.target.checked)}
                   className={CHECKBOX_CLASS}
                 />
-                Proxy/JWT Authentication
+                {t('admin.auth.methodNames.proxy', 'Proxy/JWT Authentication')}
               </label>
               <p className="ml-7 text-xs text-gray-500 dark:text-gray-400">
-                Headers or JWT tokens from reverse proxy
+                {t('admin.auth.methodNames.proxyDesc', 'Headers or JWT tokens from reverse proxy')}
               </p>
             </div>
 
@@ -244,7 +255,7 @@ function PlatformFormEditor({
                   onChange={e => toggleAuthMethod('localAuth', e.target.checked)}
                   className={CHECKBOX_CLASS}
                 />
-                Local Authentication
+                {t('admin.auth.methodNames.local', 'Local Authentication')}
               </label>
               <p className="ml-7 text-xs text-gray-500 dark:text-gray-400">
                 {t('admin.auth.builtInSystem', 'Built-in username/password system')}
@@ -259,10 +270,10 @@ function PlatformFormEditor({
                   onChange={e => toggleAuthMethod('oidcAuth', e.target.checked)}
                   className={CHECKBOX_CLASS}
                 />
-                OIDC Authentication
+                {t('admin.auth.methodNames.oidc', 'OIDC Authentication')}
               </label>
               <p className="ml-7 text-xs text-gray-500 dark:text-gray-400">
-                OpenID Connect providers (Google, etc.)
+                {t('admin.auth.methodNames.oidcDesc', 'OpenID Connect providers (Google, etc.)')}
               </p>
             </div>
 
@@ -274,10 +285,13 @@ function PlatformFormEditor({
                   onChange={e => toggleAuthMethod('ldapAuth', e.target.checked)}
                   className={CHECKBOX_CLASS}
                 />
-                LDAP Authentication
+                {t('admin.auth.methodNames.ldap', 'LDAP Authentication')}
               </label>
               <p className="ml-7 text-xs text-gray-500 dark:text-gray-400">
-                LDAP/Active Directory authentication with multiple providers
+                {t(
+                  'admin.auth.methodNames.ldapDesc',
+                  'LDAP/Active Directory authentication with multiple providers'
+                )}
               </p>
             </div>
 
@@ -289,10 +303,10 @@ function PlatformFormEditor({
                   onChange={e => toggleAuthMethod('ntlmAuth', e.target.checked)}
                   className={CHECKBOX_CLASS}
                 />
-                NTLM Authentication
+                {t('admin.auth.methodNames.ntlm', 'NTLM Authentication')}
               </label>
               <p className="ml-7 text-xs text-gray-500 dark:text-gray-400">
-                Windows Integrated Authentication (NTLM)
+                {t('admin.auth.methodNames.ntlmDesc', 'Windows Integrated Authentication (NTLM)')}
               </p>
             </div>
 
@@ -307,7 +321,10 @@ function PlatformFormEditor({
                 {t('admin.auth.anonymousAccess', 'Anonymous Access')}
               </label>
               <p className="ml-7 text-xs text-gray-500 dark:text-gray-400">
-                Allow users to access without authentication
+                {t(
+                  'admin.auth.methodNames.anonymousDesc',
+                  'Allow users to access without authentication'
+                )}
               </p>
             </div>
           </div>
@@ -363,17 +380,19 @@ function PlatformFormEditor({
       {config.proxyAuth?.enabled && (
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xs border border-gray-200 dark:border-gray-700 p-6">
           <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">
-            Proxy/JWT Authentication Settings
+            {t('admin.auth.proxy.settingsTitle', 'Proxy/JWT Authentication Settings')}
           </h3>
           <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
-            Configure header-based authentication from reverse proxy and/or JWT token validation for
-            pure JWT authentication.
+            {t(
+              'admin.auth.proxy.settingsHelp',
+              'Configure header-based authentication from reverse proxy and/or JWT token validation for pure JWT authentication.'
+            )}
           </p>
           <div className="space-y-4">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                  User Header
+                  {t('admin.auth.proxy.userHeader', 'User Header')}
                 </label>
                 <input
                   type="text"
@@ -385,7 +404,7 @@ function PlatformFormEditor({
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                  Groups Header
+                  {t('admin.auth.proxy.groupsHeader', 'Groups Header')}
                 </label>
                 <input
                   type="text"
@@ -476,12 +495,14 @@ function PlatformFormEditor({
                   className={`${CHECKBOX_CLASS} mr-2`}
                 />
                 <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                  Allow Self-Signup
+                  {t('admin.auth.allowSelfSignup', 'Allow Self-Signup')}
                 </span>
               </label>
               <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                Allow new users to register automatically through proxy authentication. If disabled,
-                new users must be added manually by administrators.
+                {t(
+                  'admin.auth.proxy.selfSignupHelp',
+                  'Allow new users to register automatically through proxy authentication. If disabled, new users must be added manually by administrators.'
+                )}
               </p>
             </div>
 
@@ -489,7 +510,7 @@ function PlatformFormEditor({
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                  LDAP Group Lookup Provider
+                  {t('admin.auth.ldapGroupLookup.provider', 'LDAP Group Lookup Provider')}
                 </label>
                 <select
                   value={config.proxyAuth?.ldapGroupLookupProvider || ''}
@@ -502,7 +523,9 @@ function PlatformFormEditor({
                   }
                   className={INPUT_CLASS}
                 >
-                  <option value="">None (use header/JWT groups only)</option>
+                  <option value="">
+                    {t('admin.auth.proxy.ldapLookupNone', 'None (use header/JWT groups only)')}
+                  </option>
                   {(config.ldapAuth?.providers || []).map(p => (
                     <option key={p.name} value={p.name}>
                       {p.displayName || p.name}
@@ -510,14 +533,15 @@ function PlatformFormEditor({
                   ))}
                 </select>
                 <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                  When set, look up the authenticated user's group memberships in the selected LDAP
-                  provider and merge them with the groups supplied via the groups header and JWT
-                  claim. The LDAP provider must have admin credentials and group search configured.
+                  {t(
+                    'admin.auth.proxy.ldapLookupHelp',
+                    "When set, look up the authenticated user's group memberships in the selected LDAP provider and merge them with the groups supplied via the groups header and JWT claim. The LDAP provider must have admin credentials and group search configured."
+                  )}
                 </p>
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                  LDAP Group Cache TTL (seconds)
+                  {t('admin.auth.ldapGroupLookup.cacheTtl', 'LDAP Group Cache TTL (seconds)')}
                 </label>
                 <input
                   type="number"
@@ -534,7 +558,10 @@ function PlatformFormEditor({
                   placeholder="600"
                 />
                 <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                  How long to cache LDAP group results per user. Set to 0 to disable caching.
+                  {t(
+                    'admin.auth.ldapGroupLookup.cacheTtlHelp',
+                    'How long to cache LDAP group results per user. Set to 0 to disable caching.'
+                  )}
                 </p>
               </div>
             </div>

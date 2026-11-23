@@ -51,7 +51,9 @@ On a fresh installation the browser opens the setup wizard:
    provider needs neither: just continue.
 4. **Finish** — choose **Add your models** to pick the models of the provider you connected. A fresh
    installation has no enabled chat model, so chatting starts once you have imported or enabled
-   one; the first chat model you enable becomes the default.
+   one; the first chat model you enable becomes the default. **Create your first app** opens
+   **Admin → Apps → New app**, where you describe an app, test it and publish it (see
+   [Build your first app](app-quickstart.md)).
 
 <p align="center">
   <img src="assets/screenshots/setup-wizard-welcome.png" alt="Setup wizard: welcome" width="45%">
@@ -136,5 +138,6 @@ prompts and skills.
    put a [reverse proxy](production-reverse-proxy-guide.md) with HTTPS in front of it
 3. **Connect your knowledge** — [Projects](projects.md), [iFinder](iFinder-Integration.md),
    [Office 365](office365-integration.md), [Google Drive](google-drive-integration.md)
-4. **Create your own apps** — [App Configuration](apps.md), or install them from the
+4. **Create your own apps** — [Build your first app](app-quickstart.md) in the admin UI,
+   [App Configuration](apps.md) for every setting, or install apps from the
    [Marketplace](marketplace.md)

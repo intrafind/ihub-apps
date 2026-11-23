@@ -724,6 +724,10 @@ and add it again. Sources migrated from `config/sources.json` keep their `maxLen
 
 User projects are a preview feature.
 
+[Personal apps](personal-apps.md) are set up and shared the same way: a feature flag, two group
+permissions and a settings panel. That page lists where apps differ, for example that a change
+of owner is an offer the new owner accepts.
+
 ### Switching user projects on
 
 1. Turn on the feature flag `userProjects` (**Admin → Platform → Features**, **User Projects**). The `projects` flag must be on

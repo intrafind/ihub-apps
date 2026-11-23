@@ -30,7 +30,6 @@
     "components/app-form/ExportConfigSection.jsx": 1,
     "components/app-form/FeedbackSection.jsx": 1,
     "components/app-form/ProjectsConfigSection.jsx": 2,
-    "components/app-form/SettingsConfigSection.jsx": 4,
     "components/app-form/SkillsConfigSection.jsx": 1,
     "components/app-form/UploadConfigSection.jsx": 2,
     "components/data-table/filters/FilterMultiSelect.jsx": 2,

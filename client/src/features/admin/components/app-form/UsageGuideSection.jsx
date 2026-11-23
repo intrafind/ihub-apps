@@ -3,7 +3,7 @@
 
 import { useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import DynamicLanguageEditor from '../../../../shared/components/DynamicLanguageEditor';
+import AppLanguageField from './AppLanguageField';
 import ConfirmDialog from '../../../../shared/components/ConfirmDialog';
 import Icon from '../../../../shared/components/Icon';
 import { generateAppUsageGuide, getAdminApiErrorMessage } from '../../../../api/adminApi';
@@ -141,8 +141,8 @@ function UsageGuideSection({ app, onChange }) {
 
   return (
     <div className="bg-white dark:bg-gray-800 shadow-sm px-4 py-5 sm:rounded-lg sm:p-6">
-      <div className="md:grid md:grid-cols-3 md:gap-6">
-        <div className="md:col-span-1">
+      <div className="md:form-cols:grid md:form-cols:grid-cols-3 md:form-cols:gap-6">
+        <div className="md:form-cols:col-span-1">
           <h3 className="text-lg font-medium leading-6 text-gray-900 dark:text-gray-100">
             {t('admin.apps.edit.usageGuide.title', 'Usage Guide')}
           </h3>
@@ -153,7 +153,7 @@ function UsageGuideSection({ app, onChange }) {
             )}
           </p>
         </div>
-        <div className="mt-5 md:col-span-2 md:mt-0 space-y-4">
+        <div className="mt-5 md:form-cols:col-span-2 md:form-cols:mt-0 space-y-4">
           <UsageGuideActions
             languages={languages}
             language={language}
@@ -179,13 +179,13 @@ function UsageGuideSection({ app, onChange }) {
 
           {guide && (
             <>
-              <DynamicLanguageEditor
+              <AppLanguageField
                 label={t('admin.apps.edit.usageGuide.question', 'Dialog heading')}
                 value={guide.question || {}}
                 onChange={value => updateGuide({ question: value })}
                 placeholder={{ en: 'How do I use this app?', de: 'Wie nutze ich diese App?' }}
               />
-              <DynamicLanguageEditor
+              <AppLanguageField
                 label={t('admin.apps.edit.usageGuide.content', 'Guide (Markdown)')}
                 value={guide.content || {}}
                 onChange={value => updateGuide({ content: value })}

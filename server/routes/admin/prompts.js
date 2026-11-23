@@ -26,11 +26,6 @@ import { serializeUserPrompt } from '../../services/prompts/userPromptView.js';
 import { loadUsers } from '../../utils/userManager.js';
 import { localUsersFile } from '../../utils/contentsPath.js';
 import { ServiceError } from '../../utils/ServiceError.js';
-import installedIntegrationService from '../../services/integrations/InstalledIntegrationService.js';
-import {
-  buildAppGeneratorBrief,
-  describeInstalledIntegrations
-} from '../../services/appGenerator.js';
 import { sendCreated, segment } from '../../utils/created.js';
 import { updatePlatform } from '../../utils/platformConfigStore.js';
 
@@ -247,30 +242,6 @@ export function slugifyPromptId(name) {
  *           items:
  *             type: string
  *
- *     AppGeneratorPrompt:
- *       type: object
- *       description: App generator specific prompt with language selection
- *       properties:
- *         id:
- *           type: string
- *           description: Prompt template ID
- *           example: "app-generator"
- *         prompt:
- *           type: string
- *           description: Localized prompt text for the specified language, followed by the installed integrations the generated app may bind
- *         outputSchema:
- *           type: object
- *           description: JSON schema of the generated app configuration; `integrations` is limited to the installed integrations
- *         integrationIds:
- *           type: array
- *           items:
- *             type: string
- *           description: The enabled installations the prompt lists
- *         language:
- *           type: string
- *           description: Language code used for localization
- *           example: "en"
- *
  *     CompletionRequest:
  *       type: object
  *       description: Request for AI completion using prompts
@@ -409,22 +380,6 @@ export default function registerAdminPromptsRoutes(app) {
    *                   en: "Summarize the following text: {{content}}"
    *                   de: "Fasse den folgenden Text zusammen: {{content}}"
    *                 enabled: true
-   *               - id: "app-generator"
-   *                 category: "system"
-   *                 name:
-   *                   en: "App Generator"
-   *                   de: "App-Generator"
-   *                 description:
-   *                   en: "Generate app configurations from user descriptions"
-   *                 icon: "cog"
-   *                 enabled: true
-   *                 outputSchema:
-   *                   type: "object"
-   *                   properties:
-   *                     id:
-   *                       type: "string"
-   *                     name:
-   *                       type: "object"
    *       304:
    *         description: Not Modified - content hasn't changed (ETag match)
    *       401:
@@ -474,115 +429,6 @@ export default function registerAdminPromptsRoutes(app) {
     }
     res.json({ items: prompts });
   });
-
-  /**
-   * @swagger
-   * /api/admin/prompts/app-generator:
-   *   get:
-   *     summary: Get the app generator prompt template for a specific language
-   *     description: |
-   *       Retrieves the app generator prompt template localized for the specified language.
-   *       This special endpoint provides access to the app generation prompt used by the
-   *       iHub Apps platform to create new application configurations.
-   *
-   *       **Admin Access Required**: This endpoint requires administrator authentication.
-   *
-   *       **Language Fallback**: If the requested language is not available, falls back to the default platform language.
-   *
-   *       **Special Purpose**: This endpoint is specifically designed for the app generator functionality
-   *       and returns the prompt text (with the installed integrations the app may bind) and the
-   *       schema of the answer, rather than the full configuration object.
-   *     tags:
-   *       - Admin - Prompts
-   *     security:
-   *       - bearerAuth: []
-   *       - sessionAuth: []
-   *     parameters:
-   *       - in: query
-   *         name: lang
-   *         required: false
-   *         description: Language code for localization (defaults to platform default language)
-   *         schema:
-   *           type: string
-   *         example: "en"
-   *     responses:
-   *       200:
-   *         description: App generator prompt successfully retrieved
-   *         content:
-   *           application/json:
-   *             schema:
-   *               $ref: '#/components/schemas/AppGeneratorPrompt'
-   *             example:
-   *               id: "app-generator"
-   *               prompt: "You are an expert in the iHub Apps platform. Your job is to help users create complete and valid JSON configurations..."
-   *               language: "en"
-   *       401:
-   *         description: Authentication required
-   *         content:
-   *           application/json:
-   *             schema:
-   *               $ref: '#/components/schemas/AdminError'
-   *             example:
-   *               error: "Admin authentication required"
-   *       403:
-   *         description: Forbidden - insufficient admin privileges
-   *         content:
-   *           application/json:
-   *             schema:
-   *               $ref: '#/components/schemas/AdminError'
-   *             example:
-   *               error: "Admin access required"
-   *       404:
-   *         description: App-generator prompt not found
-   *         content:
-   *           application/json:
-   *             schema:
-   *               $ref: '#/components/schemas/AdminError'
-   *             example:
-   *               error: "App-generator prompt not found"
-   *       500:
-   *         description: Internal server error
-   *         content:
-   *           application/json:
-   *             schema:
-   *               $ref: '#/components/schemas/AdminError'
-   *             examples:
-   *               configError:
-   *                 summary: Configuration load error
-   *                 value:
-   *                   error: "Failed to load prompts configuration"
-   *               internalError:
-   *                 summary: General internal error
-   *                 value:
-   *                   error: "Internal server error"
-   */
-  app.get(
-    buildServerPath('/api/admin/prompts/app-generator'),
-    contentAdminAuth,
-    async (req, res) => {
-      const platformConfig = configCache.getPlatform();
-      const defaultLanguage = platformConfig?.defaultLanguage || 'en';
-      const { lang = defaultLanguage } = req.query;
-      const { data: prompts } = configCache.getPrompts(true);
-      if (!prompts) {
-        throw new ServiceError('INTERNAL_ERROR', 'Failed to load prompts configuration');
-      }
-      const appGeneratorPrompt = prompts.find(p => p.id === 'app-generator');
-      if (!appGeneratorPrompt) {
-        throw new ServiceError('NOT_FOUND', 'App-generator prompt not found');
-      }
-      // The brief: the prompt plus the installed integrations the app may bind.
-      const resolved = await installedIntegrationService.resolveAllEnabled(lang);
-      const integrations = describeInstalledIntegrations(resolved, lang);
-      const brief = buildAppGeneratorBrief(appGeneratorPrompt, lang, defaultLanguage, integrations);
-      res.json({
-        id: appGeneratorPrompt.id,
-        prompt: brief.prompt,
-        integrations: integrations.map(({ id, actions }) => ({ id, actions })),
-        language: lang
-      });
-    }
-  );
 
   /**
    * @swagger
@@ -1117,7 +963,7 @@ export default function registerAdminPromptsRoutes(app) {
    *         examples:
    *           specific:
    *             summary: Specific prompts
-   *             value: "summarize,translate,app-generator"
+   *             value: "summarize,translate-de,faq-question"
    *           all:
    *             summary: All prompts
    *             value: "*"
@@ -1149,7 +995,7 @@ export default function registerAdminPromptsRoutes(app) {
    *                 value:
    *                   message: "Prompts enabled successfully"
    *                   enabled: true
-   *                   ids: ["summarize", "translate", "app-generator"]
+   *                   ids: ["summarize", "translate-de", "faq-question"]
    *               disabled:
    *                 summary: Prompts disabled
    *                 value:

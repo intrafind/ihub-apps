@@ -8,6 +8,8 @@ import { storeFeedback } from '../../feedbackStorage.js';
 import { authRequired } from '../../middleware/authRequired.js';
 import { requireFeature } from '../../featureRegistry.js';
 import { findByIdCaseInsensitive } from '../../utils/resourceLookup.js';
+import { isUserAppId } from '../../../shared/userAppContent.js';
+import { resolveAppForChat } from '../../services/userApps/resolveApp.js';
 import validate from '../../validators/validate.js';
 import { feedbackSchema } from '../../validators/index.js';
 import { buildServerPath } from '../../utils/basePath.js';
@@ -30,15 +32,28 @@ import { RUN_LOG_EVENTS } from '../../../shared/runEvents.js';
  * appId is not gated — it fails later on its own terms, and a feedback entry
  * must never be dropped just because its app config could not be read.
  *
+ * A personal app (feature `userApps`) is the exception: its id is not in the
+ * config, so "unknown" would let anyone file feedback under it. Feedback for
+ * a personal app is taken from a caller who can use the app, and answers 404
+ * for everyone else.
+ *
  * @param {import('express').Request} req
  * @param {import('express').Response} res
  * @param {Function} next
  */
-export function requireAppFeedbackEnabled(req, res, next) {
+export async function requireAppFeedbackEnabled(req, res, next) {
   const appId = req.body?.appId;
   if (!appId) return next();
   const { data: apps = [] } = configCache.getApps(true) || {};
   const appConfig = findByIdCaseInsensitive(apps, appId);
+  if (!appConfig && isUserAppId(appId)) {
+    try {
+      const found = await resolveAppForChat(appId, req.user, { req });
+      return next(found?.userApp ? undefined : new ServiceError('NOT_FOUND', 'App not found'));
+    } catch (error) {
+      return next(error);
+    }
+  }
   if (appConfig && appConfig.features?.feedback === false) {
     return next(new ServiceError('FEATURE_DISABLED', `Feedback is disabled for app '${appId}'`));
   }

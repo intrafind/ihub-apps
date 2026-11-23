@@ -59,7 +59,7 @@ function AdminProviderCreatePage() {
 
       // Validation
       if (!formData.id.trim()) {
-        setError('Provider ID is required');
+        setError(t('admin.providers.create.idRequired', 'Provider ID is required'));
         return;
       }
 
@@ -102,9 +102,11 @@ function AdminProviderCreatePage() {
       <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <AdminBreadcrumb
           crumbs={[
-            { label: 'Admin', href: '/admin' },
-            ...(access.models ? [{ label: 'Models', href: '/admin/models' }] : []),
-            { label: 'Providers', href: '/admin/providers' },
+            { label: t('documentTitle.admin', 'Admin'), href: '/admin' },
+            ...(access.models
+              ? [{ label: t('admin.nav.models', 'Models'), href: '/admin/models' }]
+              : []),
+            { label: t('admin.nav.providers', 'Providers'), href: '/admin/providers' },
             { label: t('admin.providers.create.title', 'Create New Provider') }
           ]}
         />

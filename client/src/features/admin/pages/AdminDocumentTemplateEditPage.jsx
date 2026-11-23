@@ -797,9 +797,15 @@ export default function AdminDocumentTemplateEditPage() {
                     onChange={event => update('pdf', 'theme', event.target.value || undefined)}
                   >
                     <option value="">{t('admin.documentTemplates.edit.notSet', 'Not set')}</option>
-                    <option value="default">Default</option>
-                    <option value="professional">Professional</option>
-                    <option value="minimal">Minimal</option>
+                    <option value="default">
+                      {t('admin.documentTemplates.edit.themes.default', 'Default')}
+                    </option>
+                    <option value="professional">
+                      {t('admin.documentTemplates.edit.themes.professional', 'Professional')}
+                    </option>
+                    <option value="minimal">
+                      {t('admin.documentTemplates.edit.themes.minimal', 'Minimal')}
+                    </option>
                   </select>
                 )}
               </Field>
