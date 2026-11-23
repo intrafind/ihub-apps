@@ -38,7 +38,7 @@ import {
 } from '../../services/ModelEndpointDiscovery.js';
 import { DEFAULT_BEDROCK_REGION, isValidBedrockRegion } from '../../../shared/bedrockRegions.js';
 import { BEDROCK_API_TYPE, discoverBedrockModels } from '../../services/BedrockModelDiscovery.js';
-import { computeGatewayDrift } from '../../services/gatewayDrift.js';
+import { computeGatewayDrift, inBedrockListingRegion } from '../../services/gatewayDrift.js';
 import { applyGatewayDrift } from '../../services/gatewaySyncApply.js';
 import { logAudit } from '../../services/AuditLogService.js';
 import { saveSnapshot } from '../../services/ChangeHistoryService.js';
@@ -388,6 +388,7 @@ async function loadModelDrift(providerId) {
   const { data: models = [] } = configCache.getModels(true);
   return {
     provider,
+    region,
     modelsUrl: listing.modelsUrl,
     items: computeGatewayDrift({
       provider,
@@ -595,7 +596,8 @@ export default function registerAdminProvidersRoutes(app) {
    *     description: |
    *       Reads the model listing of an iFinder Model Gateway, Google or Anthropic provider (its
    *       base URL and stored key), or of the AWS Bedrock provider (its region, else
-   *       `AWS_REGION`, else eu-central-1, and its stored key), and compares it with the
+   *       `AWS_REGION`, else `AWS_DEFAULT_REGION`, else eu-central-1, and its stored key),
+   *       and compares it with the
    *       models linked to the provider. For Bedrock only the linked models of that
    *       region are compared, and an added model stores the region. Changes nothing: every item names what an admin could do. To apply
    *       a choice, send it to `POST /admin/providers/{providerId}/_sync-models`; do not
@@ -771,12 +773,14 @@ export default function registerAdminProvidersRoutes(app) {
     adminAuth,
     async (req, res) => {
       const picks = picksOf(req.body);
-      const { items } = await loadModelDrift(req.params.providerId);
+      const { items, region } = await loadModelDrift(req.params.providerId);
       const admin = req.user?.username ?? req.user?.name ?? req.user?.id ?? 'unknown';
 
       const results = await applyGatewayDrift({
         picks,
         items,
+        // Bedrock: a stored model moved to another region since is left alone.
+        ...(region ? { inScope: model => inBedrockListingRegion(model, region) } : {}),
         store: {
           ...modelStore,
           audit: (action, id, summary) =>

@@ -783,6 +783,35 @@ describe('AWS Bedrock: the listing of the provider region', () => {
     expect(files.has('models/bedrock-us-sonnet.json')).toBe(false);
   });
 
+  it('skips a pick whose stored model moved to another region since the cache was read', async () => {
+    withBedrock('eu-central-1');
+    // The config cache still shows the model in eu-central-1, with image input off …
+    const cached = {
+      id: 'bedrock-eu-sonnet',
+      modelId: `eu.${SONNET}`,
+      provider: 'bedrock',
+      config: { region: 'eu-central-1' },
+      supportsVision: false,
+      enabled: true
+    };
+    models.push(cached);
+    // … while another admin already moved the stored file to us-east-1.
+    const stored = { ...clone(cached), config: { region: 'us-east-1' } };
+    files.set('models/bedrock-eu-sonnet.json', clone(stored));
+
+    const res = await request(app)
+      .post('/api/admin/providers/bedrock/_sync-models')
+      .send({
+        items: [{ kind: 'changed', remoteId: `eu.${SONNET}`, modelId: 'bedrock-eu-sonnet' }]
+      });
+
+    expect(res.status).toBe(200);
+    expect(res.body.items).toEqual([
+      expect.objectContaining({ modelId: 'bedrock-eu-sonnet', status: 'skipped' })
+    ]);
+    expect(files.get('models/bedrock-eu-sonnet.json')).toEqual(stored);
+  });
+
   it('refuses a region that is not an AWS region instead of reading another one', async () => {
     withBedrock('us-east1');
     const res = await drift('bedrock');
