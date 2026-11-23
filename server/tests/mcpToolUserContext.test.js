@@ -46,8 +46,13 @@ jest.unstable_mockModule('../services/integrations/integrationTools.js', () => (
   getIntegrationToolsForApp: () => [],
   userMayUse: () => true
 }));
+// The Jira installation's approval policy gates its `comment` action (#2945).
 jest.unstable_mockModule('../services/integrations/installedRefs.js', () => ({
-  installedIntegrationById: id => ({ id, enabled: true }),
+  installedIntegrationById: id => ({
+    id,
+    enabled: true,
+    ...(id === 'jira' ? { approval: { default: 'never', actions: { comment: 'always' } } } : {})
+  }),
   installedIntegrationRefs: () => []
 }));
 
@@ -68,11 +73,25 @@ const iFinderSearchTool = {
   }
 };
 
-async function connectGateway(user) {
-  discoverIntegrationTools.mockResolvedValue([iFinderSearchTool]);
+// An action whose approval policy (its installation's, above) needs a person:
+// nobody at the gateway can give it.
+const jiraCommentTool = {
+  id: 'jira_comment',
+  _integration: { instanceId: 'jira', action: 'comment', definition: 'com.atlassian/jira' },
+  description: 'Comment on a Jira issue',
+  parameters: {
+    type: 'object',
+    properties: { issue: { type: 'string' }, text: { type: 'string' } },
+    required: ['issue', 'text']
+  }
+};
+
+async function connectGateway(user, { tools = [iFinderSearchTool], toolApproval } = {}) {
+  discoverIntegrationTools.mockResolvedValue(tools);
   const platform = {
     defaultLanguage: 'en',
-    mcpServer: { expose: { tools: true, apps: false, workflows: false, resources: false } }
+    mcpServer: { expose: { tools: true, apps: false, workflows: false, resources: false } },
+    ...(toolApproval ? { toolApproval } : {})
   };
   const server = await buildMcpServer({ user, platform });
   const client = new Client({ name: 'test-client', version: '0.0.0' }, { capabilities: {} });
@@ -129,5 +148,41 @@ describe('MCP gateway native tool calls carry user context', () => {
     const [, calledParams] = runTool.mock.calls[0];
     expect(calledParams.user).toBe(user);
     expect(calledParams.user.id).toBe('alice');
+  });
+});
+
+describe('MCP gateway tools/call of a tool that needs approval', () => {
+  beforeEach(() => {
+    runTool.mockClear();
+    discoverIntegrationTools.mockReset();
+  });
+
+  const user = {
+    id: 'alice',
+    scopes: [MCP_SCOPES.TOOLS_READ, MCP_SCOPES.TOOLS_CALL]
+  };
+  const refused = result => {
+    expect(result.isError).toBe(true);
+    expect(result.content[0].text).toMatch(/^APPROVAL_REQUIRED_NO_USER: /);
+  };
+
+  it('refuses a gated action and never runs it', async () => {
+    const client = await connectGateway(user, { tools: [jiraCommentTool, iFinderSearchTool] });
+    refused(
+      await client.callTool({ name: 'jira_comment', arguments: { issue: 'A-1', text: 'hi' } })
+    );
+    expect(runTool).not.toHaveBeenCalled();
+    // The control: an ungated action of the same gateway runs.
+    await client.callTool({ name: 'iFinder_search', arguments: { query: 'x' } });
+    expect(runTool).toHaveBeenCalledTimes(1);
+    expect(runTool.mock.calls[0][0]).toBe('iFinder_search');
+  });
+
+  it('refuses every action when the platform default gates all of them', async () => {
+    const client = await connectGateway(user, {
+      toolApproval: { defaults: { default: 'always' } }
+    });
+    refused(await client.callTool({ name: 'iFinder_search', arguments: { query: 'x' } }));
+    expect(runTool).not.toHaveBeenCalled();
   });
 });

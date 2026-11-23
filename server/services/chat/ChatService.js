@@ -18,7 +18,7 @@ import { v4 as uuidv4 } from 'uuid';
 import RequestBuilder from './RequestBuilder.js';
 import { processMessageTemplates } from '../../serverHelpers.js';
 import { logInteraction as defaultLogInteraction } from '../../utils.js';
-import { runTool as defaultRunTool } from '../tools/runTool.js';
+import { ToolRunner } from '../run/ToolRunner.js';
 import configCache from '../../configCache.js';
 import { isFeatureEnabled } from '../../featureRegistry.js';
 import { findByIdCaseInsensitive } from '../../utils/resourceLookup.js';
@@ -339,7 +339,8 @@ class ChatService {
    * @param {import('../loop/AgentLoop.js').AgentLoop} [options.agentLoop]
    * @param {import('../loop/RunLog.js').RunLog} [options.runLog]
    * @param {Function} [options.logInteraction] - interaction logger (tests inject a spy)
-   * @param {Function} [options.runTool] - tool runner (tests inject a stub)
+   * @param {Function} [options.runTool] - `runTool` behind the tool runner (tests inject a stub)
+   * @param {ToolRunner} [options.toolRunner] - the tool runner (defaults to one around `runTool`)
    * @param {{recordChatCallStart: Function, recordChatCallEnd: Function}} [options.telemetry] -
    *   usage/metrics recorder (defaults to chatTelemetry.js)
    */
@@ -349,7 +350,7 @@ class ChatService {
     this.runLog = options.runLog || runLogSingleton;
     this.interactionService = options.interactionService || interactionServiceSingleton;
     this.logInteraction = options.logInteraction || defaultLogInteraction;
-    this.runTool = options.runTool || defaultRunTool;
+    this.toolRunner = options.toolRunner || new ToolRunner({ runTool: options.runTool });
     this.telemetry = options.telemetry || defaultTelemetry;
     /** @type {Map<string, number>} clarification count per conversation */
     this.clarificationCounts = new Map();
@@ -1092,7 +1093,7 @@ class ChatService {
           streaming,
           buildLogData: log,
           logInteraction: this.logInteraction,
-          runTool: this.runTool
+          toolRunner: this.toolRunner
         })
       ),
       imageLiftSeam,
@@ -1211,44 +1212,39 @@ class ChatService {
         meta: { stream },
         seams,
         channel,
-        // `language` is a default the tool may use; explicit model-provided
-        // args of the same name win, while chatId/user/appConfig — and the
-        // scopes the user picked for the chat (`integrationScopes`, #3050) —
-        // can never be overridden by the model.
+        // The tool runner (`services/run/ToolRunner.js`) builds the tool's
+        // parameters: `language` is a default the model's arguments may
+        // override, while the chat, the user, the app and the scopes the user
+        // picked for the chat (`integrationScopes`, #3050) never can. Page
+        // reads are capped per turn by the gate (`websearch.maxPageReads`).
         //
         // An MCP tool of a server with MCP Apps enabled hands back its raw
         // result on the shared `info` object, where `chatToolSeam` builds the
         // view from it (declared, or embedded in the result).
-        //
-        // Page reads are capped per turn (`websearch.maxPageReads`): past the
-        // cap the gate answers the call itself instead of fetching the page.
-        executeTool: (call, { toolId, args, info, signal }) =>
-          pageReads.admit(toolId) ||
-          this.runTool(
+        executeTool: (call, { toolId, toolDef, args, info, signal }) =>
+          this.toolRunner.execute(call, {
             toolId,
-            {
-              language,
-              ...args,
+            toolDef,
+            args,
+            signal,
+            toolContext: {
+              origin: 'chat',
+              // The approval seam is the first seam of the turn.
+              approval: 'seam',
+              principal: user,
               chatId,
-              user,
               appConfig: app,
+              language,
               integrationScopes,
               turnSkills,
-              // The user's timezone, for the scheduling tools' defaults. Only
-              // when known: a value the model put in `args` could only pick a
-              // default timezone, which the schedule itself can name anyway.
-              ...(clientTimezone ? { clientTimezone } : {}),
-              // A workflow links its execution back to the chat only when the
-              // chat is stored (see `tools/workflowRunner.js`).
-              ...(String(toolId).startsWith('workflow_') ? { _chatStored: Boolean(persist) } : {})
-            },
-            {
-              signal,
+              clientTimezone,
+              chatStored: Boolean(persist),
+              pageReads,
               onMcpAppResult: result => {
                 if (info) info.mcpAppResult = result;
               }
             }
-          )
+          })
       });
       // Paused on a chat approval: keep what the continuation needs with the
       // chat, and only then show the card (`interaction/raised`), so even an
@@ -1317,6 +1313,19 @@ class ChatService {
           basis: carriedBasis({ prior: resume?.basis || connectResume?.basis, result })
         });
       }
+      // The terminal frames (`stream/error`, `run/ended`) are held back until
+      // the answer is stored (below), and then sent in the order they were
+      // made: the client stops reading at either of them.
+      const terminalFrames = [];
+      const finishStream = {
+        emit: (type, data) => {
+          if (type === SSE_V2_EVENTS.STREAM_ERROR || type === SSE_V2_EVENTS.RUN_ENDED) {
+            terminalFrames.push([type, data]);
+            return null;
+          }
+          return stream.emit(type, data);
+        }
+      };
       outcome = await this._finishTurn({
         result,
         outputId,
@@ -1324,7 +1333,7 @@ class ChatService {
         runId,
         chatId,
         streaming,
-        stream,
+        stream: finishStream,
         buildLogData: log,
         model,
         timeoutMs,
@@ -1382,17 +1391,31 @@ class ChatService {
       // The single choke point: every terminal shape `_finishTurn` produces —
       // normal, aborted, error, passthrough answer, malformed response —
       // passes through here with the same summary.
+      //
+      // The answer is stored BEFORE the client is told the turn is over. A
+      // client that has seen `run/ended` re-reads the stored chat (a reattached
+      // turn does at once, `useAppChat`'s `rereadStoredChat`; a user reloads):
+      // told first, it can read the chat in the window before the append and
+      // replace the answer on screen with a transcript that lacks it. The
+      // stored activity does not need the frame: the materializer settles a
+      // run that is still open in its recording (`runActivity.js`).
+      try {
+        if (persist) {
+          await materializeAssistantTurn({
+            repository: persist.repository,
+            chatId,
+            runId,
+            summary: outcome,
+            clientConnected: clientConnectedOf(persist, chatId),
+            message: persist.assistant,
+            runLog: this.runLog,
+            takeLeftover: leftover.takerFor(outcome.status, outcome.abortCause?.kind)
+          });
+        }
+      } finally {
+        for (const [type, data] of terminalFrames) stream.emit(type, data);
+      }
       if (persist) {
-        await materializeAssistantTurn({
-          repository: persist.repository,
-          chatId,
-          runId,
-          summary: outcome,
-          clientConnected: clientConnectedOf(persist, chatId),
-          message: persist.assistant,
-          runLog: this.runLog,
-          takeLeftover: leftover.takerFor(outcome.status, outcome.abortCause?.kind)
-        });
         // A named chat is easier to find again. After the answer is stored and
         // not awaited: the title never delays the turn, and it works the same
         // when the client has long gone, because the user is a closure value.
@@ -1415,16 +1438,8 @@ class ChatService {
     } catch (error) {
       // The loop never throws for model or tool failures; this is a bug path.
       logger.error('Chat turn crashed', { component: COMPONENT, chatId, runId, error });
-      stream.emit(SSE_V2_EVENTS.STREAM_ERROR, {
-        code: 'INTERNAL_ERROR',
-        message: error.message || 'Internal error'
-      });
-      stream.emit(SSE_V2_EVENTS.RUN_ENDED, {
-        status: 'error',
-        finishReason: 'error',
-        error: { code: 'INTERNAL_ERROR', message: error.message || 'Internal error' }
-      });
-      // Ledger first here too, for the reason above.
+      // Ledger first here too, for the reason above; `stream/error` and
+      // `run/ended` after the chat is settled, as on the ordinary path.
       this._endLedgerRun(runId, {
         status: 'error',
         finishReason: 'error',
@@ -1434,20 +1449,32 @@ class ChatService {
       });
       // `_finishTurn` never ran, so nothing else releases the chat: without
       // this it stays `running` with a live `activeRunId` forever.
-      if (persist) {
-        await materializeAssistantTurn({
-          repository: persist.repository,
-          chatId,
-          runId,
-          summary: {
-            status: 'error',
-            content: '',
-            finishReason: 'error',
-            errorInfo: { code: 'INTERNAL_ERROR', message: error.message || 'Internal error' }
-          },
-          clientConnected: clientConnectedOf(persist, chatId),
-          runLog: this.runLog,
-          takeLeftover: leftover.takerFor('error')
+      try {
+        if (persist) {
+          await materializeAssistantTurn({
+            repository: persist.repository,
+            chatId,
+            runId,
+            summary: {
+              status: 'error',
+              content: '',
+              finishReason: 'error',
+              errorInfo: { code: 'INTERNAL_ERROR', message: error.message || 'Internal error' }
+            },
+            clientConnected: clientConnectedOf(persist, chatId),
+            runLog: this.runLog,
+            takeLeftover: leftover.takerFor('error')
+          });
+        }
+      } finally {
+        stream.emit(SSE_V2_EVENTS.STREAM_ERROR, {
+          code: 'INTERNAL_ERROR',
+          message: error.message || 'Internal error'
+        });
+        stream.emit(SSE_V2_EVENTS.RUN_ENDED, {
+          status: 'error',
+          finishReason: 'error',
+          error: { code: 'INTERNAL_ERROR', message: error.message || 'Internal error' }
         });
       }
       throw error;
@@ -1664,12 +1691,15 @@ class ChatService {
     // from the stored messages), so they are in the live frames only.
     const context = contextTracker?.replay(content) || contextTracker?.last() || undefined;
     if (context) summary.context = context;
-    const endRun = data =>
+    // `runTurn` passes a stream that holds the terminal frames back until the
+    // answer is stored, so the client is told the turn is over only then.
+    const endRun = data => {
       stream.emit(SSE_V2_EVENTS.RUN_ENDED, {
         ...(usage ? { usage } : {}),
         ...(context ? { context } : {}),
         ...data
       });
+    };
     // The provenance object of the answer (EU AI Act Art. 50(2)): hashed from
     // the text the caller receives, so it runs after structured-output
     // validation and before citation markers. A store failure never fails the
@@ -2220,20 +2250,33 @@ class ChatService {
               streaming: false,
               buildLogData,
               logInteraction: this.logInteraction,
-              runTool: this.runTool
+              toolRunner: this.toolRunner,
+              origin: 'subagent'
             })
           ),
           imageLiftSeam,
           headlessToolOutputSeam({ chatId, user, generatedFiles, generatedImages }),
           collector
         ],
-        executeTool: (call, { toolId, args, signal }) =>
-          pageReads.admit(toolId) ||
-          this.runTool(
+        executeTool: (call, { toolId, toolDef, args, signal }) =>
+          this.toolRunner.execute(call, {
             toolId,
-            { language, ...args, chatId, user, appConfig: app, integrationScopes: {}, turnSkills },
-            { signal }
-          )
+            toolDef,
+            args,
+            signal,
+            toolContext: {
+              origin: 'subagent',
+              // The headless approval seam above refuses a gated call.
+              approval: 'seam',
+              principal: user,
+              chatId,
+              appConfig: app,
+              language,
+              integrationScopes: {},
+              turnSkills,
+              pageReads
+            }
+          })
       });
 
       if (result.status === 'error' || result.status === 'aborted') {

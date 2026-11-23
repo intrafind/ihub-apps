@@ -38,7 +38,7 @@ jest.unstable_mockModule('../../configCache.js', () => ({
   }
 }));
 
-const { stripReservedToolContext, withTrustedToolContext, RESERVED_TOOL_CONTEXT_KEYS } =
+const { stripReservedToolContext, RESERVED_TOOL_CONTEXT_KEYS } =
   await import('../../utils/toolCallContext.js');
 const { dispatchA2A } = await import('../../services/mcp/a2aHandler.js');
 const { A2aTaskStore } = await import('../../services/mcp/a2aTaskStore.js');
@@ -58,18 +58,12 @@ beforeEach(async () => {
   runTool.mockClear();
 });
 
-describe('withTrustedToolContext', () => {
-  it('drops every reserved key from the caller input and sets the trusted ones last', () => {
+describe('stripReservedToolContext', () => {
+  it('drops every reserved key from the caller input', () => {
     expect(stripReservedToolContext({ ...SPOOFED, q: 'x' })).toEqual({ q: 'x' });
-    const trusted = { id: 'bob' };
-    expect(withTrustedToolContext({ ...SPOOFED, q: 'x' }, { user: trusted, chatId: 'c' })).toEqual({
-      q: 'x',
-      user: trusted,
-      chatId: 'c'
-    });
     expect(RESERVED_TOOL_CONTEXT_KEYS).toEqual(expect.arrayContaining(Object.keys(SPOOFED)));
-    expect(withTrustedToolContext(null, { user: trusted })).toEqual({ user: trusted });
-    expect(withTrustedToolContext(['a'], {})).toEqual({});
+    expect(stripReservedToolContext(null)).toEqual({});
+    expect(stripReservedToolContext(['a'])).toEqual({});
   });
 });
 

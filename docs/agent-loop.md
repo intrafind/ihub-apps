@@ -400,10 +400,9 @@ Chat policies:
 | `timeoutMs`              | hard timeout per model call (the chat route's `DEFAULT_TIMEOUT`)                      |
 | `context`                | `chatContextPolicies(model)`: threshold at 50 % of the model's `contextWindow` (at least 16,000), `strategy: 'digest'` |
 
-Tools execute through
-`runTool(toolId, { language, ...args, chatId, user, appConfig })`:
-model-provided arguments may override `language` but never `chatId`, `user` or
-`appConfig`. Before the tools are offered, `markInteractiveTools()` flags
+Tools execute through the [tool runner](#tool-runner): model-provided
+arguments may override `language` but never `chatId`, `user`, `appConfig` or
+any other key of iHub's context. Before the tools are offered, `markInteractiveTools()` flags
 `ask_user` (and any tool with `requiresUserInput: true`) as `interactive: true`,
 so the built-in `questionSeam` takes clarifications over.
 
@@ -433,6 +432,53 @@ result instead of pausing the segment. The non-SSE POST answers with
 `{ messageId, model, content, finishReason, usage }`; `invokeAppInternal()`
 runs a `kind: 'subagent'` segment and returns
 `{ status, finalMessage, toolCalls, sources, usage, finishReason, model }`.
+
+### Tool runner
+
+Every tool call of a chat turn, of an app that runs as a tool, of the
+passthrough seam, of the MCP gateway (`tools/call` of an integration tool and
+of a workflow) and of an inbound A2A task that starts a workflow goes through
+`ToolRunner.execute(call, { toolId, toolDef, args, signal, toolContext })`
+(`server/services/run/ToolRunner.js`). The runner applies the checks below,
+builds the tool's parameters from the call's arguments and the trusted
+`toolContext`, and dispatches: an `app__<id>` call to the app-as-tool gateway,
+everything else to `runTool` (`server/services/tools/runTool.js`), which keeps
+the checks of the tool kinds themselves. `toolContext` says what the caller
+vouches for: `origin` (`chat`, `subagent`, `mcp`, `a2a`), who decides the
+approval (`approval`: `seam`, `refuse` or `caller`), the `principal` the tool
+runs as (a user object today; a service account an admin chooses has the same
+shape), the chat, the app, the language, the scopes, and for a workflow the
+upload and whether the chat is stored. The display fields of a call (`title`,
+`integration`, `activityKind`, `activityOrigin`) come from `toolDisplayOf`
+alone; the runner logs every call with them.
+
+The frozen legacy workflow executors (`PromptNodeExecutor`, `ToolNodeExecutor`)
+still call `runTool` themselves and get none of these guarantees.
+`server/tests/run/runToolAllowList.json` lists them with their reason and the
+issue that removes them (#3784); `server/tests/run/runToolCallers.test.js`
+fails for any other `runTool(` call outside `server/services/run/`.
+
+| Check (test in `server/tests/run/toolRunner.checks.test.js`) | Before the runner | With the runner |
+| --- | --- | --- |
+| `tool-id-valid`: the tool id is a safe id | `runTool`, so every path | The runner, before any dispatch, on every path |
+| `resolved-tool`: only a tool the caller resolved from what it offers runs | The loop (an unregistered name never reaches `executeTool`), the legacy prompt node (`matchTool`), the MCP SDK registry | Every path: a call without the caller's definition for that id is refused (`TOOL_NOT_RESOLVED`) |
+| `approval-decided`: who decides the approval of a call is stated | Implicit per path | Every caller states `approval`; a call without it is refused (`TOOL_APPROVAL_UNDECIDED`) |
+| `approval-refused-nobody`: a gated tool where nobody can approve is refused (`APPROVAL_REQUIRED_NO_USER`) | The approval seam (headless chat, app as a tool), the MCP gateway | The approval seam for loop callers (unchanged, first seam); the runner for `approval: 'refuse'` (the MCP gateway, same rule and text; `server/tests/mcpToolUserContext.test.js` drives the gateway's `tools/call` with a gated tool) |
+| `page-read-cap`: page reads per turn (`websearch.maxPageReads`) | Chat turn, app as a tool | The runner, opt-in through `toolContext.pageReads`; chat turn and app as a tool pass it |
+| `reserved-keys-caller`: an external caller's arguments never carry iHub's context | MCP gateway, A2A | The runner for `argsFrom: 'caller'` (MCP, A2A) |
+| `reserved-keys-model`: a model's arguments never carry iHub's context, except a parameter the tool's own schema declares (not for a workflow, an app or a passthrough call) | Chat and app as a tool overrode `user`, `chatId`, `appConfig`, `integrationScopes`, `turnSkills`; the passthrough seam also dropped `runId`, whatever the tool declared | Chat, app as a tool and passthrough drop every reserved key (`passthrough`, `runId`, `_fileData` and `_chatHistory` too); a passthrough call drops them even where the tool declares them |
+| `trusted-context`: the caller's context is set after the arguments | Each path its own set | One builder; each caller passes the set it passed before |
+| `language`: a model may name the language of its call; for an external caller, the language the caller vouches for wins when it sets one | Chat, app as a tool (default); A2A (fixed); the MCP gateway set none, so a client's `language` argument reached the tool | The same, by `argsFrom` and `toolContext.language` (the MCP gateway still sets none) |
+| `argument-repair`: raw model arguments are repaired | The loop, the legacy prompt node | The loop; the runner for a caller that hands only the raw call |
+| `app-tool-routing`: an `app__` call goes to the app-as-tool gateway (permission, feature and nesting guards) | `runTool` (chat, without the abort signal), the legacy prompt node (with it) | The runner, with the caller's abort signal: a stopped answer stops the app it called |
+| `abort-signal`: the caller's abort signal reaches integration tools | Chat, app as a tool | Every caller that has one; the passthrough seam passes it now |
+| `display`: the display fields come from `toolDisplayOf` | Loop events of chat and app as a tool | The same events; every call through the runner is logged with them, MCP and A2A included |
+| `tool-exists`, `workflow-access`, `system-skill-permission`, `skill-usable` | `runTool` and the workflow runner, on every path | Unchanged, reached through the runner on every path |
+
+Two checks stay with the MCP gateway: the token scope (`mcp:tools:call`,
+`mcp:workflows:run`) and the call-time re-check of the grant (the
+installation is enabled, the caller's groups grant it, it is reachable from
+the exposed apps, the people directory).
 
 ### Degenerate runs
 

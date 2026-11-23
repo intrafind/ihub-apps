@@ -7,9 +7,11 @@
  * user and ends the turn — the model gets no follow-up call. The result is
  * appended to the transcript as an assistant message tagged with `tool_source`.
  *
- * The seam is constructed with the tool runner and an optional chunk sink:
+ * The seam is constructed with the function that runs the call (the chat's
+ * goes through the tool runner, `services/run/ToolRunner.js`) and an optional
+ * chunk sink:
  *
- *   passthroughSeam({ runTool, onChunk(text, info, ctx), onComplete(text, info, ctx) })
+ *   passthroughSeam({ execute(info, ctx), onChunk(text, info, ctx), onComplete(text, info, ctx) })
  *
  * @module services/loop/seams/passthroughSeam
  */
@@ -91,14 +93,20 @@ async function drainToolResponse(response, emit, { limit } = {}) {
 
 export { drainToolResponse };
 
-export function passthroughSeam({
-  runTool,
-  onChunk,
-  onComplete,
-  onError,
-  buildParams,
-  maxTextChars
-} = {}) {
+/**
+ * @param {Object} [options]
+ * @param {((info: Object, ctx: Object) => Promise<unknown>)|undefined} options.execute - required:
+ *   runs the call and returns its response (text, an async iterable of chunks, or a fetch
+ *   response); the seam refuses to be built without it
+ * @param {Function} [options.onChunk]
+ * @param {Function} [options.onComplete]
+ * @param {Function} [options.onError]
+ * @param {number} [options.maxTextChars]
+ */
+export function passthroughSeam({ execute, onChunk, onComplete, onError, maxTextChars } = {}) {
+  if (typeof execute !== 'function') {
+    throw new TypeError('passthroughSeam needs an execute function');
+  }
   return {
     name: 'passthrough',
     /** A passthrough tool writes the answer and ends the turn: never beside another call. */
@@ -106,13 +114,10 @@ export function passthroughSeam({
       return info?.toolDef?.passthrough === true;
     },
     async preTool(ctx, info) {
-      const { toolDef, toolId, args, call } = info;
+      const { toolDef, toolId, call } = info;
       if (!toolDef || toolDef.passthrough !== true) return null;
-      const params = buildParams
-        ? buildParams(info, ctx)
-        : { ...args, chatId: ctx.refs.chatId, passthrough: true };
       try {
-        const response = await runTool(toolId, params, { ctx, info });
+        const response = await execute(info, ctx);
         const text = await drainToolResponse(response, chunk => onChunk?.(chunk, info, ctx), {
           limit: maxTextChars
         });

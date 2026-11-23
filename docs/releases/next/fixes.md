@@ -44,3 +44,14 @@ back from wherever it was.
   of going round inside the card.
 - The notice of a scheduled run that waits for your approval stays until you close it; the other
   notices still close by themselves after 12 seconds.
+
+## Chat: A Finished Answer Is Stored Before the Chat Says It Is Done
+
+Right after an answer finished, the chat could briefly have no answer stored: opening the chat
+again at that moment, or a browser that had lost the reply to the message and caught up with the
+answer, could show the question without its answer until the chat was opened once more.
+
+- The server now stores the answer first and only then tells the browser that the answer is
+  complete.
+
+No action is needed after the upgrade.

@@ -6,8 +6,7 @@ import { randomUUID } from 'node:crypto';
 import configCache from '../../configCache.js';
 import { MCP_SCOPES } from './scopes.js';
 import { invokeApp } from './appInvoker.js';
-import { runTool } from '../tools/runTool.js';
-import { withTrustedToolContext } from '../../utils/toolCallContext.js';
+import { toolRunner, workflowToolDef } from '../run/ToolRunner.js';
 import { isValidId } from '../../utils/pathSecurity.js';
 import logger from '../../utils/logger.js';
 import { getLocalizedString } from '../../utils/localize.js';
@@ -698,18 +697,23 @@ async function runTask({
       provenance = run?.provenance || null;
       outputs = { generatedFiles: run?.generatedFiles || [], images: run?.images || [] };
     } else {
-      const output = await runTool(
-        `workflow_${skill._id}`,
-        withTrustedToolContext(
-          { input: text, ...data },
-          {
-            user,
-            chatId: inbound?.chatId || `a2a-${task.id}`,
-            language,
-            ...(inbound?.fileData?.length ? { _fileData: inbound.fileData } : {})
-          }
-        )
-      );
+      const toolDef = workflowToolDef(skill._id);
+      const output = await toolRunner.execute(null, {
+        toolId: toolDef.id,
+        toolDef,
+        args: { input: text, ...data },
+        toolContext: {
+          origin: 'a2a',
+          // The agent starts the workflow by name, as a person does on the
+          // workflow page: no tool approval.
+          approval: 'caller',
+          argsFrom: 'caller',
+          principal: user,
+          chatId: inbound?.chatId || `a2a-${task.id}`,
+          language,
+          fileData: inbound?.fileData?.length ? inbound.fileData : undefined
+        }
+      });
       // The answer and nothing else: text as text, JSON as a `data` part
       // (with the same JSON written out as text for a client that reads
       // only text). A run that did not finish with an answer fails the task.

@@ -1,0 +1,15 @@
+{
+  "description": "Every call of runTool( outside server/services/run/, with the reason it may skip the tool runner and the issue that removes it. server/tests/run/runToolCallers.test.js fails for a caller that is not listed and for an entry that no longer calls runTool.",
+  "entries": [
+    {
+      "path": "services/workflow/executors/PromptNodeExecutor.js",
+      "reason": "Frozen legacy workflow executor: executeToolCall runs the tools of a legacy prompt node through its own agent loop (sha256 in workflow-legacy-frozen.test.js). Legacy workflow runs get none of the tool runner's guarantees in the first release.",
+      "removal": "#3784"
+    },
+    {
+      "path": "services/workflow/executors/ToolNodeExecutor.js",
+      "reason": "Frozen legacy workflow executor: a legacy tool node runs the tool the workflow author chose, not one a model picked (sha256 in workflow-legacy-frozen.test.js).",
+      "removal": "#3784"
+    }
+  ]
+}

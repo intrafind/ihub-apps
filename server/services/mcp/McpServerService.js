@@ -8,12 +8,11 @@ import {
 } from '@modelcontextprotocol/sdk/types.js';
 import { z } from 'zod';
 import configCache from '../../configCache.js';
-import { runTool } from '../tools/runTool.js';
+import { toolRunner, ToolCallRefusedError, workflowToolDef } from '../run/ToolRunner.js';
 import {
   filterDirectoryToolsForUser,
   mayUseDirectory
 } from '../peopleDirectory/PeopleDirectoryService.js';
-import { withTrustedToolContext } from '../../utils/toolCallContext.js';
 import { invokeAppNonStreaming } from './appInvoker.js';
 import { recordTextOutput } from '../provenance/turnProvenance.js';
 import { mcpMeta } from '../provenance/httpProvenance.js';
@@ -23,21 +22,7 @@ import logger from '../../utils/logger.js';
 import { getLocalizedString } from '../../utils/localize.js';
 import { workflowAnswerParts } from '../workflow/answerParts.js';
 import { installedIntegrationById } from '../integrations/installedRefs.js';
-import { directCallNeedsApproval } from '../../utils/toolApproval.js';
 import { APPROVAL_ERROR_CODES } from '../../../shared/toolApproval.js';
-
-/**
- * Whether a tool exposed through the gateway needs a person's approval
- * (#2945). The gateway has nobody to ask: such a call is refused with
- * `APPROVAL_REQUIRED_NO_USER` instead of running.
- *
- * @param {Object} tool
- * @param {Object} platform
- * @returns {boolean}
- */
-export function gatewayCallNeedsApproval(tool, platform) {
-  return directCallNeedsApproval(tool, platform, { getInstallation: installedIntegrationById });
-}
 
 /**
  * Builds and serves the iHub MCP gateway. Each incoming HTTP/SSE request
@@ -250,7 +235,10 @@ const IHUB_DEFINITION_ID = 'com.intrafind/ihub';
  * The integrations are the tools (#3275): every action of an enabled
  * installation the caller's groups grant (`permissions.integrations`, checked
  * by `filterIntegrationToolsForUser` and again at call time) is offered, with
- * the approval policy of the action (`gatewayCallNeedsApproval`).
+ * the approval policy of the action: nobody at the gateway can approve, so the
+ * `tools/call` handler hands the call to the tool runner with
+ * `approval: 'refuse'`, which refuses a gated action
+ * (`APPROVAL_REQUIRED_NO_USER`, `services/run/ToolRunner.js`).
  *
  * Four kinds stay out:
  * - the actions of an outbound MCP server (`_mcp`) and the skills of a remote
@@ -384,24 +372,35 @@ export async function buildMcpServer({ user, platform }) {
           ) {
             return toolErrorResult('access_denied: tool not permitted for this caller');
           }
-          // A gated tool waits for a person's approval; nobody here can give it.
-          if (gatewayCallNeedsApproval(tool, configCache.getPlatform?.() || platform)) {
-            return toolErrorResult(
-              `${APPROVAL_ERROR_CODES.APPROVAL_REQUIRED_NO_USER}: this tool needs a person's approval and cannot run through the MCP gateway`
-            );
-          }
           try {
-            // Inject the authenticated caller's identity + a tracking chatId.
-            // Integration tools (iFinder, Entra, Jira, ...) run *as the user* and
-            // reject calls without an authenticated `user`/`chatId` in their
-            // params. MCP args are schema-validated first, so they can never
-            // spoof these fields — we set them last regardless.
-            const result = await runTool(
-              tool.id,
-              withTrustedToolContext(args, { user, chatId: `mcp-${Date.now()}` })
-            );
+            // The tool runner sets the authenticated caller's identity and a
+            // tracking chatId after the arguments, which lose every key of
+            // iHub's context first: integration tools (iFinder, Entra, Jira,
+            // ...) run *as the user*. A gated tool waits for a person's
+            // approval, and nobody here can give it: the runner refuses it.
+            const result = await toolRunner.execute(null, {
+              toolId: tool.id,
+              toolDef: tool,
+              args: args || {},
+              toolContext: {
+                origin: 'mcp',
+                approval: 'refuse',
+                argsFrom: 'caller',
+                principal: user,
+                chatId: `mcp-${Date.now()}`,
+                platform: configCache.getPlatform?.() || platform
+              }
+            });
             return toolSuccessResult(result);
           } catch (err) {
+            if (
+              err instanceof ToolCallRefusedError &&
+              err.code === APPROVAL_ERROR_CODES.APPROVAL_REQUIRED_NO_USER
+            ) {
+              return toolErrorResult(
+                `${APPROVAL_ERROR_CODES.APPROVAL_REQUIRED_NO_USER}: this tool needs a person's approval and cannot run through the MCP gateway`
+              );
+            }
             logger.warn('MCP gateway tool call failed', {
               component: 'McpServerService',
               toolId: tool.id,
@@ -493,14 +492,22 @@ export async function buildMcpServer({ user, platform }) {
             // OAuth MCP calls use the caller's own token); the arguments can
             // never name another user.
             const { input: workflowArgs, context } = await workflowFileInput(args, user);
-            const result = await runTool(
-              `workflow_${wf.id}`,
-              withTrustedToolContext(workflowArgs, {
-                user,
+            const toolDef = workflowToolDef(wf.id, wf);
+            const result = await toolRunner.execute(null, {
+              toolId: toolDef.id,
+              toolDef,
+              args: workflowArgs,
+              toolContext: {
+                origin: 'mcp',
+                // The client starts the workflow by name, as a person does on
+                // the workflow page: no tool approval.
+                approval: 'caller',
+                argsFrom: 'caller',
+                principal: user,
                 chatId: context.chatId || `mcp-${Date.now()}`,
-                ...(context.fileData ? { _fileData: context.fileData } : {})
-              })
-            );
+                fileData: context.fileData || undefined
+              }
+            });
             const answer = workflowAnswerParts(result);
             const provenance = answer.ok
               ? await recordTextOutput({

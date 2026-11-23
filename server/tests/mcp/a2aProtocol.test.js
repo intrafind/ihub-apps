@@ -437,7 +437,9 @@ describe('message/send', () => {
         chatId: `a2a-${r.result.id}`,
         language: 'en',
         user: expect.objectContaining({ id: 'alice' })
-      })
+      }),
+      // No abort signal and no MCP App sink: the tool runner's options
+      {}
     );
   });
 
