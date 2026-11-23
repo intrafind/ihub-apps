@@ -792,7 +792,7 @@ function AdminAppsPage() {
             aria-labelledby={`tab-${PERSONAL_TAB}`}
             hidden={!showPersonal}
           >
-            <AdminUserAppsTab onWaitingChange={setWaitingCount} />
+            <AdminUserAppsTab onWaitingChange={setWaitingCount} refreshKey={waitingRefresh} />
           </div>
         )}
         {showPersonal ? null : (

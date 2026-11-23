@@ -19,6 +19,7 @@
  */
 import fs from 'fs';
 import path from 'path';
+import { useState } from 'react';
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import { MemoryRouter, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
@@ -1189,5 +1190,27 @@ describe('the user page', () => {
     await screen.findByRole('heading', { name: 'Anna Schmidt' });
     await waitFor(() => expect(mockApi.fetchAdminUserApps).toHaveBeenCalled());
     expect(screen.queryByRole('button', { name: text('admin.userApps.user.block') })).toBeNull();
+  });
+});
+
+describe('the retained Personal apps tab', () => {
+  test('reads its list again when the page says a company app changed', async () => {
+    function Host() {
+      const [key, setKey] = useState(0);
+      return (
+        <>
+          <button type="button" onClick={() => setKey(value => value + 1)}>
+            company app changed
+          </button>
+          <AdminUserAppsTab refreshKey={key} />
+        </>
+      );
+    }
+    renderAt('/admin/apps?tab=personal', <Route path="*" element={<Host />} />);
+    await waitFor(() => expect(mockApi.fetchAdminUserApps).toHaveBeenCalledTimes(1));
+
+    fireEvent.click(screen.getByRole('button', { name: 'company app changed' }));
+
+    await waitFor(() => expect(mockApi.fetchAdminUserApps).toHaveBeenCalledTimes(2));
   });
 });

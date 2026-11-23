@@ -539,9 +539,12 @@ function AppCell({ app, now }) {
  * @param {Object} props
  * @param {(count: number) => void} [props.onWaitingChange] - Told how many
  *   published apps wait to be switched on, after each load.
+ * @param {number} [props.refreshKey] - Changes when a company app changed elsewhere on the
+ *   page (published, unpublished, deleted): the list is read again. The tab stays mounted
+ *   while hidden, so a change of this value is the only signal it gets.
  * @returns {JSX.Element}
  */
-function AdminUserAppsTab({ onWaitingChange }) {
+function AdminUserAppsTab({ onWaitingChange, refreshKey = 0 }) {
   const { t, i18n } = useTranslation();
   const navigate = useNavigate();
   const featureOn = useFeatureFlags().isEnabled('userApps', false);
@@ -571,7 +574,7 @@ function AdminUserAppsTab({ onWaitingChange }) {
 
   useEffect(() => {
     void load();
-  }, [load]);
+  }, [load, refreshKey]);
 
   const all = apps || [];
   const ofOwner = ownerId ? all.filter(app => app.owner?.id === ownerId) : all;
