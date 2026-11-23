@@ -8,12 +8,12 @@ import {
 } from '../../../../../../shared/appRevision.js';
 import {
   EMPTY_CONVERSATION,
+  changeKeysOf,
+  changesOf,
   conversationStorageKey,
   draftOf,
-  offeredSuggestions,
   readConversation,
   restoreValues,
-  suggestionChanges,
   valuesOf,
   wireConversation,
   writeConversation
@@ -65,9 +65,11 @@ const isPlainObject = value => value !== null && typeof value === 'object' && !A
  * @param {object|null} options.form - The app as the editor holds it now.
  * @param {string} options.language - The content language of the app.
  * @param {(request: object) => Promise<object>} options.refine - One turn (`refineDraft`).
- * @param {(next: object) => Promise<{ status: 'saved'|'conflict'|'failed', value?: object, message?: string|null }>} options.persist -
- *   Puts `next` into the form and saves it. `value` is the form as saved, when
- *   the save normalised it.
+ * @param {(next: object, change: { keys: string[] }) => Promise<{ status: 'saved'|'conflict'|'failed', value?: object, message?: string|null }>} options.persist -
+ *   Puts `next` into the form and saves it. `change.keys` are the keys the
+ *   change writes: any other key of `next` that differs from the saved app is
+ *   an unsaved edit of the author that goes with it (`unsavedOutsideChange`).
+ *   `value` is the form as saved, when the save normalised it.
  * @returns {object} See the members below.
  *
  * @example
@@ -234,16 +236,12 @@ export function useConversation({ appId, target, form, language, refine, persist
       const formNow = latest.form;
       if (!entry || entry.kind !== 'change' || !formNow) return 'refused';
       if (entry.status !== 'proposed') return 'refused';
-      const offered = offeredSuggestions(target, formNow, entry.suggestions);
-      const changes = {
-        ...(isPlainObject(entry.patch) ? entry.patch : {}),
-        ...suggestionChanges(target, formNow, offered, ticked)
-      };
+      const changes = changesOf(target, formNow, entry, ticked);
       const keys = Object.keys(changes);
       if (keys.length === 0) return 'refused';
       const before = valuesOf(formNow, keys);
       updateEntry(id, { status: 'applying', problem: null, problemText: null });
-      const outcome = await latest.persist(applyRevisionPatch(formNow, changes));
+      const outcome = await latest.persist(applyRevisionPatch(formNow, changes), { keys });
       if (outcome?.status === 'saved') {
         const saved = isPlainObject(outcome.value)
           ? outcome.value
@@ -290,7 +288,9 @@ export function useConversation({ appId, target, form, language, refine, persist
       const formNow = latest.form;
       if (!entry || entry.status !== 'applied' || !formNow || !entry.before) return 'refused';
       updateEntry(id, { status: 'undoing', problem: null, problemText: null });
-      const outcome = await latest.persist(restoreValues(formNow, entry.before));
+      const outcome = await latest.persist(restoreValues(formNow, entry.before), {
+        keys: changeKeysOf(target, formNow, entry)
+      });
       if (outcome?.status === 'saved') {
         updateEntry(id, { status: 'undone' });
         setJustApplied({ id });
@@ -303,7 +303,7 @@ export function useConversation({ appId, target, form, language, refine, persist
       });
       return outcome?.status || 'failed';
     },
-    [updateEntry]
+    [target, updateEntry]
   );
 
   return {

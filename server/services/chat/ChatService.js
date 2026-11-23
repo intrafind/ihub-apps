@@ -252,7 +252,9 @@ function ledgerError(error) {
   if (!error) return {};
   return {
     // `storedMessage`: a failed model call's sentence without its raw text
-    // (see chatErrors.js); the ledger is replayed to whoever reattaches.
+    // (see chatErrors.js); the ledger is replayed to whoever reattaches. The
+    // model call's own `error` event carries no raw text either: LLMClient
+    // records `ledgerErrorMessage` there and logs the raw text on the server.
     error: {
       code: String(error.code || 'ERROR'),
       message: String(error.storedMessage || error.message || error)

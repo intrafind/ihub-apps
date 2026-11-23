@@ -106,7 +106,8 @@ before). **Test.** `tests/unit/client/app-revision-patch.test.jsx`.
 form." (or the Undo version). In the admin editor such an Apply or Undo first runs the form's
 validity check, the same as Save (`saveValue(value, { checkForm })` in `useEditorSave.js`); a
 form with errors is not saved, and the card says why. The personal editor's Save has no client
-check, so only the line is shown there.
+check, so only the line is shown there. (Superseded by R4 below: the check is now per change and
+counts content keys too.)
 
 **Tests.** `tests/unit/client/app-conversation-panel.test.jsx` ("with other unsaved changes in
 the form"), `tests/unit/client/app-revision-patch.test.jsx`.
@@ -148,3 +149,128 @@ question afterwards (next section).
      personal editor"), e2e case 10 of `tests/e2e/user-apps.spec.js`.
 2. **The admin content limits of a revision turn** (`REVISE_CONTENT_LIMITS` in
    `shared/appRevision.js`) are confirmed as chosen in section 4.
+
+## Second review round (PR #3965)
+
+A second review found the problems below. Each fix has a regression test.
+
+### R1. An admin app was cut to the size of a personal app
+
+**Problem.** A revision of an admin app ran the sanitiser with the draft limits (8 fields, 4
+starters, a message template of 4,000 characters, a default of 200). A change that touched
+`starterPrompts`, `variables` or `prompt` dropped starters and shortened texts the admin had
+written.
+
+**Fix.** `sanitizeGeneratedApp` takes `limits` (default `DRAFT_LIMITS`). `changeReply` in
+`server/services/appRevision.js` passes the limits of the target
+(`REVISE_CONTENT_LIMITS[target]` in `shared/appRevision.js`): the admin limits are those the owner
+confirmed (12 fields, 12 starters, prompt 8,000, default 2,000, …). A draft of `_generate` keeps
+`DRAFT_LIMITS`.
+
+On the way, two more rewrites of untouched content were found and fixed: a field or starter the
+model wrote back unchanged is now taken from the draft as it is, and a field's default that the
+draft names by option value (`professional`) is no longer rewritten to the option's label.
+
+**Tests.** `server/tests/app-revision.test.js`, "an admin app keeps its size": 6 starters, a
+default of about 1,000 characters, a 6,000-character template, and every app in
+`server/defaults/apps` round-tripped (a no-op change answers `NO_CHANGE`; rewording one starter or
+field changes only that entry).
+
+### R2. Keys the sanitiser does not know were dropped
+
+**Problem.** `variablesWithLanguages` and `startersWithLanguages` built each entry from scratch,
+so a field lost `description` and `placeholder`, a starter its `description`, `variables` and
+`autoSend`.
+
+**Fix.** `overEntry` starts each entry from the draft's entry it replaces (same field name; for a
+starter the same title or message, else the same place) and overlays only the sanitiser's keys.
+The other keys come from the draft only: the sanitiser never reads them from the model, and a new
+entry has none. When a kept entry breaks the schema (a field the author is still typing, with an
+empty label), `changeReply` builds the patch again with `keepDraft: false`, from the sanitiser
+alone, as before this fix; only then does a schema failure answer 502.
+
+**Tests.** `server/tests/app-revision.test.js`, "the author's own keys of a field or starter"
+(`outlook-reply` with `autoSend`, the shipped fields with `placeholder`, an injected key, a new
+entry).
+
+### R3. LLMClient's connect timeout was reported as a slow answer
+
+**Fix.** `CONNECT_TIMEOUT` (the providerCode of LLMClient's own connect ceiling) maps to
+`connectionTimeout` in `server/services/loop/llmFailureCause.js`.
+
+**Tests.** `server/tests/chat-failure-cause.test.js`, `server/tests/model-test-failure-messages.test.js`.
+
+### R4. Apply and Undo saved unsaved content edits without saying so
+
+**Problem.** `unsavedOutsideContent` ignored every content key, so an unsaved description went
+with an Apply of the instructions unannounced, and the admin form check did not run.
+
+**Fix.** It is replaced by `unsavedOutsideChange(form, saved, changeKeys)`: every key of form
+and saved app counts, minus the keys the change itself writes (`changeKeysOf`: patch keys and
+ticked suggestion keys before Apply, the keys Apply set after). Each `ChangeCard` computes it for
+itself from the `saved` prop. `useConversation` passes `{ keys }` to `persist`, and the admin
+editor's `persistFromConversation` runs `checkForm` when the result is true. The personal editor
+passes `saved` only (its Save has no client check).
+
+**Tests.** `tests/unit/client/app-conversation-panel.test.jsx` (an unsaved name before Apply; a
+name edited after Apply, then Undo), `tests/unit/client/app-revision-patch.test.jsx`.
+
+### R5. A change of a field's type or default showed no difference
+
+**Fix.** `linesOf('variables', …)` writes one line per field with label, required, type, options
+and default (`fieldLine` in `conversationState.js`; new i18n keys
+`admin.apps.conversation.line.default` and `.typeBoolean`).
+
+**Test.** `tests/unit/client/app-revision-patch.test.jsx` ("a field line names the type and the
+default").
+
+### R6. A second Bedrock wizard run moved every Bedrock model
+
+**Fix.** Each imported Bedrock model stores the region it was listed in as its own
+`config.region` (`buildImportedModelConfig` option `region`, used by the wizard and the import
+dialog). The wizard sets the provider's region only when the provider has none. The region field
+is prefilled with the effective region: `GET /api/admin/providers` (and `/:providerId`) now sends
+the read-only `effectiveRegion` on the Bedrock entry (provider region, else a valid
+`AWS_REGION` / `AWS_DEFAULT_REGION`); provider saves drop it. `docs/models.md` and the release
+note say so.
+
+**Tests.** `tests/unit/client/provider-connect-utils.test.jsx`, `server/tests/llm-provider-links.test.js`
+("the effective region of the Bedrock provider").
+
+### R7. An invalid Bedrock region silently sent data to another region
+
+**Fix.** `BedrockAdapter.resolveRegion` skips only empty sources. The first source that is set
+decides; when it is not a region, the call fails with an `LLMError` `INVALID_REQUEST`, providerCode
+`BEDROCK_REGION_INVALID`, whose message names the value and its source. No failure-cause key fits
+a configuration error, so none was added: an admin sees the message in the model test and the
+chat, other users the generic "model call failed". Saving a Bedrock model with an invalid
+`config.region` answers 400 (`normalizeBedrockModelRegion` in `server/routes/admin/models.js`).
+
+**Tests.** `server/tests/bedrock-model-discovery.test.js` ("a set but invalid region is a
+configuration error"), `server/tests/llm-provider-links.test.js` ("the region of a Bedrock
+model").
+
+### R8a. A change without a sentence did not reset the question count
+
+**Fix.** `wireConversation` keeps a builder `change` entry even with empty text; the route
+already accepts an empty builder text. **Test.** `tests/unit/client/app-revision-patch.test.jsx`.
+
+### R8b. The run ledger kept the raw failure text
+
+**Problem.** `LLMClient._recordError` wrote `err.message` (socket text with the host, a
+provider's body) into the ledger's `error` event, which a run's non-admin owner replays through
+`GET /api/runs/:runId/events`.
+
+**Fix.** The ledger records `ledgerErrorMessage(err)` (`llmFailureCause.js`): the cause's
+headline (`Network error`, `Connection timeout`, …) or `The model call failed (<code>)`. The raw
+text goes to the server log (`Model call failed`, warn). The comments in `ChatService.js` and
+`chatErrors.js` say so.
+
+**Test.** `server/tests/runsEventsLedgerErrorRoute.test.js`.
+
+## Known limits
+
+- `rebaseModelUrl` (`server/routes/admin/providers.js`) swaps the provider's whole old base for
+  the new one, path included: when an admin changes the path of a base (`/v1` to `/v2`), every
+  linked model URL under it moves to the new path too, which is right for a moved gateway but
+  not when only the listing path changed; there was no minimal safe fix, so it is noted here.

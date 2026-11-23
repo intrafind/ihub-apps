@@ -108,6 +108,16 @@ test('a timeout is requestTimeout; a connect that never answered is connectionTi
   );
 });
 
+test("LLMClient's own connect ceiling (CONNECT_TIMEOUT) is connectionTimeout", () => {
+  const err = new LLMError('Could not connect to provider openai within 30000 ms', {
+    code: LLM_ERROR_CODES.TIMEOUT,
+    providerCode: 'CONNECT_TIMEOUT',
+    provider: 'openai',
+    modelId: model.id
+  });
+  assert.equal(chatFailureCause(err, { model }).failureCause, 'connectionTimeout');
+});
+
 test('a model without a key configured is apiKeyNotConfigured', () => {
   const err = new LLMError('API key for openai not found', {
     code: LLM_ERROR_CODES.AUTH_FAILED,

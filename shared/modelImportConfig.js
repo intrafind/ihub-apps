@@ -92,11 +92,15 @@ function hostOf(url) {
  * @param {string} options.providerId - Provider entry holding the key
  * @param {string} options.modelsUrl - Listing URL the entry came from (named in the description)
  * @param {boolean} [options.enabled=true]
+ * @param {string} [options.region] - AWS Bedrock only: the region the listing was read in
+ *   (the `_discover` response's `region`). Stored as the model's own `config.region`, so
+ *   the model stays in that region when the provider's region changes later: its id is an
+ *   inference profile of that region's geography.
  * @returns {Object} Model config for `POST /admin/models`
  */
 export function buildImportedModelConfig(
   entry,
-  { id, apiType, providerId, modelsUrl, enabled = true }
+  { id, apiType, providerId, modelsUrl, enabled = true, region }
 ) {
   const host = hostOf(modelsUrl);
   const name = entry.name || entry.id;
@@ -114,6 +118,9 @@ export function buildImportedModelConfig(
   };
   // AWS Bedrock models have no URL: the adapter builds it from the region.
   if (!entry.url) delete config.url;
+  if (config.provider === 'bedrock' && typeof region === 'string' && region) {
+    config.config = { region };
+  }
   // A model reaches a built-in provider through its API type; a link to a
   // custom provider is always stored (the server applies the same rule).
   if (providerId && !BUILT_IN_LLM_PROVIDERS.includes(providerId)) {

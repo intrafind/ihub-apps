@@ -4833,7 +4833,9 @@
         "line": {
           "required": "(required)",
           "color": "Colour {{value}}",
-          "icon": "Icon {{value}}"
+          "icon": "Icon {{value}}",
+          "default": "Default: {{value}}",
+          "typeBoolean": "Yes/no"
         },
         "warning": {
           "otherLanguages": "Only the text in this language changed. The other languages stay as they were.",

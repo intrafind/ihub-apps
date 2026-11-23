@@ -304,6 +304,34 @@ function normalizeModelUsageLimits(model) {
   return null;
 }
 
+/**
+ * Validate the region of a Bedrock model (`config.region`) in place: an empty
+ * value is removed (the provider's region or the environment applies), a set
+ * one is trimmed and must be an AWS region code or `global`. The adapter
+ * refuses a set but invalid region at call time; refusing it on save tells
+ * the admin before a user hits it. Other providers' `config` is not read.
+ *
+ * @param {Object} model
+ * @returns {string|null} An error message, or null when valid
+ */
+function normalizeBedrockModelRegion(model) {
+  if (model.provider !== 'bedrock') return null;
+  const config = model.config;
+  if (!config || typeof config !== 'object' || Array.isArray(config)) return null;
+  if (!('region' in config)) return null;
+  const { region, ...rest } = config;
+  if (region === undefined || region === null || region === '') {
+    model.config = rest;
+    return null;
+  }
+  const trimmed = typeof region === 'string' ? region.trim() : region;
+  if (!isValidBedrockRegion(trimmed)) {
+    return 'config.region must be an AWS region code such as eu-central-1, or global';
+  }
+  model.config = { ...rest, region: trimmed };
+  return null;
+}
+
 export default function registerAdminModelsRoutes(app) {
   /**
    * @swagger
@@ -632,6 +660,8 @@ export default function registerAdminModelsRoutes(app) {
 
     const limitsError = normalizeModelUsageLimits(updatedModel);
     if (limitsError) throw new ServiceError('BAD_REQUEST', limitsError);
+    const regionError = normalizeBedrockModelRegion(updatedModel);
+    if (regionError) throw new ServiceError('BAD_REQUEST', regionError);
 
     // A disabled model answers nobody, so it cannot stay the default (the toggle
     // already clears it); the next enabled chat model takes over below.
@@ -683,6 +713,8 @@ export default function registerAdminModelsRoutes(app) {
     assertValidId(newModel.id, 'model');
     const limitsError = normalizeModelUsageLimits(newModel);
     if (limitsError) throw new ServiceError('BAD_REQUEST', limitsError);
+    const regionError = normalizeBedrockModelRegion(newModel);
+    if (regionError) throw new ServiceError('BAD_REQUEST', regionError);
 
     const providerLinkError = applyProviderLink(newModel);
     if (providerLinkError) {

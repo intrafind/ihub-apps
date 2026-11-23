@@ -23,6 +23,16 @@ test('a blackholed connect (UND_ERR_CONNECT_TIMEOUT) maps to connectionTimeout',
   assert.equal(userMessage, 'Connection timeout');
 });
 
+test("LLMClient's connect ceiling (TIMEOUT, CONNECT_TIMEOUT) maps to connectionTimeout", () => {
+  const err = new LLMError('Could not connect to provider openai within 30000 ms', {
+    code: LLM_ERROR_CODES.TIMEOUT,
+    providerCode: 'CONNECT_TIMEOUT'
+  });
+  const { messageKey, userMessage } = describeLlmFailure(err);
+  assert.equal(messageKey, 'connectionTimeout');
+  assert.equal(userMessage, 'Connection timeout');
+});
+
 test('ECONNREFUSED maps to connectionRefused', () => {
   const err = new LLMError('fetch failed', {
     code: LLM_ERROR_CODES.NETWORK,

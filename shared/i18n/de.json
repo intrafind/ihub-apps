@@ -5333,7 +5333,9 @@
         "line": {
           "required": "(Pflichtfeld)",
           "color": "Farbe {{value}}",
-          "icon": "Symbol {{value}}"
+          "icon": "Symbol {{value}}",
+          "default": "Vorgabe: {{value}}",
+          "typeBoolean": "Ja/Nein"
         },
         "warning": {
           "otherLanguages": "Nur der Text in dieser Sprache wurde geändert. Die anderen Sprachen bleiben, wie sie waren.",

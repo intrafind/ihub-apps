@@ -6,10 +6,12 @@ import { useTranslation } from 'react-i18next';
 import Icon from '../../../../shared/components/Icon';
 import { CHECKBOX_CLASS, PRIMARY_BUTTON_CLASS, SECONDARY_BUTTON_CLASS } from '../formStyles';
 import {
+  changeKeysOf,
   changeSections,
   changedLanguages,
   linesOf,
   offeredSuggestions,
+  unsavedOutsideChange,
   warningKey
 } from './conversationState';
 import { diffLines, foldUnchanged } from './lineDiff';
@@ -178,8 +180,9 @@ function ChangeSection({ section, before, patch, language }) {
  * @param {boolean} props.undoAvailable - Every part the change set still holds the applied value.
  * @param {Array<{key: string, values?: object}>} [props.stakes] - Who gets the change.
  * @param {boolean} [props.testOpen=false] - The test chat is beside the conversation.
- * @param {boolean} [props.savesOtherChanges=false] - The form has unsaved changes outside
- *   the content keys; Apply and Undo save the whole form, so they are saved too.
+ * @param {object|null} [props.saved=null] - The app as it was last loaded or saved. Apply
+ *   and Undo save the whole form: when the form differs from it outside the keys this
+ *   change writes, the card says those edits are saved too (`unsavedOutsideChange`).
  * @param {(ticked: { webSearch: boolean, integrationIds: string[] }) => void} props.onApply
  * @param {() => void} props.onDismiss
  * @param {() => void} props.onUndo
@@ -196,7 +199,7 @@ function ChangeCard({
   undoAvailable,
   stakes = [],
   testOpen = false,
-  savesOtherChanges = false,
+  saved = null,
   onApply,
   onDismiss,
   onUndo,
@@ -213,6 +216,13 @@ function ChangeCard({
   const offered = proposed
     ? offeredSuggestions(target, form, entry.suggestions)
     : { webSearch: false, integrations: [] };
+  // Per card: the author's unsaved edits are what differs from the saved app outside the keys
+  // this change (with the suggestions ticked now) writes.
+  const savesOtherChanges = unsavedOutsideChange(
+    form,
+    saved,
+    changeKeysOf(target, form, entry, ticked)
+  );
   // One sentence per kind of warning: several dropped fields say it once.
   const warningKeys = [...new Set((entry.warnings || []).map(warningKey))];
   const staleId = `${baseId}-stale`;

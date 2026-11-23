@@ -70,6 +70,7 @@ import { resolveSurface, outcomeOf, errorCodeOf } from '../usage/callRecord.js';
 import { dumpRequest, summarizeRequestShape, isDumpAllEnabled } from './llmDebug.js';
 import { raceAbort, abortError } from './abortRace.js';
 import { ledgerMessages } from './ledgerMessages.js';
+import { ledgerErrorMessage } from './llmFailureCause.js';
 import { guardMessagesForModel, resolveGuardrailRule } from '../provenance/guardrail.js';
 
 /** Upper bound on runs whose last request hash is kept for request/header dedupe. */
@@ -1711,12 +1712,32 @@ export class LLMClient {
     });
   }
 
+  /**
+   * Write a failed model call to the run's ledger and end its span. The
+   * ledger keeps a safe sentence ({@link ledgerErrorMessage}), never the raw
+   * failure text, because the ledger is replayed to the run's owner
+   * (`GET /api/runs/:runId/events`); the raw text goes to the server log.
+   * @private
+   */
   _recordError({ runId, step, err, span, startedAt }) {
     if (runId && err && typeof err === 'object') ledgeredErrors.set(err, runId);
+    if (runId && err?.code !== LLM_ERROR_CODES.ABORTED) {
+      logger.warn('Model call failed', {
+        component: COMPONENT,
+        runId,
+        step,
+        modelId: err?.modelId,
+        errorCode: err?.code,
+        providerCode: err?.providerCode ?? null,
+        status: err?.status ?? null,
+        error: err?.message,
+        details: typeof err?.details === 'string' ? err.details.slice(0, 2000) : undefined
+      });
+    }
     this._ledger(runId, RUN_LOG_EVENTS.ERROR, {
       step,
       code: err.code,
-      message: err.message,
+      message: ledgerErrorMessage(err),
       providerCode: err.providerCode ?? null,
       status: err.status ?? null,
       recoverable: err.retryable === true || err.code === LLM_ERROR_CODES.CONTEXT_WINDOW_EXCEEDED

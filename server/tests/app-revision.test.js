@@ -1006,3 +1006,271 @@ describe('applyRevisionPatch', () => {
     assert.deepEqual(applyRevisionPatch(form, { __proto__: { evil: true } }), form);
   });
 });
+
+// --- Review fixes of #3965: the limits of the target, the author's own keys --------
+
+const SHIPPED_APPS_DIR = path.join(
+  path.dirname(new URL(import.meta.url).pathname),
+  '..',
+  'defaults',
+  'apps'
+);
+
+/** Every app shipped with the server, by file name. */
+const shippedApps = () =>
+  fsSync
+    .readdirSync(SHIPPED_APPS_DIR)
+    .filter(name => name.endsWith('.json'))
+    .map(file => ({
+      file,
+      app: JSON.parse(fsSync.readFileSync(path.join(SHIPPED_APPS_DIR, file), 'utf8'))
+    }));
+
+/** An input field as the model sees it (`variableForModel` in the engine). */
+const fieldForModel = (variable, language) => {
+  const defaultValue = textIn(variable.defaultValue, language);
+  return {
+    name: variable.name,
+    label: textIn(variable.label, language) || variable.name,
+    type: variable.type,
+    ...(variable.required === true ? { required: true } : {}),
+    ...(defaultValue ? { defaultValue } : {}),
+    ...(Array.isArray(variable.predefinedValues) && variable.predefinedValues.length > 0
+      ? {
+          predefinedValues: variable.predefinedValues.map(option => ({
+            value: option.value,
+            label: textIn(option.label, language) || option.value
+          }))
+        }
+      : {})
+  };
+};
+
+/** A conversation starter as the model sees it. */
+const starterForModel = (starter, language) => ({
+  title: textIn(starter.title, language),
+  message: textIn(starter.message, language)
+});
+
+/** The languages of an app's name: the ones a revision of it writes into without copying. */
+const ownLanguages = app =>
+  ['en', 'de'].filter(language => typeof app.name?.[language] === 'string');
+
+describe('an admin app keeps its size', () => {
+  const bigDraft = () => ({
+    ...ADMIN_DRAFT(),
+    prompt: { de: `${'Lies genau. '.repeat(500)}\n\n{{tone}} {{context}}\n\n{{content}}` },
+    variables: [
+      ADMIN_DRAFT().variables[0],
+      {
+        name: 'context',
+        label: { de: 'Kontext' },
+        type: 'text',
+        defaultValue: { de: 'Hintergrund '.repeat(84).trim() }
+      }
+    ],
+    starterPrompts: Array.from({ length: 6 }, (_, index) => ({
+      title: { de: `Start ${index}` },
+      message: { de: `Nachricht ${index}` }
+    }))
+  });
+
+  it('keeps all six starters when one is reworded', async () => {
+    const draft = bigDraft();
+    llm.answer = change({
+      starterPrompts: draft.starterPrompts.map((starter, index) => ({
+        title: index === 2 ? 'Start zwei' : starter.title.de,
+        message: starter.message.de
+      }))
+    });
+    const turn = await revise({ draft });
+    assert.equal(turn.patch.starterPrompts.length, 6);
+    assert.equal(turn.patch.starterPrompts[2].title.de, 'Start zwei');
+    assert.equal(turn.patch.starterPrompts[5].title.de, 'Start 5');
+    assert.ok(!turn.warnings.some(w => w.code === 'STARTER_DROPPED'));
+  });
+
+  it('keeps a default of about 1,000 characters through a change of the fields', async () => {
+    const draft = bigDraft();
+    const longDefault = draft.variables[1].defaultValue.de;
+    assert.ok(longDefault.length > 900 && longDefault.length <= 2000);
+    llm.answer = change({
+      variables: [
+        fieldForModel(draft.variables[0], 'de'),
+        { ...fieldForModel(draft.variables[1], 'de'), label: 'Hintergrund' }
+      ]
+    });
+    const turn = await revise({ draft });
+    assert.deepEqual(turn.changed, ['variables']);
+    assert.equal(turn.patch.variables[1].label.de, 'Hintergrund');
+    assert.equal(turn.patch.variables[1].defaultValue.de, longDefault);
+  });
+
+  it('keeps a message template of 6,000 characters', async () => {
+    const draft = bigDraft();
+    const template = `${'x'.repeat(5990)}\n\nTon: {{tone}} {{context}}\n\n{{content}}`;
+    assert.ok(template.length > 6000 && template.length <= 8000);
+    llm.answer = change({ prompt: template });
+    const turn = await revise({ draft });
+    assert.equal(turn.patch.prompt.de, template);
+    assert.ok(!turn.warnings.some(w => w.code === 'TEXT_SHORTENED'));
+  });
+
+  it('still caps a personal app at the limits of the personal-app schema', async () => {
+    llm.answer = change({
+      starterPrompts: Array.from({ length: 6 }, (_, index) => ({
+        title: `Start ${index}`,
+        message: `Message ${index}`
+      }))
+    });
+    const turn = await revise({
+      draft: PERSONAL_DRAFT(),
+      language: 'en',
+      personal: { settings: { capabilities: {} } }
+    });
+    assert.equal(turn.patch.starterPrompts.length, REVISE_CONTENT_LIMITS.personal.starterPrompts);
+  });
+
+  it('answers a no-op change on every shipped app with NO_CHANGE', async () => {
+    for (const { file, app } of shippedApps()) {
+      for (const language of ownLanguages(app)) {
+        llm.answer = change({
+          name: textIn(app.name, language),
+          ...(app.prompt ? { prompt: textIn(app.prompt, language) } : {}),
+          ...(app.variables
+            ? { variables: app.variables.map(variable => fieldForModel(variable, language)) }
+            : {}),
+          ...(app.starterPrompts
+            ? { starterPrompts: app.starterPrompts.map(s => starterForModel(s, language)) }
+            : {})
+        });
+        const turn = await revise({ draft: app, language });
+        assert.deepEqual(turn.patch, {}, `${file} ${language}`);
+        assert.ok(
+          turn.warnings.some(w => w.code === 'NO_CHANGE'),
+          `${file} ${language}: NO_CHANGE`
+        );
+      }
+    }
+  });
+
+  it('round-trips every shipped app: a reworded entry changes that entry only', async () => {
+    for (const { file, app } of shippedApps()) {
+      for (const language of ownLanguages(app)) {
+        if (app.starterPrompts?.length) {
+          const starters = app.starterPrompts.map(s => starterForModel(s, language));
+          starters[0] = { ...starters[0], title: `${starters[0].title} (2)` };
+          llm.answer = change({ starterPrompts: starters });
+          const turn = await revise({ draft: app, language });
+          const expected = structuredClone(app.starterPrompts);
+          expected[0].title[revisionLanguageKey(app.starterPrompts[0].title, language)] =
+            starters[0].title;
+          assert.deepEqual(turn.patch.starterPrompts, expected, `${file} ${language} starters`);
+        }
+        if (app.variables?.length) {
+          const fields = app.variables.map(variable => fieldForModel(variable, language));
+          fields[0] = { ...fields[0], label: `${fields[0].label} (2)` };
+          llm.answer = change({ variables: fields });
+          const turn = await revise({ draft: app, language });
+          const expected = structuredClone(app.variables);
+          expected[0].label[revisionLanguageKey(app.variables[0].label, language)] =
+            fields[0].label;
+          assert.deepEqual(turn.patch.variables, expected, `${file} ${language} variables`);
+        }
+      }
+    }
+  });
+});
+
+describe("the author's own keys of a field or starter", () => {
+  it('keep autoSend, description and preset variables of a reworded starter', async () => {
+    const { app } = shippedApps().find(({ file }) => file === 'outlook-reply.json');
+    assert.ok(app.starterPrompts.some(starter => starter.autoSend === true));
+    const starters = app.starterPrompts.map(s => starterForModel(s, 'en'));
+    starters[0] = { ...starters[0], message: `${starters[0].message} Please.` };
+    llm.answer = change({ starterPrompts: starters });
+    const turn = await revise({ draft: app, language: 'en' });
+    assert.equal(turn.patch.starterPrompts.length, app.starterPrompts.length);
+    turn.patch.starterPrompts.forEach((starter, index) => {
+      const before = app.starterPrompts[index];
+      for (const key of Object.keys(before).filter(k => k !== 'title' && k !== 'message')) {
+        assert.deepEqual(starter[key], before[key], `starter ${index} ${key}`);
+      }
+    });
+  });
+
+  it('keep the placeholder and description of a reworded field', async () => {
+    const shipped = shippedApps().filter(({ app }) =>
+      app.variables?.some(variable => variable.placeholder || variable.description)
+    );
+    assert.ok(shipped.length > 0, 'a shipped app has a field with a placeholder');
+    for (const { file, app } of shipped) {
+      const index = app.variables.findIndex(v => v.placeholder || v.description);
+      const fields = app.variables.map(variable => fieldForModel(variable, 'en'));
+      fields[index] = { ...fields[index], label: `${fields[index].label} (2)` };
+      llm.answer = change({ variables: fields });
+      const turn = await revise({ draft: app, language: 'en' });
+      const after = turn.patch.variables[index];
+      assert.deepEqual(after.placeholder, app.variables[index].placeholder, file);
+      assert.deepEqual(after.description, app.variables[index].description, file);
+    }
+  });
+
+  it('cannot be written by the model, and a new entry has none of them', async () => {
+    llm.answer = change({
+      variables: [
+        {
+          ...fieldForModel(ADMIN_DRAFT().variables[0], 'de'),
+          label: 'Tonfall',
+          placeholder: 'injected',
+          description: 'injected'
+        },
+        { name: 'audience', label: 'Publikum', type: 'string', placeholder: 'injected' }
+      ],
+      starterPrompts: [
+        { title: 'Urlaub', message: 'Wie beantrage ich Urlaub?', autoSend: true },
+        { title: 'Neu', message: 'Ganz neu', autoSend: true, variables: { tone: 'x' } }
+      ]
+    });
+    const turn = await revise();
+    const [tone, audience] = turn.patch.variables;
+    assert.equal(tone.placeholder, undefined);
+    assert.equal(tone.description, undefined);
+    assert.deepEqual(Object.keys(audience).sort(), ['label', 'name', 'required', 'type']);
+    const [kept, added] = turn.patch.starterPrompts;
+    assert.equal(kept.autoSend, undefined);
+    assert.deepEqual(Object.keys(added).sort(), ['message', 'title']);
+  });
+
+  it('fall back to the sanitiser when a half-edited entry of the draft breaks the schema', async () => {
+    // The author is typing: the second field has no label yet, and the model leaves it alone.
+    const draft = ADMIN_DRAFT();
+    draft.variables.push({ name: 'audience', label: { de: '' }, type: 'string', placeholder: {} });
+    llm.answer = change({
+      variables: [
+        { ...fieldForModel(draft.variables[0], 'de'), label: 'Tonfall' },
+        { name: 'audience', label: 'audience', type: 'string' }
+      ]
+    });
+    const turn = await revise({ draft });
+    assert.equal(turn.reply, 'change');
+    assert.deepEqual(turn.patch.variables[1].label, { de: 'audience' });
+    assert.equal(appConfigSchema.safeParse(applyRevisionPatch(draft, turn.patch)).success, true);
+  });
+
+  it('come from the draft entry the new one replaces', async () => {
+    const draft = ADMIN_DRAFT();
+    draft.variables[0].placeholder = { de: 'Wählen', en: 'Choose' };
+    draft.starterPrompts[0].autoSend = true;
+    draft.starterPrompts[0].description = { de: 'Fragt nach Urlaub' };
+    llm.answer = change({
+      variables: [{ ...fieldForModel(draft.variables[0], 'de'), label: 'Tonfall' }],
+      starterPrompts: [{ title: 'Urlaub', message: 'Wie beantrage ich bitte Urlaub?' }]
+    });
+    const turn = await revise({ draft });
+    assert.deepEqual(turn.patch.variables[0].placeholder, { de: 'Wählen', en: 'Choose' });
+    assert.equal(turn.patch.starterPrompts[0].autoSend, true);
+    assert.deepEqual(turn.patch.starterPrompts[0].description, { de: 'Fragt nach Urlaub' });
+    assert.equal(appConfigSchema.safeParse(applyRevisionPatch(draft, turn.patch)).success, true);
+  });
+});

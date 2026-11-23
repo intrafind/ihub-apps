@@ -18,17 +18,24 @@ import { LLM_ERROR_CODES } from './contracts/errors.js';
 import { isMissingApiKeyError } from './llmHttpErrors.js';
 import { endpointHost, tlsCertificateErrorCode } from '../../utils/connectionErrors.js';
 
+/** A connection that was never established in time. */
+const CONNECTION_TIMEOUT = Object.freeze({
+  userMessage: 'Connection timeout',
+  messageKey: 'connectionTimeout',
+  errorMessage:
+    'The model service did not respond within the timeout period. Please check if the model URL is correct and the service is running.'
+});
+
 /**
- * Socket-level failure codes (undici / Node `net`) that deserve a dedicated
- * explanation in the admin UI. Checked before the generic code mapping.
+ * Socket-level failure codes (undici / Node `net`, and LLMClient's own
+ * `CONNECT_TIMEOUT`) that deserve a dedicated explanation in the admin UI.
+ * Checked before the generic code mapping.
  */
 const MODEL_TEST_NETWORK_CAUSES = Object.freeze({
-  UND_ERR_CONNECT_TIMEOUT: {
-    userMessage: 'Connection timeout',
-    messageKey: 'connectionTimeout',
-    errorMessage:
-      'The model service did not respond within the timeout period. Please check if the model URL is correct and the service is running.'
-  },
+  UND_ERR_CONNECT_TIMEOUT: CONNECTION_TIMEOUT,
+  // LLMClient's own connect ceiling (`connectTimeoutMs`): a TIMEOUT whose
+  // connection was never established, not a slow answer.
+  CONNECT_TIMEOUT: CONNECTION_TIMEOUT,
   ECONNREFUSED: {
     userMessage: 'Connection refused',
     messageKey: 'connectionRefused',
@@ -203,4 +210,25 @@ export function describeLlmFailure(err, { url, keyless = false } = {}) {
     host: endpointHost(url),
     errorCode: tlsCertificateErrorCode(err) || socketCode || null
   };
+}
+
+/**
+ * The sentence a run's ledger keeps for a failed model call: the cause's
+ * headline (`Service not found`, `Connection timeout`, `Server error`), or
+ * the error code when no cause is recognized. Never the raw failure text: a
+ * socket message names the host (`getaddrinfo ENOTFOUND llm.corp.local`) and
+ * a provider error carries the provider's body, and the ledger is replayed to
+ * the run's owner (`GET /api/runs/:runId/events`), who need not be an admin.
+ * The raw text goes to the server log (`LLMClient._recordError`).
+ *
+ * @param {import('./contracts/errors.js').LLMError} err
+ * @returns {string}
+ * @example
+ *   ledgerErrorMessage(dnsError); // → 'Service not found'
+ */
+export function ledgerErrorMessage(err) {
+  const code = String(err?.code || 'ERROR');
+  if (code === LLM_ERROR_CODES.ABORTED) return 'The model call was stopped';
+  const { messageKey, userMessage } = describeLlmFailureCause(err || {}, { keyless: false });
+  return messageKey === 'testFailed' ? `The model call failed (${code})` : userMessage;
 }

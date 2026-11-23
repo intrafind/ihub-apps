@@ -31,7 +31,9 @@
  * administrator only. Everyone else gets the translated sentence without it and
  * no `details` (a used-up usage limit keeps its structured `details`). What is
  * stored with the message (`storedMessage`) never carries it, and the raw text
- * stays available for the server's own log (`logMessage`, `logDetails`).
+ * stays available for the server's own log (`logMessage`, `logDetails`). The
+ * run ledger's `error` event of the model call holds no raw text either
+ * (`ledgerErrorMessage` in `loop/llmFailureCause.js`, written by LLMClient).
  *
  * @module services/chat/chatErrors
  */

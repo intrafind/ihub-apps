@@ -535,6 +535,55 @@ describe('Apply and Undo with other unsaved changes in the form', () => {
     expect(within(card).getByRole('button', { name: TEXT.change.apply })).toBeEnabled();
   });
 
+  /** Changes the name in the form: a content key the change below does not touch. */
+  function editNameInForm(name = 'Renamed chat') {
+    fireEvent.click(viewButton(TEXT.view.form));
+    fireEvent.change(screen.getByLabelText('Name'), { target: { value: name } });
+  }
+
+  test('an unsaved edit of a content key the change does not touch is announced and checked', async () => {
+    await renderEditor();
+    // The name is edited before the turn, so the change is not stale: Apply would save it too.
+    editNameInForm();
+    fireEvent.click(screen.getByRole('button', { name: 'report one error' }));
+    fireEvent.click(viewButton(TEXT.view.conversation));
+    server.revise.push(changeAnswer());
+    await say('Be formal');
+
+    const card = await screen.findByTestId('change-card');
+    expect(within(card).getByTestId('change-also-saves')).toHaveTextContent(TEXT.change.alsoSaves);
+    await act(async () => {
+      fireEvent.click(within(card).getByRole('button', { name: TEXT.change.apply }));
+    });
+    // The form is not valid: the editor's check runs, as for Save, and nothing is sent.
+    expect(puts()).toHaveLength(0);
+    expect(within(card).getByRole('alert')).toHaveTextContent(EDIT.validationErrorsExist);
+  });
+
+  test('an unsaved edit of the name after an Apply goes with Undo, which says so', async () => {
+    await renderEditor();
+    server.revise.push(changeAnswer());
+    await say('Be formal');
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: TEXT.change.apply }));
+    });
+    expect(puts()).toHaveLength(1);
+    editNameInForm();
+    fireEvent.click(viewButton(TEXT.view.conversation));
+
+    expect(await screen.findByTestId('change-undo-also-saves')).toHaveTextContent(
+      TEXT.change.undoAlsoSaves
+    );
+    fireEvent.click(viewButton(TEXT.view.form));
+    fireEvent.click(screen.getByRole('button', { name: 'report one error' }));
+    fireEvent.click(viewButton(TEXT.view.conversation));
+    await act(async () => {
+      fireEvent.click(await screen.findByRole('button', { name: TEXT.change.undo }));
+    });
+    expect(puts()).toHaveLength(1);
+    expect(screen.getByTestId('change-card')).toHaveTextContent(EDIT.validationErrorsExist);
+  });
+
   test('the same holds for Undo', async () => {
     await renderEditor();
     server.revise.push(changeAnswer());
