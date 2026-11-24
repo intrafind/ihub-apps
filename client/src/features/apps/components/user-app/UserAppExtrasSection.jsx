@@ -84,6 +84,7 @@ function Switch({ checked, onChange, label, help, disabled = false }) {
  * @param {Array<{id: string, name?: object|string, description?: string}>} [props.projects] -
  *   The projects the caller may link (`GET /api/projects`).
  * @param {boolean} [props.projectsError=false] - The list could not be loaded.
+ * @param {boolean} [props.projectsLoading=false] - The list is being loaded: no "none" text yet.
  * @param {() => void} [props.onRetryProjects] - Loads the list again.
  * @param {Array<{id: string, kind: string, installationId: string|null}>} [props.withheld] -
  *   The result of `withheldCapabilities(app)`.
@@ -99,6 +100,7 @@ function UserAppExtrasSection({
   models = [],
   projects = [],
   projectsError = false,
+  projectsLoading = false,
   onRetryProjects,
   withheld = [],
   capabilityName,
@@ -376,7 +378,10 @@ function UserAppExtrasSection({
               )}
             </div>
           )}
-          {!projectsError && listedProjects.length === 0 && (
+          {projectsLoading && !projectsError && listedProjects.length === 0 && (
+            <p className="text-sm text-gray-600 dark:text-gray-400">{t('common.loading')}</p>
+          )}
+          {!projectsLoading && !projectsError && listedProjects.length === 0 && (
             <p className="text-sm text-gray-600 dark:text-gray-400">
               {t('userApps.edit.extras.projectsNone')}
             </p>

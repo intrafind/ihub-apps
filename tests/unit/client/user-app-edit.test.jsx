@@ -151,6 +151,7 @@ const UserAppEditPage = require('../../../client/src/features/apps/pages/UserApp
 const {
   WITHHELD_MODEL,
   formFromApp,
+  invalidNumberFields,
   patchFor,
   readOnlyReason,
   stillAsksFor,
@@ -728,6 +729,23 @@ describe('what the app may use', () => {
     );
   });
 
+  test('says "loading", not "no project yet", while the list is on its way', async () => {
+    mockUserApps.config = { ...CONFIG, capabilities: { ...ALLOWED, projects: true } };
+    let answer;
+    mockApi.fetchProjects.mockReturnValue(
+      new Promise(resolve => {
+        answer = resolve;
+      })
+    );
+    await renderEditor();
+    const picker = within(extras().getByTestId('user-app-projects'));
+    expect(picker.getByText(en.common.loading)).toBeInTheDocument();
+    expect(picker.queryByText(EDIT.extras.projectsNone)).not.toBeInTheDocument();
+    await act(async () => answer([]));
+    expect(picker.getByText(EDIT.extras.projectsNone)).toBeInTheDocument();
+    expect(picker.queryByText(en.common.loading)).not.toBeInTheDocument();
+  });
+
   test('says so when the projects could not be loaded, and lists them after Retry', async () => {
     mockUserApps.config = { ...CONFIG, capabilities: { ...ALLOWED, projects: true } };
     mockApi.fetchProjects
@@ -936,6 +954,29 @@ describe('saving', () => {
     await click(screen.getByRole('button', { name: 'Discard' }));
     expect(nameField()).toHaveValue('Job ad writer');
     expect(mockApi.updateUserApp).not.toHaveBeenCalled();
+  });
+});
+
+describe('the number fields no save can use', () => {
+  test('are the rows and the pages that are filled in but not whole numbers in range', () => {
+    const form = (rows, pages) => ({
+      inputMode: { type: 'multiline', rows },
+      capabilities: { webSearchSettings: { maxPageReads: pages } }
+    });
+    expect(invalidNumberFields(form(5, 4))).toEqual([]);
+    // Empty clears a setting; it is not an error.
+    expect(invalidNumberFields(form('', ''))).toEqual([]);
+    expect(invalidNumberFields({})).toEqual([]);
+    expect(invalidNumberFields(form(0, 4)).map(entry => entry.key)).toEqual(['rows']);
+    expect(invalidNumberFields(form(1.5, 4.5)).map(entry => entry.key)).toEqual([
+      'rows',
+      'pageReads'
+    ]);
+    expect(invalidNumberFields(form(21, 51)).map(entry => entry.key)).toEqual([
+      'rows',
+      'pageReads'
+    ]);
+    expect(invalidNumberFields(form('abc', 50)).map(entry => entry.key)).toEqual(['rows']);
   });
 });
 

@@ -152,6 +152,7 @@ function UserAppEditPage() {
   const [models, setModels] = useState([]);
   const [projects, setProjects] = useState([]);
   const [projectsFailed, setProjectsFailed] = useState(false);
+  const [projectsLoaded, setProjectsLoaded] = useState(false);
   const [projectsAttempt, setProjectsAttempt] = useState(0);
   const [groups, setGroups] = useState(GROUPS_OPEN);
   const [saving, setSaving] = useState(false);
@@ -249,7 +250,11 @@ function UserAppEditPage() {
     if (!projectLinks) return undefined;
     let active = true;
     fetchProjects()
-      .then(list => active && setProjects(Array.isArray(list) ? list : []))
+      .then(list => {
+        if (!active) return;
+        setProjects(Array.isArray(list) ? list : []);
+        setProjectsLoaded(true);
+      })
       .catch(() => active && setProjectsFailed(true));
     return () => {
       active = false;
@@ -360,18 +365,23 @@ function UserAppEditPage() {
     [setForm]
   );
 
+  /** Why the form cannot be saved because of a number field, else null. */
+  const invalidNumberMessage = candidate => {
+    const [invalid] = invalidNumberFields(candidate);
+    if (!invalid) return null;
+    return t(
+      invalid.key === 'rows'
+        ? 'userApps.edit.advanced.invalidRows'
+        : 'userApps.edit.advanced.invalidPageReads',
+      { max: invalid.max }
+    );
+  };
+
   const save = async () => {
     if (!app || !form || saving) return;
-    const [invalid] = invalidNumberFields(form);
+    const invalid = invalidNumberMessage(form);
     if (invalid) {
-      setSaveError(
-        t(
-          invalid.key === 'rows'
-            ? 'userApps.edit.advanced.invalidRows'
-            : 'userApps.edit.advanced.invalidPageReads',
-          { max: invalid.max }
-        )
-      );
+      setSaveError(invalid);
       return;
     }
     const patch = patchFor(forms.saved, form);
@@ -411,6 +421,9 @@ function UserAppEditPage() {
    */
   const persistFromConversation = async next => {
     if (!app || !form || saving) return { status: 'failed', message: null };
+    // Apply and Undo save the whole form: an invalid number in it would clear the stored one.
+    const invalid = invalidNumberMessage(next);
+    if (invalid) return { status: 'failed', message: invalid };
     const before = form;
     const patch = patchFor(forms.saved, next);
     if (!patch) {
@@ -776,6 +789,7 @@ function UserAppEditPage() {
                     models={models}
                     projects={projects}
                     projectsError={projectsFailed}
+                    projectsLoading={!projectsLoaded && !projectsFailed}
                     onRetryProjects={() => {
                       setProjectsFailed(false);
                       setProjectsAttempt(count => count + 1);

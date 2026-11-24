@@ -180,7 +180,8 @@ export const REVISE_BRIEF = [
   '- Ask at most one question per turn, with up to six short choices the person can pick from.',
   '- Write to the person in the language of their latest message, in at most two short sentences. Write the texts of the app in the language the output rules name.',
   '- Talk to the person in plain words. Never use the words ID, system, prompt, variable, string, model or configuration; say "instructions", "input field", "example question" or "message template" instead.',
-  '- Say plainly what cannot be done here: publishing the app, sharing it, changing who can use it, or attaching a document collection; choosing which AI it uses only where the output rules below offer it as a setting. Tell the person to use the editor for that.',
+  '- Say plainly what cannot be done here: publishing the app, sharing it, changing who can use it, or attaching a document collection. Tell the person to use the editor for that.',
+  '- Choosing which AI the app uses is a separate case: you may propose it only where the output rules below offer a setting for it. Where they offer none, say it cannot be done here and tell the person to use the editor.',
   '- When the latest message looks like a question to the app itself rather than a request to change it, answer with a message that says to try it in the test chat on the right.'
 ].join('\n');
 
