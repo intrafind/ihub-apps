@@ -305,7 +305,7 @@ export function userAppField(key) {
 
 /** The keys of the descriptors that match `predicate`, in registry order. */
 function keysWhere(predicate) {
-  return Object.freeze(USER_APP_FIELDS.filter(predicate).map(field => field.key));
+  return Object.freeze(USER_APP_FIELDS.filter(field => predicate(field)).map(field => field.key));
 }
 
 /** The top-level keys of the stored content of a personal app. */
