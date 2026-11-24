@@ -165,14 +165,16 @@ export function isGatewayProvider(provider) {
 
 /**
  * Whether iHub can compare the provider's model listing with the models imported
- * from it ("Sync models"): an iFinder Model Gateway, Google or Anthropic. Their
- * listing names each model with what the sync compares (context window, whether it
- * still exists) or what an import fills in (the provider's EU AI Act marking). The
- * listing is read from the saved provider entry on the server.
+ * from it ("Sync models"): an iFinder Model Gateway, Google, Anthropic or AWS
+ * Bedrock. Their listing names each model with what the sync compares (context
+ * window, whether it still exists) or what an import fills in (the provider's EU AI
+ * Act marking). The listing is read from the saved provider entry on the server;
+ * Bedrock's from its region instead of a URL.
  */
 export function supportsModelSync(provider) {
   return (
-    isGatewayProvider(provider) || ['google', 'anthropic'].includes(getProviderApiType(provider))
+    isGatewayProvider(provider) ||
+    ['google', 'anthropic', 'bedrock'].includes(getProviderApiType(provider))
   );
 }
 

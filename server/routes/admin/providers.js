@@ -36,8 +36,9 @@ import {
   ModelDiscoveryError,
   stripTrailingSlashes
 } from '../../services/ModelEndpointDiscovery.js';
-import { isValidBedrockRegion } from '../../../shared/bedrockRegions.js';
-import { computeGatewayDrift } from '../../services/gatewayDrift.js';
+import { DEFAULT_BEDROCK_REGION, isValidBedrockRegion } from '../../../shared/bedrockRegions.js';
+import { BEDROCK_API_TYPE, discoverBedrockModels } from '../../services/BedrockModelDiscovery.js';
+import { computeGatewayDrift, inBedrockListingRegion } from '../../services/gatewayDrift.js';
 import { applyGatewayDrift } from '../../services/gatewaySyncApply.js';
 import { logAudit } from '../../services/AuditLogService.js';
 import { saveSnapshot } from '../../services/ChangeHistoryService.js';
@@ -347,11 +348,15 @@ async function loadModelDrift(providerId) {
   if (!supportsModelSync(provider)) {
     throw new ServiceError(
       'BAD_REQUEST',
-      `Provider ${providerId} is not a model gateway, Google or Anthropic provider`,
+      `Provider ${providerId} is not a model gateway, Google, Anthropic or AWS Bedrock provider`,
       { details: { providerId } }
     );
   }
-  if (!provider.baseUrl) {
+  // AWS Bedrock lists its models per region, not behind a URL: the region the
+  // adapter calls a model without its own region in (provider, environment, default).
+  const bedrock = getProviderApiType(provider) === BEDROCK_API_TYPE;
+  const region = bedrock ? bedrockRegionForSync(provider) : undefined;
+  if (!bedrock && !provider.baseUrl) {
     throw new ServiceError('BAD_REQUEST', `Provider ${providerId} has no base URL`, {
       details: { providerId }
     });
@@ -359,12 +364,14 @@ async function loadModelDrift(providerId) {
 
   let listing;
   try {
-    listing = await discoverModels({
-      url: provider.baseUrl,
-      provider: getProviderApiType(provider),
-      apiKey: resolveProviderApiKey(provider) || '',
-      gateway: provider.gateway
-    });
+    listing = bedrock
+      ? await discoverBedrockModels({ region, apiKey: resolveProviderApiKey(provider) || '' })
+      : await discoverModels({
+          url: provider.baseUrl,
+          provider: getProviderApiType(provider),
+          apiKey: resolveProviderApiKey(provider) || '',
+          gateway: provider.gateway
+        });
   } catch (error) {
     if (!(error instanceof ModelDiscoveryError)) throw error;
     // A URL the admin has to fix is theirs (400); anything else is the provider's.
@@ -381,12 +388,14 @@ async function loadModelDrift(providerId) {
   const { data: models = [] } = configCache.getModels(true);
   return {
     provider,
+    region,
     modelsUrl: listing.modelsUrl,
     items: computeGatewayDrift({
       provider,
       models,
       entries: listing.models,
-      modelsUrl: listing.modelsUrl
+      modelsUrl: listing.modelsUrl,
+      region
     })
   };
 }
@@ -481,6 +490,32 @@ function bedrockEffectiveRegion(provider) {
 }
 
 /**
+ * The region a Bedrock sync reads its listing in: the one the adapter calls a
+ * model without its own region in. A region that is set but not valid is refused,
+ * as the adapter refuses it; the listing never falls back to another region.
+ *
+ * @param {Object} provider - The Bedrock provider entry
+ * @returns {string}
+ */
+function bedrockRegionForSync(provider) {
+  const region = bedrockEffectiveRegion(provider);
+  if (region) return region;
+  const configured = [
+    provider.config?.region,
+    process.env.AWS_REGION,
+    process.env.AWS_DEFAULT_REGION
+  ].find(value => typeof value === 'string' && value.trim() !== '');
+  if (configured) {
+    throw new ServiceError(
+      'BAD_REQUEST',
+      `"${String(configured).slice(0, 40)}" is not an AWS region. Set a region code such as eu-central-1 on the AWS Bedrock provider.`,
+      { details: { providerId: provider.id, reason: 'invalidRegion' } }
+    );
+  }
+  return DEFAULT_BEDROCK_REGION;
+}
+
+/**
  * A provider entry as the admin API returns it: the API key masked
  * (`apiKeyMasked`, `apiKeySet`) and, for Bedrock, the `effectiveRegion`.
  * These helper fields are dropped again on save.
@@ -560,8 +595,11 @@ export default function registerAdminProvidersRoutes(app) {
    *     summary: Compare a provider's model listing with the models imported from it (Admin)
    *     description: |
    *       Reads the model listing of an iFinder Model Gateway, Google or Anthropic provider (its
-   *       base URL and stored key) and compares it with the models linked to the
-   *       provider. Changes nothing: every item names what an admin could do. To apply
+   *       base URL and stored key), or of the AWS Bedrock provider (its region, else
+   *       `AWS_REGION`, else `AWS_DEFAULT_REGION`, else eu-central-1, and its stored key),
+   *       and compares it with the
+   *       models linked to the provider. For Bedrock only the linked models of that
+   *       region are compared, and an added model stores the region. Changes nothing: every item names what an admin could do. To apply
    *       a choice, send it to `POST /admin/providers/{providerId}/_sync-models`; do not
    *       replay it through the model endpoints, which read the config cache and can
    *       write back a stale copy.
@@ -629,7 +667,7 @@ export default function registerAdminProvidersRoutes(app) {
    *                             from: {}
    *                             to: {}
    *       400:
-   *         description: "`BAD_REQUEST`: the provider is not a model gateway, Google or Anthropic provider, has no base URL, or its URL is unusable"
+   *         description: "`BAD_REQUEST`: the provider is not a model gateway, Google, Anthropic or AWS Bedrock provider, has no base URL, its URL is unusable, or (Bedrock) its region is not an AWS region"
    *       401:
    *         description: Admin authentication required
    *       404:
@@ -735,12 +773,14 @@ export default function registerAdminProvidersRoutes(app) {
     adminAuth,
     async (req, res) => {
       const picks = picksOf(req.body);
-      const { items } = await loadModelDrift(req.params.providerId);
+      const { items, region } = await loadModelDrift(req.params.providerId);
       const admin = req.user?.username ?? req.user?.name ?? req.user?.id ?? 'unknown';
 
       const results = await applyGatewayDrift({
         picks,
         items,
+        // Bedrock: a stored model moved to another region since is left alone.
+        ...(region ? { inScope: model => inBedrockListingRegion(model, region) } : {}),
         store: {
           ...modelStore,
           audit: (action, id, summary) =>

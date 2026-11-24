@@ -56,12 +56,16 @@ export function patchOf(changes) {
  *   chose; `modelId` (the iHub model) names the model of a `changed` or `removed` pick
  * @param {Array<Object>} params.items - The drift as it is now (`computeGatewayDrift`)
  * @param {ModelStore} params.store
+ * @param {(model: Object) => boolean} [params.inScope] - Whether a stored model is still one
+ *   the listing covers (AWS Bedrock: a model of the listing's region). Checked on the stored
+ *   model before a `changed` or `removed` pick writes it: the drift was computed from the
+ *   config cache, which can lag behind the file. A model outside is `skipped`.
  * @returns {Promise<Array<{ kind: string, remoteId: string, modelId?: string,
  *   status: 'applied'|'skipped'|'failed', detail?: string }>>}
  *   `skipped`: the pick no longer matches the gateway (it changed again since the
  *   admin looked), nothing was done for it. `failed`: the write did not work.
  */
-export async function applyGatewayDrift({ picks, items, store }) {
+export async function applyGatewayDrift({ picks, items, store, inScope = () => true }) {
   const byKey = new Map(items.map(item => [itemKey(item), item]));
   // Each pick once, in apply order.
   const seen = new Set();
@@ -87,7 +91,12 @@ export async function applyGatewayDrift({ picks, items, store }) {
       continue;
     }
     try {
-      results.push({ ...base, ...(await applyItem(item, store)), status: 'applied' });
+      const outcome = await applyItem(item, store, inScope);
+      results.push(
+        outcome.skipped
+          ? { ...base, status: 'skipped', detail: 'changedSinceReview' }
+          : { ...base, ...outcome, status: 'applied' }
+      );
     } catch (error) {
       const modelId = item.kind === 'added' ? item.model.id : item.modelId;
       results.push({ ...base, modelId, status: 'failed', detail: error.message });
@@ -96,8 +105,11 @@ export async function applyGatewayDrift({ picks, items, store }) {
   return results;
 }
 
-/** Apply one item; throws when the write cannot be done. Returns `{ modelId }`. */
-async function applyItem(item, store) {
+/**
+ * Apply one item; throws when the write cannot be done. Returns `{ modelId }`, or
+ * `{ skipped: true }` when the stored model is no longer one the listing covers.
+ */
+async function applyItem(item, store, inScope) {
   if (item.kind === 'added') {
     const { model } = item;
     if ((await store.read(model.id)) !== null) {
@@ -110,6 +122,7 @@ async function applyItem(item, store) {
 
   const before = await store.read(item.modelId);
   if (before === null) throw new Error(`Model ${item.modelId} not found`);
+  if (!inScope(before)) return { skipped: true };
   const after =
     item.kind === 'changed'
       ? { ...before, ...patchOf(item.changes) }
