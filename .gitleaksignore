@@ -22,3 +22,8 @@ c437a8d91b353d6f17cf96279d851943ea486c9e:tests/security/authz/resources.js:gener
 # (app-unpublished-access.test.js) plants in an app's texts, in a commit already
 # pushed. The line itself now uses a stopword value (.gitleaks.toml).
 c8d7622c449445d778c9fd2c62be3ac52a469084:server/tests/app-unpublished-access.test.js:generic-api-key:83
+
+# A test fixture, not a secret: the model API key of the watermark detection
+# tests (watermarkServiceDetection.test.js) in a commit already pushed. The line
+# itself now uses a stopword value (.gitleaks.toml).
+6a6d21e130325abd7b88b7c24d218c3b4be15b4a:server/tests/watermarkServiceDetection.test.js:generic-api-key:50

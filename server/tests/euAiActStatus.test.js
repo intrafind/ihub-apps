@@ -323,6 +323,23 @@ describe('self-test store', () => {
     expect(selfTestSummary(undefined, 'wm-2026-2').state).toBe('never');
     expect(JSON.stringify(stored)).not.toMatch(/key"/);
   });
+
+  test('a pass is stale once the key holder changed, in both directions', async () => {
+    await recordSelfTest(
+      'img',
+      { diagnosis: 'watermark_found' },
+      { activeKeyId: null, keyHolder: 'model' }
+    );
+    await recordSelfTest('vl', { diagnosis: 'keys_match' }, { activeKeyId: 'wm-2026-1' });
+    const stored = await readSelfTests();
+    expect(selfTestSummary(stored.img, null, 'model').state).toBe('passed');
+    // Switched to iHub's key: the image's key was tested, not the active one.
+    expect(selfTestSummary(stored.img, 'wm-2026-1', 'ihub').state).toBe('stale');
+    expect(selfTestSummary(stored.vl, null, 'model').state).toBe('stale');
+    // An entry from before the key holder was stored tested iHub's key.
+    const { keyHolder: _omit, ...legacy } = stored.vl;
+    expect(selfTestSummary(legacy, 'wm-2026-1', 'ihub').state).toBe('passed');
+  });
 });
 
 describe('detector probe', () => {

@@ -124,7 +124,11 @@ export default function registerAdminWatermarkDetectorRoutes(app) {
       // The overview page (#3329) shows the last result and marks it outdated after a key change.
       // A model whose image holds the key does not depend on iHub's keys.
       const modelHeld = model.contentMarking?.text?.keyHolder === 'model';
-      await recordSelfTest(model.id, result, modelHeld ? { activeKeyId: null } : {});
+      await recordSelfTest(
+        model.id,
+        result,
+        modelHeld ? { activeKeyId: null, keyHolder: 'model' } : { keyHolder: 'ihub' }
+      );
       await logAudit({
         req,
         action: 'execute',

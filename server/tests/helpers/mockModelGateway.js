@@ -8,7 +8,10 @@
  * login.
  *
  * A text registered through `markText` is `DETECTED` with that key file name
- * (`key_label`); everything else is `NOT_DETECTED`. Every request is recorded.
+ * (`reported_by[].key_label`, the answer format since RAG-1190); everything else
+ * is `NOT_DETECTED`. The strongest result names two reporters, the standalone
+ * detector and the image, each with its own label, as the gateway does for a
+ * check both report. Every request is recorded.
  *
  * Modes: `ok`, `short` (`UNCLEAR`, too few tokens), `detectorsDown` (`UNCLEAR`,
  * a detector did not answer), `unavailable` (`503`), `badContract`, `401`.
@@ -85,8 +88,10 @@ export async function startMockModelGateway({ token, oauth } = {}) {
       const words = text.split(/\s+/).filter(Boolean).length;
       const label = marked.get(text);
       const result = {
-        detector: 'gemma',
-        key_label: label || 'key-2026-11',
+        reported_by: [
+          { detector: 'gemma', key_label: label || 'key-2026-11' },
+          { detector: 'gemma-image', key_label: 'current' }
+        ],
         algorithm: 'gumbel',
         parameters: { context_width: 4, deduplicate_contexts: true, prf: 'philox' },
         p_value: label ? 2e-9 : 0.6,

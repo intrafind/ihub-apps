@@ -47,7 +47,7 @@ const { planTextWatermark } = await import('../services/provenance/watermark/wat
 const { runSelfTest, pingDetector } = await import('../services/provenance/watermark/selfTest.js');
 const { modelConfigSchema } = await import('../validators/modelConfigSchema.js');
 
-const MODEL_KEY = 'vllm-api-key-123456'; // gitleaks:allow (a test value)
+const MODEL_KEY = 'vllm-api-key-test-123456';
 const TOKEN = 'gateway-bearer-123456';
 const OAUTH = { clientId: 'ihub', clientSecret: 'client-secret-987654', accessToken: 'jwt-abc' };
 const TEXT = Array.from({ length: 200 }, (_, i) => `word${i}`).join(' ');
@@ -234,7 +234,7 @@ describe('evaluateChecks (Bonferroni, as the Model Gateway decides)', () => {
     });
   });
 
-  test('a check two images report identically counts once; another key under one label twice', () => {
+  test('a check two images report identically counts once; another result twice', () => {
     const same = [check('k', 3e-5), check('k', 0.7, 300, 'd')];
     expect(evaluateChecks([outcome(same), outcome(same)], settings)).toMatchObject({
       status: WATERMARK_STATUS.DETECTED,
@@ -245,8 +245,28 @@ describe('evaluateChecks (Bonferroni, as the Model Gateway decides)', () => {
     expect(evaluateChecks([outcome(same), outcome(other)], settings).checksMade).toBe(3);
   });
 
+  test('as the gateway since RAG-1190: not the key label or vLLM version, p up to rounding', () => {
+    // One key under two file names, from images of two vLLM versions: one check.
+    const a = { ...outcome([check('key-2026-11', 3e-5)]), vllmVersion: '0.34.0' };
+    const b = { ...outcome([check('current', 3e-5 * (1 + 1e-9))]), vllmVersion: '0.35.0' };
+    expect(evaluateChecks([a, b], settings)).toMatchObject({
+      checksMade: 1,
+      keyLabel: 'key-2026-11'
+    });
+    // A detector that names no tokenizer shares no check with another one.
+    const bare = url => ({
+      detector: { ...detector, detectorUrl: url },
+      checks: [check('k', 3e-5)]
+    });
+    expect(evaluateChecks([bare('https://a'), bare('https://b')], settings).checksMade).toBe(2);
+  });
+
   test('too short, a detector down, or not detected', () => {
     expect(evaluateChecks([outcome([check('k', 0.3, 50)])], settings).status).toBe('too_short');
+    // An image that answers without results is down, as for the gateway.
+    expect(evaluateChecks([outcome([check('k', 0.3)]), outcome([])], settings).status).toBe(
+      'unavailable'
+    );
     expect(
       evaluateChecks([outcome([check('k', 0.3)]), { detector, error: new Error('x') }], settings)
         .status
@@ -300,7 +320,21 @@ describe('callGatewayDetector', () => {
     expect(answer).toMatchObject({
       verdict: 'DETECTED',
       gatewayVersion: '6.9.0',
-      schemes: [{ verdict: 'DETECTED', strongestResult: { keyLabel: 'key-2026-11' }, tests: 2 }]
+      schemes: [
+        {
+          verdict: 'DETECTED',
+          // The first reporter names the key file; every reporter is kept.
+          strongestResult: {
+            detector: 'gemma',
+            keyLabel: 'key-2026-11',
+            reportedBy: [
+              { detector: 'gemma', keyLabel: 'key-2026-11' },
+              { detector: 'gemma-image', keyLabel: 'current' }
+            ]
+          },
+          tests: 2
+        }
+      ]
     });
   });
 
@@ -370,6 +404,17 @@ describe('callGatewayDetector', () => {
     }
   });
 
+  test('a refused detector URL is reported as such, before any token request', async () => {
+    await expect(
+      callGatewayDetector({
+        url: 'ftp://gateway.example/detect',
+        credentialRef: 'gw-oauth',
+        text: TEXT
+      })
+    ).rejects.toMatchObject({ details: { reason: 'url_refused' } });
+    expect(oauthGateway.tokenCalls).toHaveLength(0);
+  });
+
   test('a changed client secret fetches a new token instead of the cached one', async () => {
     await callGatewayDetector({ url: oauthGateway.url, credentialRef: 'gw-oauth', text: TEXT });
     withOauthCredential({ clientSecret: 'rotated-secret' });
@@ -419,6 +464,10 @@ describe('callGatewayDetector', () => {
     expect(
       combineVerdicts([{ status: 'unavailable' }, { status: 'detected', pValue: 1e-9 }]).status
     ).toBe('detected');
+    // A route that could not decide keeps a negative of another route open.
+    expect(combineVerdicts([{ status: 'not_detected' }, { status: 'unavailable' }]).status).toBe(
+      'unavailable'
+    );
   });
 });
 

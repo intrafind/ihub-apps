@@ -256,7 +256,7 @@ master switch, these cards:
   (rollback, for example when vLLM was not updated in time). Making a key active retires the current one,
   asks you to update vLLM's `--watermark-config` (the printed option can be shown again, which is audited) and
   until then the self-test shows a mismatch. Per model: test connection and self-test (about 400 tokens). The last
-  self-test result is kept per model; after a key change it shows as outdated until run again. Detector URL,
+  self-test result is kept per model; after a key change, or when the model switches between iHub's key and the image's, it shows as outdated until run again. Detector URL,
   credential, tokenizer and watermark context are edited in the model editor; all of them are optional. *Detectors and
   self-test* starts with the iFinder Model Gateway (`provenance.watermark.gatewayUrl`, credential), which decides
   the route of the detectors listed below it. *Detection thresholds* holds alpha, the minimum of scored tokens and

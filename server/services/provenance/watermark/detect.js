@@ -21,7 +21,9 @@
  *   verdict ({@link decideFromGateway}).
  *
  * With several kinds configured, any detection wins ({@link combineVerdicts});
- * the false-alarm rate is then at most the sum of their alphas.
+ * the false-alarm rate is then at most the sum of their alphas. Without a
+ * detection, a detector that did not answer makes the result "unavailable"
+ * rather than "not detected", as for the gateway's `UNCLEAR`.
  *
  * Wording: a result never says "not watermarked" or "human-written". A negative
  * is "not detected" (evidence of nothing) or "too short to tell".
@@ -225,20 +227,31 @@ function stableJson(value) {
     .join(',')}}`;
 }
 
+/** Buckets per unit of `ln p` for comparing checks, as the Model Gateway's `SchemeEvaluator`. */
+const LOG_P_VALUE_BUCKETS_PER_UNIT = 1e6;
+
+/** The bucket of `ln p`; a p-value of 0 (underflow) has a bucket of its own. */
+function logPValueBucket(pValue) {
+  return pValue === 0 ? 'zero' : Math.round(Math.log(pValue) * LOG_P_VALUE_BUCKETS_PER_UNIT);
+}
+
 /**
  * Decide from the uncorrected checks of if-vllm images' detection endpoints
- * (pure; exported for the tests), as an iFinder Model Gateway decides a scheme
- * (`SchemeEvaluator`), so both products give one text the same verdict:
+ * (pure; exported for the tests) with the rule of an iFinder Model Gateway's
+ * `SchemeEvaluator` (RAG-1190), applied with iHub's thresholds:
  *
- * - A check several detectors report identically counts once: same tokenizer,
- *   vLLM version, key file, algorithm, parameters and result. Two images can hold
- *   different keys under one file name; those give different results and count
- *   twice.
+ * - A check several detectors report with the same result counts once: same
+ *   tokenizer, algorithm, parameters and number of scored tokens, and `ln p`
+ *   equal after rounding to 1e-6 (hardware differences). The key file name and
+ *   the vLLM version are not part of it: one key can carry two names, and
+ *   different keys give different results anyway. A detector that reports no
+ *   tokenizer shares no check with another one.
  * - Bonferroni: the strongest check's p-value times the number of distinct
- *   checks (at most 1) must be below `alpha`.
+ *   checks (at most 1) must be below `alpha`. Of equal p-values the first
+ *   detector's check wins.
  * - Otherwise "too short" when a check scored fewer than `minScoredTokens`
- *   tokens, "unavailable" when a detector did not answer (the gateway's
- *   `UNCLEAR`), else "not detected".
+ *   tokens, "unavailable" when a detector did not answer or answered without
+ *   results (the gateway's `UNCLEAR`), else "not detected".
  *
  * @param {Array<{detector: Object, checks?: Array<{keyLabel: string, algorithm: string,
  *   parameters?: Object, pValue: number, numScoredTokens: number}>, tokenizer?: string,
@@ -250,12 +263,12 @@ export function evaluateChecks(outcomes, { alpha, minScoredTokens }) {
   for (const outcome of outcomes) {
     for (const check of outcome.checks || []) {
       const id = stableJson([
-        outcome.tokenizer,
-        outcome.vllmVersion,
-        check.keyLabel,
+        outcome.tokenizer
+          ? { tokenizer: outcome.tokenizer }
+          : { detector: outcome.detector.detectorUrl },
         check.algorithm,
         check.parameters || {},
-        check.pValue,
+        logPValueBucket(check.pValue),
         check.numScoredTokens
       ]);
       if (!distinct.has(id)) distinct.set(id, { ...check, detector: outcome.detector });
@@ -270,7 +283,7 @@ export function evaluateChecks(outcomes, { alpha, minScoredTokens }) {
   const base = {
     scheme: outcomes[0]?.detector.scheme,
     checksMade: tests,
-    detectorsChecked: outcomes.filter(outcome => outcome.checks).length
+    detectorsChecked: outcomes.filter(outcome => outcome.checks?.length).length
   };
   const pValue = best ? Math.min(1, tests * best.pValue) : undefined;
   if (best && pValue < alpha) {
@@ -288,7 +301,7 @@ export function evaluateChecks(outcomes, { alpha, minScoredTokens }) {
   let status = WATERMARK_STATUS.NOT_DETECTED;
   if (checks.some(check => check.numScoredTokens < minScoredTokens)) {
     status = WATERMARK_STATUS.TOO_SHORT;
-  } else if (outcomes.some(outcome => !outcome.checks)) {
+  } else if (outcomes.some(outcome => !outcome.checks?.length)) {
     status = WATERMARK_STATUS.UNAVAILABLE;
   }
   return { ...base, status, scoredTokens, ...(best ? { pValue } : {}) };
@@ -368,14 +381,15 @@ export function decideFromGateway(answer, { detector }) {
 const STATUS_RANK = [
   WATERMARK_STATUS.DETECTED,
   WATERMARK_STATUS.TOO_SHORT,
-  WATERMARK_STATUS.NOT_DETECTED,
-  WATERMARK_STATUS.UNAVAILABLE
+  WATERMARK_STATUS.UNAVAILABLE,
+  WATERMARK_STATUS.NOT_DETECTED
 ];
 
 /**
  * One result from the results of several kinds of detector: a detection wins
- * (the smallest p-value among them), then "too short", then "not detected",
- * then "unavailable". The counts add up.
+ * (the smallest p-value among them), then "too short", then "unavailable", then
+ * "not detected": a route that could not decide keeps a negative open. The
+ * counts add up.
  *
  * @param {Object[]} verdicts
  */
@@ -462,6 +476,8 @@ export async function askModelDetector(detector, text, { timeoutMs, call = callM
       text,
       timeoutMs
     });
+    // An image that answers without a result is unavailable, as for the gateway.
+    if (answer.checks.length === 0) return { detector, error: new Error('no results') };
     return {
       detector,
       checks: answer.checks,
@@ -486,7 +502,7 @@ async function runModelDetectors(text, detectors, settings) {
       return { detector, error };
     }
   });
-  const answered = outcomes.filter(outcome => outcome.checks).length;
+  const answered = outcomes.filter(outcome => outcome.checks?.length).length;
   return {
     verdicts: answered
       ? [{ ...evaluateChecks(outcomes, settings), source: DETECTOR_API.MODEL }]
@@ -543,9 +559,13 @@ export async function detectWatermark(text, { modelId } = {}) {
     runGatewayDetectors(text, of(DETECTOR_API.GATEWAY), settings)
   ]);
   const verdicts = runs.flatMap(run => run.verdicts);
+  const failures = runs.reduce((sum, run) => sum + run.failures, 0);
   if (verdicts.length === 0) {
-    const failures = runs.reduce((sum, run) => sum + run.failures, 0);
     return { status: failures ? WATERMARK_STATUS.UNAVAILABLE : WATERMARK_STATUS.NOT_CONFIGURED };
   }
-  return combineVerdicts(verdicts);
+  const result = combineVerdicts(verdicts);
+  // A route that failed altogether may have held the watermark: no "not detected" then.
+  return failures && result.status === WATERMARK_STATUS.NOT_DETECTED
+    ? { ...result, status: WATERMARK_STATUS.UNAVAILABLE }
+    : result;
 }

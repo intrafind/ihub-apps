@@ -542,7 +542,8 @@ describe('POST /api/admin/configs/platform provenance block', () => {
     [{ watermark: { minScoredTokens: 0 } }, 'watermark.minScoredTokens'],
     [{ watermark: { detectorTimeoutMs: 999 } }, 'watermark.detectorTimeoutMs'],
     [{ watermark: { detectorTimeoutMs: 120001 } }, 'watermark.detectorTimeoutMs'],
-    [{ watermark: { gatewayUrl: 'ftp://gateway/detect' } }, 'watermark.gatewayUrl']
+    [{ watermark: { gatewayUrl: 'ftp://gateway/detect' } }, 'watermark.gatewayUrl'],
+    [{ watermark: { gatewayUrl: 'gateway.internal/detect' } }, 'watermark.gatewayUrl']
   ])('rejects %j with 400 naming %s and writes nothing', async (provenance, field) => {
     const res = await post({ provenance });
     expect(res.status).toBe(400);

@@ -36,6 +36,16 @@ import {
   VOICE_INSTRUCTION_MAX_CHARS
 } from '../../shared/voiceMode.js';
 
+/** An http(s) URL, or empty (no value). */
+function isHttpUrlOrEmpty(value) {
+  if (value === '') return true;
+  try {
+    return ['http:', 'https:'].includes(new URL(value).protocol);
+  } catch {
+    return false;
+  }
+}
+
 const jwtProviderSchema = z.object({
   name: z.string(),
   header: z.string().prefault('Authorization'),
@@ -622,8 +632,14 @@ export const platformConfigSchema = z
             alpha: z.number().gt(0).lt(1).optional(),
             minScoredTokens: z.number().int().min(1).optional(),
             detectorTimeoutMs: z.number().int().min(1000).max(120000).optional(),
-            // An iFinder Model Gateway's detection endpoint (keyHolder "model").
-            gatewayUrl: z.string().max(500).optional(),
+            // An iFinder Model Gateway's detection endpoint (keyHolder "model"). An
+            // http(s) address, as the admin form checks: a typo would otherwise send
+            // every model-held key to a broken gateway route.
+            gatewayUrl: z
+              .string()
+              .max(500)
+              .refine(isHttpUrlOrEmpty, { message: 'Enter an http or https address.' })
+              .optional(),
             gatewayCredentialRef: z.string().max(100).optional()
           })
           .passthrough()

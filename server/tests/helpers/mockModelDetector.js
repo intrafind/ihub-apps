@@ -68,12 +68,13 @@ export async function startMockModelDetector({
       const tokens = Math.round(text.split(/\s+/).filter(Boolean).length * 1.3);
       const label = marked.get(text);
       const parameters = { context_width: 4, deduplicate_contexts: true, prf: 'philox' };
-      const results = keys.flatMap(key => [
+      // Different keys give different p-values (identical ones would count once).
+      const results = keys.flatMap((key, index) => [
         {
           key_label: key,
           algorithm: 'gumbel',
           parameters,
-          p_value: key === label ? 1e-9 : 0.5,
+          p_value: key === label ? 1e-9 : 0.5 + index / 100,
           score: 0,
           num_scored_tokens: tokens
         },
@@ -81,7 +82,7 @@ export async function startMockModelDetector({
           key_label: key,
           algorithm: 'dual_key_gumbel',
           parameters: { ...parameters, alpha: 0.4 },
-          p_value: 0.6,
+          p_value: 0.6 + index / 100,
           score: 0,
           num_scored_tokens: tokens
         }

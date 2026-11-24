@@ -26,8 +26,13 @@
  *
  *   request  { text }
  *   response { detection: { verdict, alpha, text_sha256, detected_at, gateway_version,
- *              schemes: [{ scheme, verdict, unclear_reasons, strongest_result?: { detector,
- *              key_label, algorithm, p_value, num_scored_tokens } }] } }
+ *              schemes: [{ scheme, verdict, unclear_reasons, strongest_result?: {
+ *              reported_by: [{ detector, key_label }], algorithm, p_value,
+ *              num_scored_tokens }, evaluation?: { tests } }] } }
+ *
+ * `reported_by` names every detector that reported the strongest check (the gateway
+ * counts a check several detectors report identically once); iHub names the key
+ * file of the first.
  *
  * The `ihub` request carries every key, so: redirects are refused (one would
  * forward token and keys to another host), the target passes
@@ -85,8 +90,9 @@ const responseSchema = z.object({
 
 /** The answer of the if-vllm image's `/watermark/v1/detect`; more fields may follow. */
 const modelDetectorResponseSchema = z.object({
-  tokenizer: z.string().max(300),
-  vllm_version: z.string().max(100),
+  // null as well as absent: a missing detail must not discard the results.
+  tokenizer: z.string().max(300).nullish(),
+  vllm_version: z.string().max(100).nullish(),
   results: z
     .array(
       z.object({
@@ -94,7 +100,7 @@ const modelDetectorResponseSchema = z.object({
         algorithm: z.string().max(64),
         parameters: z.record(z.string(), z.unknown()),
         p_value: z.number().min(0).max(1),
-        score: z.number().optional(),
+        score: z.number().nullish(),
         num_scored_tokens: z.number().int().min(0)
       })
     )
@@ -119,15 +125,17 @@ const gatewayResponseSchema = z.object({
           unclear_reasons: z.array(z.string().max(64)).max(10),
           strongest_result: z
             .object({
-              detector: z.string().max(200),
-              key_label: z.string().max(255),
+              reported_by: z
+                .array(z.object({ detector: z.string().max(200), key_label: z.string().max(255) }))
+                .min(1)
+                .max(100),
               algorithm: z.string().max(64),
               p_value: z.number().min(0).max(1),
               num_scored_tokens: z.number().int().min(0)
             })
-            .optional(),
-          // Older gateways may lack it; iHub then shows no number of checks.
-          evaluation: z.object({ tests: z.number().int().min(0) }).optional()
+            .nullish(),
+          // iHub shows no number of checks without it.
+          evaluation: z.object({ tests: z.number().int().min(0) }).nullish()
         })
       )
       .max(20)
@@ -279,13 +287,14 @@ async function postJson({
   const started = Date.now();
   const safeUrl = redactUrl(url);
   try {
+    // The URL first: a refused detector gets no token request.
+    const check = await checkDetectorUrl(url, { resolve });
+    if (!check.ok) throw unreachable(check.reason, { reason: 'url_refused' });
     const auth = await credentialHeaders(credentialRef, {
       resolve,
       bearerToken,
       signal: controller.signal
     });
-    const check = await checkDetectorUrl(url, { resolve });
-    if (!check.ok) throw unreachable(check.reason, { reason: 'url_refused' });
     const secrets = [...auth.secrets, ...bodySecrets];
     let res;
     try {
@@ -479,8 +488,9 @@ export async function callModelDetector({ url, apiKey, text, timeoutMs, signal, 
  * @param {Function} [params.resolve] - DNS override for tests
  * @returns {Promise<{verdict: string, alpha: number, textSha256: string, detectedAt: string,
  *   gatewayVersion: string, schemes: Array<{scheme: string, verdict: string, unclearReasons: string[],
- *   strongestResult?: {detector: string, keyLabel: string, algorithm: string, pValue: number,
- *   numScoredTokens: number}}>, latencyMs: number}>}
+ *   strongestResult?: {detector: string, keyLabel: string, reportedBy: Array<{detector: string,
+ *   keyLabel: string}>, algorithm: string, pValue: number, numScoredTokens: number}}>,
+ *   latencyMs: number}>} `detector` and `keyLabel` are those of the first reporter.
  * @throws {ServiceError} As {@link callDetector}; a gateway whose detectors all failed answers
  *   `503` (`http_error`).
  */
@@ -525,8 +535,12 @@ export async function callGatewayDetector({
       ...(scheme.strongest_result
         ? {
             strongestResult: {
-              detector: scheme.strongest_result.detector,
-              keyLabel: scheme.strongest_result.key_label,
+              detector: scheme.strongest_result.reported_by[0].detector,
+              keyLabel: scheme.strongest_result.reported_by[0].key_label,
+              reportedBy: scheme.strongest_result.reported_by.map(reporter => ({
+                detector: reporter.detector,
+                keyLabel: reporter.key_label
+              })),
               algorithm: scheme.strongest_result.algorithm,
               pValue: scheme.strongest_result.p_value,
               numScoredTokens: scheme.strongest_result.num_scored_tokens

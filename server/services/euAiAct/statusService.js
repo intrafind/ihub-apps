@@ -113,7 +113,11 @@ export async function buildStatus({ refresh = false, deps = {} } = {}) {
   for (const model of enabled) {
     // The image holds the key of a "model" key holder: iHub's key changes do not age its self-test.
     const modelHeld = markingOf(model, 'text').keyHolder === 'model';
-    const selfTest = selfTestSummary(selfTests[model.id], modelHeld ? null : activeKeyId);
+    const selfTest = selfTestSummary(
+      selfTests[model.id],
+      modelHeld ? null : activeKeyId,
+      modelHeld ? 'model' : 'ihub'
+    );
     const probe = probes.get(model.id);
     checks.push(
       ...modelChecks(model, {

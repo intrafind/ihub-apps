@@ -47,13 +47,19 @@ export function stateOfDiagnosis(diagnosis) {
  * @param {{diagnosis: string, matchedKeyId?: string}} result
  * @param {{now?: Date, activeKeyId?: string|null}} [options]
  */
-export async function recordSelfTest(modelId, result, { now = new Date(), activeKeyId } = {}) {
+export async function recordSelfTest(
+  modelId,
+  result,
+  { now = new Date(), activeKeyId, keyHolder = 'ihub' } = {}
+) {
   const entry = {
     at: now.toISOString(),
     diagnosis: result.diagnosis,
     state: stateOfDiagnosis(result.diagnosis),
     // The key that was active when the test ran: a later key change makes it stale.
-    keyId: activeKeyId === undefined ? getActiveKeyId() : activeKeyId
+    keyId: activeKeyId === undefined ? getActiveKeyId() : activeKeyId,
+    // Who held the key: a test of the image's key says nothing about iHub's, and back.
+    keyHolder
   };
   try {
     await configStore.updateJson(SELF_TESTS_FILE, current => ({
@@ -68,7 +74,7 @@ export async function recordSelfTest(modelId, result, { now = new Date(), active
   }
 }
 
-/** @returns {Promise<Object<string, {at: string, diagnosis: string, state: string, keyId: string|null}>>} */
+/** @returns {Promise<Object<string, {at: string, diagnosis: string, state: string, keyId: string|null, keyHolder?: string}>>} */
 export async function readSelfTests() {
   try {
     const data = await configStore.readJson(SELF_TESTS_FILE);
@@ -79,15 +85,19 @@ export async function readSelfTests() {
 }
 
 /**
- * The state of a model's last test against the key that is active now.
+ * The state of a model's last test against the key that is active now. A passed
+ * test is stale after a key change, and after the key holder changed (an entry
+ * without `keyHolder` predates the image-held keys and tested iHub's key).
  *
  * @param {Object|undefined} entry
  * @param {string|null} activeKeyId
+ * @param {'ihub'|'model'} [keyHolder]
  */
-export function selfTestSummary(entry, activeKeyId) {
+export function selfTestSummary(entry, activeKeyId, keyHolder = 'ihub') {
   if (!entry) return { state: SELF_TEST_STATE.NEVER, at: null, keyId: null, diagnosis: null };
-  const stale =
-    entry.state !== SELF_TEST_STATE.FAILED && entry.keyId && entry.keyId !== activeKeyId;
+  const holderChanged = (entry.keyHolder ?? 'ihub') !== keyHolder;
+  const keyChanged = Boolean(entry.keyId) && entry.keyId !== activeKeyId;
+  const stale = entry.state !== SELF_TEST_STATE.FAILED && (holderChanged || keyChanged);
   return {
     state: stale ? SELF_TEST_STATE.STALE : entry.state,
     at: entry.at,

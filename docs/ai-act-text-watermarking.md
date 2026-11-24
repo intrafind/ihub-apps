@@ -132,12 +132,16 @@ its own, neither for generating nor for detecting:
   as for the chat API; the image checks it when `VLLM_API_KEY` is set. `tokenizer`, `prf`,
   `contextWidth` and `detectorCredentialRef` are refused with `keyHolder: "model"`.
 - **The verdict.** The image answers with an uncorrected p-value per key file and algorithm
-  (`gumbel`, `dual_key_gumbel`). iHub decides as an iFinder Model Gateway does: a check that
-  several images report identically counts once, the strongest check's p-value times the number
-  of distinct checks must be below `alpha` (Bonferroni), otherwise the text is *too short* (a check
-  scored fewer than `minScoredTokens`), *unavailable* (an image did not answer) or *not detected*.
-  The `_verify` answer names the key file (`watermark.keyLabel`), the algorithm and the number of
-  checks (`watermark.checksMade`).
+  (`gumbel`, `dual_key_gumbel`). iHub decides with the rule of an iFinder Model Gateway, with its
+  own thresholds: a check that several images report with the same result counts once (same
+  tokenizer, algorithm, parameters and scored tokens, and the p-value up to rounding; the key file
+  name and the vLLM version do not matter), the strongest check's p-value times the number of
+  distinct checks must be below `alpha` (Bonferroni), otherwise the text is *too short* (a check
+  scored fewer than `minScoredTokens`), *unavailable* (an image did not answer, or answered
+  without results) or *not detected*. The `_verify` answer names the key file
+  (`watermark.keyLabel`), the algorithm, the number of checks (`watermark.checksMade`) and the
+  route that decided (`watermark.source`: `ihub`, `model` or `gateway`). With several routes, a
+  detection wins; without one, a route that could not answer makes the result *unavailable*.
 - **Through an iFinder Model Gateway.** Where iFinder runs alongside iHub, set the gateway's
   detection endpoint in **Admin → EU AI Act → Text watermark → Detectors and self-test**
   (`provenance.watermark.gatewayUrl`, with `gatewayCredentialRef`: a `bearer` credential, or an
