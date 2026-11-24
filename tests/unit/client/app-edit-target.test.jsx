@@ -6,7 +6,6 @@
  * editor by whoever the server says may edit it; every other app in the admin
  * editor by admins. The admin editor does not know personal apps.
  */
-import { describe, expect, test } from 'vitest';
 import { appEditPath } from '../../../client/src/features/apps/utils/appEditTarget';
 
 const admin = { isAdmin: true };
