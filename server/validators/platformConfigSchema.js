@@ -820,6 +820,7 @@ export const platformConfigSchema = z
             upload: z.boolean().prefault(true),
             webSearch: z.boolean().prefault(false),
             skills: z.boolean().prefault(false),
+            projects: z.boolean().prefault(false),
             integrations: z
               .array(
                 z

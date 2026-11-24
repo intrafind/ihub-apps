@@ -4,11 +4,12 @@
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
 /**
- * Migration V263 specs — seeding `platform.userApps.capabilities.webSearchLimits`.
+ * Migration V263 specs — seeding `platform.userApps.capabilities.webSearchLimits`
+ * and `platform.userApps.capabilities.projects`.
  *
- * The limit lands where it is missing and where `platform.userApps` exists; a
- * value an admin set stays, a second run changes nothing, and an installation
- * without the block is left alone (the settings reader fills the default).
+ * The defaults land where they are missing and where `platform.userApps` exists;
+ * a value an admin set stays, a second run changes nothing, and an installation
+ * without the block is left alone (the settings reader fills the defaults).
  */
 import fs from 'node:fs/promises';
 import os from 'node:os';
@@ -22,7 +23,7 @@ import {
   version,
   description,
   DEFAULT_MAX_PAGE_READS
-} from '../migrations/V263__user_apps_web_search_limits.js';
+} from '../migrations/V263__user_apps_advanced_capabilities.js';
 import { setDefault } from '../migrations/utils.js';
 import {
   DEFAULT_USER_APP_SETTINGS,
@@ -73,14 +74,15 @@ after(async () => {
   await fs.rm(baseDir, { recursive: true, force: true });
 });
 
-describe('V263 user_apps_web_search_limits', () => {
+describe('V263 user_apps_advanced_capabilities', () => {
   it('has its version and description, and the default of the settings reader', () => {
     assert.equal(version, '263');
-    assert.equal(description, 'user_apps_web_search_limits');
+    assert.equal(description, 'user_apps_advanced_capabilities');
     assert.equal(
       DEFAULT_MAX_PAGE_READS,
       DEFAULT_USER_APP_SETTINGS.capabilities.webSearchLimits.maxPageReads
     );
+    assert.equal(DEFAULT_USER_APP_SETTINGS.capabilities.projects, false);
   });
 
   it('runs only where platform.json exists', async () => {
@@ -99,17 +101,20 @@ describe('V263 user_apps_web_search_limits', () => {
     assert.deepEqual(platform.userApps.capabilities, {
       webSearch: true,
       modelChoice: false,
-      webSearchLimits: { maxPageReads: DEFAULT_MAX_PAGE_READS }
+      webSearchLimits: { maxPageReads: DEFAULT_MAX_PAGE_READS },
+      projects: false
     });
     assert.deepEqual(ctx.writes, ['config/platform.json']);
   });
 
-  it('keeps a limit an administrator set, and a second run changes nothing', async () => {
+  it('keeps what an administrator set, and a second run changes nothing', async () => {
     const { dir, ctx } = await seed({
-      userApps: { capabilities: { webSearchLimits: { maxPageReads: 3 } } }
+      userApps: { capabilities: { webSearchLimits: { maxPageReads: 3 }, projects: true } }
     });
     await up(ctx);
-    assert.equal((await readPlatform(dir)).userApps.capabilities.webSearchLimits.maxPageReads, 3);
+    const kept = (await readPlatform(dir)).userApps.capabilities;
+    assert.equal(kept.webSearchLimits.maxPageReads, 3);
+    assert.equal(kept.projects, true);
     assert.deepEqual(ctx.writes, []);
 
     const { dir: again, ctx: second } = await seed({ userApps: {} });

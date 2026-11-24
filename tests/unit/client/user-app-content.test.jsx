@@ -252,7 +252,8 @@ describe('the content keys and caps', () => {
       'skills',
       'integrations',
       'models',
-      'webSearchSettings'
+      'webSearchSettings',
+      'projects'
     ]);
     expect(USER_APP_INTEGRATION_KEYS).toEqual(['id', 'actions']);
   });
@@ -309,7 +310,8 @@ describe('the content keys and caps', () => {
         'inputRows',
         'models',
         'pageReads',
-        'researchGuidance'
+        'researchGuidance',
+        'projects'
       ].sort()
     );
   });
@@ -389,10 +391,11 @@ describe('USER_APP_FIELD_POLICY', () => {
     for (const key of keysOf('content')) expect(USER_APP_CONTENT_KEYS).toContain(key);
   });
 
-  test('capability: the nine keys only the ceiling writes', () => {
+  test('capability: the ten keys only the ceiling writes', () => {
     expect(keysOf('capability').sort()).toEqual(
       [
         'allowedModels',
+        'projects',
         'disallowModelSelection',
         'preferredModel',
         'upload',
@@ -424,7 +427,6 @@ describe('USER_APP_FIELD_POLICY', () => {
       'outputSchema',
       'customResponseRenderer',
       'rendererConfig',
-      'projects',
       'apps',
       'workflows',
       'iassistant',
@@ -438,9 +440,9 @@ describe('USER_APP_FIELD_POLICY', () => {
 });
 
 describe('the run object', () => {
-  test('USER_APP_RUN_KEYS is the fixed, content and capability keys: 30, each once', () => {
-    expect(USER_APP_RUN_KEYS).toHaveLength(30);
-    expect(new Set(USER_APP_RUN_KEYS).size).toBe(30);
+  test('USER_APP_RUN_KEYS is the fixed, content and capability keys: 31, each once', () => {
+    expect(USER_APP_RUN_KEYS).toHaveLength(31);
+    expect(new Set(USER_APP_RUN_KEYS).size).toBe(31);
     for (const key of USER_APP_RUN_KEYS) {
       expect(['fixed', 'content', 'capability']).toContain(USER_APP_FIELD_POLICY[key]);
     }
@@ -569,7 +571,9 @@ describe('pickUserAppContent', () => {
         skills: true,
         integrations: [{ id: 'jira', actions: ['searchIssues', 'getIssue'] }],
         // `allowedModels` and `disallowModelSelection` of an app config are the models of a personal app.
-        models: { allowed: ['model-a'], lock: true }
+        models: { allowed: ['model-a'], lock: true },
+        // The `projects` of an app config are links of a personal app; only the IDs are kept.
+        projects: [{ id: 'secret-project' }]
       }
     });
   });

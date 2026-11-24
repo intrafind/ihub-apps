@@ -220,6 +220,7 @@ function settings(overrides = {}) {
       upload: true,
       webSearch: false,
       skills: false,
+      projects: false,
       integrations: [],
       webSearchLimits: { maxPageReads: 10 }
     },
@@ -1083,6 +1084,22 @@ describe('the settings panel', () => {
     const { container } = renderPanel();
     await waitFor(() => expect(mockApi.fetchUserAppSettings).toHaveBeenCalled());
     await waitFor(() => expect(container.querySelector('details')).toBeNull());
+  });
+});
+
+describe('the switch for linked projects', () => {
+  test('is in the list of what personal apps may use, off by default, and saved alone', async () => {
+    renderPanel({ publishingAvailable: true });
+    await screen.findByText(text('admin.userApps.settings.shareWith'));
+    const projects = screen.getByRole('checkbox', {
+      name: new RegExp(`^${text('admin.userApps.capability.projects')}`)
+    });
+    expect(projects).not.toBeChecked();
+    fireEvent.click(projects);
+    await act(async () => {
+      fireEvent.click(saveButton());
+    });
+    expect(mockApi.saveUserAppSettings).toHaveBeenCalledWith({ capabilities: { projects: true } });
   });
 });
 

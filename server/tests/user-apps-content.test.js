@@ -352,6 +352,45 @@ describe('the models and the web search settings of an app', () => {
   });
 });
 
+describe('the linked projects of an app', () => {
+  const caps = projects => content({ capabilities: { upload: true, projects } });
+  const parse = projects => userAppContentSchema.safeParse(caps(projects));
+
+  it('keeps the IDs of up to three projects, each once, and nothing else of a link', () => {
+    const parsed = userAppContentSchema.parse(caps([{ id: 'prj_abc' }, { id: 'faq' }]));
+    assert.deepEqual(parsed.capabilities.projects, [{ id: 'prj_abc' }, { id: 'faq' }]);
+    const many = Array.from({ length: USER_APP_LIMITS.projects + 1 }, (_, i) => ({ id: `p${i}` }));
+    assert.equal(parse(many).success, false);
+    for (const link of [
+      { id: '' },
+      { id: '../x' },
+      { id: 'a b' },
+      { id: 'a', mode: 'tools' },
+      { id: 'a', write: true },
+      {}
+    ]) {
+      assert.equal(parse([link]).success, false, JSON.stringify(link));
+    }
+    assert.equal(parse([{ id: 'a' }, { id: 'a' }]).success, false);
+  });
+
+  it('stores nothing for an empty list, and removes it with null', () => {
+    for (const projects of [[], null]) {
+      const parsed = userAppContentSchema.parse(caps(projects));
+      assert.equal(Object.hasOwn(parsed.capabilities, 'projects'), false);
+    }
+    const stored = userAppContentSchema.parse(caps([{ id: 'faq' }]));
+    const merged = mergeUserAppContent(stored, { capabilities: { projects: null } });
+    assert.equal(Object.hasOwn(merged.capabilities, 'projects'), false);
+  });
+
+  it('replaces the list as a whole in a merge patch', () => {
+    const stored = userAppContentSchema.parse(caps([{ id: 'faq' }, { id: 'prj_abc' }]));
+    const merged = mergeUserAppContent(stored, { capabilities: { projects: [{ id: 'prj_abc' }] } });
+    assert.deepEqual(merged.capabilities.projects, [{ id: 'prj_abc' }]);
+  });
+});
+
 describe('every cap holds', () => {
   it('accepts 5 languages and refuses 6, for every localized key', () => {
     for (const key of ['name', 'description', 'system', 'prompt', 'messagePlaceholder']) {

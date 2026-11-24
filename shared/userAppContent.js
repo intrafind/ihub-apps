@@ -102,8 +102,12 @@ export const USER_APP_CAPABILITY_KEYS = Object.freeze([
   'skills',
   'integrations',
   'models',
-  'webSearchSettings'
+  'webSearchSettings',
+  'projects'
 ]);
+
+/** The keys of one entry of `capabilities.projects`. */
+export const USER_APP_PROJECT_KEYS = Object.freeze(['id']);
 
 /** The keys of `capabilities.models`: the models the app may use, and whether the choice is locked. */
 export const USER_APP_MODELS_KEYS = Object.freeze(['allowed', 'lock']);
@@ -175,7 +179,9 @@ export const USER_APP_LIMITS = Object.freeze({
   /** The most pages the page reader may open for one answer. */
   pageReads: 50,
   /** The research guidance of web search. */
-  researchGuidance: 1000
+  researchGuidance: 1000,
+  /** Projects an app may link: the documents it answers from. */
+  projects: 3
 });
 
 /** The values of `origin`: how the app was started. `chat` is added with the chat-based builder. */
@@ -221,7 +227,6 @@ export const USER_APP_FIELD_POLICY = Object.freeze({
   outputSchema: 'never',
   customResponseRenderer: 'never',
   rendererConfig: 'never',
-  projects: 'never',
   apps: 'never',
   workflows: 'never',
   iassistant: 'never',
@@ -428,6 +433,22 @@ function pickModels(value) {
   return Object.keys(models).length > 0 ? models : undefined;
 }
 
+/**
+ * `capabilities.projects` from either form: the personal list `[{ id }]` or the
+ * `projects` of an app config (a bare ID or `{ id, mode, write }`). Only the ID
+ * is kept: a personal app links a project and the project's own knowledge mode
+ * applies; it never writes into one.
+ */
+function pickProjects(value) {
+  if (!Array.isArray(value)) return undefined;
+  const ids = [];
+  for (const entry of value) {
+    const id = typeof entry === 'string' ? entry : isPlainObject(entry) ? entry.id : undefined;
+    if (typeof id === 'string' && id !== '' && !ids.includes(id)) ids.push(id);
+  }
+  return ids.length > 0 ? ids.map(id => ({ id })) : undefined;
+}
+
 /** `capabilities.webSearchSettings` from the personal object or from `websearch` of an app config. */
 function pickWebSearchSettings(value) {
   if (!isPlainObject(value)) return undefined;
@@ -460,6 +481,8 @@ function pickCapabilities(draft) {
   };
   const models = pickModels(Object.hasOwn(own, 'models') ? own.models : draft);
   if (models) capabilities.models = models;
+  const projects = pickProjects(Object.hasOwn(own, 'projects') ? own.projects : draft.projects);
+  if (projects) capabilities.projects = projects;
   const search = pickWebSearchSettings(
     Object.hasOwn(own, 'webSearchSettings') ? own.webSearchSettings : draft.websearch
   );

@@ -28,6 +28,9 @@ import {
 /** Prefix of the capability ID of a bound installation (`integration:<installationId>`). */
 const INTEGRATION_PREFIX = 'integration:';
 
+/** Prefix of the capability ID of a linked project (`project:<projectId>`). */
+const PROJECT_PREFIX = 'project:';
+
 /**
  * Stands for "the app asks for a model the server does not tell": the model
  * was withheld, so its ID is not in the answer. Never sent.
@@ -116,7 +119,14 @@ export function formFromApp(app) {
   };
   // What the author stored where the app object of a run has less (the models are cut to
   // what this caller may use): the answer's `authored` block, when the caller may edit.
+  // The linked projects: as stored where the caller may read it, else the ones the app asks for.
+  const requestedProjects = [...caps.keys()]
+    .filter(id => id.startsWith(PROJECT_PREFIX) && requested(id))
+    .map(id => ({ id: id.slice(PROJECT_PREFIX.length) }));
+  if (requestedProjects.length > 0) form.capabilities.projects = requestedProjects;
   const authored = source.authored?.capabilities;
+  if (Array.isArray(authored?.projects))
+    form.capabilities.projects = structuredClone(authored.projects);
   if (isPlainObject(authored?.models)) form.capabilities.models = structuredClone(authored.models);
   if (isPlainObject(authored?.webSearchSettings)) {
     form.capabilities.webSearchSettings = structuredClone(authored.webSearchSettings);
@@ -238,6 +248,16 @@ function cleanCapabilityObject(key, value) {
   return clean;
 }
 
+/** The linked projects as the server would store them: each ID once, in order. */
+function cleanProjects(list) {
+  const ids = [];
+  for (const entry of Array.isArray(list) ? list : []) {
+    const id = typeof entry?.id === 'string' ? entry.id : '';
+    if (id && !ids.includes(id)) ids.push(id);
+  }
+  return ids.map(id => ({ id }));
+}
+
 /** The patch of one capability object between two form states; `undefined` when it did not change. */
 function capabilityObjectPatch(key, saved, current) {
   const before = cleanCapabilityObject(key, saved?.capabilities?.[key]);
@@ -324,6 +344,12 @@ export function patchFor(saved, current) {
     const change = capabilityObjectPatch(key, saved, current);
     if (change !== undefined) capabilities[key] = change;
   }
+  // The linked projects are a list and go whole, or `null` when none is left.
+  const projectsBefore = cleanProjects(saved.capabilities?.projects);
+  const projectsAfter = cleanProjects(current.capabilities?.projects);
+  if (!same(projectsBefore, projectsAfter)) {
+    capabilities.projects = projectsAfter.length > 0 ? projectsAfter : null;
+  }
   if (Object.keys(capabilities).length > 0) patch.capabilities = capabilities;
   return Object.keys(patch).length > 0 ? patch : null;
 }
@@ -335,7 +361,7 @@ export function patchFor(saved, current) {
  * the form read-only for that editor.
  *
  * @param {Object} app - The answer of the server.
- * @returns {Array<{id: string, kind: 'model'|'models'|'upload'|'webSearch'|'skills'|'integration',
+ * @returns {Array<{id: string, kind: 'model'|'models'|'upload'|'webSearch'|'skills'|'integration'|'project',
  *   installationId: string|null, name: Object|string|null, reason: string|null}>}
  */
 export function withheldCapabilities(app) {
@@ -344,9 +370,11 @@ export function withheldCapabilities(app) {
     .filter(entry => isPlainObject(entry) && entry.requested === true && entry.granted !== true)
     .map(entry => {
       const integration = String(entry.id).startsWith(INTEGRATION_PREFIX);
+      const project = String(entry.id).startsWith(PROJECT_PREFIX);
       return {
         id: entry.id,
-        kind: integration ? 'integration' : entry.id,
+        kind: integration ? 'integration' : project ? 'project' : entry.id,
+        ...(project ? { projectId: String(entry.id).slice(PROJECT_PREFIX.length) } : {}),
         installationId: integration ? String(entry.id).slice(INTEGRATION_PREFIX.length) : null,
         name: entry.name ?? null,
         reason: entry.reason || null
@@ -367,6 +395,13 @@ export function withoutCapability(form, capability) {
   if (capability.kind === 'models') {
     const { models: _removed, ...rest } = form.capabilities;
     return { ...form, capabilities: rest };
+  }
+  if (capability.kind === 'project') {
+    const kept = cleanProjects(form.capabilities.projects).filter(
+      link => link.id !== capability.projectId
+    );
+    const { projects: _links, ...rest } = form.capabilities;
+    return { ...form, capabilities: kept.length > 0 ? { ...rest, projects: kept } : rest };
   }
   if (capability.kind === 'integration') {
     return {
@@ -393,6 +428,9 @@ export function stillAsksFor(form, capability) {
   if (capability.kind === 'model') return form.preferredModel === WITHHELD_MODEL;
   if (capability.kind === 'models')
     return !isUnset(cleanCapabilityObject('models', form.capabilities.models));
+  if (capability.kind === 'project') {
+    return cleanProjects(form.capabilities.projects).some(link => link.id === capability.projectId);
+  }
   if (capability.kind === 'integration') {
     return form.capabilities.integrations.some(binding => binding.id === capability.installationId);
   }

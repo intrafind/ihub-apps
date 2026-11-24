@@ -47,6 +47,7 @@ import {
 import {
   CAPABILITY_REASONS,
   INTEGRATION_CAPABILITY_PREFIX,
+  PROJECT_CAPABILITY_PREFIX,
   checkCapabilitiesForSave,
   removesCapabilitiesOnly
 } from './ceiling.js';
@@ -61,6 +62,7 @@ import {
   ownerSnapshotNeedsRefresh,
   userAppOwnerSnapshot
 } from './userAppAccess.js';
+import { isProjectsConfigured } from '../projects/projectSettings.js';
 import { hasCompanyApp, userAppCatalog, userAppStanding } from './userAppResolution.js';
 import {
   allowedUserAppShareTargets,
@@ -158,6 +160,9 @@ export function requestedCapabilityIds(content) {
   for (const binding of capabilities.integrations || []) {
     if (binding?.id) ids.push(`${INTEGRATION_CAPABILITY_PREFIX}${binding.id}`);
   }
+  for (const link of capabilities.projects || []) {
+    if (link?.id) ids.push(`${PROJECT_CAPABILITY_PREFIX}${link.id}`);
+  }
   return ids;
 }
 
@@ -166,7 +171,12 @@ function withoutCapability(content, capability) {
   const next = { ...content, capabilities: { ...content.capabilities } };
   if (capability === 'model') delete next.preferredModel;
   else if (capability === 'models') delete next.capabilities.models;
-  else if (capability.startsWith(INTEGRATION_CAPABILITY_PREFIX)) {
+  else if (capability.startsWith(PROJECT_CAPABILITY_PREFIX)) {
+    const id = capability.slice(PROJECT_CAPABILITY_PREFIX.length);
+    const kept = (content.capabilities?.projects || []).filter(link => link.id !== id);
+    if (kept.length > 0) next.capabilities.projects = kept;
+    else delete next.capabilities.projects;
+  } else if (capability.startsWith(INTEGRATION_CAPABILITY_PREFIX)) {
     const id = capability.slice(INTEGRATION_CAPABILITY_PREFIX.length);
     next.capabilities.integrations = (content.capabilities?.integrations || []).filter(
       binding => binding.id !== id
@@ -260,7 +270,7 @@ export class UserAppService {
    * the owner saves, "the owner may not" is told as "you may not".
    */
   async refusedCapabilities(content, { actor, owner, settings }) {
-    const catalog = await userAppCatalog({ owner, runner: actor });
+    const catalog = await userAppCatalog({ owner, runner: actor, content });
     const refused = checkCapabilitiesForSave(content, { actor, owner, settings, catalog });
     if (owner !== actor) return refused;
     return refused.map(entry =>
@@ -685,6 +695,7 @@ export class UserAppService {
    * @returns {Promise<{enabled: boolean, canCreate: boolean, canShare: boolean,
    *   canPublish: boolean, maxApps: number, used: number, generator: boolean,
    *   generatorEnabled: boolean, capabilities: {modelChoice: boolean, upload: boolean, webSearch: boolean, skills: boolean,
+   *   projects: boolean,
    *   integrations: Array<{id: string, label: string,
    *   actions: Array<{name: string, description: string}>}>,
    *   webSearchLimits: {maxPageReads: number}}}>}
@@ -705,6 +716,7 @@ export class UserAppService {
       upload: false,
       webSearch: false,
       skills: false,
+      projects: false,
       integrations: [],
       webSearchLimits: { maxPageReads: 0 }
     };
@@ -725,6 +737,7 @@ export class UserAppService {
             upload: settings.capabilities.upload,
             webSearch: settings.capabilities.webSearch && this._searchFor(user),
             skills: settings.capabilities.skills && isFeatureEnabled('skills', features),
+            projects: settings.capabilities.projects && isProjectsConfigured(features),
             integrations: await this._bindableInstallations(user, settings, features, language),
             webSearchLimits: { ...settings.capabilities.webSearchLimits }
           }

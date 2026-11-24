@@ -140,8 +140,10 @@ function capabilitiesFor(capabilities, full, bindings) {
     name: about.get(entry.id)?.name,
     actions: about.get(entry.id)?.actions
   }));
-  // The name of a connected system goes to every role: the notice names it.
-  const named = entry => (entry.name ? { name: entry.name } : {});
+  // The name of a connected system goes to every role: the notice names it. The name of a
+  // project goes to the roles that may edit the app only: it may be one the others cannot see.
+  const named = entry =>
+    entry.name && (full || !String(entry.id).startsWith('project:')) ? { name: entry.name } : {};
   if (full) {
     return list.map(entry => ({
       id: entry.id,

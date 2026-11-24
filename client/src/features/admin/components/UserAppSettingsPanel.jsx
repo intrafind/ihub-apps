@@ -44,7 +44,8 @@ const CAPABILITIES = [
   ['modelChoice', 'admin.userApps.capability.model'],
   ['upload', 'admin.userApps.capability.upload'],
   ['webSearch', 'userApps.edit.extras.webSearch'],
-  ['skills', 'userApps.edit.extras.skills']
+  ['skills', 'userApps.edit.extras.skills'],
+  ['projects', 'admin.userApps.capability.projects']
 ];
 
 /**

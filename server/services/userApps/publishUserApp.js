@@ -36,7 +36,12 @@ import { appIdProblem, slugifyAppId, uniqueAppId } from '../../../shared/appId.j
 import { isUserAppId } from '../../../shared/userAppContent.js';
 import { getUserAppRepository } from './UserAppRepository.js';
 import { asServiceError } from './UserAppService.js';
-import { INTEGRATION_CAPABILITY_PREFIX, effectiveUserApp, isRunnerOwner } from './ceiling.js';
+import {
+  INTEGRATION_CAPABILITY_PREFIX,
+  PROJECT_CAPABILITY_PREFIX,
+  effectiveUserApp,
+  isRunnerOwner
+} from './ceiling.js';
 import { effectiveUserAppState, isCompanyAppOf, lookupUserAppOwner } from './userAppAccess.js';
 import { userAppCatalog } from './userAppResolution.js';
 import { currentUserAppSettings } from './userAppSettings.js';
@@ -107,18 +112,43 @@ function installationName(installationId, language) {
  *   one entry per granted capability: `{ id: 'model', model }`,
  *   `{ id: 'upload' }`, `{ id: 'webSearch' }`, `{ id: 'skills', skills: [ids] }`
  *   and `{ id: 'integration:<installationId>', installationId, name, actions }`.
+ *   `{ id: 'project:<id>', projectId, name }` for a project of the company; a project of a
+ *   person is left out with the reason `userProject`.
  *   `tools` names what makes the app one with tools (`webSearch`, `skills`,
- *   `integrations`). `plain` is true when the owner's rights could not be
+ *   `integrations`, `projects`). `plain` is true when the owner's rights could not be
  *   checked, so nothing that was asked for is granted.
  */
 export function projectCapabilities(effective, { nameOf = id => id } = {}) {
   const app = effective?.app || {};
   const capabilities = [];
   const dropped = [];
+  // What the ceiling knows about each linked project: its name, and whose it is.
+  const linked = new Map(
+    (effective?.bindings || [])
+      .filter(entry => String(entry.id).startsWith(PROJECT_CAPABILITY_PREFIX))
+      .map(entry => [entry.id, entry])
+  );
   for (const entry of effective?.capabilities || []) {
     const binding = entry.id.startsWith(INTEGRATION_CAPABILITY_PREFIX)
       ? entry.id.slice(INTEGRATION_CAPABILITY_PREFIX.length)
       : null;
+    const project = linked.get(entry.id);
+    if (project) {
+      const projectId = entry.id.slice(PROJECT_CAPABILITY_PREFIX.length);
+      if (entry.granted && project.ownership === 'admin') {
+        capabilities.push({ id: entry.id, projectId, name: project.name || projectId });
+      } else if (entry.requested) {
+        // A project of a person stays theirs: the company app does not link it, because
+        // everyone who may use the app would otherwise be given its documents. The owner
+        // can ask an administrator for a project of the company.
+        dropped.push({
+          id: entry.id,
+          reason: entry.granted ? 'userProject' : entry.reason,
+          name: project.name || projectId
+        });
+      }
+      continue;
+    }
     if (!entry.granted) {
       if (entry.requested) {
         dropped.push({
@@ -148,6 +178,7 @@ export function projectCapabilities(effective, { nameOf = id => id } = {}) {
   if (capabilities.some(entry => entry.id === 'webSearch')) tools.push('webSearch');
   if (capabilities.some(entry => entry.id === 'skills')) tools.push('skills');
   if (capabilities.some(entry => entry.installationId)) tools.push('integrations');
+  if (capabilities.some(entry => entry.projectId)) tools.push('projects');
   return {
     capabilities,
     dropped,
@@ -255,11 +286,22 @@ export function toAdminApp(record, { effective, id, enabled, category }) {
       };
     }
   }
-  // The personal app ran without projects: a project attached to a chat would
-  // hand the knowledge tools to instructions nobody reviewed, and those reads
-  // run without a card. The company app starts the same way; an admin switches
-  // projects on in the editor (design 8.2).
-  app.features = { ...(app.features || {}), projects: false, userProjects: false };
+  // Only the projects of the company are carried; a project of a person stays theirs. They bring
+  // their knowledge tools, which run without a card (`exemptInternalReads` does not apply to a
+  // company app, whose reads never asked), and an administrator reviews them: an app that links a
+  // project starts switched off (`projectCapabilities`).
+  const companyProjects = (effective?.bindings || [])
+    .filter(
+      entry => String(entry.id).startsWith(PROJECT_CAPABILITY_PREFIX) && entry.ownership === 'admin'
+    )
+    .map(entry => entry.id.slice(PROJECT_CAPABILITY_PREFIX.length))
+    .filter(id => (source.projects || []).includes(id));
+  if (companyProjects.length > 0) app.projects = companyProjects;
+  app.features = {
+    ...(app.features || {}),
+    projects: companyProjects.length > 0,
+    userProjects: false
+  };
   app.toolApproval = { default: 'writes' };
   if (typeof category === 'string' && category !== '') app.category = category;
   // The stamp that makes this file the record's company app (`isCompanyAppOf`).

@@ -25,9 +25,12 @@
  * {
  *   models: [{ id, enabled, modelType }],          // every model, disabled ones included
  *   installations: [{ id, definition, enabled }],  // every installed integration
- *   features: { skills: true, integrations: true },// feature flags; `false` withholds
+ *   features: { skills: true, integrations: true, projects: true, userProjects: true },
+ *                                                  // feature flags; `false` withholds
  *   webSearch: { owner: true, runner: true },      // a search engine is available to them
- *   skills: { owner: ['a'], runner: ['a', 'b'] }   // global skills granted to them
+ *   skills: { owner: ['a'], runner: ['a', 'b'] },  // global skills granted to them
+ *   projects: { [id]: { exists, ownership, name, owner, runner } }
+ *                                                  // who may use each linked project
  * }
  * ```
  *
@@ -68,6 +71,9 @@ export const USER_APP_CAPABILITY_IDS = Object.freeze([
 /** The prefix of the capability ID of one bound installation. */
 export const INTEGRATION_CAPABILITY_PREFIX = 'integration:';
 
+/** The prefix of the capability ID of one linked project. */
+export const PROJECT_CAPABILITY_PREFIX = 'project:';
+
 /** Why a capability was withheld. */
 export const CAPABILITY_REASONS = Object.freeze({
   notRequested: 'notRequested',
@@ -89,6 +95,19 @@ export const CAPABILITY_REASONS = Object.freeze({
  */
 export function integrationCapabilityId(installationId) {
   return `${INTEGRATION_CAPABILITY_PREFIX}${installationId}`;
+}
+
+/**
+ * The capability ID of a linked project.
+ *
+ * @param {string} projectId
+ * @returns {string}
+ *
+ * @example
+ * projectCapabilityId('prj_abc'); // → 'project:prj_abc'
+ */
+export function projectCapabilityId(projectId) {
+  return `${PROJECT_CAPABILITY_PREFIX}${projectId}`;
 }
 
 function isPlainObject(value) {
@@ -120,6 +139,18 @@ function requestedBindings(content) {
     bindings.push({ id, actions: actionNames(entry.actions) });
   }
   return bindings;
+}
+
+/** The projects a content object asks for, as `[{ id }]`; each ID once. */
+function requestedProjects(content) {
+  const list = content?.capabilities?.projects;
+  if (!Array.isArray(list)) return [];
+  const links = [];
+  for (const entry of list) {
+    const id = typeof entry?.id === 'string' ? entry.id : '';
+    if (id && !links.some(link => link.id === id)) links.push({ id });
+  }
+  return links;
 }
 
 /**
@@ -320,7 +351,31 @@ function evaluate(content, { runner, owner, settings, catalog, ownerState, stric
     };
   });
 
-  return { model, models, upload, webSearch, skills, bindings };
+  // Linked projects, one decision per link: the switch, the features, and then whether the owner
+  // and the person the check is made for may each use the project in their own right. A
+  // personal app never gives access to a project.
+  const projects = requestedProjects(content).map(link => {
+    const access = catalog?.projects?.[link.id];
+    const user = access?.ownership !== 'admin';
+    return {
+      id: link.id,
+      requested: true,
+      name: access?.name || null,
+      ownership: access?.ownership || null,
+      reason: decide({
+        installation:
+          allowed.projects === true &&
+          features.projects !== false &&
+          (!user || features.userProjects !== false) &&
+          access?.exists === true,
+        ownerState,
+        owner: access?.owner === true,
+        runner: access?.runner === true
+      })
+    };
+  });
+
+  return { model, models, upload, webSearch, skills, bindings, projects };
 }
 
 /** One entry of the `capabilities` list of {@link effectiveUserApp}. */
@@ -471,7 +526,8 @@ function webSearchTuning(value, settings) {
  *   reason?: string}>, bindings: Array<{id: string, name: Object|string|null, actions: string[]}>,
  *   approval: {mode: 'writes'|'always', chatGrants: boolean}}}
  *   `app` passes `appConfigSchema` and has only keys of `USER_APP_RUN_KEYS`.
- *   `capabilities` lists `model`, `upload`, `webSearch`, `skills` and one
+ *   `capabilities` lists `model`, `models`, `upload`, `webSearch`, `skills`, one `project:<id>`
+ *   per linked project and one
  *   `integration:<installationId>` per binding.
  *
  * @example
@@ -552,6 +608,14 @@ export function effectiveUserApp(record, { runner, owner, settings, catalog, now
       };
     }
   }
+  // Linked projects: the ones both may use. The projects of the run are exactly this list: a
+  // chat of a personal app attaches no other project and runs in none (`resolveProjectScope`),
+  // and the picker stays off for it (`userProjects: false`).
+  const grantedProjects = decided.projects.filter(link => !link.reason).map(link => link.id);
+  if (grantedProjects.length > 0) {
+    app.projects = grantedProjects;
+    app.features = { ...app.features, projects: true, userProjects: false };
+  }
   // The owner runs their app under their own approval settings, whoever
   // saved the content: anyone allowed to change the app changes it, and the
   // owner does not confirm an editor's change (design 6.3). Everyone else is
@@ -576,15 +640,25 @@ export function effectiveUserApp(record, { runner, owner, settings, catalog, now
       capabilityEntry('skills', decided.skills),
       ...decided.bindings.map(binding =>
         capabilityEntry(integrationCapabilityId(binding.id), binding)
-      )
+      ),
+      ...decided.projects.map(link => capabilityEntry(projectCapabilityId(link.id), link))
     ],
     // Per connected system the app asks for: its display name and the
-    // functions the app stores, granted or not. For the views only.
-    bindings: decided.bindings.map(binding => ({
-      id: integrationCapabilityId(binding.id),
-      name: binding.name,
-      actions: [...binding.storedActions]
-    })),
+    // functions the app stores, granted or not; per linked project its name.
+    // For the views only.
+    bindings: [
+      ...decided.bindings.map(binding => ({
+        id: integrationCapabilityId(binding.id),
+        name: binding.name,
+        actions: [...binding.storedActions]
+      })),
+      // A linked project carries its name, so that an editor can tell which one is withheld.
+      ...decided.projects.map(link => ({
+        id: projectCapabilityId(link.id),
+        name: link.name,
+        ownership: link.ownership
+      }))
+    ],
     approval: { mode: runnerIsOwner ? 'writes' : 'always', chatGrants: runnerIsOwner }
   };
 }
@@ -630,6 +704,7 @@ export function checkCapabilitiesForSave(content, { actor, owner, settings, cata
   note('webSearch', decided.webSearch);
   note('skills', decided.skills);
   for (const binding of decided.bindings) note(integrationCapabilityId(binding.id), binding);
+  for (const link of decided.projects) note(projectCapabilityId(link.id), link);
   return denied;
 }
 
@@ -663,6 +738,9 @@ export function removesCapabilitiesOnly(previous, next) {
   for (const key of ['models', 'webSearchSettings']) {
     if (is[key] !== undefined && !same(was[key], is[key])) return false;
   }
+  // Projects may be taken away, not added.
+  const wasLinked = new Set(requestedProjects(before).map(link => link.id));
+  if (requestedProjects(after).some(link => !wasLinked.has(link.id))) return false;
   const wasBound = new Map(requestedBindings(before).map(binding => [binding.id, binding.actions]));
   for (const binding of requestedBindings(after)) {
     const actions = wasBound.get(binding.id);

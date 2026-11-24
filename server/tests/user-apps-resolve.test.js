@@ -183,7 +183,7 @@ describe('resolveAppForChat: who gets a personal app', () => {
     for (const key of Object.keys(app)) assert.ok(USER_APP_RUN_KEYS.includes(key), key);
     assert.equal(app.type, 'chat');
     assert.deepEqual(app.features, { projects: false, userProjects: false });
-    assert.deepEqual(app.toolApproval, { default: 'always' });
+    assert.deepEqual(app.toolApproval, { default: 'always', exemptInternalReads: true });
     assert.equal(JSON.stringify(app).includes('ownerPrincipal'), false);
   });
 

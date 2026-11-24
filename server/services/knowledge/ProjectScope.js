@@ -35,6 +35,7 @@ import {
 import { resolveKnowledgeMode } from '../../../shared/knowledgeModes.js';
 import { withoutExcludedItems } from '../projects/aiAccess.js';
 import { normalizeProjectLink } from '../../validators/projectSchema.js';
+import { isUserAppId } from '../../../shared/userAppContent.js';
 import { projectDescription, projectName } from '../projects/projectView.js';
 
 /**
@@ -92,17 +93,22 @@ export async function resolveProjectScope({
   // An app the admin switched projects off for (`features.projects: false`)
   // reaches none of its own: no container, no linked or attached project.
   // A workflow's links are the workflow's, not the app's.
+  // A personal app brings the projects it links and nothing else: a chat of it runs in no
+  // container project and attaches none, and the instructions of a linked project do not apply.
+  // Those instructions are written by the project's editors, who are not the app's owner, and
+  // they change without a revision of the app (design 07, section 2.4).
+  const personal = isUserAppId(appConfig.id);
   if (appUsesProjects(appConfig)) {
-    if (typeof appConfig._projectId === 'string')
+    if (typeof appConfig._projectId === 'string' && !personal)
       add(appConfig._projectId, null, false, 'container', true);
     for (const link of Array.isArray(appConfig.projects) ? appConfig.projects : []) {
       const { id, mode, write } = normalizeProjectLink(link);
-      add(id, mode, write, 'app', true);
+      add(id, mode, personal ? false : write, 'app', !personal);
     }
     for (const id of Array.isArray(appConfig._attachedProjectIds)
       ? appConfig._attachedProjectIds
       : []) {
-      if (typeof id === 'string') add(id, null, false, 'attached', false);
+      if (typeof id === 'string' && !personal) add(id, null, false, 'attached', false);
     }
   }
   for (const link of Array.isArray(appConfig._workflowProjects)
@@ -161,7 +167,13 @@ export async function resolveProjectScope({
     }
     const loadedProject = loaded.project;
     if (!loadedProject) continue;
-    if (loadedProject.ownership === 'user' && !userProjectsOn) continue;
+    // The links of a personal app are its own: the feature `userProjects` and the app switch
+    // decide whether people chat inside their projects and attach them, not whether the app
+    // answers from the user project its owner linked. The runner must still be allowed to use it.
+    // The platform feature still decides: with user projects off nothing of them is reached.
+    const linkedByPersonalApp =
+      personal && entry.origin === 'app' && isUserProjectsConfigured(features);
+    if (loadedProject.ownership === 'user' && !userProjectsOn && !linkedByPersonalApp) continue;
     const permissions = permissionsFor(loadedProject, user, context);
     if (!permissions.canUse) continue;
     // "Not for AI" items stay in the project for people; the model never sees them.

@@ -340,6 +340,8 @@ export function revisionOutputRules({
  *   settings of the registry the turn may propose; see {@link revisionOutputRules}.
  * @param {string} [options.modelsBlock=''] - The catalogue of the models the caller may use,
  *   read only where a setting names models.
+ * @param {string} [options.projectsBlock=''] - The catalogue of the projects the caller may
+ *   use, read only where a setting links projects.
  * @returns {{ messages: Array<{ role: string, content: string }> }}
  */
 export function buildRevisionMessages({
@@ -353,7 +355,8 @@ export function buildRevisionMessages({
   mayPropose = true,
   integrationsBlock = '',
   settings = [],
-  modelsBlock = ''
+  modelsBlock = '',
+  projectsBlock = ''
 }) {
   const catalogue = mayPropose ? integrationsBlock.trim() : '';
   // The models are listed only where a setting of this turn names a model.
@@ -362,6 +365,7 @@ export function buildRevisionMessages({
     REVISE_BRIEF,
     catalogue,
     namesModels ? modelsBlock.trim() : '',
+    settings.some(({ key }) => key === 'projects') ? projectsBlock.trim() : '',
     revisionOutputRules({
       language,
       keys,

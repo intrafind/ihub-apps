@@ -147,7 +147,8 @@ const WaitingAppsNotice =
 const AdminAppsPage = require('../../../client/src/features/admin/pages/AdminAppsPage').default;
 const {
   capabilityLines,
-  droppedText
+  droppedText,
+  toolsText
 } = require('../../../client/src/features/apps/components/user-app/publishText');
 
 const PUBLISH = en.userApps.publish;
@@ -283,6 +284,24 @@ describe('the sentences both dialogs share (publishText.js)', () => {
     );
     expect(droppedText(dropped, t, { asOwner: true })).toContain('Web search (you may not use it)');
     expect(droppedText([], t)).toBe('');
+  });
+});
+
+describe('what the dialogs say about linked projects (publishText.js)', () => {
+  test('a project of the company is a line, and a reason the app needs review', () => {
+    expect(
+      capabilityLines([{ id: 'project:faq', projectId: 'faq', name: 'FAQ' }], t).map(
+        line => line.text
+      )
+    ).toEqual(['answer from the project FAQ']);
+    expect(toolsText(['projects'], t, 'en')).toBe('a project');
+    expect(toolsText(['webSearch', 'projects'], t, 'en')).toBe('web search and a project');
+  });
+
+  test('a project of a person is left behind, with the reason that it stays theirs', () => {
+    expect(droppedText([{ id: 'project:prj_a', reason: 'userProject', name: 'My notes' }], t)).toBe(
+      'My notes (a project of a person stays theirs; ask an administrator for a company project)'
+    );
   });
 });
 

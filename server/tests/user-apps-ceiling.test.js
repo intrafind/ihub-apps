@@ -53,6 +53,7 @@ const DAY = 24 * 60 * 60 * 1000;
 
 const MODEL = 'model-a';
 const INSTALLATION = 'jira';
+const PROJECT = 'prj_handbook';
 
 /** A principal with resolved permissions. */
 function principal(id, { models = ['*'], integrations = ['*'], authMode = 'local' } = {}) {
@@ -81,6 +82,7 @@ function settingsWith(capabilities = {}, limits = {}) {
         upload: true,
         webSearch: true,
         skills: true,
+        projects: true,
         integrations: [{ id: INSTALLATION, actions: ['search', 'read'] }],
         ...capabilities
       }
@@ -99,7 +101,10 @@ function catalogWith({ webSearch = { owner: true, runner: true }, skills, ...res
       { id: INSTALLATION, definition: 'jira', enabled: true },
       { id: 'wiki', definition: 'confluence', enabled: false }
     ],
-    features: { skills: true, integrations: true },
+    features: { skills: true, integrations: true, projects: true, userProjects: true },
+    projects: {
+      [PROJECT]: { exists: true, ownership: 'user', name: 'Handbook', owner: true, runner: true }
+    },
     webSearch,
     skills: skills || {
       owner: ['write-well', 'only-owner'],
@@ -146,7 +151,8 @@ function recordWith(content = {}, fields = {}) {
         skills: true,
         integrations: [{ id: INSTALLATION, actions: ['search'] }],
         models: { allowed: [MODEL], lock: true },
-        webSearchSettings: { maxPageReads: 3, researchGuidance: 'Check two sources.' }
+        webSearchSettings: { maxPageReads: 3, researchGuidance: 'Check two sources.' },
+        projects: [{ id: PROJECT }]
       },
       ...content
     },
@@ -191,11 +197,14 @@ describe('the run object', () => {
     });
     const base = personalAppBase(APP_ID);
     for (const key of Object.keys(base)) {
-      // The derived flag, and the input line the author may change.
-      if (key === 'allowEmptyContent' || key === 'inputMode') continue;
+      // The derived flag, the input line the author may change, and `features`, which the
+      // granted project changes (below).
+      if (key === 'allowEmptyContent' || key === 'inputMode' || key === 'features') continue;
       assert.deepEqual(app[key], base[key], key);
     }
-    assert.deepEqual(app.features, { projects: false, userProjects: false });
+    // The one project the app links is granted: the app uses projects, people still cannot
+    // attach their own (`userProjects` stays off).
+    assert.deepEqual(app.features, { projects: true, userProjects: false });
   });
 
   it('writes how the chat looks and starts, and keeps the microphone of the base', () => {
@@ -350,7 +359,10 @@ describe('the run object', () => {
     assert.equal(app.enabled, true);
     assert.equal(app.sendChatHistory, true);
     assert.deepEqual(app.toolApproval, { default: 'always', exemptInternalReads: true });
-    assert.deepEqual(app.features, { projects: false, userProjects: false });
+    // `features: { projects: true, userProjects: true }` of the record is not read: the app uses
+    // projects because it links one that both may use, and `userProjects` is never the author's.
+    assert.deepEqual(app.features, { projects: true, userProjects: false });
+    assert.deepEqual(app.projects, [PROJECT]);
     assert.deepEqual(app.upload, PERSONAL_UPLOAD_ON);
     assert.deepEqual(app.variables, [{ name: 'role', label: { en: 'Role' }, type: 'string' }]);
     assert.deepEqual(app.starterPrompts, [{ title: { en: 'Start' }, message: { en: 'Go' } }]);
@@ -556,9 +568,9 @@ describe('what the app object gets (6.3, last column)', () => {
     assert.equal(capabilityOf({ capabilities }, JIRA).reason, CAPABILITY_REASONS.offOnInstallation);
   });
 
-  it('no key that adds tools beyond the four switches', () => {
+  it('no key that adds tools beyond the switches, the models and the linked projects', () => {
     const app = granted();
-    for (const key of ['projects', 'apps', 'workflows', 'iassistant', 'toolChoice', 'toolSearch']) {
+    for (const key of ['apps', 'workflows', 'iassistant', 'toolChoice', 'toolSearch']) {
       assert.equal(Object.hasOwn(app, key), false, key);
     }
   });
@@ -734,7 +746,7 @@ describe('the matrix of 6.3', () => {
     });
     assert.deepEqual(
       capabilities.map(entry => entry.id),
-      [...USER_APP_CAPABILITY_IDS, JIRA]
+      [...USER_APP_CAPABILITY_IDS, JIRA, `project:${PROJECT}`]
     );
   });
 
@@ -1001,6 +1013,175 @@ describe('how an app researches on the web (design 07, section 2.2)', () => {
   });
 });
 
+describe('the projects of an app (design 07, section 2.4)', () => {
+  const asking = projects =>
+    recordWith({
+      preferredModel: undefined,
+      capabilities: { upload: false, webSearch: false, skills: false, integrations: [], projects }
+    });
+  const access = (entries = {}) => ({
+    [PROJECT]: { exists: true, ownership: 'user', name: 'Handbook', owner: true, runner: true },
+    ...entries
+  });
+  const run = (
+    record,
+    { catalog = catalogWith({ projects: access() }), settings = settingsWith(), runner = BEN } = {}
+  ) => effectiveUserApp(record, { runner, owner: ANNA, settings, catalog, now: NOW });
+  const entry = (result, id) => result.capabilities.find(capability => capability.id === id);
+  const link = id => ({ id: `project:${id}` });
+
+  it('links the projects both may use, and nothing else, with the picker off', () => {
+    const result = run(asking([{ id: PROJECT }]));
+    assert.deepEqual(result.app.projects, [PROJECT]);
+    assert.deepEqual(result.app.features, { projects: true, userProjects: false });
+    assert.deepEqual(entry(result, link(PROJECT).id), {
+      id: link(PROJECT).id,
+      requested: true,
+      granted: true
+    });
+    // The name and the ownership go to the views and to publish, which decide who may read them.
+    assert.deepEqual(
+      result.bindings.find(binding => binding.id === link(PROJECT).id),
+      { id: link(PROJECT).id, name: 'Handbook', ownership: 'user' }
+    );
+    parseAsApp(result.app);
+  });
+
+  it('gives a runner who may not use the project nothing from it, and says so', () => {
+    const result = run(asking([{ id: PROJECT }]), {
+      catalog: catalogWith({
+        projects: access({
+          [PROJECT]: { exists: true, ownership: 'user', name: 'H', owner: true, runner: false }
+        })
+      })
+    });
+    assert.equal(Object.hasOwn(result.app, 'projects'), false);
+    assert.deepEqual(result.app.features, { projects: false, userProjects: false });
+    assert.equal(entry(result, link(PROJECT).id).reason, CAPABILITY_REASONS.youMayNot);
+  });
+
+  it('gives nobody the project when the owner lost it', () => {
+    const result = run(asking([{ id: PROJECT }]), {
+      catalog: catalogWith({
+        projects: access({
+          [PROJECT]: { exists: true, ownership: 'user', name: 'H', owner: false, runner: true }
+        })
+      })
+    });
+    assert.equal(Object.hasOwn(result.app, 'projects'), false);
+    assert.equal(entry(result, link(PROJECT).id).reason, CAPABILITY_REASONS.ownerMayNot);
+  });
+
+  it('decides each link on its own', () => {
+    const result = run(asking([{ id: PROJECT }, { id: 'faq' }, { id: 'gone' }]), {
+      catalog: catalogWith({
+        projects: access({
+          faq: { exists: true, ownership: 'admin', name: 'FAQ', owner: true, runner: true },
+          gone: { exists: false, ownership: null, name: '', owner: false, runner: false }
+        })
+      })
+    });
+    assert.deepEqual(result.app.projects, [PROJECT, 'faq']);
+    assert.equal(entry(result, link('gone').id).granted, false);
+  });
+
+  it('is off while the administrator did not switch it on, or the feature is off', () => {
+    for (const [settings, catalog] of [
+      [settingsWith({ projects: false }), catalogWith({ projects: access() })],
+      [settingsWith(), catalogWith({ projects: access(), features: { projects: false } })],
+      // A user project also needs the feature of user projects; an admin project does not.
+      [
+        settingsWith(),
+        catalogWith({
+          projects: access(),
+          features: { projects: true, userProjects: false }
+        })
+      ]
+    ]) {
+      const result = run(asking([{ id: PROJECT }]), { settings, catalog });
+      assert.equal(Object.hasOwn(result.app, 'projects'), false);
+      assert.equal(entry(result, link(PROJECT).id).reason, CAPABILITY_REASONS.offOnInstallation);
+    }
+    const admin = run(asking([{ id: 'faq' }]), {
+      catalog: catalogWith({
+        projects: access({
+          faq: { exists: true, ownership: 'admin', name: 'FAQ', owner: true, runner: true }
+        }),
+        features: { projects: true, userProjects: false }
+      })
+    });
+    assert.deepEqual(admin.app.projects, ['faq']);
+  });
+
+  it('is withheld with everything else when the owner cannot be checked', () => {
+    const result = effectiveUserApp(asking([{ id: PROJECT }]), {
+      runner: BEN,
+      owner: null,
+      settings: settingsWith(),
+      catalog: catalogWith({ projects: access() }),
+      now: NOW
+    });
+    assert.equal(Object.hasOwn(result.app, 'projects'), false);
+    assert.equal(entry(result, link(PROJECT).id).reason, CAPABILITY_REASONS.ownerInactive);
+  });
+
+  it('does not read a `projects` key or a `features` key beside the real ones', () => {
+    const result = run(
+      recordWith({
+        projects: ['hr-handbook'],
+        features: { projects: true, userProjects: true },
+        capabilities: { upload: false, webSearch: false, skills: false, integrations: [] }
+      })
+    );
+    assert.equal(Object.hasOwn(result.app, 'projects'), false);
+    assert.deepEqual(result.app.features, { projects: false, userProjects: false });
+  });
+
+  it('is refused on a save for a person who may not use the project, or for a project that is gone', () => {
+    const content = asking([{ id: PROJECT }]).content;
+    const context = {
+      actor: ANNA,
+      owner: ANNA,
+      settings: settingsWith(),
+      catalog: catalogWith({ projects: access() })
+    };
+    assert.deepEqual(checkCapabilitiesForSave(content, context), []);
+    assert.deepEqual(
+      checkCapabilitiesForSave(content, {
+        ...context,
+        catalog: catalogWith({
+          projects: access({
+            [PROJECT]: { exists: true, ownership: 'user', name: 'H', owner: true, runner: false }
+          })
+        })
+      }),
+      [{ capability: link(PROJECT).id, reason: CAPABILITY_REASONS.youMayNot }]
+    );
+    assert.deepEqual(
+      checkCapabilitiesForSave(content, {
+        ...context,
+        catalog: catalogWith({
+          projects: access({
+            [PROJECT]: { exists: false, ownership: null, name: '', owner: false, runner: false }
+          })
+        })
+      }),
+      [{ capability: link(PROJECT).id, reason: CAPABILITY_REASONS.offOnInstallation }]
+    );
+  });
+
+  it('may be taken away in a save by an editor, not added', () => {
+    const before = asking([{ id: PROJECT }]).content;
+    const without = { ...before, capabilities: { ...before.capabilities, projects: undefined } };
+    assert.equal(removesCapabilitiesOnly(before, without), true);
+    const more = {
+      ...before,
+      capabilities: { ...before.capabilities, projects: [{ id: PROJECT }, { id: 'other' }] }
+    };
+    assert.equal(removesCapabilitiesOnly(before, more), false);
+  });
+});
+
 describe('the owner snapshot (6.2)', () => {
   const oidcRecord = ageDays =>
     recordWith(
@@ -1193,7 +1374,7 @@ describe('checkCapabilitiesForSave', () => {
     const denied = checkCapabilitiesForSave(content, { ...context, actor: BEN, owner: null });
     assert.deepEqual(
       denied.map(entry => entry.capability),
-      ['model', 'models', 'upload', 'webSearch', 'skills', JIRA]
+      ['model', 'models', 'upload', 'webSearch', 'skills', JIRA, `project:${PROJECT}`]
     );
     assert.ok(denied.every(entry => entry.reason === CAPABILITY_REASONS.ownerInactive));
   });

@@ -247,6 +247,7 @@ describe('platform.userApps', () => {
       upload: true,
       webSearch: false,
       skills: false,
+      projects: false,
       integrations: [],
       webSearchLimits: { maxPageReads: 10 }
     },
@@ -646,6 +647,34 @@ describe('the limit of pages a personal app may open (webSearchLimits)', () => {
       webSearchLimits: { maxPageReads: 3 }
     });
     assert.deepEqual(changedUserAppSettingKeys(body), ['capabilities.webSearchLimits']);
+  });
+});
+
+describe('the switch for linked projects', () => {
+  it('is off by default, and reads only a boolean', () => {
+    assert.equal(userAppSettings({}).capabilities.projects, false);
+    for (const value of ['yes', 1, null, undefined, {}]) {
+      const read = userAppSettings({ userApps: { capabilities: { projects: value } } });
+      assert.equal(read.capabilities.projects, false, String(value));
+    }
+    assert.equal(
+      userAppSettings({ userApps: { capabilities: { projects: true } } }).capabilities.projects,
+      true
+    );
+  });
+
+  it('is a boolean of the body of the settings route, and an audit key when it is named', () => {
+    assert.equal(
+      userAppSettingsSchema.safeParse({ capabilities: { projects: true } }).success,
+      true
+    );
+    assert.equal(
+      userAppSettingsSchema.safeParse({ capabilities: { projects: 'on' } }).success,
+      false
+    );
+    assert.deepEqual(changedUserAppSettingKeys({ capabilities: { projects: true } }), [
+      'capabilities.projects'
+    ]);
   });
 });
 

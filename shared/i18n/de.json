@@ -5351,7 +5351,8 @@
             "preferredModel": "das Modell {{model}} verwenden",
             "models": "nur diese Modelle verwenden: {{models}}",
             "modelsLocked": "immer das gewählte Modell verwenden, und nur diese Modelle: {{models}}",
-            "webSearchSettings": "mit höchstens {{pages}} Seiten pro Antwort recherchieren. {{guidance}}"
+            "webSearchSettings": "mit höchstens {{pages}} Seiten pro Antwort recherchieren. {{guidance}}",
+            "projects": "diese Projekte verknüpfen: {{projects}}"
           }
         },
         "field": {
@@ -10167,7 +10168,8 @@
       },
       "capability": {
         "model": "Ein gewähltes KI-Modell",
-        "upload": "Dateien"
+        "upload": "Dateien",
+        "projects": "Projekte"
       },
       "empty": "Noch keine persönlichen Apps.",
       "noMatch": "Keine persönliche App passt.",
@@ -14260,7 +14262,10 @@
         "pageReads": "Seiten, die die App pro Antwort öffnen darf",
         "pageReadsHelp": "Höchstens {{max}}. Leer nutzt den Standard der Installation.",
         "researchGuidance": "Wie die App recherchieren soll",
-        "researchGuidanceHelp": "Ein bis zwei Sätze, die den Anweisungen hinzugefügt werden, solange die Websuche an ist."
+        "researchGuidanceHelp": "Ein bis zwei Sätze, die den Anweisungen hinzugefügt werden, solange die Websuche an ist.",
+        "projectsTitle": "Projekte, aus denen die App antwortet",
+        "projectsHelp": "Höchstens {{max}}. Wer die App nutzt, erhält Dokumente nur aus den Projekten, die die Person selbst nutzen darf; wer kein Mitglied ist, erhält nichts daraus.",
+        "projectsNone": "Sie haben noch kein Projekt."
       },
       "conflict": "Jemand anderes hat diese App geändert. Laden Sie neu, um die Änderungen zu sehen.",
       "readOnly": {
@@ -14284,7 +14289,8 @@
         "upload": "Datei-Upload",
         "webSearch": "Websuche",
         "skills": "Skills",
-        "models": "Die gewählte Liste der KI-Modelle"
+        "models": "Die gewählte Liste der KI-Modelle",
+        "project": "Das verknüpfte Projekt"
       },
       "saveFirst": "Speichern Sie zuerst Ihre Änderungen",
       "instructionsDesc": "Sagen Sie der KI, was ihre Aufgabe ist und wie sie antworten soll. Sie liest das vor jedem Chat. Personen, mit denen Sie die App teilen, können es lesen. (Auch System-Prompt genannt.)",
@@ -14293,7 +14299,8 @@
         "upload": "den Datei-Upload",
         "webSearch": "die Websuche",
         "skills": "Skills",
-        "models": "die gewählte Liste der KI-Modelle"
+        "models": "die gewählte Liste der KI-Modelle",
+        "project": "das verknüpfte Projekt"
       },
       "advanced": {
         "title": "Erweitert",
@@ -14348,12 +14355,14 @@
         "skills": "die Skills nutzen: {{list}}",
         "skillsNone": "Skills nutzen",
         "integration": "{{name}}: {{actions}}",
-        "none": "im Chat antworten, sonst nichts"
+        "none": "im Chat antworten, sonst nichts",
+        "project": "aus dem Projekt {{name}} antworten"
       },
       "tool": {
         "webSearch": "die Websuche",
         "skills": "Skills",
-        "integrations": "ein angebundenes System"
+        "integrations": "ein angebundenes System",
+        "projects": "ein Projekt"
       },
       "droppedItem": "{{name}} ({{reason}})",
       "reason": {
@@ -14361,7 +14370,8 @@
         "ownerMayNot": "der Besitzer darf es nicht nutzen",
         "youMayNot": "Sie dürfen es nicht nutzen",
         "ownerInactive": "das Konto des Besitzers ist inaktiv",
-        "ownerStale": "die Rechte des Besitzers sind veraltet"
+        "ownerStale": "die Rechte des Besitzers sind veraltet",
+        "userProject": "ein persönliches Projekt bleibt bei der Person; bitten Sie eine Administration um ein Unternehmensprojekt"
       }
     },
     "transfer": {

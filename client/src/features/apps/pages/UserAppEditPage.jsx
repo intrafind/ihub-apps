@@ -10,6 +10,7 @@ import {
   deleteUserApp,
   duplicateUserApp,
   fetchModels,
+  fetchProjects,
   fetchUserApp,
   fetchUserAppShareTargets,
   offerUserApp,
@@ -148,6 +149,7 @@ function UserAppEditPage() {
   // The stored content as a form state, and the form as edited.
   const [forms, setForms] = useState({ saved: null, form: null });
   const [models, setModels] = useState([]);
+  const [projects, setProjects] = useState([]);
   const [groups, setGroups] = useState(GROUPS_OPEN);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState(null);
@@ -238,6 +240,19 @@ function UserAppEditPage() {
     };
   }, [modelChoice]);
 
+  // The projects the person may link, listed only where the installation allows linking.
+  const projectLinks = allowed?.projects === true;
+  useEffect(() => {
+    if (!projectLinks) return undefined;
+    let active = true;
+    fetchProjects()
+      .then(list => active && setProjects(Array.isArray(list) ? list : []))
+      .catch(() => active && setProjects([]));
+    return () => {
+      active = false;
+    };
+  }, [projectLinks]);
+
   const permissions = app?.permissions || {};
   const form = forms.form;
   const contentLanguage =
@@ -276,6 +291,9 @@ function UserAppEditPage() {
           getLocalizedContent(capability.name, uiLanguage) ||
           capability.installationId
         );
+      }
+      if (capability.kind === 'project') {
+        return getLocalizedContent(capability.name, uiLanguage) || capability.projectId;
       }
       return wording === 'noun'
         ? t(`userApps.edit.capabilityNoun.${capability.kind}`)
@@ -741,6 +759,7 @@ function UserAppEditPage() {
                     onChange={setForm}
                     allowed={allowed}
                     models={models}
+                    projects={projects}
                     withheld={withheld}
                     capabilityName={capabilityName}
                     onRemove={capability => setForm(held => withoutCapability(held, capability))}

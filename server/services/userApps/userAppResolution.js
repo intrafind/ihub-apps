@@ -30,7 +30,9 @@ import { isWebSearchAvailableTo } from '../tools/webSearchResolver.js';
 import { isUserAppId } from '../../../shared/userAppContent.js';
 import { MAX_SHARED_LISTED, getUserAppRepository } from './UserAppRepository.js';
 import { companyAppStampsSettled } from './companyAppStamps.js';
+import { isProjectsConfigured, isUserProjectsConfigured } from '../projects/projectSettings.js';
 import { effectiveUserApp, isRunnerOwner } from './ceiling.js';
+import { linkedProjectIdsOf, projectAccessFor } from './userAppProjects.js';
 import {
   canHoldUserApps,
   effectiveGroups,
@@ -165,15 +167,18 @@ async function grantedSkillIds(user) {
  * @param {Object} principals
  * @param {Object|null} principals.owner - The owner's principal, or null.
  * @param {Object} principals.runner - The person chatting, or the person saving.
+ * @param {Object|null} [principals.content] - The content of the app, when the projects it
+ *   links are to be looked up (`catalog.projects`); without it the catalog has none.
  * @returns {Promise<{models: Object[], installations: Object[], features: {skills: boolean,
- *   integrations: boolean}, webSearch: {owner: boolean, runner: boolean},
- *   skills: {owner: string[], runner: string[]}}>}
+ *   integrations: boolean, projects: boolean, userProjects: boolean},
+ *   webSearch: {owner: boolean, runner: boolean}, skills: {owner: string[], runner: string[]},
+ *   projects: Object}>}
  *
  * @example
  * const catalog = await userAppCatalog({ owner: owner.principal, runner: req.user });
  * const denied = checkCapabilitiesForSave(content, { actor: req.user, owner: owner.principal, settings, catalog });
  */
-export async function userAppCatalog({ owner, runner }) {
+export async function userAppCatalog({ owner, runner, content = null }) {
   const features = configCache.getFeatures() || {};
   const same = Boolean(owner) && owner === runner;
   const runnerSkills = await grantedSkillIds(runner);
@@ -200,10 +205,13 @@ export async function userAppCatalog({ owner, runner }) {
     })),
     features: {
       skills: isFeatureEnabled('skills', features),
-      integrations: isFeatureEnabled('integrations', features)
+      integrations: isFeatureEnabled('integrations', features),
+      projects: isProjectsConfigured(features),
+      userProjects: isUserProjectsConfigured(features)
     },
     webSearch: { owner: same ? runnerSearch : webSearchFor(owner), runner: runnerSearch },
-    skills: { owner: same ? runnerSkills : await grantedSkillIds(owner), runner: runnerSkills }
+    skills: { owner: same ? runnerSkills : await grantedSkillIds(owner), runner: runnerSkills },
+    projects: await projectAccessFor(linkedProjectIdsOf(content), { owner, runner })
   };
 }
 
@@ -290,11 +298,18 @@ async function withCeiling(record, user, standing, catalogs) {
     });
     catalogs?.set(ownerKey, catalog);
   }
+  // Who may use the projects of this app is per app, so it is looked up apart from the catalog
+  // that a list shares between the apps of one owner.
+  const owner = standing.permissions.isOwner ? user : standing.owner.principal;
+  const projects = await projectAccessFor(linkedProjectIdsOf(record.content), {
+    owner,
+    runner: user
+  });
   const effective = effectiveUserApp(record, {
     runner: user,
     owner: standing.owner.principal,
     settings: standing.settings,
-    catalog,
+    catalog: { ...catalog, projects },
     now: Date.now()
   });
   return { status: 'ok', record, effective, ...standing };

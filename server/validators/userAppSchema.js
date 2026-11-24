@@ -201,6 +201,24 @@ const webSearchSettingsSchema = z
     return Object.keys(settings).length > 0 ? settings : undefined;
   });
 
+const projectLinkSchema = z
+  .object({
+    id: z.string().min(1).max(200).regex(SAFE_ID_PATTERN, 'Invalid project ID')
+  })
+  .strict();
+
+/**
+ * The projects the app answers from. Only the ID: the project's own knowledge
+ * mode applies, and a personal app never writes into a project. The ceiling decides
+ * whether the owner and the person chatting may use each one.
+ */
+const projectsSchema = z
+  .array(projectLinkSchema)
+  .max(L.projects)
+  .superRefine(uniqueIds)
+  .nullish()
+  .transform(value => (value && value.length > 0 ? value : undefined));
+
 /** The schema of every key inside `capabilities`, by key (see `userAppFieldSchemas`). */
 export const userAppCapabilitySchemas = {
   upload: z.boolean().prefault(false),
@@ -212,7 +230,8 @@ export const userAppCapabilitySchemas = {
     .superRefine(uniqueIds)
     .prefault([]),
   models: modelsSchema,
-  webSearchSettings: webSearchSettingsSchema
+  webSearchSettings: webSearchSettingsSchema,
+  projects: projectsSchema
 };
 
 const capabilitiesSchema = z.object(userAppCapabilitySchemas).strict().transform(compact);
@@ -485,6 +504,7 @@ export const userAppSettingsSchema = z
         upload: z.boolean(),
         webSearch: z.boolean(),
         skills: z.boolean(),
+        projects: z.boolean(),
         integrations: z.array(allowedInstallationSchema).max(200).superRefine(uniqueIds),
         webSearchLimits: z
           .object({

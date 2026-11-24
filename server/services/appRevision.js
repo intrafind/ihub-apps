@@ -40,6 +40,7 @@ import {
   modelsBlock,
   modelsFor,
   parseGeneratedAnswer,
+  projectsBlock,
   pickDraftModel,
   sanitizeGeneratedApp,
   searchFor
@@ -53,6 +54,12 @@ import {
 } from './appSettingsProposal.js';
 import { checkCapabilitiesForSave } from './userApps/ceiling.js';
 import { userAppCatalog } from './userApps/userAppResolution.js';
+import {
+  linkedProjectIdsOf,
+  projectAccessFor,
+  usableProjectsFor
+} from './userApps/userAppProjects.js';
+import { isProjectsConfigured } from './projects/projectSettings.js';
 import { userAppField } from '../../shared/userAppFields.js';
 import { newAppDefaults } from '../../shared/appDefaults.js';
 import {
@@ -836,7 +843,13 @@ function readContent({ draft, fields, language, target, personal, user }) {
   const offered = settingsToPropose({
     target,
     fields: narrowed ? fields : undefined,
-    personal: personal ? { settings: personal.settings, searchAvailable: searchFor(user) } : null
+    personal: personal
+      ? {
+          settings: personal.settings,
+          searchAvailable: searchFor(user),
+          projectsAvailable: isProjectsConfigured(configCache.getFeatures())
+        }
+      : null
   });
   const settingsCurrent = {};
   for (const { key } of offered) {
@@ -891,6 +904,9 @@ async function callModel({
     content: forModel,
     settings: offered,
     modelsBlock: namesModels ? modelsBlock(modelsFor(user, language)) : '',
+    projectsBlock: offered.some(({ key }) => key === 'projects')
+      ? projectsBlock(await usableProjectsFor(user, language))
+      : '',
     earlier: turns.slice(0, -1),
     latest: turns.at(-1)?.text ?? '',
     language,
@@ -966,6 +982,7 @@ const CAPABILITY_OF_SETTING = Object.freeze({
  * authority. A setting without a capability is not restricted here.
  */
 function mayHaveSetting({ key, value, draft, personal, user, call }) {
+  if (key === 'projects') return mayLinkProjects({ value, draft, personal, user, call });
   const capability = CAPABILITY_OF_SETTING[key];
   if (!capability || !call.catalog) return true;
   const base = isPlainObject(draft) ? draft : {};
@@ -982,6 +999,31 @@ function mayHaveSetting({ key, value, draft, personal, user, call }) {
     catalog: call.catalog
   });
   return !denied.some(entry => entry.capability === capability);
+}
+
+/**
+ * The links of a proposed list of projects that the caller may have: the project exists, the
+ * administrator allows it and the caller may use it (`checkCapabilitiesForSave` for each
+ * `project:<id>`). A proposal with some links the caller may not have is shortened to the others;
+ * with none left it is dropped. The caller stands in for the owner; the save by the real owner
+ * is the authority.
+ *
+ * @returns {false|{ value: Array<{ id: string }> }}
+ */
+function mayLinkProjects({ value, draft, personal, user, call }) {
+  if (!call.catalog) return false;
+  const base = isPlainObject(draft) ? draft : {};
+  const merged = { ...base, capabilities: { ...(base.capabilities || {}), projects: value } };
+  const denied = new Set(
+    checkCapabilitiesForSave(merged, {
+      actor: user,
+      owner: user,
+      settings: personal.settings,
+      catalog: call.catalog
+    }).map(entry => entry.capability)
+  );
+  const allowed = value.filter(link => !denied.has(`project:${link.id}`));
+  return allowed.length > 0 ? { value: allowed } : false;
 }
 
 /** Steps 7 to 10 for a change: the patch, checked against the schema, or a message. */
@@ -1151,6 +1193,23 @@ export async function reviseApp({
 
   // 6. to 10. Parse, interpret, patch, schema check.
   const answer = parseGeneratedAnswer(result?.content, result?.finishReason);
+  // Who may use the projects the model proposes (and those the draft links) is looked up once the
+  // answer is known; the ceiling is pure and reads the result from the catalog.
+  if (personal && call.catalog) {
+    const proposed = isPlainObject(answer.change?.settings)
+      ? answer.change.settings.projects
+      : null;
+    const ids = [
+      ...linkedProjectIdsOf({
+        capabilities: { projects: Array.isArray(proposed) ? proposed : [] }
+      }),
+      ...linkedProjectIdsOf(draft)
+    ];
+    call.catalog.projects = await projectAccessFor([...new Set(ids)], {
+      owner: user,
+      runner: user
+    });
+  }
   const turn = interpretAnswer({
     answer,
     call,

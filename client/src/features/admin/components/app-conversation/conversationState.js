@@ -299,6 +299,10 @@ export function settingSentence({ key, value }, t) {
           : 'admin.apps.conversation.change.setting.models',
         { models: (Array.isArray(values.allowed) ? values.allowed : []).join(', ') }
       );
+    case 'projects':
+      return t('admin.apps.conversation.change.setting.projects', {
+        projects: (Array.isArray(value) ? value : []).map(link => link?.id).join(', ')
+      });
     case 'webSearchSettings':
       return t('admin.apps.conversation.change.setting.webSearchSettings', {
         pages: Number.isInteger(values.maxPageReads) ? values.maxPageReads : '–',

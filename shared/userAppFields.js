@@ -266,6 +266,16 @@ export const USER_APP_FIELDS = Object.freeze([
     hint: 'How the app researches on the web, only when web search is on: { "maxPageReads": 1 to 50, "researchGuidance": "a sentence on how to research" }.'
   }),
   describe({
+    key: 'projects',
+    store: 'capabilities',
+    verdict: 'capability',
+    appKeys: ['projects'],
+    gate: 'projects',
+    propose: PERSONAL,
+    proposal: 'confirm',
+    hint: 'Projects whose documents the app answers from: [{ "id": project id from the list above }], at most three. A person gets documents from a project only if they may use it themselves.'
+  }),
+  describe({
     key: 'skills',
     store: 'capabilities',
     verdict: 'capability',

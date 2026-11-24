@@ -111,7 +111,7 @@ const effective = () => ({
     websearch: { enabled: false },
     toolApproval: { default: 'always' },
     // Keys the ceiling never writes. The view must not pass them on.
-    projects: ['secret-project'],
+    workflows: ['secret-project'],
     ownerPrincipal: { email: SECRET_EMAIL }
   },
   capabilities: [

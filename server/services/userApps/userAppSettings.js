@@ -55,6 +55,8 @@ export const DEFAULT_USER_APP_SETTINGS = Object.freeze({
     upload: true,
     webSearch: false,
     skills: false,
+    // Whether an app may link projects, the documents it answers from.
+    projects: false,
     integrations: Object.freeze([]),
     // How far web search may be tuned in an app of one person: the most pages the
     // page reader may open for one answer (the platform default is 5).
@@ -122,7 +124,7 @@ function readInstallations(value) {
  * @returns {{limits: {maxAppsPerUser: number, maxOpenOffersPerUser: number,
  *   ownerSnapshotMaxAgeDays: number}, sharing: {allowUsers: boolean, allowGroups: boolean,
  *   allowEveryone: boolean, allowPublish: boolean}, capabilities: {modelChoice: boolean,
- *   upload: boolean, webSearch: boolean, skills: boolean,
+ *   upload: boolean, webSearch: boolean, skills: boolean, projects: boolean,
  *   integrations: Array<{id: string, actions: string[]}>,
  *   webSearchLimits: {maxPageReads: number}},
  *   publishing: {adminEnables: 'withTools'|'always'}, blockedOwners: string[]}}
@@ -156,6 +158,7 @@ export function userAppSettings(platformConfig) {
       upload: readBoolean(capabilities.upload, defaults.capabilities.upload),
       webSearch: readBoolean(capabilities.webSearch, defaults.capabilities.webSearch),
       skills: readBoolean(capabilities.skills, defaults.capabilities.skills),
+      projects: readBoolean(capabilities.projects, defaults.capabilities.projects),
       integrations: readInstallations(capabilities.integrations),
       webSearchLimits: {
         maxPageReads: Math.min(

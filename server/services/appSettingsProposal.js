@@ -92,8 +92,9 @@ export function settingOf(app, key) {
  * @param {'admin'|'personal'} options.target
  * @param {readonly string[]} [options.fields] - The request's `fields`; when it names
  *   keys, only those settings are offered.
- * @param {{ settings?: Object, searchAvailable?: boolean }|null} [options.personal] - For a
- *   personal app: the effective `platform.userApps` settings and whether the caller has web search.
+ * @param {{ settings?: Object, searchAvailable?: boolean, projectsAvailable?: boolean }|null}
+ *   [options.personal] - For a personal app: the effective `platform.userApps` settings, whether the
+ *   caller has web search and whether the projects feature is on.
  * @returns {Array<{ key: string, hint: string, proposal: 'direct'|'confirm' }>}
  */
 export function settingsToPropose({ target, fields, personal = null } = {}) {
@@ -104,7 +105,9 @@ export function settingsToPropose({ target, fields, personal = null } = {}) {
       const { gate } = userAppField(key);
       if (!gate || !personal) return true;
       if (personal.settings?.capabilities?.[gate] !== true) return false;
-      return gate !== 'webSearch' || personal.searchAvailable === true;
+      if (gate === 'webSearch') return personal.searchAvailable === true;
+      if (gate === 'projects') return personal.projectsAvailable === true;
+      return true;
     })
     .map(key => {
       const { hint, proposal } = userAppField(key);
@@ -129,8 +132,9 @@ function adminValue(key, parsed) {
  * @param {'admin'|'personal'} options.target
  * @param {Array<{ key: string }>} options.offered - {@link settingsToPropose} for this turn.
  * @param {Object} options.current - The app's own values of the keys, hidden characters removed.
- * @param {(key: string, value: unknown) => boolean} [options.allow] - Whether the caller may have
- *   a `confirm` setting with this value; the ceiling of personal apps answers it. A setting it
+ * @param {(key: string, value: unknown) => boolean|{ value: unknown }} [options.allow] - Whether the
+ *   caller may have a `confirm` setting with this value; the ceiling of personal apps answers it.
+ *   `{ value }` allows a part of it (the projects of a list that the caller may use). A setting it
  *   refuses is left out without a word, like a suggestion the caller may not use.
  * @returns {{ patch: Object, changed: string[], suggestions: Array<{ key: string, value: unknown }>,
  *   warnings: Array<{ code: string, field: string }> }}
@@ -161,8 +165,14 @@ export function readSettings(raw, { target, offered, current, allow }) {
     const checked = target === 'personal' ? (parsed.data ?? null) : adminValue(key, parsed.data);
     if (sameValue(checked, current?.[key])) continue;
     if (entry.proposal === 'confirm') {
-      if (isUnsetSetting(checked) || allow?.(key, checked) === false) continue;
-      result.suggestions.push({ key, value: checked });
+      if (isUnsetSetting(checked)) continue;
+      const verdict = allow?.(key, checked);
+      if (verdict === false) continue;
+      // The ceiling may hand back a smaller value: the links it allows of a list it did not all allow.
+      const value =
+        isPlainObject(verdict) && Object.hasOwn(verdict, 'value') ? verdict.value : checked;
+      if (isUnsetSetting(value)) continue;
+      result.suggestions.push({ key, value });
     } else {
       result.patch[key] = checked;
       result.changed.push(key);

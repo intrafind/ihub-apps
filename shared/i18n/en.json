@@ -4851,7 +4851,8 @@
             "preferredModel": "use the model {{model}}",
             "models": "only use these models: {{models}}",
             "modelsLocked": "always use the chosen model, and only these models: {{models}}",
-            "webSearchSettings": "research with at most {{pages}} pages per answer. {{guidance}}"
+            "webSearchSettings": "research with at most {{pages}} pages per answer. {{guidance}}",
+            "projects": "link these projects: {{projects}}"
           }
         },
         "field": {
@@ -9667,7 +9668,8 @@
       },
       "capability": {
         "model": "A chosen AI model",
-        "upload": "Files"
+        "upload": "Files",
+        "projects": "Projects"
       },
       "empty": "No personal apps yet.",
       "noMatch": "No personal app matches.",
@@ -14261,7 +14263,10 @@
         "pageReads": "Pages the app may open per answer",
         "pageReadsHelp": "At most {{max}}. Empty uses the default of the installation.",
         "researchGuidance": "How the app should research",
-        "researchGuidanceHelp": "One or two sentences, added to the instructions while web search is on."
+        "researchGuidanceHelp": "One or two sentences, added to the instructions while web search is on.",
+        "projectsTitle": "Projects the app answers from",
+        "projectsHelp": "At most {{max}}. Everyone who uses the app gets documents only from the projects they may use themselves; people who are not members get nothing from them.",
+        "projectsNone": "You have no project yet."
       },
       "conflict": "Someone else changed this app. Reload to see the changes.",
       "readOnly": {
@@ -14285,7 +14290,8 @@
         "upload": "File upload",
         "webSearch": "Web search",
         "skills": "Skills",
-        "models": "The chosen list of AI models"
+        "models": "The chosen list of AI models",
+        "project": "The linked project"
       },
       "saveFirst": "Save your changes first",
       "instructionsDesc": "Tell the AI what its task is and how it should answer. It reads this before every chat. People you share the app with can read it. (Also called the system prompt.)",
@@ -14294,7 +14300,8 @@
         "upload": "file upload",
         "webSearch": "web search",
         "skills": "skills",
-        "models": "the chosen list of AI models"
+        "models": "the chosen list of AI models",
+        "project": "the linked project"
       },
       "advanced": {
         "title": "Advanced",
@@ -14349,12 +14356,14 @@
         "skills": "use the skills: {{list}}",
         "skillsNone": "use skills",
         "integration": "{{name}}: {{actions}}",
-        "none": "answer in the chat, and nothing else"
+        "none": "answer in the chat, and nothing else",
+        "project": "answer from the project {{name}}"
       },
       "tool": {
         "webSearch": "web search",
         "skills": "skills",
-        "integrations": "a connected system"
+        "integrations": "a connected system",
+        "projects": "a project"
       },
       "droppedItem": "{{name}} ({{reason}})",
       "reason": {
@@ -14362,7 +14371,8 @@
         "ownerMayNot": "the owner may not use it",
         "youMayNot": "you may not use it",
         "ownerInactive": "the owner's account is inactive",
-        "ownerStale": "the owner's rights are out of date"
+        "ownerStale": "the owner's rights are out of date",
+        "userProject": "a project of a person stays theirs; ask an administrator for a company project"
       }
     },
     "transfer": {

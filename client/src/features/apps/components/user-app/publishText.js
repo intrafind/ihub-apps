@@ -36,14 +36,16 @@ const REASON_KEYS = {
   ownerMayNot: 'userApps.publish.reason.ownerMayNot',
   youMayNot: 'userApps.publish.reason.youMayNot',
   ownerInactive: 'userApps.publish.reason.ownerInactive',
-  ownerStale: 'userApps.publish.reason.ownerStale'
+  ownerStale: 'userApps.publish.reason.ownerStale',
+  userProject: 'userApps.publish.reason.userProject'
 };
 
 /** What makes an app one that an administrator switches on, for "Because it uses …". */
 const TOOL_KEYS = {
   webSearch: 'userApps.publish.tool.webSearch',
   skills: 'userApps.publish.tool.skills',
-  integrations: 'userApps.publish.tool.integrations'
+  integrations: 'userApps.publish.tool.integrations',
+  projects: 'userApps.publish.tool.projects'
 };
 
 /**
@@ -86,6 +88,11 @@ export function capabilityLines(capabilities, t) {
           name: entry.name || entry.installationId,
           actions: (entry.actions || []).join(', ')
         })
+      });
+    } else if (entry.projectId) {
+      lines.push({
+        id: entry.id,
+        text: t('userApps.publish.can.project', { name: entry.name || entry.projectId })
       });
     } else if (entry.id === 'skills') {
       const skills = Array.isArray(entry.skills) ? entry.skills : [];

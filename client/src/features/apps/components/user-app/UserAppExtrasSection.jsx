@@ -81,6 +81,8 @@ function Switch({ checked, onChange, label, help, disabled = false }) {
  *   What may be offered; nothing without it.
  * @param {Array<{id: string, name?: object|string}>} [props.models] - The models the caller
  *   may choose.
+ * @param {Array<{id: string, name?: object|string, description?: string}>} [props.projects] -
+ *   The projects the caller may link (`GET /api/projects`).
  * @param {Array<{id: string, kind: string, installationId: string|null}>} [props.withheld] -
  *   The result of `withheldCapabilities(app)`.
  * @param {(capability: object) => string} props.capabilityName - A capability's name for a sentence.
@@ -93,6 +95,7 @@ function UserAppExtrasSection({
   onChange,
   allowed,
   models = [],
+  projects = [],
   withheld = [],
   capabilityName,
   onRemove,
@@ -161,6 +164,24 @@ function UserAppExtrasSection({
       .filter(id => !models.some(model => model.id === id))
       .map(id => ({ id, name: id }))
   ];
+  const showProjects = may.projects === true;
+  const linked = Array.isArray(capabilities.projects) ? capabilities.projects : [];
+  const linkedIds = linked.map(link => link.id);
+  const listedProjects = [
+    ...projects,
+    ...linkedIds
+      .filter(id => !projects.some(project => project.id === id))
+      .map(id => ({ id, name: id }))
+  ];
+  const toggleProject = (id, checked) => {
+    const ids = checked
+      ? [...linkedIds.filter(other => other !== id), id].slice(0, USER_APP_LIMITS.projects)
+      : linkedIds.filter(other => other !== id);
+    const next = { ...capabilities };
+    if (ids.length > 0) next.projects = ids.map(entry => ({ id: entry }));
+    else delete next.projects;
+    onChange({ ...form, capabilities: next });
+  };
   const search = isPlainObject(capabilities.webSearchSettings)
     ? capabilities.webSearchSettings
     : {};
@@ -193,6 +214,7 @@ function UserAppExtrasSection({
   const nothing =
     !showModel &&
     !showModels &&
+    !showProjects &&
     !showUpload &&
     !showWebSearch &&
     !showSkills &&
@@ -330,6 +352,33 @@ function UserAppExtrasSection({
             </p>
           </div>
         </div>
+      )}
+      {showProjects && (
+        <fieldset className="space-y-2" data-testid="user-app-projects">
+          <legend className={LABEL_CLASS}>{t('userApps.edit.extras.projectsTitle')}</legend>
+          <p className={HELP_CLASS}>
+            {t('userApps.edit.extras.projectsHelp', { max: USER_APP_LIMITS.projects })}
+          </p>
+          {listedProjects.length === 0 && (
+            <p className="text-sm text-gray-600 dark:text-gray-400">
+              {t('userApps.edit.extras.projectsNone')}
+            </p>
+          )}
+          <div className="space-y-1.5">
+            {listedProjects.map(project => (
+              <Switch
+                key={project.id}
+                checked={linkedIds.includes(project.id)}
+                onChange={checked => toggleProject(project.id, checked)}
+                label={getLocalizedContent(project.name, language) || project.id}
+                help={typeof project.description === 'string' ? project.description : undefined}
+                disabled={
+                  !linkedIds.includes(project.id) && linkedIds.length >= USER_APP_LIMITS.projects
+                }
+              />
+            ))}
+          </div>
+        </fieldset>
       )}
       {showSkills && (
         <Switch

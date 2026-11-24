@@ -28,6 +28,7 @@ import {
   readConversation,
   restoreValues,
   sameValue,
+  settingSentence,
   stillApplied,
   suggestionChanges,
   unsavedOutsideChange,
@@ -461,6 +462,31 @@ describe('answers and suggestions', () => {
     // A setting the form already has is not offered again.
     const same = offeredSuggestions('personal', { ...form, preferredModel: 'gpt-4o' }, suggestions);
     expect(same.settings.map(entry => entry.key)).not.toContain('preferredModel');
+  });
+
+  test('ticked projects go into capabilities as the list, and are named in plain words', () => {
+    const form = {
+      ...FORM,
+      capabilities: { upload: false, webSearch: false, skills: false, integrations: [] }
+    };
+    const value = [{ id: 'prj_a' }, { id: 'prj_b' }];
+    const offered = offeredSuggestions('personal', form, {
+      settings: [{ key: 'projects', value }]
+    });
+    expect(offered.settings).toEqual([{ key: 'projects', value }]);
+    const changes = suggestionChanges('personal', form, offered, { settingKeys: ['projects'] });
+    expect(changes.capabilities.projects).toEqual(value);
+    const t = (key, values) => `${key}${values ? JSON.stringify(values) : ''}`;
+    expect(settingSentence({ key: 'projects', value }, t)).toBe(
+      'admin.apps.conversation.change.setting.projects{"projects":"prj_a, prj_b"}'
+    );
+    // Offered again only while the form has other links.
+    const same = offeredSuggestions(
+      'personal',
+      { ...form, capabilities: { ...form.capabilities, projects: value } },
+      { settings: [{ key: 'projects', value }] }
+    );
+    expect(same.settings).toEqual([]);
   });
 
   test('applying a setting, and putting it back, works on the form like a content key', () => {

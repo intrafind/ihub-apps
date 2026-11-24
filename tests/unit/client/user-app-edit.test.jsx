@@ -34,6 +34,7 @@ const API_NAMES = [
   'deleteUserApp',
   'duplicateUserApp',
   'fetchModels',
+  'fetchProjects',
   'fetchUserApp',
   'fetchUserAppShareTargets',
   'offerUserApp',
@@ -49,6 +50,7 @@ jest.mock('../../../client/src/api', () =>
       'deleteUserApp',
       'duplicateUserApp',
       'fetchModels',
+      'fetchProjects',
       'fetchUserApp',
       'fetchUserAppShareTargets',
       'offerUserApp',
@@ -151,9 +153,11 @@ const {
   formFromApp,
   patchFor,
   readOnlyReason,
+  stillAsksFor,
   userAppStateChip,
   userAppStateChipText,
-  withheldCapabilities
+  withheldCapabilities,
+  withoutCapability
 } = require('../../../client/src/features/apps/components/user-app/userAppForm');
 
 const EDIT = en.userApps.edit;
@@ -170,6 +174,7 @@ beforeEach(() => {
   window.localStorage.clear();
   mockApi.fetchUserApp.mockResolvedValue(userApp());
   mockApi.fetchModels.mockResolvedValue([]);
+  mockApi.fetchProjects.mockResolvedValue([]);
 });
 
 // A state update outside act() means a test ended, or went on, before the page had settled.
@@ -378,6 +383,69 @@ describe('the form state (userAppForm.js)', () => {
       greeting: null,
       inputMode: null
     });
+  });
+
+  test('the linked projects: as stored, else as asked for; sent whole, null when none is left', () => {
+    const stored = formFromApp(
+      userApp({ authored: { capabilities: { projects: [{ id: 'prj_a' }, { id: 'faq' }] } } })
+    );
+    expect(stored.capabilities.projects).toEqual([{ id: 'prj_a' }, { id: 'faq' }]);
+    // Without the stored list (a caller who may not edit) the form has the ones the app asks for.
+    const asked = formFromApp(
+      userApp({
+        capabilities: [
+          { id: 'project:prj_a', requested: true, granted: false, reason: 'youMayNot' },
+          { id: 'project:prj_b', requested: false, granted: false, reason: 'notRequested' }
+        ]
+      })
+    );
+    expect(asked.capabilities.projects).toEqual([{ id: 'prj_a' }]);
+
+    const without = { ...stored, capabilities: { ...stored.capabilities, projects: undefined } };
+    expect(patchFor(stored, stored)).toBeNull();
+    expect(patchFor(stored, without)).toEqual({ capabilities: { projects: null } });
+    expect(
+      patchFor(stored, {
+        ...stored,
+        capabilities: {
+          ...stored.capabilities,
+          projects: [{ id: 'faq' }, { id: 'faq' }, { id: '' }]
+        }
+      })
+    ).toEqual({ capabilities: { projects: [{ id: 'faq' }] } });
+  });
+
+  test('a withheld project is named, can be asked for and removed on its own', () => {
+    const app = userApp({
+      authored: { capabilities: { projects: [{ id: 'prj_a' }, { id: 'prj_b' }] } },
+      capabilities: [
+        { id: 'project:prj_a', name: 'Handbook', requested: true, granted: true },
+        {
+          id: 'project:prj_b',
+          name: 'Minutes',
+          requested: true,
+          granted: false,
+          reason: 'ownerMayNot'
+        }
+      ]
+    });
+    const [withheld] = withheldCapabilities(app);
+    expect(withheld).toEqual({
+      id: 'project:prj_b',
+      kind: 'project',
+      projectId: 'prj_b',
+      installationId: null,
+      name: 'Minutes',
+      reason: 'ownerMayNot'
+    });
+    const form = formFromApp(app);
+    expect(stillAsksFor(form, withheld)).toBe(true);
+    const removed = withoutCapability(form, withheld);
+    expect(removed.capabilities.projects).toEqual([{ id: 'prj_a' }]);
+    expect(stillAsksFor(removed, withheld)).toBe(false);
+    expect(
+      withoutCapability(removed, { kind: 'project', projectId: 'prj_a' }).capabilities
+    ).not.toHaveProperty('projects');
   });
 
   test('a withheld model that was not touched is not sent; removing it sends null', () => {
@@ -631,6 +699,73 @@ describe('what the app may use', () => {
           webSearchSettings: { maxPageReads: 4, researchGuidance: 'Check two sources.' }
         }
       },
+      { revision: 7 }
+    );
+  });
+
+  test('offers the projects the person may use, at most three, and saves the list whole', async () => {
+    mockUserApps.config = { ...CONFIG, capabilities: { ...ALLOWED, projects: true } };
+    mockApi.fetchProjects.mockResolvedValue([
+      { id: 'prj_a', name: 'Handbook', description: 'The team handbook' },
+      { id: 'prj_b', name: 'Policies' },
+      { id: 'prj_c', name: 'Minutes' },
+      { id: 'faq', name: { en: 'FAQ' } }
+    ]);
+    await renderEditor();
+    const projects = within(extras().getByTestId('user-app-projects'));
+    expect(projects.getByText('The team handbook')).toBeInTheDocument();
+    for (const name of ['Handbook', 'Policies', 'Minutes']) {
+      fireEvent.click(projects.getByRole('checkbox', { name }));
+    }
+    // A fourth cannot be ticked while three are.
+    expect(projects.getByRole('checkbox', { name: 'FAQ' })).toBeDisabled();
+    mockApi.updateUserApp.mockResolvedValue(userApp({ revision: 8 }));
+    await click(saveButton());
+    expect(mockApi.updateUserApp).toHaveBeenCalledWith(
+      APP_ID,
+      { capabilities: { projects: [{ id: 'prj_a' }, { id: 'prj_b' }, { id: 'prj_c' }] } },
+      { revision: 7 }
+    );
+  });
+
+  test('is not offered, and loads nothing, while the administrator has not allowed linked projects', async () => {
+    await renderEditor();
+    expect(extras().queryByTestId('user-app-projects')).not.toBeInTheDocument();
+    expect(mockApi.fetchProjects).not.toHaveBeenCalled();
+  });
+
+  test('shows the projects the author stored, one that is no longer listed with its ID, and removes the list with null', async () => {
+    mockUserApps.config = { ...CONFIG, capabilities: { ...ALLOWED, projects: true } };
+    mockApi.fetchProjects.mockResolvedValue([{ id: 'prj_a', name: 'Handbook' }]);
+    mockApi.fetchUserApp.mockResolvedValue(
+      userApp({
+        authored: { capabilities: { projects: [{ id: 'prj_a' }, { id: 'prj_gone' }] } },
+        capabilities: [
+          { id: 'upload', requested: true, granted: true },
+          { id: 'project:prj_a', name: 'Handbook', requested: true, granted: true },
+          {
+            id: 'project:prj_gone',
+            name: 'Old notes',
+            requested: true,
+            granted: false,
+            reason: 'ownerMayNot'
+          }
+        ]
+      })
+    );
+    await renderEditor();
+    // The project that is withheld stays visible with a note and "Remove": the app cannot be saved with it.
+    expect(screen.getByTestId('user-app-gone')).toHaveTextContent('Old notes');
+    await click(
+      within(screen.getByTestId('user-app-gone')).getByRole('button', {
+        name: new RegExp(`^${EDIT.extras.remove}`)
+      })
+    );
+    mockApi.updateUserApp.mockResolvedValue(userApp({ revision: 8 }));
+    await click(saveButton());
+    expect(mockApi.updateUserApp).toHaveBeenCalledWith(
+      APP_ID,
+      { capabilities: { projects: [{ id: 'prj_a' }] } },
       { revision: 7 }
     );
   });

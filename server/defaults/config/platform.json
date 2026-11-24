@@ -542,6 +542,7 @@
       "upload": true,
       "webSearch": false,
       "skills": false,
+      "projects": false,
       "integrations": [],
       "webSearchLimits": {
         "maxPageReads": 10
