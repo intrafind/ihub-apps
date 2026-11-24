@@ -43,6 +43,7 @@ import {
   searchFor
 } from './appGenerator.js';
 import { buildRevisionMessages } from './appGeneratorBrief.js';
+import { isUnsetSetting, readSettings, settingsToPropose } from './appSettingsProposal.js';
 import { newAppDefaults } from '../../shared/appDefaults.js';
 import {
   REVISE_CHOICES_MAX,
@@ -50,6 +51,7 @@ import {
   REVISE_CHOICE_MAX,
   REVISE_LOCALIZED_KEYS,
   REVISE_QUESTION_CAP,
+  REVISE_SETTINGS_KEY,
   REVISE_SYSTEM_MAX,
   REVISE_TEXT_MAX,
   REVISE_WARNINGS,
@@ -702,7 +704,7 @@ function proposalOf(proposed, allowed, language) {
   const proposal = {};
   const warnings = [];
   for (const [key, value] of Object.entries(proposed)) {
-    if (SUGGESTION_KEYS.includes(key)) continue;
+    if (SUGGESTION_KEYS.includes(key) || key === REVISE_SETTINGS_KEY) continue;
     if (!allowed.includes(key)) {
       warnings.push({ code: 'KEY_IGNORED', field: ignoredField(key) });
       continue;
@@ -796,8 +798,8 @@ function changeOf({
     changed,
     warnings,
     suggestions: sanitizeOptions.mayPropose
-      ? after.suggestions
-      : { websearch: false, integrations: [] }
+      ? { ...after.suggestions, settings: [] }
+      : { websearch: false, integrations: [], settings: [] }
   };
 }
 
@@ -818,13 +820,29 @@ function readContent({ draft, fields, language, target }) {
   const source = {};
   for (const key of keys) if (input[key] !== undefined) source[key] = visibleDeep(input[key]);
   assertRevisable(source, language, target);
+
+  // The settings of the registry: offered unless the request names other `fields`. The
+  // model sees the ones the app has set, so it changes them and does not guess.
+  const offered = settingsToPropose({ target, fields: narrowed ? fields : undefined });
+  const settingsCurrent = {};
+  for (const { key } of offered) {
+    if (!isUnsetSetting(input[key])) settingsCurrent[key] = visibleDeep(input[key]);
+  }
+  const current = contentForModel(source, keys, language);
   return {
     keys,
     allowed,
     mayPropose: !narrowed,
     input,
     source,
-    current: contentForModel(source, keys, language)
+    current,
+    offered,
+    settingsCurrent,
+    // What the model reads: the content and, apart from it, the settings that are set.
+    forModel:
+      Object.keys(settingsCurrent).length > 0
+        ? { ...current, [REVISE_SETTINGS_KEY]: settingsCurrent }
+        : current
   };
 }
 
@@ -845,7 +863,7 @@ async function callModel({
   signal,
   llmClient
 }) {
-  const { allowed, mayPropose, current } = content;
+  const { allowed, mayPropose, forModel, offered } = content;
   // 4. Messages.
   const turns = Array.isArray(conversation) ? conversation : [];
   const mayAsk = allowQuestions !== false && questionsSinceLastChange(turns) < REVISE_QUESTION_CAP;
@@ -854,7 +872,8 @@ async function callModel({
     ? await installationsFor(user, language, personal ? { settings: personal.settings } : null)
     : [];
   const { messages } = buildRevisionMessages({
-    content: current,
+    content: forModel,
+    settings: offered,
     earlier: turns.slice(0, -1),
     latest: turns.at(-1)?.text ?? '',
     language,
@@ -900,7 +919,7 @@ function unchangedParts() {
     patch: {},
     changed: [],
     warnings: [],
-    suggestions: { websearch: false, integrations: [] }
+    suggestions: { websearch: false, integrations: [], settings: [] }
   };
 }
 
@@ -938,9 +957,23 @@ function changeReply({ answer, text, content, call, user, personal, language, la
     sanitizeOptions
   };
   let outcome = changeOf(changeInput);
-  if (outcome.changed.length === 0) {
+  // The settings of the registry: checked per key, apart from the content above.
+  const settings = readSettings(
+    isPlainObject(answer.change) ? answer.change[REVISE_SETTINGS_KEY] : undefined,
+    {
+      target: personal ? 'personal' : 'admin',
+      offered: content.offered,
+      current: content.settingsCurrent
+    }
+  );
+  if (
+    outcome.changed.length === 0 &&
+    settings.changed.length === 0 &&
+    settings.suggestions.length === 0
+  ) {
     const warnings = [
       ...outcome.warnings.filter(warning => warning.code === 'KEY_IGNORED'),
+      ...settings.warnings,
       { code: REVISE_WARNINGS.NO_CHANGE, field: '' }
     ];
     return { ...unchangedParts(), reply: 'message', text, warnings };
@@ -949,18 +982,25 @@ function changeReply({ answer, text, content, call, user, personal, language, la
   // in `variables` and `starterPrompts` are the author's, possibly half-edited in the form: when
   // they break the schema, the entries are built from the sanitiser alone, as a draft's are.
   const schemaCheck = { source, draft: input, personal, lang };
-  if (patchSchemaIssues({ ...schemaCheck, patch: outcome.patch }).length > 0) {
+  const withSettings = patch => ({ ...patch, ...settings.patch });
+  if (patchSchemaIssues({ ...schemaCheck, patch: withSettings(outcome.patch) }).length > 0) {
     outcome = changeOf({ ...changeInput, keepDraft: false });
   }
-  assertPatchFitsSchema({ ...schemaCheck, patch: outcome.patch, modelId });
+  const patch = withSettings(outcome.patch);
+  assertPatchFitsSchema({ ...schemaCheck, patch, modelId });
+  const changed = [...outcome.changed, ...settings.changed];
   return {
     reply: 'change',
     text,
     question: null,
-    patch: outcome.patch,
-    changed: outcome.changed,
-    suggestions: outcome.suggestions,
-    warnings: [...outcome.warnings, ...otherLanguageWarnings(source, language, outcome.changed)]
+    patch,
+    changed,
+    suggestions: { ...outcome.suggestions, settings: settings.suggestions },
+    warnings: [
+      ...outcome.warnings,
+      ...settings.warnings,
+      ...otherLanguageWarnings(source, language, changed)
+    ]
   };
 }
 

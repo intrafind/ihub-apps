@@ -4857,14 +4857,29 @@
           "variables": "What users fill in first",
           "starterPrompts": "Example questions",
           "category": "Category",
-          "look": "Look"
+          "look": "Look",
+          "greeting": "Greeting",
+          "inputMode": "Input line",
+          "preferredOutputFormat": "Answer format",
+          "startForm": "Start form",
+          "variablesPanel": "Input panel",
+          "autoStart": "Auto-start"
         },
         "line": {
           "required": "(required)",
           "color": "Colour {{value}}",
           "icon": "Icon {{value}}",
           "default": "Default: {{value}}",
-          "typeBoolean": "Yes/no"
+          "typeBoolean": "Yes/no",
+          "rows_one": "{{count}} row",
+          "rows_other": "{{count}} rows",
+          "formatText": "Answers as plain text",
+          "formatMarkdown": "Answers as formatted text",
+          "startFormOn": "A chat starts with a form {{label}}",
+          "startFormOff": "A chat starts with the message box",
+          "panelPinned": "The input fields stay open beside the chat",
+          "panelCollapsed": "The input fields close after each message",
+          "autoStart": "The app sends the first message itself"
         },
         "warning": {
           "otherLanguages": "Only the text in this language changed. The other languages stay as they were.",
@@ -14261,6 +14276,16 @@
         "upload": "file upload",
         "webSearch": "web search",
         "skills": "skills"
+      },
+      "advanced": {
+        "title": "Advanced",
+        "intro": "How the chat looks and starts. None of this gives the app a tool or access to more data.",
+        "greetingTitle": "Greeting: title",
+        "greetingHelp": "Shown on the empty chat, in the language of the person chatting. A language needs a title and a subtitle.",
+        "greetingSubtitle": "Greeting: subtitle",
+        "formatMarkdown": "Formatted text",
+        "formatText": "Plain text",
+        "autoStartHelp": "The app sends the first message itself, so it speaks first. When someone else opens your app, that first answer counts against their own usage limit."
       }
     },
     "share": {

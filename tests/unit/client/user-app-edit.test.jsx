@@ -282,17 +282,23 @@ describe('the form state (userAppForm.js)', () => {
     expect(form.preferredModel).toBe(WITHHELD_MODEL);
     expect(Object.keys(form).sort()).toEqual(
       [
+        'autoStart',
         'capabilities',
         'color',
         'description',
+        'greeting',
         'icon',
+        'inputMode',
         'messagePlaceholder',
         'name',
         'preferredModel',
+        'preferredOutputFormat',
         'prompt',
+        'startForm',
         'starterPrompts',
         'system',
-        'variables'
+        'variables',
+        'variablesPanel'
       ].sort()
     );
   });
@@ -322,6 +328,56 @@ describe('the form state (userAppForm.js)', () => {
         ]
       })
     ).toEqual({ starterPrompts: [{ title: { en: 'A' }, message: { en: 'B' } }] });
+  });
+
+  test('how the chat looks and starts: read from the app, sent as a merge patch', () => {
+    const saved = formFromApp(
+      userApp({
+        greeting: { en: { title: 'Job ads', subtitle: 'Tell me the role' } },
+        // The microphone of the base is not the author's; type and rows are.
+        inputMode: { type: 'multiline', rows: 8, microphone: { enabled: true } },
+        preferredOutputFormat: 'text',
+        autoStart: true
+      })
+    );
+    expect(saved.greeting).toEqual({ en: { title: 'Job ads', subtitle: 'Tell me the role' } });
+    expect(saved.inputMode).toEqual({ type: 'multiline', rows: 8 });
+    expect(saved.preferredOutputFormat).toBe('text');
+    expect(saved.autoStart).toBe(true);
+    expect(patchFor(saved, saved)).toBeNull();
+
+    // A look that is only the platform's default is not read as set.
+    const plain = formFromApp(userApp({ inputMode: { type: 'singleline', rows: 5 } }));
+    expect(plain.inputMode).toEqual({});
+    expect(plain.preferredOutputFormat).toBe('');
+
+    expect(
+      patchFor(saved, {
+        ...saved,
+        // A language with a title only is not sent: the server needs both texts.
+        greeting: {
+          en: { title: 'Ads', subtitle: 'Tell me the role' },
+          de: { title: 'x', subtitle: '' }
+        },
+        inputMode: { type: 'multiline', rows: '12' },
+        autoStart: false,
+        preferredOutputFormat: '',
+        startForm: { enabled: true, submitLabel: { en: 'Write' } },
+        variablesPanel: { pinned: false }
+      })
+    ).toEqual({
+      greeting: { en: { title: 'Ads' } },
+      inputMode: { rows: 12 },
+      autoStart: null,
+      preferredOutputFormat: null,
+      startForm: { enabled: true, submitLabel: { en: 'Write' } },
+      variablesPanel: { pinned: false }
+    });
+    // Emptying a look removes it.
+    expect(patchFor(saved, { ...saved, greeting: {}, inputMode: {} })).toEqual({
+      greeting: null,
+      inputMode: null
+    });
   });
 
   test('a withheld model that was not touched is not sent; removing it sends null', () => {
@@ -637,6 +693,46 @@ describe('saving', () => {
     await click(screen.getByRole('button', { name: 'Discard' }));
     expect(nameField()).toHaveValue('Job ad writer');
     expect(mockApi.updateUserApp).not.toHaveBeenCalled();
+  });
+});
+
+describe('how the chat looks and starts', () => {
+  const advanced = () => screen.getByRole('button', { name: en.userApps.edit.advanced.title });
+
+  test('"Advanced" is closed, holds the looks, and saves them as a merge patch', async () => {
+    await renderEditor();
+    expect(advanced()).toHaveAttribute('aria-expanded', 'false');
+    await click(advanced());
+    expect(advanced()).toHaveAttribute('aria-expanded', 'true');
+    expect(untranslated(document.body)).toEqual([]);
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('checkbox', { name: en.admin.apps.edit.autoStart }));
+      fireEvent.change(screen.getByRole('combobox', { name: en.admin.apps.edit.inputType }), {
+        target: { value: 'multiline' }
+      });
+      fireEvent.change(screen.getByRole('combobox', { name: en.admin.apps.edit.outputFormat }), {
+        target: { value: 'text' }
+      });
+    });
+    mockApi.updateUserApp.mockResolvedValue(
+      userApp({ autoStart: true, inputMode: { type: 'multiline', rows: 5 }, revision: 8 })
+    );
+    await click(saveButton());
+    expect(mockApi.updateUserApp).toHaveBeenCalledWith(
+      APP_ID,
+      { autoStart: true, inputMode: { type: 'multiline' }, preferredOutputFormat: 'text' },
+      { revision: 7 }
+    );
+  });
+
+  test('a read-only app cannot change them', async () => {
+    mockApi.fetchUserApp.mockResolvedValue(
+      userApp({ permissions: { canEdit: false, readOnly: true, role: 'user', isOwner: false } })
+    );
+    await renderEditor();
+    await click(advanced());
+    expect(screen.getByRole('checkbox', { name: en.admin.apps.edit.autoStart })).toBeDisabled();
   });
 });
 

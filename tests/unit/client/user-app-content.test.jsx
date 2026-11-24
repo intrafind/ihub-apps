@@ -67,7 +67,8 @@ function appWithEverySchemaKey() {
     system: { en: 'You help.' },
     order: 3,
     preferredModel: 'model-a',
-    preferredOutputFormat: 'html',
+    // `html` is refused for a personal app; `text` is a choice it may make.
+    preferredOutputFormat: 'text',
     preferredStyle: 'formal',
     sendChatHistory: false,
     thinking: { enabled: true },
@@ -86,7 +87,7 @@ function appWithEverySchemaKey() {
       }
     ],
     startForm: { enabled: true },
-    variablesPanel: { enabled: true },
+    variablesPanel: { pinned: true },
     settings: { enabled: true },
     inputMode: { type: 'multiline' },
     upload: { enabled: true },
@@ -200,16 +201,22 @@ describe('the content keys and caps', () => {
   test('the content keys are those of section 4.4, without category', () => {
     expect([...USER_APP_CONTENT_KEYS].sort()).toEqual(
       [
+        'autoStart',
         'capabilities',
         'color',
         'description',
+        'greeting',
         'icon',
+        'inputMode',
         'messagePlaceholder',
         'name',
         'preferredModel',
+        'preferredOutputFormat',
         'prompt',
+        'startForm',
         'starterPrompts',
         'system',
+        'variablesPanel',
         'variables'
       ].sort()
     );
@@ -288,7 +295,11 @@ describe('the content keys and caps', () => {
         'languages',
         'integrations',
         'integrationActions',
-        'members'
+        'members',
+        'greetingTitle',
+        'greetingSubtitle',
+        'submitLabel',
+        'inputRows'
       ].sort()
     );
   });
@@ -345,7 +356,7 @@ describe('USER_APP_FIELD_POLICY', () => {
     ]);
   });
 
-  test('content: the nine keys copied from the record', () => {
+  test('content: the fifteen keys copied from the record', () => {
     expect(keysOf('content').sort()).toEqual(
       [
         'name',
@@ -356,7 +367,13 @@ describe('USER_APP_FIELD_POLICY', () => {
         'prompt',
         'messagePlaceholder',
         'variables',
-        'starterPrompts'
+        'starterPrompts',
+        'greeting',
+        'inputMode',
+        'preferredOutputFormat',
+        'startForm',
+        'variablesPanel',
+        'autoStart'
       ].sort()
     );
     for (const key of keysOf('content')) expect(USER_APP_CONTENT_KEYS).toContain(key);
@@ -376,15 +393,22 @@ describe('USER_APP_FIELD_POLICY', () => {
     );
   });
 
-  test('fixed: exactly the keys of personalAppBase', () => {
-    expect(keysOf('fixed').sort()).toEqual(Object.keys(personalAppBase(MINTED)).sort());
+  test('fixed: the keys of personalAppBase, but the input line, which the author may overlay', () => {
+    // `inputMode` is in the base with the microphone of every personal app; the
+    // author sets its `type` and `rows`, and the ceiling merges them over the base.
+    expect(keysOf('fixed').sort()).toEqual(
+      Object.keys(personalAppBase(MINTED))
+        .filter(key => key !== 'inputMode')
+        .sort()
+    );
+    expect(USER_APP_FIELD_POLICY.inputMode).toBe('content');
+    expect(Object.keys(personalAppBase(MINTED))).toContain('inputMode');
   });
 
   test('never: what lets an author decide about another person’s browser, knowledge or tools', () => {
     for (const key of [
       'redirectConfig',
       'iframeConfig',
-      'preferredOutputFormat',
       'outputSchema',
       'customResponseRenderer',
       'rendererConfig',
@@ -403,9 +427,9 @@ describe('USER_APP_FIELD_POLICY', () => {
 });
 
 describe('the run object', () => {
-  test('USER_APP_RUN_KEYS is the fixed, content and capability keys: 23, each once', () => {
-    expect(USER_APP_RUN_KEYS).toHaveLength(23);
-    expect(new Set(USER_APP_RUN_KEYS).size).toBe(23);
+  test('USER_APP_RUN_KEYS is the fixed, content and capability keys: 28, each once', () => {
+    expect(USER_APP_RUN_KEYS).toHaveLength(28);
+    expect(new Set(USER_APP_RUN_KEYS).size).toBe(28);
     for (const key of USER_APP_RUN_KEYS) {
       expect(['fixed', 'content', 'capability']).toContain(USER_APP_FIELD_POLICY[key]);
     }
@@ -464,7 +488,7 @@ describe('the run object', () => {
     expect(Object.isFrozen(PERSONAL_UPLOAD_OFF)).toBe(true);
   });
 
-  test('a run object passes the app schema and gains only the four schema defaults', () => {
+  test('a run object passes the app schema and gains only the schema defaults of `never` keys, and `autoStart`', () => {
     const app = {
       ...personalAppBase(MINTED),
       name: { de: 'Helfer' },
@@ -474,7 +498,9 @@ describe('the run object', () => {
       color: DEFAULT_APP_COLOR,
       upload: structuredClone(PERSONAL_UPLOAD_ON),
       websearch: { enabled: false },
-      toolApproval: { default: 'always' }
+      toolApproval: { default: 'always' },
+      // A content key now: the ceiling sets it when the author did; the schema adds `false` otherwise.
+      autoStart: false
     };
     // The schema of the app files refuses the personal shape (4.2), so the
     // shape of the object is checked under an ordinary ID.
@@ -517,6 +543,12 @@ describe('pickUserAppContent', () => {
         }
       ],
       starterPrompts: [{ title: { en: 'Start' }, message: { en: 'Go' } }],
+      greeting: { en: { title: 'Hi', subtitle: 'there' } },
+      inputMode: { type: 'multiline' },
+      preferredOutputFormat: 'text',
+      startForm: { enabled: true },
+      variablesPanel: { pinned: true },
+      autoStart: true,
       preferredModel: 'model-a',
       capabilities: {
         upload: true,

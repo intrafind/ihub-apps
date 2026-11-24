@@ -678,6 +678,37 @@ describe('the start state and the projection, for every kind of tool', () => {
     assert.equal(appConfigSchema.safeParse(app).success, true);
   });
 
+  it('how the chat looks and starts is copied, and the input line only when the author set it', () => {
+    const looks = {
+      greeting: { de: { title: 'Recherche', subtitle: 'Was suchen Sie?' } },
+      preferredOutputFormat: 'text',
+      startForm: { enabled: true, submitLabel: { de: 'Suchen' } },
+      variablesPanel: { pinned: false },
+      autoStart: true,
+      inputMode: { type: 'multiline', rows: 7, microphone: { enabled: true } }
+    };
+    const result = effective(looks, []);
+    const withInput = toAdminApp(
+      { ...record, content: { inputMode: { rows: 7 } } },
+      { effective: result, id: 'recherche', enabled: true }
+    );
+    assert.deepEqual(withInput.greeting, looks.greeting);
+    assert.equal(withInput.preferredOutputFormat, 'text');
+    assert.deepEqual(withInput.startForm, looks.startForm);
+    assert.deepEqual(withInput.variablesPanel, looks.variablesPanel);
+    assert.equal(withInput.autoStart, true);
+    assert.equal(withInput.inputMode.rows, 7);
+    assert.equal(appConfigSchema.safeParse(withInput).success, true);
+
+    // Every personal app has an input line with the microphone of the base; an author
+    // who set nothing does not get that block written into the company app.
+    const withoutInput = toAdminApp(
+      { ...record, content: {} },
+      { effective: result, id: 'recherche', enabled: true }
+    );
+    assert.notDeepEqual(withoutInput.inputMode?.rows, 7);
+  });
+
   it('skills are written as the explicit list of granted IDs, never as a wildcard', () => {
     const result = effective(
       { skillSettings: { enabled: true, allowPersonal: true }, skills: ['brand-voice', '*'] },

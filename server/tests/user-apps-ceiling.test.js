@@ -131,6 +131,12 @@ function recordWith(content = {}, fields = {}) {
       messagePlaceholder: { en: 'Your notes' },
       variables: [{ name: 'role', label: { en: 'Role' }, type: 'string', required: false }],
       starterPrompts: [{ title: { en: 'Start' }, message: { en: 'Write an ad' } }],
+      greeting: { en: { title: 'Job ads', subtitle: 'Tell me the role' } },
+      inputMode: { type: 'multiline', rows: 8 },
+      preferredOutputFormat: 'text',
+      startForm: { enabled: false, submitLabel: { en: 'Write' } },
+      variablesPanel: { pinned: false },
+      autoStart: true,
       preferredModel: MODEL,
       capabilities: {
         upload: true,
@@ -181,10 +187,82 @@ describe('the run object', () => {
     });
     const base = personalAppBase(APP_ID);
     for (const key of Object.keys(base)) {
-      if (key === 'allowEmptyContent') continue;
+      // The derived flag, and the input line the author may change.
+      if (key === 'allowEmptyContent' || key === 'inputMode') continue;
       assert.deepEqual(app[key], base[key], key);
     }
     assert.deepEqual(app.features, { projects: false, userProjects: false });
+  });
+
+  it('writes how the chat looks and starts, and keeps the microphone of the base', () => {
+    const { app } = effectiveUserApp(recordWith(), {
+      runner: BEN,
+      owner: ANNA,
+      settings: settingsWith(),
+      catalog: catalogWith(),
+      now: NOW
+    });
+    assert.deepEqual(app.greeting, { en: { title: 'Job ads', subtitle: 'Tell me the role' } });
+    assert.deepEqual(app.inputMode, {
+      ...personalAppBase(APP_ID).inputMode,
+      type: 'multiline',
+      rows: 8
+    });
+    assert.equal(app.preferredOutputFormat, 'text');
+    assert.deepEqual(app.startForm, { enabled: false, submitLabel: { en: 'Write' } });
+    assert.deepEqual(app.variablesPanel, { pinned: false });
+    assert.equal(app.autoStart, true);
+    parseAsApp(app);
+  });
+
+  it('leaves the looks of the base alone when the author set none', () => {
+    const record = recordWith();
+    for (const key of [
+      'greeting',
+      'inputMode',
+      'preferredOutputFormat',
+      'startForm',
+      'variablesPanel',
+      'autoStart'
+    ]) {
+      delete record.content[key];
+    }
+    const { app } = effectiveUserApp(record, {
+      runner: BEN,
+      owner: ANNA,
+      settings: settingsWith(),
+      catalog: catalogWith(),
+      now: NOW
+    });
+    assert.deepEqual(app.inputMode, personalAppBase(APP_ID).inputMode);
+    for (const key of ['greeting', 'preferredOutputFormat', 'startForm', 'variablesPanel']) {
+      assert.equal(Object.hasOwn(app, key), false, key);
+    }
+    assert.equal(Object.hasOwn(app, 'autoStart'), false);
+  });
+
+  it('checks the looks again, because a record is not trusted', () => {
+    const record = recordWith({
+      greeting: { en: { title: 'Only a title' }, de: 'text', fr: { title: 'T', subtitle: 'S' } },
+      inputMode: { type: 'banner', rows: 99 },
+      preferredOutputFormat: 'html',
+      startForm: { enabled: 'yes' },
+      variablesPanel: { pinned: 'no' },
+      autoStart: 'true'
+    });
+    const { app } = effectiveUserApp(record, {
+      runner: BEN,
+      owner: ANNA,
+      settings: settingsWith(),
+      catalog: catalogWith(),
+      now: NOW
+    });
+    assert.deepEqual(app.greeting, { fr: { title: 'T', subtitle: 'S' } });
+    assert.deepEqual(app.inputMode, personalAppBase(APP_ID).inputMode);
+    for (const key of ['preferredOutputFormat', 'startForm', 'variablesPanel', 'autoStart']) {
+      assert.equal(Object.hasOwn(app, key), false, key);
+    }
+    parseAsApp(app);
   });
 
   it('derives allowEmptyContent from the message template', () => {
@@ -212,6 +290,7 @@ describe('the run object', () => {
         apps: ['*'],
         workflows: ['payroll'],
         iassistant: { baseUrl: 'https://evil.example' },
+        // `html` is not an output format a personal app may choose.
         preferredOutputFormat: 'html',
         customResponseRenderer: 'evil',
         rendererConfig: { script: 'x' },
@@ -250,7 +329,14 @@ describe('the run object', () => {
       catalog: catalogWith(),
       now: NOW
     });
-    assert.deepEqual(Object.keys(app).sort(), [...USER_APP_RUN_KEYS].sort());
+    // Everything but the output format, which the hostile record sets to `html`.
+    assert.deepEqual(
+      Object.keys(app).sort(),
+      USER_APP_RUN_KEYS.filter(key => key !== 'preferredOutputFormat').sort()
+    );
+    assert.equal(app.preferredOutputFormat, undefined);
+    // The row count of 99 is dropped; the type is a valid one and stays.
+    assert.equal(app.inputMode.rows, personalAppBase(APP_ID).inputMode.rows);
     assert.equal(app.type, 'chat');
     assert.equal(app.enabled, true);
     assert.equal(app.sendChatHistory, true);

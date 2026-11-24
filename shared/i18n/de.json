@@ -5357,14 +5357,29 @@
           "variables": "Was Benutzer zuerst ausfüllen",
           "starterPrompts": "Beispielfragen",
           "category": "Kategorie",
-          "look": "Aussehen"
+          "look": "Aussehen",
+          "greeting": "Begrüßung",
+          "inputMode": "Eingabezeile",
+          "preferredOutputFormat": "Antwortformat",
+          "startForm": "Startformular",
+          "variablesPanel": "Eingabebereich",
+          "autoStart": "Automatischer Start"
         },
         "line": {
           "required": "(Pflichtfeld)",
           "color": "Farbe {{value}}",
           "icon": "Symbol {{value}}",
           "default": "Vorgabe: {{value}}",
-          "typeBoolean": "Ja/Nein"
+          "typeBoolean": "Ja/Nein",
+          "rows_one": "{{count}} Zeile",
+          "rows_other": "{{count}} Zeilen",
+          "formatText": "Antworten als reiner Text",
+          "formatMarkdown": "Antworten als formatierter Text",
+          "startFormOn": "Ein Chat beginnt mit einem Formular {{label}}",
+          "startFormOff": "Ein Chat beginnt mit dem Eingabefeld",
+          "panelPinned": "Die Eingabefelder bleiben neben dem Chat geöffnet",
+          "panelCollapsed": "Die Eingabefelder klappen nach jeder Nachricht zu",
+          "autoStart": "Die App sendet die erste Nachricht selbst"
         },
         "warning": {
           "otherLanguages": "Nur der Text in dieser Sprache wurde geändert. Die anderen Sprachen bleiben, wie sie waren.",
@@ -14260,6 +14275,16 @@
         "upload": "den Datei-Upload",
         "webSearch": "die Websuche",
         "skills": "Skills"
+      },
+      "advanced": {
+        "title": "Erweitert",
+        "intro": "Wie der Chat aussieht und beginnt. Nichts davon gibt der App ein Werkzeug oder Zugriff auf mehr Daten.",
+        "greetingTitle": "Begrüßung: Titel",
+        "greetingHelp": "Wird im leeren Chat angezeigt, in der Sprache der Person, die chattet. Eine Sprache braucht einen Titel und einen Untertitel.",
+        "greetingSubtitle": "Begrüßung: Untertitel",
+        "formatMarkdown": "Formatierter Text",
+        "formatText": "Nur Text",
+        "autoStartHelp": "Die App sendet die erste Nachricht selbst und spricht damit zuerst. Öffnet jemand anderes Ihre App, zählt diese erste Antwort auf das eigene Nutzungslimit dieser Person."
       }
     },
     "share": {

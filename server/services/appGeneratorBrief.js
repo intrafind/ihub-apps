@@ -255,6 +255,8 @@ function withoutBlockMarksDeep(value) {
  *   search and installed integrations (not when the request names `fields`).
  * @param {boolean} [options.hasIntegrations=false] - Whether a list of installed
  *   systems precedes the rules.
+ * @param {Array<{ key: string, hint: string, proposal: 'direct'|'confirm' }>} [options.settings] -
+ *   The settings of the registry this turn may propose under `change.settings`.
  * @returns {string}
  */
 export function revisionOutputRules({
@@ -263,7 +265,8 @@ export function revisionOutputRules({
   categories = [],
   mayAsk = true,
   mayPropose = true,
-  hasIntegrations = false
+  hasIntegrations = false,
+  settings = []
 }) {
   const keyRules = keys.map(key => {
     if (key !== 'category') return `- ${REVISION_KEY_RULES[key]}`;
@@ -280,6 +283,16 @@ export function revisionOutputRules({
           : '- "integrations": leave it out; no integration is installed that this app could use.'
       ]
     : [];
+  const settingRules =
+    settings.length > 0
+      ? [
+          '- "settings": an object with the keys below, only when the person asked for such a change. Write each value out in full; use null to remove a setting. A setting marked (confirm) is a proposal the person confirms; the others are part of the change. Use only these keys; every other key is ignored:',
+          ...settings.map(
+            ({ key, hint, proposal }) =>
+              `  - "${key}"${proposal === 'confirm' ? ' (confirm)' : ''}: ${hint}`
+          )
+        ]
+      : [];
   const question = mayAsk
     ? '"question": { "text": string, "choices": array of up to 6 short strings }. Ask only when the change cannot be made without the answer.'
     : 'not allowed in this turn. Make the change with a sensible choice, or answer with a message.';
@@ -293,6 +306,7 @@ export function revisionOutputRules({
     '4. "reply": "change": "change" is an object with only the parts that change, each written out in full. Use only these keys; every other key is ignored:',
     ...keyRules,
     ...proposals,
+    ...settingRules,
     `5. Write every text of the app in ${languageName(language)}, as a plain string, never as an object with language codes.`,
     '6. The "name" of an input field is its placeholder name: lowercase letters, digits and underscores, starting with a letter. Write the placeholder of every input field into the message template, for example "Tone: {{tone}}".',
     '7. Do not name an AI model and do not set one. Do not publish, share or change who can use the app.'
@@ -322,6 +336,8 @@ export function revisionOutputRules({
  * @param {boolean} [options.mayAsk=true]
  * @param {boolean} [options.mayPropose=true]
  * @param {string} [options.integrationsBlock=''] - The catalogue of installed systems.
+ * @param {Array<{ key: string, hint: string, proposal: string }>} [options.settings] - The
+ *   settings of the registry the turn may propose; see {@link revisionOutputRules}.
  * @returns {{ messages: Array<{ role: string, content: string }> }}
  */
 export function buildRevisionMessages({
@@ -333,7 +349,8 @@ export function buildRevisionMessages({
   categories = [],
   mayAsk = true,
   mayPropose = true,
-  integrationsBlock = ''
+  integrationsBlock = '',
+  settings = []
 }) {
   const catalogue = mayPropose ? integrationsBlock.trim() : '';
   const system = [
@@ -345,7 +362,8 @@ export function buildRevisionMessages({
       categories,
       mayAsk,
       mayPropose,
-      hasIntegrations: Boolean(catalogue)
+      hasIntegrations: Boolean(catalogue),
+      settings
     })
   ]
     .filter(Boolean)

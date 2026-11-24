@@ -24,7 +24,7 @@
  */
 
 import { USER_APP_LIMITS } from './userAppContent.js';
-import { fieldKeysToRevise } from './userAppFields.js';
+import { fieldKeysToPropose, fieldKeysToRevise } from './userAppFields.js';
 
 /** The two targets of a revision: an admin app (`apps/*.json`) and a personal app. */
 export const REVISE_TARGETS = Object.freeze(['admin', 'personal']);
@@ -42,6 +42,28 @@ const ADMIN_REVISION_KEYS = fieldKeysToRevise('admin');
  * builder only suggests them.
  */
 const PERSONAL_REVISION_KEYS = fieldKeysToRevise('personal');
+
+/**
+ * The key of a change under which a model proposes the settings of the
+ * registry (`shared/userAppFields.js`, `propose`): `change.settings`. Each
+ * value is checked per key on the server.
+ */
+export const REVISE_SETTINGS_KEY = 'settings';
+
+/**
+ * The keys a change may set through `change.settings` for a target. They are
+ * not content keys of {@link appRevisionKeys}: a text, an input field or a
+ * conversation starter has a sanitiser of its own, a setting is checked
+ * against the schema of its key.
+ *
+ * @param {'admin'|'personal'} target
+ * @returns {readonly string[]}
+ * @example
+ * appSettingsKeys('personal').includes('autoStart'); // → true
+ */
+export function appSettingsKeys(target) {
+  return fieldKeysToPropose(target === 'personal' ? 'personal' : 'admin');
+}
 
 /** The keys whose value is one text per language. */
 export const REVISE_LOCALIZED_KEYS = Object.freeze([

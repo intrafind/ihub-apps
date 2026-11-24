@@ -44,7 +44,11 @@ import { placeholdersIn } from '../../../shared/appPlaceholders.js';
 import {
   PERSONAL_UPLOAD_OFF,
   PERSONAL_UPLOAD_ON,
+  USER_APP_GREETING_KEYS,
+  USER_APP_INPUT_MODE_TYPES,
+  USER_APP_LIMITS,
   USER_APP_LOCALIZED_KEYS,
+  USER_APP_OUTPUT_FORMATS,
   USER_APP_STARTER_PROMPT_KEYS,
   USER_APP_VARIABLE_KEYS,
   personalAppBase
@@ -285,6 +289,61 @@ function listCopy(value, keys) {
   });
 }
 
+/** The greeting as a new object: per language a title and a subtitle, both strings. */
+function greetingCopy(value) {
+  if (!isPlainObject(value)) return undefined;
+  const copy = {};
+  for (const [language, entry] of Object.entries(value)) {
+    if (!isPlainObject(entry)) continue;
+    const [title, subtitle] = USER_APP_GREETING_KEYS.map(key => entry[key]);
+    if (typeof title === 'string' && typeof subtitle === 'string') {
+      copy[language] = { title, subtitle };
+    }
+  }
+  return Object.keys(copy).length > 0 ? copy : undefined;
+}
+
+/**
+ * The input line the author set, checked again: the record was validated when
+ * it was saved, but the ceiling does not trust a record. A type or a row count
+ * outside the app schema is left out, and the base's value stays.
+ */
+function inputModeCopy(value) {
+  if (!isPlainObject(value)) return undefined;
+  const copy = {};
+  if (USER_APP_INPUT_MODE_TYPES.includes(value.type)) copy.type = value.type;
+  if (Number.isInteger(value.rows) && value.rows >= 1 && value.rows <= USER_APP_LIMITS.inputRows) {
+    copy.rows = value.rows;
+  }
+  return Object.keys(copy).length > 0 ? copy : undefined;
+}
+
+/**
+ * Write what the author chose about how the chat looks and starts into the app
+ * object: greeting, input line, output format, start form, input panel and
+ * `autoStart`. None of them adds a tool or reach, so no ceiling decides them;
+ * each value is still checked, because a record is not trusted. The input line
+ * keeps the microphone of {@link personalAppBase}.
+ */
+function applyLooks(app, content) {
+  const greeting = greetingCopy(content.greeting);
+  if (greeting) app.greeting = greeting;
+  const inputMode = inputModeCopy(content.inputMode);
+  if (inputMode) app.inputMode = { ...app.inputMode, ...inputMode };
+  if (USER_APP_OUTPUT_FORMATS.includes(content.preferredOutputFormat)) {
+    app.preferredOutputFormat = content.preferredOutputFormat;
+  }
+  if (isPlainObject(content.startForm) && typeof content.startForm.enabled === 'boolean') {
+    app.startForm = { enabled: content.startForm.enabled };
+    const label = localizedCopy(content.startForm.submitLabel);
+    if (label) app.startForm.submitLabel = label;
+  }
+  if (isPlainObject(content.variablesPanel) && typeof content.variablesPanel.pinned === 'boolean') {
+    app.variablesPanel = { pinned: content.variablesPanel.pinned };
+  }
+  if (content.autoStart === true) app.autoStart = true;
+}
+
 /**
  * Whether a person can send the form without typing a message: true when the
  * message template uses an input field (the rule of a generated draft).
@@ -372,6 +431,7 @@ export function effectiveUserApp(record, { runner, owner, settings, catalog, now
   const starterPrompts = listCopy(content.starterPrompts, USER_APP_STARTER_PROMPT_KEYS);
   if (starterPrompts) app.starterPrompts = starterPrompts;
   app.allowEmptyContent = templateUsesField(app.prompt, app.variables);
+  applyLooks(app, content);
 
   // Capabilities: written here, never copied from the record.
   if (!decided.model.reason) app.preferredModel = decided.model.id;

@@ -32,6 +32,13 @@
  *   the key adds cost, data reach or access (design 07, section 2.6).
  * - `gate`: the key of `platform.userApps.capabilities` that switches it on,
  *   or null when no admin switch is needed.
+ * - `propose`: the targets for which the builder may set the key through the
+ *   `settings` channel of a revision (a model's `settings` object, validated
+ *   per key on the server). `revise` is the older channel for texts, input
+ *   fields and conversation starters, which has a sanitiser of its own; a
+ *   key is in one channel, not both.
+ * - `hint`: one line for the builder's prompt: what the key is and what
+ *   values it takes. Only keys with `propose` need one.
  *
  * Pure data and pure functions. The Zod schemas stay hand-written in
  * `server/validators/userAppSchema.js`; a test (`user-app-fields.test.js`)
@@ -55,8 +62,10 @@ function describe(descriptor) {
     localized: false,
     required: false,
     revise: NONE,
+    propose: NONE,
     proposal: null,
     gate: null,
+    hint: '',
     ...descriptor,
     appKeys: Object.freeze([...(descriptor.appKeys || [])])
   });
@@ -157,6 +166,60 @@ export const USER_APP_FIELDS = Object.freeze([
     proposal: 'direct'
   }),
   describe({
+    key: 'greeting',
+    store: 'content',
+    verdict: 'content',
+    appKeys: ['greeting'],
+    propose: BOTH,
+    proposal: 'direct',
+    hint: 'The title and subtitle on the empty chat, per language: { "en": { "title": "…", "subtitle": "…" } }.'
+  }),
+  describe({
+    key: 'inputMode',
+    store: 'content',
+    verdict: 'content',
+    appKeys: ['inputMode'],
+    propose: BOTH,
+    proposal: 'direct',
+    hint: 'The input line: { "type": "singleline" | "multiline", "rows": 1 to 20 }. Leave out what stays as it is.'
+  }),
+  describe({
+    key: 'preferredOutputFormat',
+    store: 'content',
+    verdict: 'content',
+    appKeys: ['preferredOutputFormat'],
+    propose: BOTH,
+    proposal: 'direct',
+    hint: 'How answers are rendered: "markdown" or "text".'
+  }),
+  describe({
+    key: 'startForm',
+    store: 'content',
+    verdict: 'content',
+    appKeys: ['startForm'],
+    propose: BOTH,
+    proposal: 'direct',
+    hint: 'A chat opens with the input fields as a form: { "enabled": true | false, "submitLabel": { "en": "…" } }.'
+  }),
+  describe({
+    key: 'variablesPanel',
+    store: 'content',
+    verdict: 'content',
+    appKeys: ['variablesPanel'],
+    propose: BOTH,
+    proposal: 'direct',
+    hint: 'Whether the input panel beside the chat starts pinned: { "pinned": true | false }.'
+  }),
+  describe({
+    key: 'autoStart',
+    store: 'content',
+    verdict: 'content',
+    appKeys: ['autoStart'],
+    propose: BOTH,
+    proposal: 'direct',
+    hint: 'true: a new chat sends the first message by itself, so the app speaks first.'
+  }),
+  describe({
     key: 'preferredModel',
     store: 'content',
     verdict: 'capability',
@@ -251,4 +314,15 @@ export function appKeyVerdicts() {
     for (const appKey of field.appKeys) verdicts[appKey] = field.verdict;
   }
   return verdicts;
+}
+
+/**
+ * The keys the builder may set through the `settings` channel for a target,
+ * in registry order.
+ *
+ * @param {'admin'|'personal'} target
+ * @returns {readonly string[]}
+ */
+export function fieldKeysToPropose(target) {
+  return keysWhere(field => field.propose.includes(target));
 }

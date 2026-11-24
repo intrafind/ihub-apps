@@ -840,7 +840,6 @@ const NEVER_COPIED = [
   'enabled',
   'type',
   'allowedModels',
-  'greeting',
   'settings',
   'requiredFeatures',
   'websearch',
@@ -915,6 +914,8 @@ describe('copying an existing app', () => {
       starterPrompts: [
         { title: { en: 'Leave' }, message: { en: 'How many days of leave do I have?' } }
       ],
+      // The greeting of the empty chat is a setting a personal app may hold, so a copy keeps it.
+      greeting: { en: { title: 'Hi', subtitle: 'Ask me' } },
       // Only the actions the installation allows in an app of this person stay bound.
       capabilities: {
         upload: true,

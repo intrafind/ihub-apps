@@ -19,7 +19,11 @@
  * @module features/apps/components/user-app/userAppForm
  */
 
-import { pickUserAppContent } from '../../../../../../shared/userAppContent.js';
+import {
+  USER_APP_LIMITS,
+  USER_APP_OUTPUT_FORMATS,
+  pickUserAppContent
+} from '../../../../../../shared/userAppContent.js';
 
 /** Prefix of the capability ID of a bound installation (`integration:<installationId>`). */
 const INTEGRATION_PREFIX = 'integration:';
@@ -33,6 +37,20 @@ export const WITHHELD_MODEL = ':withheld';
 const LOCALIZED = ['name', 'description', 'system', 'prompt', 'messagePlaceholder'];
 const OPTIONAL_TEXTS = ['prompt', 'messagePlaceholder'];
 const FLAGS = ['upload', 'webSearch', 'skills'];
+
+/**
+ * The keys about how the chat looks and starts, each with the value of "not
+ * set" in the form. The form holds them as the content stores them, except
+ * that an empty object, an empty text or `false` stands for "not set".
+ */
+const LOOKS = Object.freeze({
+  greeting: {},
+  inputMode: {},
+  preferredOutputFormat: '',
+  startForm: {},
+  variablesPanel: {},
+  autoStart: false
+});
 
 const isPlainObject = value => Boolean(value) && typeof value === 'object' && !Array.isArray(value);
 const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
@@ -71,6 +89,8 @@ export function formFromApp(app) {
   form.color = content.color || '';
   form.variables = content.variables || [];
   form.starterPrompts = content.starterPrompts || [];
+  for (const [key, unset] of Object.entries(LOOKS))
+    form[key] = content[key] ?? structuredClone(unset);
   form.preferredModel =
     typeof source.preferredModel === 'string' && source.preferredModel
       ? source.preferredModel
@@ -95,6 +115,90 @@ export function formFromApp(app) {
       })
   };
   return form;
+}
+
+/** The greeting with only the languages that have both a title and a subtitle. */
+function cleanGreeting(greeting) {
+  const clean = {};
+  for (const [language, entry] of Object.entries(isPlainObject(greeting) ? greeting : {})) {
+    const title = typeof entry?.title === 'string' ? entry.title.trim() : '';
+    const subtitle = typeof entry?.subtitle === 'string' ? entry.subtitle.trim() : '';
+    if (title && subtitle) clean[language] = { title, subtitle };
+  }
+  return clean;
+}
+
+/**
+ * One look as the server would store it: a value that is not set, or not one a
+ * personal app may store, becomes the value of "not set" ({@link LOOKS}).
+ */
+function cleanLook(key, value) {
+  switch (key) {
+    case 'greeting':
+      return cleanGreeting(value);
+    case 'inputMode': {
+      const clean = {};
+      if (value?.type === 'singleline' || value?.type === 'multiline') clean.type = value.type;
+      const rows = Number(value?.rows);
+      if (Number.isInteger(rows) && rows >= 1 && rows <= USER_APP_LIMITS.inputRows) {
+        clean.rows = rows;
+      }
+      return clean;
+    }
+    case 'preferredOutputFormat':
+      return USER_APP_OUTPUT_FORMATS.includes(value) && value !== 'markdown' ? value : '';
+    case 'startForm': {
+      if (typeof value?.enabled !== 'boolean') return {};
+      const clean = { enabled: value.enabled };
+      const label = {};
+      for (const [language, text] of Object.entries(
+        isPlainObject(value.submitLabel) ? value.submitLabel : {}
+      )) {
+        if (typeof text === 'string' && text.trim()) label[language] = text.trim();
+      }
+      if (Object.keys(label).length > 0) clean.submitLabel = label;
+      return clean;
+    }
+    case 'variablesPanel':
+      return typeof value?.pinned === 'boolean' ? { pinned: value.pinned } : {};
+    default:
+      return value === true;
+  }
+}
+
+/** Whether a look is "not set". */
+const isUnset = value =>
+  value === '' ||
+  value === false ||
+  value === undefined ||
+  value === null ||
+  (isPlainObject(value) && Object.keys(value).length === 0);
+
+/**
+ * The merge patch that turns `before` into `after`: objects key by key, a
+ * removed key as `null`, anything else as the whole new value. `undefined`
+ * when nothing differs.
+ */
+function mergeDiff(before, after) {
+  if (isPlainObject(after)) {
+    const old = isPlainObject(before) ? before : {};
+    const diff = {};
+    for (const [key, value] of Object.entries(after)) {
+      const change = mergeDiff(old[key], value);
+      if (change !== undefined) diff[key] = change;
+    }
+    for (const key of Object.keys(old)) if (!Object.hasOwn(after, key)) diff[key] = null;
+    return Object.keys(diff).length > 0 ? diff : undefined;
+  }
+  return same(before, after) ? undefined : after;
+}
+
+/** The patch of one look between two form states: `undefined` when it did not change. */
+function lookPatch(key, saved, current) {
+  const before = cleanLook(key, saved?.[key]);
+  const after = cleanLook(key, current?.[key]);
+  if (isUnset(after)) return isUnset(before) ? undefined : null;
+  return mergeDiff(before, after);
 }
 
 /** A localized text as a merge patch: changed languages, and `null` for removed ones. */
@@ -147,6 +251,10 @@ export function patchFor(saved, current) {
   });
   for (const key of ['variables', 'starterPrompts']) {
     if (!same(picked[key], pickedSaved[key])) patch[key] = picked[key];
+  }
+  for (const key of Object.keys(LOOKS)) {
+    const change = lookPatch(key, saved, current);
+    if (change !== undefined) patch[key] = change;
   }
   if (
     current.preferredModel !== saved.preferredModel &&

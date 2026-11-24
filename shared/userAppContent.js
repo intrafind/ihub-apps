@@ -8,8 +8,8 @@
  * object a chat runs with.
  *
  * Pure; no function modifies its argument. This file imports only
- * `shared/userAppFields.js`, which imports nothing, so `shared/appId.js` and
- * the validators can import it without a cycle.
+ * `shared/userAppFields.js` and `shared/appDefaults.js`, which import nothing,
+ * so `shared/appId.js` and the validators can import it without a cycle.
  *
  * Design: concepts/app-builder-rework-2026-11/02-personal-apps.md, sections
  * 4.2 and 4.4.
@@ -17,6 +17,7 @@
  * @module shared/userAppContent
  */
 
+import { newAppDefaults } from './appDefaults.js';
 import {
   USER_APP_STORED_CONTENT_KEYS,
   USER_APP_STORED_LOCALIZED_KEYS,
@@ -73,6 +74,24 @@ export const USER_APP_VARIABLE_KEYS = Object.freeze([
 /** The keys of a conversation starter a personal app may store. */
 export const USER_APP_STARTER_PROMPT_KEYS = Object.freeze(['title', 'message']);
 
+/** The keys of the greeting of one language a personal app may store. */
+export const USER_APP_GREETING_KEYS = Object.freeze(['title', 'subtitle']);
+
+/** The keys of the input line a personal app may set; the microphone stays fixed. */
+export const USER_APP_INPUT_MODE_KEYS = Object.freeze(['type', 'rows']);
+
+/** The values of `inputMode.type`. */
+export const USER_APP_INPUT_MODE_TYPES = Object.freeze(['singleline', 'multiline']);
+
+/** The values of the output format a personal app may choose. */
+export const USER_APP_OUTPUT_FORMATS = Object.freeze(['markdown', 'text']);
+
+/** The keys of the start form a personal app may set. */
+export const USER_APP_START_FORM_KEYS = Object.freeze(['enabled', 'submitLabel']);
+
+/** The keys of the input panel a personal app may set. */
+export const USER_APP_VARIABLES_PANEL_KEYS = Object.freeze(['pinned']);
+
 /** The keys of `capabilities`: three switches and the list of bound installations. */
 export const USER_APP_CAPABILITY_KEYS = Object.freeze([
   'upload',
@@ -120,7 +139,14 @@ export const USER_APP_LIMITS = Object.freeze({
   /** Named actions per bound installation. */
   integrationActions: 30,
   /** Member entries per app. */
-  members: 100
+  members: 100,
+  /** The title and the subtitle of the greeting on an empty chat. */
+  greetingTitle: 80,
+  greetingSubtitle: 200,
+  /** The label of the send button of the start form. */
+  submitLabel: 60,
+  /** The most rows the input line may have. */
+  inputRows: 20
 });
 
 /** The values of `origin`: how the app was started. `chat` is added with the chat-based builder. */
@@ -158,12 +184,10 @@ export const USER_APP_FIELD_POLICY = Object.freeze({
   enabled: 'fixed',
   sendChatHistory: 'fixed',
   allowEmptyContent: 'fixed',
-  inputMode: 'fixed',
   features: 'fixed',
 
   redirectConfig: 'never',
   iframeConfig: 'never',
-  preferredOutputFormat: 'never',
   preferredStyle: 'never',
   outputSchema: 'never',
   customResponseRenderer: 'never',
@@ -176,14 +200,10 @@ export const USER_APP_FIELD_POLICY = Object.freeze({
   toolSearch: 'never',
   thinking: 'never',
   imageGeneration: 'never',
-  startForm: 'never',
-  variablesPanel: 'never',
-  greeting: 'never',
   aiDisclosure: 'never',
   usageGuide: 'never',
   allowedModels: 'never',
   disallowModelSelection: 'never',
-  autoStart: 'never',
   ephemeral: 'never',
   documentTemplate: 'never',
   allowUserTemplateUploads: 'never',
@@ -223,7 +243,6 @@ export const USER_APP_RUN_KEYS = Object.freeze([
  */
 export const USER_APP_SCHEMA_DEFAULTS = Object.freeze({
   disallowModelSelection: false,
-  autoStart: false,
   ephemeral: false,
   allowInheritance: false
 });
@@ -387,6 +406,62 @@ function pickCapabilities(draft) {
 }
 
 /**
+ * The greeting: one `{ title, subtitle }` per language that has both texts and
+ * is not the platform's default text of that language.
+ */
+function pickGreeting(value, defaults) {
+  if (!isPlainObject(value)) return undefined;
+  const greeting = {};
+  for (const [language, entry] of Object.entries(value)) {
+    if (!isPlainObject(entry)) continue;
+    const picked = pickKeys(entry, USER_APP_GREETING_KEYS);
+    if (typeof picked.title !== 'string' || typeof picked.subtitle !== 'string') continue;
+    const standard = defaults?.[language];
+    if (standard?.title === picked.title && standard?.subtitle === picked.subtitle) continue;
+    greeting[language] = picked;
+  }
+  return Object.keys(greeting).length > 0 ? greeting : undefined;
+}
+
+/**
+ * The keys that change how the chat looks and starts: greeting, input line,
+ * output format, start form, input panel and `autoStart`. Each is picked only
+ * when it is set, has a value a personal app may store, and is not what a new
+ * app starts with anyway (`newAppDefaults()`): a default is not a choice of the
+ * author, and an app from a draft or from the run object of a chat would
+ * otherwise store the platform's defaults as its own.
+ */
+function pickLooks(source) {
+  const defaults = newAppDefaults('en');
+  const looks = {};
+  const greeting = pickGreeting(source.greeting, defaults.greeting);
+  if (greeting) looks.greeting = greeting;
+  if (isPlainObject(source.inputMode)) {
+    const inputMode = pickKeys(source.inputMode, USER_APP_INPUT_MODE_KEYS);
+    for (const key of Object.keys(inputMode)) {
+      if (inputMode[key] === defaults.inputMode[key]) delete inputMode[key];
+    }
+    if (Object.keys(inputMode).length > 0) looks.inputMode = inputMode;
+  }
+  if (
+    USER_APP_OUTPUT_FORMATS.includes(source.preferredOutputFormat) &&
+    source.preferredOutputFormat !== defaults.preferredOutputFormat
+  ) {
+    looks.preferredOutputFormat = source.preferredOutputFormat;
+  }
+  if (isPlainObject(source.startForm)) {
+    const startForm = structuredClone(pickKeys(source.startForm, USER_APP_START_FORM_KEYS));
+    if (Object.keys(startForm).length > 0) looks.startForm = startForm;
+  }
+  if (isPlainObject(source.variablesPanel)) {
+    const panel = pickKeys(source.variablesPanel, USER_APP_VARIABLES_PANEL_KEYS);
+    if (Object.keys(panel).length > 0) looks.variablesPanel = panel;
+  }
+  if (source.autoStart === true) looks.autoStart = true;
+  return looks;
+}
+
+/**
  * The content of a personal app from a draft: the body of `POST /api/apps`
  * without `language` and `origin`. The draft is an app config (a template, a
  * generated draft, `newAppDefaults()`) or a personal body; the result has
@@ -425,6 +500,7 @@ export function pickUserAppContent(draft) {
       .filter(isPlainObject)
       .map(starter => structuredClone(pickKeys(starter, USER_APP_STARTER_PROMPT_KEYS)));
   }
+  Object.assign(content, pickLooks(source));
   if (typeof source.preferredModel === 'string' && source.preferredModel !== '') {
     content.preferredModel = source.preferredModel;
   }

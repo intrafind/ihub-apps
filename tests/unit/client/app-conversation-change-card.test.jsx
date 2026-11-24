@@ -72,6 +72,30 @@ beforeAll(async () => {
   });
 });
 
+describe('a setting of the app', () => {
+  test('is a part of its own, with the sentence it adds', () => {
+    renderCard({
+      entry: entry({ patch: { autoStart: true }, changed: ['autoStart'], baseSnapshot: {} })
+    });
+    expect(screen.getByRole('heading', { name: TEXT.field.autoStart })).toBeInTheDocument();
+    expect(document.querySelector('ins')).toHaveTextContent(TEXT.line.autoStart);
+    expect(document.querySelector('del')).toBeNull();
+  });
+
+  test('shows a removed setting as a removed line, and a greeting by language', () => {
+    renderCard({
+      entry: entry({
+        patch: { autoStart: null, greeting: { en: { title: 'Hi', subtitle: 'there' } } },
+        changed: ['autoStart', 'greeting'],
+        baseSnapshot: { autoStart: true }
+      })
+    });
+    expect(document.querySelector('del')).toHaveTextContent(TEXT.line.autoStart);
+    expect(screen.getByRole('heading', { name: TEXT.field.greeting })).toBeInTheDocument();
+    expect(document.body).toHaveTextContent('en: Hi / there');
+  });
+});
+
 describe('the diff', () => {
   test('names the part in plain words and marks lines with <del>/<ins> and hidden words', () => {
     renderCard();

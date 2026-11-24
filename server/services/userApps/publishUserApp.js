@@ -58,6 +58,20 @@ const COPIED_TEXT_KEYS = Object.freeze([
   'messagePlaceholder'
 ]);
 
+/**
+ * The keys about how the chat looks and starts that a published app takes over
+ * as the ceiling built them. The input line is not among them: every personal
+ * app has one (with the microphone of the base), so it is copied only when the
+ * author set it.
+ */
+const PUBLISHED_LOOK_KEYS = Object.freeze([
+  'greeting',
+  'preferredOutputFormat',
+  'startForm',
+  'variablesPanel',
+  'autoStart'
+]);
+
 function clone(value) {
   return value === undefined ? undefined : structuredClone(value);
 }
@@ -202,6 +216,13 @@ export function toAdminApp(record, { effective, id, enabled, category }) {
   app.variables = clone(source.variables) || [];
   app.starterPrompts = clone(source.starterPrompts) || [];
   app.allowEmptyContent = source.allowEmptyContent === true;
+  // How the chat looks and starts: copied as the ceiling built it.
+  for (const key of PUBLISHED_LOOK_KEYS) {
+    if (source[key] !== undefined) app[key] = clone(source[key]);
+  }
+  if (record?.content?.inputMode && source.inputMode) {
+    app.inputMode = { ...(app.inputMode || {}), ...clone(source.inputMode) };
+  }
 
   if (source.preferredModel) app.preferredModel = source.preferredModel;
   if (source.upload?.enabled === true) app.upload = clone(source.upload);

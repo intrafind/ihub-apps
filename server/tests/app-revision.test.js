@@ -357,6 +357,188 @@ describe('the messages of a turn', () => {
   });
 });
 
+// --- The settings of the registry ------------------------------------------
+
+describe('the settings of the registry (change.settings)', () => {
+  const personalTurn = (settings, extra = {}) => {
+    llm.answer = change({ settings, ...extra });
+    return revise({
+      draft: PERSONAL_DRAFT(),
+      language: 'en',
+      conversation: ask('Let it start by itself'),
+      personal: { settings: { capabilities: {} } }
+    });
+  };
+
+  it('puts a checked setting into the patch, apart from the content keys', async () => {
+    const turn = await personalTurn({
+      autoStart: true,
+      greeting: { en: { title: 'Job ads', subtitle: 'Tell me the role' } },
+      inputMode: { type: 'multiline', rows: 6 },
+      preferredOutputFormat: 'text'
+    });
+    assert.equal(turn.reply, 'change');
+    assert.deepEqual(turn.patch, {
+      autoStart: true,
+      greeting: { en: { title: 'Job ads', subtitle: 'Tell me the role' } },
+      inputMode: { type: 'multiline', rows: 6 },
+      preferredOutputFormat: 'text'
+    });
+    assert.deepEqual(turn.changed.sort(), [
+      'autoStart',
+      'greeting',
+      'inputMode',
+      'preferredOutputFormat'
+    ]);
+    assert.deepEqual(turn.suggestions.settings, []);
+  });
+
+  it('refuses a value the schema of its key refuses, with a warning, and keeps the rest', async () => {
+    const turn = await personalTurn({
+      autoStart: true,
+      inputMode: { type: 'multiline', rows: 99 },
+      preferredOutputFormat: 'html',
+      startForm: { enabled: 'yes' }
+    });
+    assert.deepEqual(turn.patch, { autoStart: true });
+    assert.deepEqual(
+      turn.warnings
+        .filter(warning => warning.code === 'KEY_IGNORED')
+        .map(warning => warning.field)
+        .sort(),
+      ['inputMode', 'preferredOutputFormat', 'startForm']
+    );
+  });
+
+  it('ignores a key that is not a setting, and one outside the target', async () => {
+    const turn = await personalTurn({
+      autoStart: true,
+      toolApproval: { default: 'never' },
+      projects: ['hr'],
+      capabilities: { webSearch: true },
+      // A content key is read from the content channel, not from the settings.
+      system: 'x'
+    });
+    assert.deepEqual(turn.patch, { autoStart: true });
+    assert.deepEqual(
+      turn.warnings
+        .filter(warning => warning.code === 'KEY_IGNORED')
+        .map(warning => warning.field)
+        .sort(),
+      ['capabilities', 'projects', 'system', 'toolApproval']
+    );
+  });
+
+  it('removes a setting with null, and leaves a setting that is already so alone', async () => {
+    const draft = {
+      ...PERSONAL_DRAFT(),
+      autoStart: true,
+      greeting: { en: { title: 'T', subtitle: 'S' } }
+    };
+    llm.answer = change({ settings: { greeting: null, autoStart: true, startForm: null } });
+    const turn = await revise({
+      draft,
+      language: 'en',
+      personal: { settings: { capabilities: {} } }
+    });
+    // `autoStart` is on already and `startForm` was never set: only the greeting changes.
+    assert.deepEqual(turn.patch, { greeting: null });
+    assert.deepEqual(turn.changed, ['greeting']);
+  });
+
+  it('counts the empty values of the form as "not set"', async () => {
+    const draft = {
+      ...PERSONAL_DRAFT(),
+      greeting: {},
+      inputMode: {},
+      preferredOutputFormat: '',
+      startForm: {},
+      variablesPanel: {},
+      autoStart: false
+    };
+    llm.answer = change({
+      settings: { greeting: null, inputMode: null, preferredOutputFormat: null, autoStart: false }
+    });
+    const turn = await revise({
+      draft,
+      language: 'en',
+      personal: { settings: { capabilities: {} } }
+    });
+    assert.equal(turn.reply, 'message');
+    assert.ok(turn.warnings.some(warning => warning.code === 'NO_CHANGE'));
+  });
+
+  it('removes hidden characters from a greeting before it counts', async () => {
+    const turn = await personalTurn({
+      greeting: { en: { title: `Hel${ZWSP}lo${RLO}`, subtitle: `Wel${TAG_A}come` } }
+    });
+    assert.deepEqual(turn.patch.greeting, { en: { title: 'Hello', subtitle: 'Welcome' } });
+    assert.equal(hasHidden(JSON.stringify(turn.patch)), false);
+  });
+
+  it('writes autoStart as false into an admin app, where a personal app removes it', async () => {
+    const draft = { ...ADMIN_DRAFT(), autoStart: true };
+    llm.answer = change({ settings: { autoStart: false } });
+    const turn = await revise({ draft });
+    assert.deepEqual(turn.patch, { autoStart: false });
+  });
+
+  it('is read for an admin app too, with the greeting as the app stores it', async () => {
+    llm.answer = change({
+      settings: { greeting: { de: { title: 'Hallo', subtitle: 'Wie kann ich helfen?' } } }
+    });
+    const turn = await revise();
+    assert.deepEqual(turn.patch, {
+      greeting: { de: { title: 'Hallo', subtitle: 'Wie kann ich helfen?' } }
+    });
+  });
+
+  it('can be the whole change, next to a content key, with both in the patch', async () => {
+    llm.answer = change({
+      system: 'Sie antworten förmlich.',
+      settings: { autoStart: true }
+    });
+    const turn = await revise();
+    assert.deepEqual(Object.keys(turn.patch).sort(), ['autoStart', 'system']);
+    assert.deepEqual(turn.changed.sort(), ['autoStart', 'system']);
+  });
+
+  it('tells the model which settings it may set, and which are set now', async () => {
+    const draft = { ...PERSONAL_DRAFT(), autoStart: true };
+    llm.answer = change({ settings: { autoStart: false } });
+    await revise({ draft, language: 'en', personal: { settings: { capabilities: {} } } });
+    const system = systemMessageOf(llm.calls[0]);
+    assert.match(system, /- "settings": an object/);
+    for (const key of [
+      'greeting',
+      'inputMode',
+      'preferredOutputFormat',
+      'startForm',
+      'variablesPanel',
+      'autoStart'
+    ]) {
+      assert.ok(system.includes(`  - "${key}"`), key);
+    }
+    assert.match(userMessageOf(llm.calls[0]), /"settings": \{\s+"autoStart": true/);
+  });
+
+  it('is not offered when the request names other fields', async () => {
+    llm.answer = change({ settings: { autoStart: true }, system: 'Sie antworten förmlich.' });
+    const turn = await revise({ fields: ['system'], allowQuestions: false });
+    assert.equal(systemMessageOf(llm.calls[0]).includes('"settings"'), false);
+    assert.deepEqual(Object.keys(turn.patch), ['system']);
+    assert.ok(
+      turn.warnings.some(warning => warning.code === 'KEY_IGNORED' && warning.field === 'autoStart')
+    );
+  });
+
+  it('is offered when the request names it in fields', async () => {
+    llm.answer = change({ settings: { autoStart: true } });
+    const turn = await revise({ fields: ['autoStart'], allowQuestions: false });
+    assert.deepEqual(turn.patch, { autoStart: true });
+  });
+});
+
 // --- Hostile and sloppy answers --------------------------------------------
 
 describe('what a change may hold', () => {
@@ -395,7 +577,8 @@ describe('what a change may hold', () => {
     // Proposals come back as suggestions, only for installations the caller may use.
     assert.deepEqual(turn.suggestions, {
       websearch: true,
-      integrations: [{ id: 'tickets', label: 'Tickets', actions: [] }]
+      integrations: [{ id: 'tickets', label: 'Tickets', actions: [] }],
+      settings: []
     });
   });
 
@@ -494,7 +677,7 @@ describe('fields and untouched keys', () => {
       turn.warnings.filter(w => w.code === 'KEY_IGNORED').map(w => w.field),
       ['name', 'icon']
     );
-    assert.deepEqual(turn.suggestions, { websearch: false, integrations: [] });
+    assert.deepEqual(turn.suggestions, { websearch: false, integrations: [], settings: [] });
   });
 
   it('leave a hand-written app untouched outside the changed keys', async () => {
@@ -807,7 +990,8 @@ describe('suggestions', () => {
     const turn = await revise();
     assert.deepEqual(turn.suggestions, {
       websearch: true,
-      integrations: [{ id: 'tickets', label: 'Tickets', actions: ['searchTickets'] }]
+      integrations: [{ id: 'tickets', label: 'Tickets', actions: ['searchTickets'] }],
+      settings: []
     });
     assert.equal('websearch' in turn.patch || 'integrations' in turn.patch, false);
   });
@@ -821,7 +1005,8 @@ describe('suggestions', () => {
     // No search engine is installed, and only `readTicket` is allowed for personal apps.
     assert.deepEqual(turn.suggestions, {
       websearch: false,
-      integrations: [{ id: 'tickets', label: 'Tickets', actions: ['readTicket'] }]
+      integrations: [{ id: 'tickets', label: 'Tickets', actions: ['readTicket'] }],
+      settings: []
     });
 
     const none = await revise({
@@ -829,7 +1014,7 @@ describe('suggestions', () => {
       language: 'en',
       personal: { settings: { capabilities: { webSearch: false, integrations: [] } } }
     });
-    assert.deepEqual(none.suggestions, { websearch: false, integrations: [] });
+    assert.deepEqual(none.suggestions, { websearch: false, integrations: [], settings: [] });
   });
 });
 

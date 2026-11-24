@@ -19,6 +19,7 @@ import {
 import {
   changeKeysOf,
   changeSections,
+  changesOf,
   changedLanguages,
   contentChangedSince,
   draftOf,
@@ -109,6 +110,34 @@ describe('what a turn sends and when a change still applies', () => {
       icon: FORM.icon
     });
     expect(draftOf({ ...FORM, color: '' }, 'personal')).not.toHaveProperty('color');
+  });
+
+  test('draftOf also sends the settings the app has set, and leaves out the ones it has not', () => {
+    const looks = {
+      ...FORM,
+      greeting: { en: { title: 'Hi', subtitle: 'there' } },
+      inputMode: { type: 'multiline', rows: 6 },
+      autoStart: true,
+      // The empty values of the personal form, and the `false` of an admin app, are "not set".
+      preferredOutputFormat: '',
+      startForm: {},
+      variablesPanel: {}
+    };
+    expect(draftOf(looks, 'admin')).toMatchObject({
+      greeting: looks.greeting,
+      inputMode: looks.inputMode,
+      autoStart: true
+    });
+    for (const key of ['preferredOutputFormat', 'startForm', 'variablesPanel']) {
+      expect(draftOf(looks, 'personal')).not.toHaveProperty(key);
+    }
+    expect(draftOf({ ...looks, autoStart: false }, 'admin')).not.toHaveProperty('autoStart');
+  });
+
+  test('a hand edit of a setting makes a proposed change stale', () => {
+    const base = draftOf({ ...FORM, autoStart: true }, 'personal');
+    expect(contentChangedSince({ ...FORM, autoStart: true }, base, 'personal')).toBe(false);
+    expect(contentChangedSince({ ...FORM, autoStart: false }, base, 'personal')).toBe(true);
   });
 
   test('a hand edit of a content key makes a proposed change stale; other keys do not', () => {
@@ -369,6 +398,46 @@ describe('answers and suggestions', () => {
     expect(changedLanguages('system', { en: 'a', de: 'b' }, { en: 'c', de: 'b' }, 'en')).toEqual([
       'en'
     ]);
+  });
+
+  test('a setting is its own part, compared as a whole and described in a plain line', () => {
+    const t = (key, values) => `${key}${values ? JSON.stringify(values) : ''}`;
+    expect(changeSections(['autoStart', 'greeting']).map(section => section.id)).toEqual([
+      'autoStart',
+      'greeting'
+    ]);
+    expect(changedLanguages('greeting', { en: {} }, { en: {}, de: {} }, 'en')).toEqual(['']);
+
+    expect(linesOf('autoStart', true, 'en', t)).toEqual(['admin.apps.conversation.line.autoStart']);
+    // Off, removed or never set: no line, so that the card shows an added or a removed one.
+    for (const off of [false, null, undefined])
+      expect(linesOf('autoStart', off, 'en', t)).toEqual([]);
+    expect(linesOf('greeting', { en: { title: 'Hi', subtitle: 'there' } }, 'en', t)).toEqual([
+      'en: Hi / there'
+    ]);
+    expect(linesOf('inputMode', { type: 'multiline', rows: 6 }, 'en', t)[0]).toContain(
+      'admin.apps.conversation.line.rows{"count":6}'
+    );
+    expect(linesOf('preferredOutputFormat', 'text', 'en', t)).toEqual([
+      'admin.apps.conversation.line.formatText'
+    ]);
+    expect(linesOf('startForm', { enabled: false }, 'en', t)).toEqual([
+      'admin.apps.conversation.line.startFormOff'
+    ]);
+    expect(linesOf('variablesPanel', { pinned: false }, 'en', t)).toEqual([
+      'admin.apps.conversation.line.panelCollapsed'
+    ]);
+  });
+
+  test('applying a setting, and putting it back, works on the form like a content key', () => {
+    const form = { ...FORM, autoStart: true };
+    const patch = { autoStart: null, greeting: { en: { title: 'Hi', subtitle: 'there' } } };
+    const keys = changeKeysOf('personal', form, { patch, suggestions: {} }, {});
+    expect(keys.sort()).toEqual(['autoStart', 'greeting']);
+    const before = valuesOf(form, keys);
+    const next = changesOf('personal', form, { patch, suggestions: {} }, {});
+    const applied = { ...form, ...next };
+    expect(restoreValues(applied, before)).toEqual(form);
   });
 });
 

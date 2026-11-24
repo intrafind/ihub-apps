@@ -25,9 +25,11 @@ import {
   REVISE_BUILDER_TEXT_MAX,
   REVISE_CONVERSATION_MAX,
   appRevisionKeys,
+  appSettingsKeys,
   applyRevisionPatch
 } from '../../../../../../shared/appRevision.js';
 import { APP_GENERATOR_WARNINGS } from '../../../../../../shared/appGenerator.js';
+import { pickUserAppContent } from '../../../../../../shared/userAppContent.js';
 
 /** The suggestions under the builder's first message; each is sent as the author's message. */
 export const STARTER_CHIP_KEYS = Object.freeze([
@@ -49,8 +51,18 @@ export const CHANGE_FIELD_KEYS = Object.freeze({
   variables: 'admin.apps.conversation.field.variables',
   starterPrompts: 'admin.apps.conversation.field.starterPrompts',
   category: 'admin.apps.conversation.field.category',
-  look: 'admin.apps.conversation.field.look'
+  look: 'admin.apps.conversation.field.look',
+  // The settings of the registry (`shared/userAppFields.js`), one heading each.
+  greeting: 'admin.apps.conversation.field.greeting',
+  inputMode: 'admin.apps.conversation.field.inputMode',
+  preferredOutputFormat: 'admin.apps.conversation.field.preferredOutputFormat',
+  startForm: 'admin.apps.conversation.field.startForm',
+  variablesPanel: 'admin.apps.conversation.field.variablesPanel',
+  autoStart: 'admin.apps.conversation.field.autoStart'
 });
+
+/** The keys a change sets through `change.settings`, for either target. */
+const SETTING_KEYS = new Set([...appSettingsKeys('admin'), ...appSettingsKeys('personal')]);
 
 /** The keys shown together under "Look". */
 const LOOK_KEYS = Object.freeze(['color', 'icon']);
@@ -131,6 +143,13 @@ export function sameValue(a, b) {
 const isBlank = value => value === undefined || value === null || value === '';
 
 /**
+ * A setting that is "not set": the form holds one as an empty object, an empty
+ * text or `false`; an app file as nothing at all.
+ */
+const isUnsetSetting = value =>
+  isBlank(value) || value === false || (isPlainObject(value) && Object.keys(value).length === 0);
+
+/**
  * The content a turn sends as `draft`: the keys a revision may change, as the
  * form holds them. A key without a value (a personal app without a colour) is
  * left out rather than sent empty.
@@ -144,6 +163,15 @@ export function draftOf(form, target) {
   if (!isPlainObject(form)) return draft;
   for (const key of appRevisionKeys(target)) {
     if (!isBlank(form[key])) draft[key] = form[key];
+  }
+  // The settings the builder may set, where the app has one: the model reads them, and a
+  // change of one makes a proposal stale like a change of a text does. They are read the way
+  // a personal app stores them: only the parts an author sets, and not what every new app
+  // starts with (the default greeting, the input line with its microphone), which the form
+  // of an admin app is padded with.
+  const looks = pickUserAppContent(form);
+  for (const key of appSettingsKeys(target)) {
+    if (!isUnsetSetting(looks[key])) draft[key] = looks[key];
   }
   return draft;
 }
@@ -472,6 +500,59 @@ function fieldLine(variable, language, t) {
 }
 
 /**
+ * The line of a setting as the change card compares it: what the setting is
+ * now, in a plain sentence. A setting that is off, removed or never set has no
+ * line, so that turning it on shows as an added line and removing it as a
+ * removed one.
+ *
+ * @param {string} key
+ * @param {unknown} value
+ * @param {(key: string, values?: object) => string} t
+ * @returns {string[]}
+ */
+function settingLines(key, value, t) {
+  if (key === 'greeting') {
+    return Object.entries(isPlainObject(value) ? value : {})
+      .filter(([, entry]) => isPlainObject(entry))
+      .map(([lang, entry]) => `${lang}: ${entry.title ?? ''} / ${entry.subtitle ?? ''}`);
+  }
+  if (key === 'inputMode') {
+    const parts = [];
+    if (value?.type === 'singleline') parts.push(t('admin.apps.edit.singleLine'));
+    if (value?.type === 'multiline') parts.push(t('admin.apps.edit.multiLine'));
+    if (Number.isInteger(Number(value?.rows)) && value?.rows !== undefined) {
+      parts.push(t('admin.apps.conversation.line.rows', { count: Number(value.rows) }));
+    }
+    return parts.length > 0 ? [parts.join(' · ')] : [];
+  }
+  if (key === 'preferredOutputFormat') {
+    if (value === 'text') return [t('admin.apps.conversation.line.formatText')];
+    if (value === 'markdown') return [t('admin.apps.conversation.line.formatMarkdown')];
+    return [];
+  }
+  if (key === 'startForm') {
+    if (!isPlainObject(value) || typeof value.enabled !== 'boolean') return [];
+    const label = labelIn(value.submitLabel, '');
+    return [
+      value.enabled
+        ? t('admin.apps.conversation.line.startFormOn', { label })
+        : t('admin.apps.conversation.line.startFormOff')
+    ];
+  }
+  if (key === 'variablesPanel') {
+    if (typeof value?.pinned !== 'boolean') return [];
+    return [
+      value.pinned
+        ? t('admin.apps.conversation.line.panelPinned')
+        : t('admin.apps.conversation.line.panelCollapsed')
+    ];
+  }
+  if (key === 'autoStart')
+    return value === true ? [t('admin.apps.conversation.line.autoStart')] : [];
+  return [];
+}
+
+/**
  * The lines the change card compares for a key: a text by its own lines, an
  * input field or an example question as one line each, a colour or icon as
  * one line. Pure data, so that the card can diff any key the same way.
@@ -506,6 +587,7 @@ export function linesOf(key, value, language, t) {
       : [];
   }
   if (key === 'category') return typeof value === 'string' && value ? [value] : [];
+  if (SETTING_KEYS.has(key)) return settingLines(key, value, t);
   const text = textIn(value, language);
   return text === '' ? [] : text.replace(/\r\n?/g, '\n').replace(/\n$/, '').split('\n');
 }
@@ -521,6 +603,9 @@ export function linesOf(key, value, language, t) {
  * @returns {string[]}
  */
 export function changedLanguages(key, before, after, language) {
+  // A setting is compared as a whole, not language by language: a greeting names its
+  // languages in its own lines.
+  if (SETTING_KEYS.has(key)) return [''];
   if (!isPlainObject(before) && !isPlainObject(after)) return [''];
   if (['variables', 'starterPrompts'].includes(key)) return [language];
   const all = new Set([

@@ -57,6 +57,13 @@ const SAMPLE_CONTENT = {
   messagePlaceholder: { en: 'Which role?' },
   variables: [{ name: 'role', label: { en: 'Role' }, type: 'string' }],
   starterPrompts: [{ title: { en: 'Developer' }, message: { en: 'An ad for a developer' } }],
+  greeting: { en: { title: 'Job ads', subtitle: 'Tell me the role' } },
+  inputMode: { type: 'multiline', rows: 6 },
+  // `markdown` is what every app starts with and is not picked as a choice; `text` is.
+  preferredOutputFormat: 'text',
+  startForm: { enabled: true, submitLabel: { en: 'Write' } },
+  variablesPanel: { pinned: true },
+  autoStart: true,
   color: '#4F46E5',
   icon: 'document-text',
   preferredModel: 'gpt-4o',
@@ -85,12 +92,28 @@ describe('the descriptors', () => {
     }
   });
 
-  it('offer a proposal exactly where a revision may change the key', () => {
+  it('offer a proposal exactly where the builder may change the key', () => {
     for (const field of USER_APP_FIELDS) {
-      if (field.revise.length > 0) {
+      const changed = field.revise.length > 0 || field.propose.length > 0;
+      if (changed) {
         assert.ok(['direct', 'confirm'].includes(field.proposal), `${field.key}: no proposal kind`);
       } else {
-        assert.equal(field.proposal, null, `${field.key}: a proposal without a revision target`);
+        assert.equal(field.proposal, null, `${field.key}: a proposal without a target`);
+      }
+    }
+  });
+
+  it('put a key in one channel of the builder, and describe what it proposes', () => {
+    for (const field of USER_APP_FIELDS) {
+      assert.ok(
+        field.revise.length === 0 || field.propose.length === 0,
+        `${field.key} is in both channels`
+      );
+      if (field.propose.length > 0) {
+        assert.ok(field.hint.trim().length > 0, `${field.key}: the builder has no hint for it`);
+        for (const target of field.propose) {
+          assert.ok(USER_APP_FIELD_TARGETS.includes(target), `${field.key}: unknown ${target}`);
+        }
       }
     }
   });

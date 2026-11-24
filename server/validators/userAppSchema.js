@@ -21,6 +21,8 @@ import { LANGUAGE_CODE_PATTERN, VARIABLE_NAME_PATTERN } from '../../shared/valid
 import { DEFAULT_APP_COLOR, DEFAULT_APP_ICON } from '../../shared/appDefaults.js';
 import {
   USER_APP_COLOR_PATTERN,
+  USER_APP_INPUT_MODE_TYPES,
+  USER_APP_OUTPUT_FORMATS,
   USER_APP_ICON_PATTERN,
   USER_APP_LIMITS,
   USER_APP_MEMBER_ROLES,
@@ -165,7 +167,75 @@ const capabilitiesSchema = z
   })
   .strict();
 
-const contentShape = {
+/** Remove the keys that are `undefined`, so a stored content has only what is set. */
+function compact(value) {
+  return Object.fromEntries(Object.entries(value).filter(([, entry]) => entry !== undefined));
+}
+
+/**
+ * The greeting of the empty chat: a title and a subtitle per language. An
+ * object without a language is the same as no value.
+ */
+const greetingSchema = z
+  .record(
+    languageCode,
+    z
+      .object({
+        title: text(L.greetingTitle, { allowEmpty: false }),
+        subtitle: text(L.greetingSubtitle, { allowEmpty: false })
+      })
+      .strict()
+  )
+  .refine(value => Object.keys(value).length <= L.languages, {
+    message: `At most ${L.languages} languages`
+  })
+  .nullish()
+  .transform(value => (value && Object.keys(value).length > 0 ? value : undefined));
+
+/** The input line: single or multi line and its rows. The microphone is not the author's. */
+const inputModeSchema = z
+  .object({
+    type: z.enum(USER_APP_INPUT_MODE_TYPES).optional(),
+    rows: z.number().int().min(1).max(L.inputRows).optional()
+  })
+  .strict()
+  .nullish()
+  .transform(value =>
+    value && Object.keys(compact(value)).length > 0 ? compact(value) : undefined
+  );
+
+const outputFormatSchema = z
+  .enum(USER_APP_OUTPUT_FORMATS)
+  .nullish()
+  .transform(value => value || undefined);
+
+const startFormSchema = z
+  .object({
+    enabled: z.boolean(),
+    submitLabel: optionalLocalized(L.submitLabel)
+  })
+  .strict()
+  .nullish()
+  .transform(value => (value ? compact(value) : undefined));
+
+const variablesPanelSchema = z
+  .object({ pinned: z.boolean() })
+  .strict()
+  .nullish()
+  .transform(value => value || undefined);
+
+/** `autoStart` is stored only when it is on; off is the same as absent. */
+const autoStartSchema = z
+  .boolean()
+  .nullish()
+  .transform(value => (value === true ? true : undefined));
+
+/**
+ * The schema of every top-level content key, by key. The builder validates a
+ * single proposed value with the entry of its key (`services/appSettingsProposal.js`),
+ * so a value it accepts is one a save accepts.
+ */
+export const userAppFieldSchemas = {
   name: localized(L.name),
   description: localized(L.description),
   system: localized(L.system),
@@ -178,6 +248,12 @@ const contentShape = {
   messagePlaceholder: optionalLocalized(L.messagePlaceholder),
   variables: z.array(variableSchema).max(L.variables).prefault([]),
   starterPrompts: z.array(starterPromptSchema).max(L.starterPrompts).prefault([]),
+  greeting: greetingSchema,
+  inputMode: inputModeSchema,
+  preferredOutputFormat: outputFormatSchema,
+  startForm: startFormSchema,
+  variablesPanel: variablesPanelSchema,
+  autoStart: autoStartSchema,
   // Whether the model exists and may be used is the ceiling's to say.
   preferredModel: z
     .string()
@@ -189,18 +265,13 @@ const contentShape = {
   capabilities: capabilitiesSchema.prefault({})
 };
 
-/** Remove the keys that are `undefined`, so a stored content has only what is set. */
-function compact(value) {
-  return Object.fromEntries(Object.entries(value).filter(([, entry]) => entry !== undefined));
-}
-
 /**
  * The content of a personal app (`content` in the stored record, section
  * 4.4). The parsed value always has `icon`, `color`, `variables`,
  * `starterPrompts` and a complete `capabilities`; `prompt`,
  * `messagePlaceholder` and `preferredModel` are absent when not set.
  */
-export const userAppContentSchema = z.object(contentShape).strict().transform(compact);
+export const userAppContentSchema = z.object(userAppFieldSchemas).strict().transform(compact);
 
 /**
  * The body of `POST /api/apps`: the content keys at the top level, plus
@@ -211,7 +282,7 @@ export const userAppContentSchema = z.object(contentShape).strict().transform(co
  */
 export const userAppCreateSchema = z
   .object({
-    ...contentShape,
+    ...userAppFieldSchemas,
     language: languageCode.optional(),
     origin: z.enum(USER_APP_ORIGINS).prefault('blank')
   })
@@ -228,7 +299,9 @@ export const userAppCreateSchema = z
  * {@link mergeUserAppContent}.
  */
 export const userAppPatchSchema = z
-  .object(Object.fromEntries(Object.keys(contentShape).map(key => [key, z.unknown().optional()])))
+  .object(
+    Object.fromEntries(Object.keys(userAppFieldSchemas).map(key => [key, z.unknown().optional()]))
+  )
   .strict()
   .refine(patch => Object.keys(patch).length > 0, { message: 'Nothing to change' });
 

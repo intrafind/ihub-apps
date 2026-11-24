@@ -52,6 +52,7 @@ import VariablesSection from '../../admin/components/app-form/VariablesSection';
 import { CALLOUT_CLASS, SECONDARY_BUTTON_CLASS } from '../../admin/components/formStyles';
 import { useUnsavedChanges } from '../../admin/hooks/useUnsavedChanges';
 import { isUserAppId, pickUserAppContent } from '../../../../../shared/userAppContent.js';
+import UserAppAdvancedSection from '../components/user-app/UserAppAdvancedSection';
 import UserAppBasicsSection from '../components/user-app/UserAppBasicsSection';
 import PublishDialog from '../components/user-app/PublishDialog';
 import UserAppEditorGroup from '../components/user-app/UserAppEditorGroup';
@@ -104,7 +105,13 @@ const SECTION_EMPTY = {
 const NOTHING_LOADED = Object.freeze({ appId: null, status: 'loading', app: null, error: null });
 /** From here up the test panel sits beside the editor; below it is a full-screen dialog. */
 const WIDE_QUERY = '(min-width: 1024px)';
-const GROUPS_OPEN = Object.freeze({ basics: true, instructions: true, extras: true });
+// "Advanced" starts closed: most apps never need it.
+const GROUPS_OPEN = Object.freeze({
+  basics: true,
+  instructions: true,
+  extras: true,
+  advanced: false
+});
 
 /**
  * The editor of a personal app (`/apps/:appId/edit`): three groups, the test
@@ -739,6 +746,15 @@ function UserAppEditPage() {
                     onRemove={capability => setForm(held => withoutCapability(held, capability))}
                     language={uiLanguage}
                   />
+                </UserAppEditorGroup>
+
+                <UserAppEditorGroup
+                  title={t('userApps.edit.advanced.title')}
+                  open={groups.advanced}
+                  onToggle={() => toggleGroup('advanced')}
+                  disabled={formDisabled}
+                >
+                  <UserAppAdvancedSection form={form} onChange={setForm} />
                 </UserAppEditorGroup>
               </AppFormTranslateProvider>
             </AppFormLanguageProvider>
