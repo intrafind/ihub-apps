@@ -425,6 +425,21 @@ describe('answers and suggestions', () => {
     expect(linesOf('startForm', { enabled: false }, 'en', t)).toEqual([
       'admin.apps.conversation.line.startFormOff'
     ]);
+    // A change of one language of the label shows on the card.
+    const before = linesOf(
+      'startForm',
+      { enabled: true, submitLabel: { en: 'Start', de: 'Los' } },
+      'en',
+      t
+    );
+    const after = linesOf(
+      'startForm',
+      { enabled: true, submitLabel: { en: 'Start', de: 'Weiter' } },
+      'en',
+      t
+    );
+    expect(before).not.toEqual(after);
+    expect(after[0]).toContain('de: Weiter');
     expect(linesOf('variablesPanel', { pinned: false }, 'en', t)).toEqual([
       'admin.apps.conversation.line.panelCollapsed'
     ]);

@@ -617,6 +617,23 @@ describe('the bodies of create and update', () => {
     assert.deepEqual(parsed.content, userAppContentSchema.parse(everyKey()));
   });
 
+  it('create holds a new app to the rules about its models, as a saved one is', () => {
+    const locked = { models: { lock: true } };
+    assert.equal(userAppCreateSchema.safeParse(content({ capabilities: locked })).success, false);
+    assert.equal(
+      userAppCreateSchema.safeParse(
+        content({ preferredModel: 'b', capabilities: { models: { allowed: ['a'] } } })
+      ).success,
+      false
+    );
+    assert.equal(
+      userAppCreateSchema.safeParse(
+        content({ preferredModel: 'a', capabilities: { models: { allowed: ['a'], lock: true } } })
+      ).success,
+      true
+    );
+  });
+
   it('create defaults to the first language of the name and to the origin "blank"', () => {
     const parsed = userAppCreateSchema.parse(content({ name: { de: 'Helfer' } }));
     assert.equal(parsed.language, 'de');

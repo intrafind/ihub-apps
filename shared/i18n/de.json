@@ -14265,7 +14265,8 @@
         "researchGuidanceHelp": "Ein bis zwei Sätze, die den Anweisungen hinzugefügt werden, solange die Websuche an ist.",
         "projectsTitle": "Projekte, aus denen die App antwortet",
         "projectsHelp": "Höchstens {{max}}. Wer die App nutzt, erhält Dokumente nur aus den Projekten, die die Person selbst nutzen darf; wer kein Mitglied ist, erhält nichts daraus.",
-        "projectsNone": "Sie haben noch kein Projekt."
+        "projectsNone": "Sie haben noch kein Projekt.",
+        "projectsError": "Die Liste Ihrer Projekte konnte nicht geladen werden."
       },
       "conflict": "Jemand anderes hat diese App geändert. Laden Sie neu, um die Änderungen zu sehen.",
       "readOnly": {
@@ -14310,7 +14311,9 @@
         "greetingSubtitle": "Begrüßung: Untertitel",
         "formatMarkdown": "Formatierter Text",
         "formatText": "Nur Text",
-        "autoStartHelp": "Die App sendet die erste Nachricht selbst und spricht damit zuerst. Öffnet jemand anderes Ihre App, zählt diese erste Antwort auf das eigene Nutzungslimit dieser Person."
+        "autoStartHelp": "Die App sendet die erste Nachricht selbst und spricht damit zuerst. Öffnet jemand anderes Ihre App, zählt diese erste Antwort auf das eigene Nutzungslimit dieser Person.",
+        "invalidRows": "Die Zeilen der Eingabe müssen eine ganze Zahl von 1 bis {{max}} sein oder leer bleiben.",
+        "invalidPageReads": "Die Anzahl der zu lesenden Seiten muss eine ganze Zahl von 1 bis {{max}} sein oder leer bleiben."
       }
     },
     "share": {

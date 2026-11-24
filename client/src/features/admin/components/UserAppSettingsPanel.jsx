@@ -237,8 +237,11 @@ function UserAppSettingsForm({ initial, publishingAvailable }) {
   const maxApps = parseMaxApps(maxInput);
   const maxChanged = maxApps !== stored.limits?.maxAppsPerUser;
   const changed = key => JSON.stringify(draft[key]) !== JSON.stringify(stored[key]);
+  // A page limit typed but not valid is not in the draft yet: it still counts as an edit, so the
+  // save bar offers Save (which says what is wrong) and Discard (which restores the stored value).
   const dirty =
     maxChanged ||
+    pageReads === null ||
     ['sharing', 'capabilities', 'publishing', 'blockedOwners'].some(key => changed(key));
 
   const change = update => {

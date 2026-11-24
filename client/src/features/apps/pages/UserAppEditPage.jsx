@@ -71,6 +71,7 @@ import {
 import {
   formFromApp,
   offersAiChanges,
+  invalidNumberFields,
   patchFor,
   readOnlyReason,
   userAppStateChip,
@@ -150,6 +151,8 @@ function UserAppEditPage() {
   const [forms, setForms] = useState({ saved: null, form: null });
   const [models, setModels] = useState([]);
   const [projects, setProjects] = useState([]);
+  const [projectsFailed, setProjectsFailed] = useState(false);
+  const [projectsAttempt, setProjectsAttempt] = useState(0);
   const [groups, setGroups] = useState(GROUPS_OPEN);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState(null);
@@ -247,11 +250,11 @@ function UserAppEditPage() {
     let active = true;
     fetchProjects()
       .then(list => active && setProjects(Array.isArray(list) ? list : []))
-      .catch(() => active && setProjects([]));
+      .catch(() => active && setProjectsFailed(true));
     return () => {
       active = false;
     };
-  }, [projectLinks]);
+  }, [projectLinks, projectsAttempt]);
 
   const permissions = app?.permissions || {};
   const form = forms.form;
@@ -359,6 +362,18 @@ function UserAppEditPage() {
 
   const save = async () => {
     if (!app || !form || saving) return;
+    const [invalid] = invalidNumberFields(form);
+    if (invalid) {
+      setSaveError(
+        t(
+          invalid.key === 'rows'
+            ? 'userApps.edit.advanced.invalidRows'
+            : 'userApps.edit.advanced.invalidPageReads',
+          { max: invalid.max }
+        )
+      );
+      return;
+    }
     const patch = patchFor(forms.saved, form);
     if (!patch) {
       // Only something a personal app cannot store was touched.
@@ -760,6 +775,11 @@ function UserAppEditPage() {
                     allowed={allowed}
                     models={models}
                     projects={projects}
+                    projectsError={projectsFailed}
+                    onRetryProjects={() => {
+                      setProjectsFailed(false);
+                      setProjectsAttempt(count => count + 1);
+                    }}
                     withheld={withheld}
                     capabilityName={capabilityName}
                     onRemove={capability => setForm(held => withoutCapability(held, capability))}

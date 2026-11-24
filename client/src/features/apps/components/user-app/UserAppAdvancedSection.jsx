@@ -32,12 +32,14 @@ function withGreetingTexts(greeting, part, texts) {
   const other = part === 'title' ? 'subtitle' : 'title';
   const next = {};
   for (const language of new Set([...Object.keys(greeting || {}), ...Object.keys(texts || {})])) {
-    if (!Object.hasOwn(texts || {}, language)) continue;
+    const hasPart = Object.hasOwn(texts || {}, language);
+    // A language removed from this part stays while its other part still has a text.
+    if (!hasPart && !greeting?.[language]?.[other]) continue;
     next[language] = {
       title: '',
       subtitle: '',
       ...(greeting?.[language] || {}),
-      [part]: texts[language] ?? '',
+      [part]: hasPart ? (texts[language] ?? '') : '',
       [other]: greeting?.[language]?.[other] ?? ''
     };
   }

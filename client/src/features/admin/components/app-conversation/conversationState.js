@@ -606,7 +606,14 @@ function settingLines(key, value, t) {
   }
   if (key === 'startForm') {
     if (!isPlainObject(value) || typeof value.enabled !== 'boolean') return [];
-    const label = labelIn(value.submitLabel, '');
+    // One text per language, so that a change of one language shows on the card.
+    const texts = isPlainObject(value.submitLabel)
+      ? Object.entries(value.submitLabel).filter(([, text]) => typeof text === 'string')
+      : [];
+    const label =
+      texts.length > 1
+        ? texts.map(([lang, text]) => `${lang}: ${text}`).join(' · ')
+        : labelIn(value.submitLabel, '');
     return [
       value.enabled
         ? t('admin.apps.conversation.line.startFormOn', { label })

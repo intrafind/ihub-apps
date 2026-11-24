@@ -210,6 +210,36 @@ function mergeDiff(before, after) {
   return same(before, after) ? undefined : after;
 }
 
+/** Whether a number field holds a text that is not empty and not a whole number in range. */
+function isBadWholeNumber(value, max) {
+  if (value === undefined || value === null || String(value).trim() === '') return false;
+  const number = Number(value);
+  return !(Number.isInteger(number) && number >= 1 && number <= max);
+}
+
+/**
+ * The number fields of the form that hold something no save can use, as
+ * `{ key, max }` entries: the rows of the input line and the pages the page
+ * reader may open. An empty field is not one: it clears the setting. Without
+ * this check an entry such as `0` or `4.5` would be cleaned away and the save
+ * would remove the stored number instead of reporting the input.
+ *
+ * @param {Object} form - The form state as edited.
+ * @returns {Array<{ key: 'rows'|'pageReads', max: number }>}
+ */
+export function invalidNumberFields(form) {
+  const bad = [];
+  if (isBadWholeNumber(form?.inputMode?.rows, USER_APP_LIMITS.inputRows)) {
+    bad.push({ key: 'rows', max: USER_APP_LIMITS.inputRows });
+  }
+  if (
+    isBadWholeNumber(form?.capabilities?.webSearchSettings?.maxPageReads, USER_APP_LIMITS.pageReads)
+  ) {
+    bad.push({ key: 'pageReads', max: USER_APP_LIMITS.pageReads });
+  }
+  return bad;
+}
+
 /** The patch of one look between two form states: `undefined` when it did not change. */
 function lookPatch(key, saved, current) {
   const before = cleanLook(key, saved?.[key]);

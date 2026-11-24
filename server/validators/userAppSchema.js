@@ -335,6 +335,34 @@ export const userAppFieldSchemas = {
 };
 
 /**
+ * The rules about the models of a personal app that no single key can state: a locked model is
+ * the preferred one, and the preferred one is on the list when there is a list. Otherwise the
+ * app would ask for a model it forbids itself. Used by the content schema and by the body of a
+ * create, so a new app is held to the same rules as a saved one.
+ */
+function refineModelRules(content, ctx) {
+  const models = content.capabilities?.models;
+  if (models?.lock === true && !content.preferredModel) {
+    ctx.addIssue({
+      code: 'custom',
+      path: ['capabilities', 'models', 'lock'],
+      message: 'Locking the model needs a preferred model'
+    });
+  }
+  if (
+    content.preferredModel &&
+    Array.isArray(models?.allowed) &&
+    !models.allowed.includes(content.preferredModel)
+  ) {
+    ctx.addIssue({
+      code: 'custom',
+      path: ['preferredModel'],
+      message: 'The preferred model must be one of the allowed models'
+    });
+  }
+}
+
+/**
  * The content of a personal app (`content` in the stored record, section
  * 4.4). The parsed value always has `icon`, `color`, `variables`,
  * `starterPrompts` and a complete `capabilities`; `prompt`,
@@ -343,29 +371,7 @@ export const userAppFieldSchemas = {
 export const userAppContentSchema = z
   .object(userAppFieldSchemas)
   .strict()
-  .superRefine((content, ctx) => {
-    // A locked model is the preferred one, and the preferred one is on the list when
-    // there is a list: otherwise the app would ask for a model it forbids itself.
-    const models = content.capabilities?.models;
-    if (models?.lock === true && !content.preferredModel) {
-      ctx.addIssue({
-        code: 'custom',
-        path: ['capabilities', 'models', 'lock'],
-        message: 'Locking the model needs a preferred model'
-      });
-    }
-    if (
-      content.preferredModel &&
-      Array.isArray(models?.allowed) &&
-      !models.allowed.includes(content.preferredModel)
-    ) {
-      ctx.addIssue({
-        code: 'custom',
-        path: ['preferredModel'],
-        message: 'The preferred model must be one of the allowed models'
-      });
-    }
-  })
+  .superRefine(refineModelRules)
   .transform(compact);
 
 /**
@@ -382,6 +388,7 @@ export const userAppCreateSchema = z
     origin: z.enum(USER_APP_ORIGINS).prefault('blank')
   })
   .strict()
+  .superRefine(refineModelRules)
   .transform(({ language, origin, ...content }) => ({
     language: language || Object.keys(content.name)[0],
     origin,

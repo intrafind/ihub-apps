@@ -83,6 +83,8 @@ function Switch({ checked, onChange, label, help, disabled = false }) {
  *   may choose.
  * @param {Array<{id: string, name?: object|string, description?: string}>} [props.projects] -
  *   The projects the caller may link (`GET /api/projects`).
+ * @param {boolean} [props.projectsError=false] - The list could not be loaded.
+ * @param {() => void} [props.onRetryProjects] - Loads the list again.
  * @param {Array<{id: string, kind: string, installationId: string|null}>} [props.withheld] -
  *   The result of `withheldCapabilities(app)`.
  * @param {(capability: object) => string} props.capabilityName - A capability's name for a sentence.
@@ -96,6 +98,8 @@ function UserAppExtrasSection({
   allowed,
   models = [],
   projects = [],
+  projectsError = false,
+  onRetryProjects,
   withheld = [],
   capabilityName,
   onRemove,
@@ -359,7 +363,20 @@ function UserAppExtrasSection({
           <p className={HELP_CLASS}>
             {t('userApps.edit.extras.projectsHelp', { max: USER_APP_LIMITS.projects })}
           </p>
-          {listedProjects.length === 0 && (
+          {projectsError && (
+            <div
+              role="alert"
+              className="flex items-center gap-3 text-sm text-red-700 dark:text-red-300"
+            >
+              <span>{t('userApps.edit.extras.projectsError')}</span>
+              {onRetryProjects && (
+                <button type="button" onClick={onRetryProjects} className={SECONDARY_BUTTON_CLASS}>
+                  {t('common.retry')}
+                </button>
+              )}
+            </div>
+          )}
+          {!projectsError && listedProjects.length === 0 && (
             <p className="text-sm text-gray-600 dark:text-gray-400">
               {t('userApps.edit.extras.projectsNone')}
             </p>

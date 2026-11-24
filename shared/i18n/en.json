@@ -14266,7 +14266,8 @@
         "researchGuidanceHelp": "One or two sentences, added to the instructions while web search is on.",
         "projectsTitle": "Projects the app answers from",
         "projectsHelp": "At most {{max}}. Everyone who uses the app gets documents only from the projects they may use themselves; people who are not members get nothing from them.",
-        "projectsNone": "You have no project yet."
+        "projectsNone": "You have no project yet.",
+        "projectsError": "The list of your projects could not be loaded."
       },
       "conflict": "Someone else changed this app. Reload to see the changes.",
       "readOnly": {
@@ -14311,7 +14312,9 @@
         "greetingSubtitle": "Greeting: subtitle",
         "formatMarkdown": "Formatted text",
         "formatText": "Plain text",
-        "autoStartHelp": "The app sends the first message itself, so it speaks first. When someone else opens your app, that first answer counts against their own usage limit."
+        "autoStartHelp": "The app sends the first message itself, so it speaks first. When someone else opens your app, that first answer counts against their own usage limit.",
+        "invalidRows": "The rows of the input line must be a whole number from 1 to {{max}}, or empty.",
+        "invalidPageReads": "The number of pages to read must be a whole number from 1 to {{max}}, or empty."
       }
     },
     "share": {

@@ -180,7 +180,7 @@ export const REVISE_BRIEF = [
   '- Ask at most one question per turn, with up to six short choices the person can pick from.',
   '- Write to the person in the language of their latest message, in at most two short sentences. Write the texts of the app in the language the output rules name.',
   '- Talk to the person in plain words. Never use the words ID, system, prompt, variable, string, model or configuration; say "instructions", "input field", "example question" or "message template" instead.',
-  '- Say plainly what cannot be done here: publishing the app, sharing it, choosing which AI it uses, changing who can use it, or attaching a document collection. Tell the person to use the editor for that.',
+  '- Say plainly what cannot be done here: publishing the app, sharing it, changing who can use it, or attaching a document collection; choosing which AI it uses only where the output rules below offer it as a setting. Tell the person to use the editor for that.',
   '- When the latest message looks like a question to the app itself rather than a request to change it, answer with a message that says to try it in the test chat on the right.'
 ].join('\n');
 
@@ -283,6 +283,9 @@ export function revisionOutputRules({
           : '- "integrations": leave it out; no integration is installed that this app could use.'
       ]
     : [];
+  const modelSettingOffered = settings.some(
+    ({ key }) => key === 'preferredModel' || key === 'models'
+  );
   const settingRules =
     settings.length > 0
       ? [
@@ -309,7 +312,9 @@ export function revisionOutputRules({
     ...settingRules,
     `5. Write every text of the app in ${languageName(language)}, as a plain string, never as an object with language codes.`,
     '6. The "name" of an input field is its placeholder name: lowercase letters, digits and underscores, starting with a letter. Write the placeholder of every input field into the message template, for example "Tone: {{tone}}".',
-    '7. Do not name an AI model and do not set one. Do not publish, share or change who can use the app.'
+    modelSettingOffered
+      ? '7. Choose an AI model only through the settings above. Do not publish, share or change who can use the app.'
+      : '7. Do not name an AI model and do not set one. Do not publish, share or change who can use the app.'
   ].join('\n');
 }
 

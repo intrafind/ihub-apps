@@ -279,6 +279,12 @@ test('exemptInternalReads: every other tool keeps the app default', () => {
   const cases = {
     'a tool that writes': { ...knowledgeSearch, sideEffect: 'write' },
     'a tool that leaves iHub': { ...knowledgeSearch, dataFlow: 'external' },
+    'a shipped tool with only the legacy read-only flag': {
+      ...knowledgeSearch,
+      sideEffect: undefined,
+      readOnly: true
+    },
+    'a shipped tool that names no data flow': { ...knowledgeSearch, dataFlow: undefined },
     'a tool that is not shipped, but claims to read': { ...knowledgeSearch, _shipped: undefined },
     'a tool an author could name, without the mark': { id: 'read_url', sideEffect: 'read' },
     'an integration action': {

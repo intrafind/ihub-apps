@@ -875,7 +875,13 @@ describe('the models of an app (design 07, section 2.2)', () => {
     );
     assert.equal(result.app.preferredModel, 'model-b');
     assert.equal(result.app.disallowModelSelection, true);
-    assert.deepEqual(result.app.allowedModels, ['model-a', 'model-b']);
+    assert.deepEqual(result.app.allowedModels, ['model-b']);
+  });
+
+  it('names the preferred model of a lock in any letter case', () => {
+    const result = run(asking({ allowed: ['MODEL-B'], lock: true }, { preferredModel: 'model-b' }));
+    assert.equal(result.app.preferredModel, 'model-b');
+    assert.deepEqual(result.app.allowedModels, ['model-b']);
   });
 
   it('stops the chat when a locked model is one the runner may not use', () => {
@@ -1005,6 +1011,17 @@ describe('how an app researches on the web (design 07, section 2.2)', () => {
     const junk = run(settingsWith(), { maxPageReads: '9', researchGuidance: '   ' }).websearch;
     assert.equal(Object.hasOwn(junk, 'maxPageReads'), false);
     assert.equal(Object.hasOwn(junk, 'researchGuidance'), false);
+  });
+
+  it('caps the platform default of pages at a limit below it, and leaves a higher limit alone', () => {
+    const low = run(settingsWith({ webSearchLimits: { maxPageReads: 3 } }), {
+      researchGuidance: 'Check two sources.'
+    });
+    assert.equal(low.websearch.maxPageReads, 3);
+    const high = run(settingsWith({ webSearchLimits: { maxPageReads: 20 } }), {
+      researchGuidance: 'Check two sources.'
+    });
+    assert.equal(Object.hasOwn(high.websearch, 'maxPageReads'), false);
   });
 
   it('has no effect while web search is off', () => {

@@ -728,6 +728,23 @@ describe('what the app may use', () => {
     );
   });
 
+  test('says so when the projects could not be loaded, and lists them after Retry', async () => {
+    mockUserApps.config = { ...CONFIG, capabilities: { ...ALLOWED, projects: true } };
+    mockApi.fetchProjects
+      .mockRejectedValueOnce(new Error('offline'))
+      .mockResolvedValue([{ id: 'prj_a', name: 'Handbook' }]);
+    await renderEditor();
+    const picker = within(extras().getByTestId('user-app-projects'));
+    expect(await picker.findByRole('alert')).toHaveTextContent(
+      en.userApps.edit.extras.projectsError
+    );
+    // A failed load is not the same as no project.
+    expect(picker.queryByText(en.userApps.edit.extras.projectsNone)).not.toBeInTheDocument();
+    await click(picker.getByRole('button', { name: en.common.retry }));
+    expect(await picker.findByRole('checkbox', { name: 'Handbook' })).toBeInTheDocument();
+    expect(picker.queryByRole('alert')).not.toBeInTheDocument();
+  });
+
   test('is not offered, and loads nothing, while the administrator has not allowed linked projects', async () => {
     await renderEditor();
     expect(extras().queryByTestId('user-app-projects')).not.toBeInTheDocument();
@@ -948,6 +965,35 @@ describe('how the chat looks and starts', () => {
     expect(mockApi.updateUserApp).toHaveBeenCalledWith(
       APP_ID,
       { autoStart: true, inputMode: { type: 'multiline' }, preferredOutputFormat: 'text' },
+      { revision: 7 }
+    );
+  });
+
+  test('an input line of 0 rows is reported and not saved, and an empty one is not an error', async () => {
+    await renderEditor();
+    await click(advanced());
+    await act(async () => {
+      fireEvent.click(screen.getByRole('checkbox', { name: en.admin.apps.edit.autoStart }));
+      fireEvent.change(screen.getByLabelText(en.admin.apps.edit.initialRows), {
+        target: { value: '0' }
+      });
+    });
+    await click(saveButton());
+    expect(mockApi.updateUserApp).not.toHaveBeenCalled();
+    expect(
+      await screen.findByText(en.userApps.edit.advanced.invalidRows.replace('{{max}}', '20'))
+    ).toBeInTheDocument();
+
+    mockApi.updateUserApp.mockResolvedValue(userApp({ autoStart: true, revision: 8 }));
+    await act(async () => {
+      fireEvent.change(screen.getByLabelText(en.admin.apps.edit.initialRows), {
+        target: { value: '' }
+      });
+    });
+    await click(saveButton());
+    expect(mockApi.updateUserApp).toHaveBeenCalledWith(
+      APP_ID,
+      { autoStart: true },
       { revision: 7 }
     );
   });

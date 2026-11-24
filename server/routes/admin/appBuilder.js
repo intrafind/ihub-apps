@@ -645,7 +645,7 @@ export default function registerAdminAppBuilderRoutes(app, { llmClient } = {}) {
    *                 description: The content keys and settings the change may touch; all of them when absent. With fields, nothing is proposed under `suggestions.websearch` or `suggestions.integrations`.
    *                 items:
    *                   type: string
-   *                   enum: [name, description, system, prompt, messagePlaceholder, variables, starterPrompts, category, color, icon]
+   *                   enum: [name, description, system, prompt, messagePlaceholder, variables, starterPrompts, category, color, icon, greeting, inputMode, preferredOutputFormat, startForm, variablesPanel, autoStart]
    *               allowQuestions:
    *                 type: boolean
    *                 default: true

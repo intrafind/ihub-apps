@@ -254,6 +254,10 @@ export function isExemptInternalRead(app, toolDef, resolved) {
     !toolDef._integration &&
     !toolDef._mcp &&
     !toolDef._a2a &&
+    // Declared on the definition: the legacy `readOnly` flag and the `internal` default of a
+    // tool that names no data flow do not qualify.
+    toolDef.sideEffect === 'read' &&
+    toolDef.dataFlow === 'internal' &&
     resolved.sideEffect === 'read' &&
     resolved.sideEffectSource === 'tool' &&
     resolved.dataFlow === 'internal'

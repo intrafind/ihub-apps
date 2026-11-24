@@ -58,6 +58,7 @@ import {
   personalAppBase
 } from '../../../shared/userAppContent.js';
 import { isOwnerSnapshotStale } from './userAppAccess.js';
+import { DEFAULT_MAX_PAGE_READS } from '../chat/pageReadLimit.js';
 
 /** The capability IDs that are not a bound installation, in the order they are reported. */
 export const USER_APP_CAPABILITY_IDS = Object.freeze([
@@ -260,7 +261,8 @@ function evaluate(content, { runner, owner, settings, catalog, ownerState, stric
       // the list, if there is one, must name.
       const lockBroken =
         lockModel &&
-        (Boolean(model.reason) || (wantedModels.length > 0 && !wantedModels.includes(model.id)));
+        (Boolean(model.reason) ||
+          (wantedModels.length > 0 && !wantedModels.some(id => sameId(id, model.id))));
       if (noneLeft || lockBroken) {
         models.refuse = true;
         const ownerCan = wantedModels.some(id => usableModel(id, owner));
@@ -493,14 +495,18 @@ export function isRunnerOwner(record, runner) {
  * administrator allows: the pages the page reader may open for one answer, and a
  * sentence of guidance. A value that is not of the right kind is left out.
  */
-function webSearchTuning(value, settings) {
-  if (!isPlainObject(value)) return {};
+function webSearchTuning(stored, settings) {
+  const value = isPlainObject(stored) ? stored : {};
   const tuning = {};
   const limit = settings?.capabilities?.webSearchLimits?.maxPageReads;
   if (Number.isInteger(value.maxPageReads) && value.maxPageReads >= 1) {
     tuning.maxPageReads = Number.isInteger(limit)
       ? Math.min(value.maxPageReads, limit)
       : value.maxPageReads;
+  } else if (Number.isInteger(limit) && limit >= 1 && limit < DEFAULT_MAX_PAGE_READS) {
+    // The app names no number, so the run reads as many pages as the platform default. A limit
+    // below that default caps it too; a higher limit leaves the default as it is.
+    tuning.maxPageReads = limit;
   }
   if (typeof value.researchGuidance === 'string' && value.researchGuidance.trim() !== '') {
     tuning.researchGuidance = value.researchGuidance.slice(0, USER_APP_LIMITS.researchGuidance);
@@ -577,8 +583,14 @@ export function effectiveUserApp(record, { runner, owner, settings, catalog, now
   // that no model has, see `NO_MODEL_AVAILABLE_ID`); a list narrows what the chat may pick.
   if (decided.models.refuse) app.allowedModels = [NO_MODEL_AVAILABLE_ID];
   else if (!decided.models.reason) {
-    if (decided.models.ids.length > 0) app.allowedModels = [...decided.models.ids];
-    if (decided.models.lock) app.disallowModelSelection = true;
+    // A lock lets the chat run on the preferred model only: were the whole list kept, a preferred
+    // model that lacks a feature the chat needs would give way to the next model of the list.
+    if (decided.models.lock) {
+      app.allowedModels = [decided.model.id];
+      app.disallowModelSelection = true;
+    } else if (decided.models.ids.length > 0) {
+      app.allowedModels = [...decided.models.ids];
+    }
   }
   const preferredAllowed =
     !app.allowedModels || app.allowedModels.some(id => sameId(id, decided.model.id));

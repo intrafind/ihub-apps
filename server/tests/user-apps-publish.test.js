@@ -706,7 +706,18 @@ describe('the start state and the projection, for every kind of tool', () => {
       { ...record, content: {} },
       { effective: result, id: 'recherche', enabled: true }
     );
-    assert.notDeepEqual(withoutInput.inputMode?.rows, 7);
+    // A marker in the effective input line of the personal app (nine rows is not a default)
+    // would show if it were copied: the company app is the same with and without it.
+    const marked = toAdminApp(
+      { ...record, content: {} },
+      {
+        effective: effective({ ...looks, inputMode: { type: 'multiline', rows: 9 } }, []),
+        id: 'recherche',
+        enabled: true
+      }
+    );
+    assert.equal(marked.inputMode?.rows === 9, false);
+    assert.deepEqual(marked.inputMode, withoutInput.inputMode);
   });
 
   it('the models of the app and how it researches are written as the ceiling built them', () => {
