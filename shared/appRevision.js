@@ -23,33 +23,25 @@
  * @module shared/appRevision
  */
 
-import { USER_APP_CONTENT_KEYS, USER_APP_LIMITS } from './userAppContent.js';
+import { USER_APP_LIMITS } from './userAppContent.js';
+import { fieldKeysToRevise } from './userAppFields.js';
 
 /** The two targets of a revision: an admin app (`apps/*.json`) and a personal app. */
 export const REVISE_TARGETS = Object.freeze(['admin', 'personal']);
 
-/** The content keys of an admin app a revision reads and may change. */
-const ADMIN_REVISION_KEYS = Object.freeze([
-  'name',
-  'description',
-  'system',
-  'prompt',
-  'messagePlaceholder',
-  'variables',
-  'starterPrompts',
-  'category',
-  'color',
-  'icon'
-]);
+/**
+ * The content keys of an admin app a revision reads and may change. Derived
+ * from the registry of configurable keys (`shared/userAppFields.js`).
+ */
+const ADMIN_REVISION_KEYS = fieldKeysToRevise('admin');
 
 /**
  * The content keys of a personal app a revision reads and may change: the
- * content keys without the model and the capabilities, which the author sets
- * in the form only.
+ * keys of the registry that list the target `personal`. The model and the
+ * capabilities are not among them; the author sets those in the form, and the
+ * builder only suggests them.
  */
-const PERSONAL_REVISION_KEYS = Object.freeze(
-  USER_APP_CONTENT_KEYS.filter(key => key !== 'preferredModel' && key !== 'capabilities')
-);
+const PERSONAL_REVISION_KEYS = fieldKeysToRevise('personal');
 
 /** The keys whose value is one text per language. */
 export const REVISE_LOCALIZED_KEYS = Object.freeze([

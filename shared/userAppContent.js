@@ -7,14 +7,22 @@
  * the verdict on every key of the app schema, and the fixed parts of the app
  * object a chat runs with.
  *
- * Pure; no function modifies its argument. This file imports nothing, so
- * `shared/appId.js` and the validators can import it without a cycle.
+ * Pure; no function modifies its argument. This file imports only
+ * `shared/userAppFields.js`, which imports nothing, so `shared/appId.js` and
+ * the validators can import it without a cycle.
  *
  * Design: concepts/app-builder-rework-2026-11/02-personal-apps.md, sections
  * 4.2 and 4.4.
  *
  * @module shared/userAppContent
  */
+
+import {
+  USER_APP_STORED_CONTENT_KEYS,
+  USER_APP_STORED_LOCALIZED_KEYS,
+  USER_APP_STORED_REQUIRED_KEYS,
+  appKeyVerdicts
+} from './userAppFields.js';
 
 /** The prefix of every personal app ID. An admin app may start with it too (`uap_helper`). */
 export const USER_APP_ID_PREFIX = 'uap_';
@@ -44,31 +52,13 @@ export function isUserAppId(id) {
  * and of `content` in the stored record. There is no `category`: a personal
  * app has none.
  */
-export const USER_APP_CONTENT_KEYS = Object.freeze([
-  'name',
-  'description',
-  'system',
-  'icon',
-  'color',
-  'prompt',
-  'messagePlaceholder',
-  'variables',
-  'starterPrompts',
-  'preferredModel',
-  'capabilities'
-]);
+export const USER_APP_CONTENT_KEYS = USER_APP_STORED_CONTENT_KEYS;
 
 /** The content keys that hold one text per language. */
-export const USER_APP_LOCALIZED_KEYS = Object.freeze([
-  'name',
-  'description',
-  'system',
-  'prompt',
-  'messagePlaceholder'
-]);
+export const USER_APP_LOCALIZED_KEYS = USER_APP_STORED_LOCALIZED_KEYS;
 
 /** The localized content keys an app cannot be saved without. */
-export const USER_APP_REQUIRED_KEYS = Object.freeze(['name', 'description', 'system']);
+export const USER_APP_REQUIRED_KEYS = USER_APP_STORED_REQUIRED_KEYS;
 
 /** The keys of an input field a personal app may store. */
 export const USER_APP_VARIABLE_KEYS = Object.freeze([
@@ -159,23 +149,9 @@ export const USER_APP_STATES = Object.freeze(['active', 'promoted']);
  * personal app.
  */
 export const USER_APP_FIELD_POLICY = Object.freeze({
-  name: 'content',
-  description: 'content',
-  icon: 'content',
-  color: 'content',
-  system: 'content',
-  prompt: 'content',
-  messagePlaceholder: 'content',
-  variables: 'content',
-  starterPrompts: 'content',
-
-  preferredModel: 'capability',
-  upload: 'capability',
-  websearch: 'capability',
-  skills: 'capability',
-  skillSettings: 'capability',
-  integrations: 'capability',
-  toolApproval: 'capability',
+  // `content`, `capability` and the `never` of `category`: decided by the
+  // registry (`shared/userAppFields.js`).
+  ...appKeyVerdicts(),
 
   id: 'fixed',
   type: 'fixed',
@@ -213,7 +189,6 @@ export const USER_APP_FIELD_POLICY = Object.freeze({
   allowUserTemplateUploads: 'never',
   uploads: 'never',
   settings: 'never',
-  category: 'never',
   order: 'never',
   requiredFeatures: 'never',
   requiredIntegrations: 'never',
