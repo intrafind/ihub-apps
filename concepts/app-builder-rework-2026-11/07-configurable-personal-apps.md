@@ -125,7 +125,7 @@ marked "verify".
 | `thinking` | `capabilities.thinking: { level }` | `thinking` (boolean) | Dropped when the model does not support it. The level is cut to `thinkingMaxLevel`. |
 | `imageGeneration` | `capabilities.imageGeneration` (boolean) | `imageGeneration` | Needs an image model that owner and runner may both use. |
 | Web search tuning | `capabilities.webSearchSettings: { maxSearches, maxPageReads, researchGuidance }`, next to the existing `webSearch` boolean | existing `webSearch`, plus `webSearchLimits: { maxSearches, maxPageReads }` | Numbers are cut to the admin limits. `researchGuidance` is at most 1,000 characters (the admin schema allows 4,000) and is cleaned of hidden characters. |
-| Models | `capabilities.models: { allowed: [id], lock: boolean }`, next to `preferredModel` | existing `modelChoice` | `allowed` is cut to the models that owner and runner both may use. If nothing is left the restriction is dropped and the reason `youMayNot` is reported, because blocking would leave the runner without a model. `lock` hides the model picker and needs a usable `preferredModel`. |
+| Models | `capabilities.models: { allowed: [id], lock: boolean }`, next to `preferredModel` | existing `modelChoice` | `allowed` is cut to the models that owner and runner both may use. If nothing is left, the chat of this runner does not start and says why (reason `modelNotAvailable`). Dropping the restriction instead would give the runner a model the author excluded, and the ceiling only ever removes things. `lock` hides the model picker and works the same way: if `preferredModel` is not usable for the runner, the chat does not start. At save time the same test refuses an app the owner could not run themselves. |
 | Skills, by list | `capabilities.skillIds: [id]` narrows the granted skills | existing `skills` | A list can only narrow what the boolean grants. |
 | Projects | `capabilities.projects: [{ id }]` | `projects` | Section 2.4. |
 
@@ -278,6 +278,10 @@ and integrations only.
 Cost: the catalogue lengthens every turn. Slice S1 measures prompt size per turn with the evaluation
 of 03 section 8 and sets the caps. The rate limit stays at 60 turns per hour.
 
+Gating: the builder routes stay behind the features `appGenerator` and `appBuilderChat` (preview,
+off by default), which the merged builder already uses. The new proposals add no feature of their
+own.
+
 ### 2.7 Publish
 
 `publishUserApp.js` writes the granted capabilities as ordinary app config. The new keys map as
@@ -369,8 +373,12 @@ rule, the publish rule for projects, the authorization tests.
    by one flag. The alternative is to inject them and to list them in the chat's "what the author
    wrote" view, which makes the third-person text visible but still lets it change without a revision
    of the app.
-3. **`autoStart`.** It sends the first message without a keystroke. Every tool call in a shared app
-   still asks, so it opens no tool path by itself. I lean towards allowing it; decide in slice 1.
+3. **`autoStart`.** It sends the first message without a keystroke and adds no tool. Today every
+   tool call in a shared app asks. If decision 1 is accepted, a shared app with `autoStart` can run
+   iHub's internal read-only tools, for example a project search, without a card. Other tool calls
+   still ask. So the owner decides on `autoStart` together with decision 1: with both accepted, the
+   first answer of a shared app can already draw on project documents before the person has done
+   anything. I lean towards allowing it; decide in slice 1.
 
 ## 8. What was verified and what was not
 
