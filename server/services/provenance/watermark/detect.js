@@ -57,6 +57,13 @@ export const DETECTOR_API = Object.freeze({
 /** Path of the detection endpoint in iFinder's if-vllm image. */
 export const MODEL_DETECT_PATH = '/watermark/v1/detect';
 
+/** A path without its trailing slashes (a loop: no backtracking regex). */
+function trimTrailingSlashes(path) {
+  let end = path.length;
+  while (end > 0 && path[end - 1] === '/') end -= 1;
+  return path.slice(0, end);
+}
+
 /**
  * The detection endpoint of a model's if-vllm image: the server of its chat URL,
  * with any path before `/v1` kept (a reverse proxy prefix), plus
@@ -73,7 +80,7 @@ export function modelDetectorUrl(model) {
     return null;
   }
   const index = url.pathname.search(/\/v1(\/|$)/);
-  const prefix = (index >= 0 ? url.pathname.slice(0, index) : '').replace(/\/+$/, '');
+  const prefix = trimTrailingSlashes(index >= 0 ? url.pathname.slice(0, index) : '');
   return `${url.origin}${prefix}${MODEL_DETECT_PATH}`;
 }
 
@@ -213,7 +220,7 @@ function stableJson(value) {
   if (Array.isArray(value)) return `[${value.map(stableJson).join(',')}]`;
   if (!value || typeof value !== 'object') return JSON.stringify(value ?? null);
   return `{${Object.keys(value)
-    .sort()
+    .sort((a, b) => a.localeCompare(b))
     .map(key => `${JSON.stringify(key)}:${stableJson(value[key])}`)
     .join(',')}}`;
 }
@@ -435,7 +442,10 @@ async function runIhubDetectors(text, detectors, settings) {
       logUnavailable(DETECTOR_API.IHUB, error);
     }
   });
-  return { verdicts: outcomes.length ? [decide(outcomes, settings)] : [], failures };
+  return {
+    verdicts: outcomes.length ? [{ ...decide(outcomes, settings), source: DETECTOR_API.IHUB }] : [],
+    failures
+  };
 }
 
 /**
@@ -478,7 +488,9 @@ async function runModelDetectors(text, detectors, settings) {
   });
   const answered = outcomes.filter(outcome => outcome.checks).length;
   return {
-    verdicts: answered ? [evaluateChecks(outcomes, settings)] : [],
+    verdicts: answered
+      ? [{ ...evaluateChecks(outcomes, settings), source: DETECTOR_API.MODEL }]
+      : [],
     failures: outcomes.length - answered
   };
 }
@@ -495,7 +507,7 @@ async function runGatewayDetectors(text, detectors, settings) {
         text,
         timeoutMs: settings.detectorTimeoutMs
       });
-      verdicts.push(decideFromGateway(answer, { detector }));
+      verdicts.push({ ...decideFromGateway(answer, { detector }), source: DETECTOR_API.GATEWAY });
     } catch (error) {
       failures += 1;
       logUnavailable(DETECTOR_API.GATEWAY, error);
@@ -510,7 +522,9 @@ async function runGatewayDetectors(text, detectors, settings) {
  * @param {string} text - Sent as given: normalization changes tokens.
  * @param {{modelId?: string}} [options]
  * @returns {Promise<Object>} The additive `watermark` member of the verify response.
- *   Never throws for a detector problem: that is `unavailable`.
+ *   Never throws for a detector problem: that is `unavailable`. `source` names the
+ *   route of the deciding verdict (`ihub`, `model` or `gateway`), so counts summed
+ *   over several routes do not suggest another one.
  */
 export async function detectWatermark(text, { modelId } = {}) {
   // EU AI Act master switch off: nothing is sent to a detector (defence for callers

@@ -173,6 +173,39 @@ function nameOf(model) {
   return name || model.id;
 }
 
+/** The key link of the watermark chain: held by the image, an active iHub key, or none. */
+function watermarkKeyCheck({ modelHeld, activeKeyId, base, params }) {
+  if (modelHeld) {
+    return check(
+      'model.watermark.key',
+      LEVEL.OK,
+      'watermark.keyHeldByModel',
+      '{{model}}: the model image holds the watermark key.',
+      { ...base, fix: null, params }
+    );
+  }
+  if (activeKeyId) {
+    return check(
+      'model.watermark.key',
+      LEVEL.OK,
+      'watermark.keyOk',
+      '{{model}}: active key {{keyId}}.',
+      {
+        ...base,
+        fix: null,
+        params: { ...params, keyId: activeKeyId }
+      }
+    );
+  }
+  return check(
+    'model.watermark.key',
+    LEVEL.ERROR,
+    'watermark.noKey',
+    '{{model}}: no active watermark key. Output is not marked.',
+    { ...base, fix: FIX_KEYS, params }
+  );
+}
+
 /**
  * The checks of one enabled model.
  *
@@ -254,39 +287,7 @@ export function modelChecks(
   // The watermark chain: key, detector, self-test. Errors: we must not claim marking we do not deliver.
   const detector = detectorConfigOf(model);
   const modelHeld = detector.keyHolder === 'model';
-  out.push(
-    modelHeld
-      ? check(
-          'model.watermark.key',
-          LEVEL.OK,
-          'watermark.keyHeldByModel',
-          '{{model}}: the model image holds the watermark key.',
-          { ...base, fix: null, params }
-        )
-      : activeKeyId
-        ? check(
-            'model.watermark.key',
-            LEVEL.OK,
-            'watermark.keyOk',
-            '{{model}}: active key {{keyId}}.',
-            {
-              ...base,
-              fix: null,
-              params: { ...params, keyId: activeKeyId }
-            }
-          )
-        : check(
-            'model.watermark.key',
-            LEVEL.ERROR,
-            'watermark.noKey',
-            '{{model}}: no active watermark key. Output is not marked.',
-            {
-              ...base,
-              fix: FIX_KEYS,
-              params
-            }
-          )
-  );
+  out.push(watermarkKeyCheck({ modelHeld, activeKeyId, base, params }));
 
   const detectorId = 'model.watermark.detector';
   const stId = 'model.watermark.selftest';

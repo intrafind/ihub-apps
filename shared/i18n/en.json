@@ -8759,7 +8759,7 @@
         "recordTitle": "Provenance record",
         "recordsTitle": "Provenance records ({{count}}, newest first)",
         "recordHelp": "What this installation stored when it produced the output. It holds a hash, never the content; it names a user only when \"Who a record names\" is set.",
-        "wmDetectedGateway": "Watermark detected by the iFinder Model Gateway. Key file: {{keyId}}. p-value {{p}}, {{n}} tokens scored. The gateway checks with all detectors configured there, so the text comes from one of their models, not necessarily through this installation.",
+        "wmDetectedGateway": "Watermark detected by the iFinder Model Gateway. Key file: {{keyId}}. p-value {{p}}, {{n}} tokens scored. The gateway checks with all detectors configured there: the text is consistent with the watermark of one of their models, which need not be one of this installation.",
         "wmDetectedModel": "Watermark detected by the model image. Key file: {{keyId}}. p-value {{p}}, {{n}} tokens scored.",
         "wmNotDetectedGateway": "No watermark detected by the detectors of the iFinder Model Gateway. This does not show that the text is not AI-generated: it may be edited, come from another model or have been generated without a watermark.",
         "wmNotDetectedModel": "No watermark detected by the model images. This does not show that the text is not AI-generated: it may be edited, come from another model or have been generated without a watermark."

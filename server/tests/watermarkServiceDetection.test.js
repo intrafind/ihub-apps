@@ -32,7 +32,7 @@ const { startMockModelDetector } = await import('./helpers/mockModelDetector.js'
 const { default: configStore } = await import('../services/config/ConfigStore.js');
 const { resetWatermarkKeyStore } =
   await import('../services/provenance/watermark/WatermarkKeyStore.js');
-const { callGatewayDetector, callModelDetector } =
+const { callGatewayDetector, callModelDetector, clearDetectorTokens } =
   await import('../services/provenance/watermark/DetectorClient.js');
 const {
   combineVerdicts,
@@ -47,7 +47,7 @@ const { planTextWatermark } = await import('../services/provenance/watermark/wat
 const { runSelfTest, pingDetector } = await import('../services/provenance/watermark/selfTest.js');
 const { modelConfigSchema } = await import('../validators/modelConfigSchema.js');
 
-const MODEL_KEY = 'vllm-api-key-123456';
+const MODEL_KEY = 'vllm-api-key-123456'; // gitleaks:allow (a test value)
 const TOKEN = 'gateway-bearer-123456';
 const OAUTH = { clientId: 'ihub', clientSecret: 'client-secret-987654', accessToken: 'jwt-abc' };
 const TEXT = Array.from({ length: 200 }, (_, i) => `word${i}`).join(' ');
@@ -104,6 +104,7 @@ beforeEach(async () => {
   }
   gateway.tokenCalls.length = 0;
   oauthGateway.tokenCalls.length = 0;
+  clearDetectorTokens();
   lines.length = 0;
   configCache.setCacheEntry('config/credentials.json', {
     credentials: {
@@ -313,6 +314,71 @@ describe('callGatewayDetector', () => {
     ]);
   });
 
+  const withOauthCredential = patch =>
+    configCache.setCacheEntry('config/credentials.json', {
+      credentials: {
+        'gw-oauth': {
+          id: 'gw-oauth',
+          type: 'oauth2',
+          tokenUrl: oauthGateway.tokenUrl,
+          clientId: OAUTH.clientId,
+          clientSecret: OAUTH.clientSecret,
+          grantType: 'client_credentials',
+          ...patch
+        }
+      }
+    });
+
+  test('the token request goes to the address the URL check accepted, not a new DNS answer', async () => {
+    // The check accepts 192.0.2.1 (a documentation address); a second lookup of
+    // "localhost" would reach the mock. Pinned, the request never gets there.
+    const port = new URL(oauthGateway.tokenUrl).port;
+    withOauthCredential({ tokenUrl: `http://localhost:${port}/oauth/token` });
+    await expect(
+      callGatewayDetector({
+        url: oauthGateway.url,
+        credentialRef: 'gw-oauth',
+        text: TEXT,
+        timeoutMs: 300,
+        resolve: async () => ['192.0.2.1']
+      })
+    ).rejects.toMatchObject({ code: 'WATERMARK_DETECTOR_UNREACHABLE' });
+    expect(oauthGateway.tokenCalls).toHaveLength(0);
+    expect(oauthGateway.calls).toHaveLength(0);
+  });
+
+  test('a token request that hangs ends with the deadline of the detector call', async () => {
+    const http = await import('node:http');
+    const silent = http.createServer(() => {});
+    await new Promise(resolve => silent.listen(0, '127.0.0.1', resolve));
+    try {
+      withOauthCredential({ tokenUrl: `http://127.0.0.1:${silent.address().port}/oauth/token` });
+      const started = Date.now();
+      await expect(
+        callGatewayDetector({
+          url: oauthGateway.url,
+          credentialRef: 'gw-oauth',
+          text: TEXT,
+          timeoutMs: 300
+        })
+      ).rejects.toMatchObject({ details: { reason: 'timeout' } });
+      expect(Date.now() - started).toBeLessThan(5000);
+      expect(oauthGateway.calls).toHaveLength(0);
+    } finally {
+      silent.closeAllConnections?.();
+      await new Promise(resolve => silent.close(resolve));
+    }
+  });
+
+  test('a changed client secret fetches a new token instead of the cached one', async () => {
+    await callGatewayDetector({ url: oauthGateway.url, credentialRef: 'gw-oauth', text: TEXT });
+    withOauthCredential({ clientSecret: 'rotated-secret' });
+    await expect(
+      callGatewayDetector({ url: oauthGateway.url, credentialRef: 'gw-oauth', text: TEXT })
+    ).rejects.toMatchObject({ details: { reason: 'token' } });
+    expect(oauthGateway.tokenCalls).toHaveLength(2);
+  });
+
   test('refuses a credential that is not a token or an OAuth2 client', async () => {
     await expect(
       callGatewayDetector({ url: gateway.url, credentialRef: 'gw-basic', text: TEXT })
@@ -365,7 +431,8 @@ describe('detectWatermark with a model-held key', () => {
       status: 'detected',
       keyLabel: 'key-2027-03',
       pValue: 4e-9,
-      checksMade: 4
+      checksMade: 4,
+      source: 'model'
     });
     expect(result.keyId).toBeUndefined();
     expect(image.calls[0].headers.authorization).toBe(`Bearer ${MODEL_KEY}`);
@@ -385,6 +452,7 @@ describe('detectWatermark with a model-held key', () => {
       status: 'detected',
       keyLabel: 'key-2026-11',
       checksMade: 2,
+      source: 'gateway',
       gateway: { gatewayVersion: '6.9.0' }
     });
     expect(image.calls).toHaveLength(0);

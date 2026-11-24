@@ -586,7 +586,9 @@ describe('VerificationCard', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Check' }));
     expect(await screen.findByText(/detected by the iFinder Model Gateway/)).toBeInTheDocument();
     expect(screen.getByText(/Key file: spike/)).toBeInTheDocument();
-    expect(screen.getByText(/not necessarily through this installation/)).toBeInTheDocument();
+    expect(
+      screen.getByText(/consistent with the watermark of one of their models/)
+    ).toBeInTheDocument();
 
     mockApi.verifyText.mockResolvedValueOnce({
       found: false,
@@ -619,6 +621,28 @@ describe('VerificationCard', () => {
       found: false,
       watermark: { status: 'detected', keyLabel: 'spike', pValue: 6e-5, scoredTokens: 330 }
     });
+    fireEvent.click(screen.getByRole('button', { name: 'Check' }));
+    expect(
+      await screen.findByText(/detected by the model image\. Key file: spike/)
+    ).toBeInTheDocument();
+  });
+
+  test('text: the server names the deciding route, also when iHub keys were checked too', async () => {
+    // A mixed installation: the image detected, iHub's keys did not, and the counts
+    // of both routes are summed.
+    mockApi.verifyText.mockResolvedValueOnce({
+      found: false,
+      watermark: {
+        status: 'detected',
+        source: 'model',
+        keyLabel: 'spike',
+        keysChecked: 2,
+        pValue: 6e-5,
+        scoredTokens: 330
+      }
+    });
+    render(<VerificationCard />);
+    fireEvent.change(screen.getByLabelText('Text to check'), { target: { value: 'some text' } });
     fireEvent.click(screen.getByRole('button', { name: 'Check' }));
     expect(
       await screen.findByText(/detected by the model image\. Key file: spike/)

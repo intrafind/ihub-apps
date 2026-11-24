@@ -11,6 +11,33 @@ import CheckStatus from './CheckStatus';
 import { BUTTON_SECONDARY } from './KeyDialogs';
 import { useEuAiActEnabled } from './EuAiActStateNote';
 
+/** Who answers for a detector row: the Model Gateway, the model image, or a detector service. */
+function detectorApiLabel(t, detector) {
+  if (detector.detectorApi === 'gateway') {
+    return t(
+      'admin.euAiAct.detector.apiGateway',
+      'iFinder Model Gateway (all detectors configured there)'
+    );
+  }
+  if (detector.detectorApi === 'model') {
+    return t('admin.euAiAct.detector.apiModel', 'Model image (holds the keys)');
+  }
+  return t('admin.euAiAct.detector.apiIhub', 'Detector service (keys from iHub)');
+}
+
+/** How a detector row authenticates. */
+function credentialLabel(t, detector) {
+  if (detector.detectorApi === 'model') {
+    return t('admin.euAiAct.detector.credentialModel', "The model's API key");
+  }
+  if (detector.credentialRef) {
+    return t('admin.euAiAct.detector.credentialSet', 'Set ({{ref}})', {
+      ref: detector.credentialRef
+    });
+  }
+  return t('admin.euAiAct.detector.credentialNone', 'None');
+}
+
 /** Self-test diagnosis (server-side step 4) -> level and sentence. Never over-claims. */
 function describeSelfTest(result, t) {
   const n = result.scoredTokens ?? 0;
@@ -156,16 +183,7 @@ function DetectorRow({ detector, modelStatus, onChanged }) {
         <dt className="text-gray-600 dark:text-gray-400">
           {t('admin.euAiAct.detector.api', 'Detector')}
         </dt>
-        <dd className="text-gray-900 dark:text-gray-100">
-          {detector.detectorApi === 'gateway'
-            ? t(
-                'admin.euAiAct.detector.apiGateway',
-                'iFinder Model Gateway (all detectors configured there)'
-              )
-            : detector.detectorApi === 'model'
-              ? t('admin.euAiAct.detector.apiModel', 'Model image (holds the keys)')
-              : t('admin.euAiAct.detector.apiIhub', 'Detector service (keys from iHub)')}
-        </dd>
+        <dd className="text-gray-900 dark:text-gray-100">{detectorApiLabel(t, detector)}</dd>
         <dt className="text-gray-600 dark:text-gray-400">
           {t('admin.euAiAct.detector.url', 'Detector URL')}
         </dt>
@@ -180,15 +198,7 @@ function DetectorRow({ detector, modelStatus, onChanged }) {
         <dt className="text-gray-600 dark:text-gray-400">
           {t('admin.euAiAct.detector.credential', 'Credential')}
         </dt>
-        <dd className="text-gray-900 dark:text-gray-100">
-          {detector.detectorApi === 'model'
-            ? t('admin.euAiAct.detector.credentialModel', "The model's API key")
-            : detector.credentialRef
-              ? t('admin.euAiAct.detector.credentialSet', 'Set ({{ref}})', {
-                  ref: detector.credentialRef
-                })
-              : t('admin.euAiAct.detector.credentialNone', 'None')}
-        </dd>
+        <dd className="text-gray-900 dark:text-gray-100">{credentialLabel(t, detector)}</dd>
         <dt className="text-gray-600 dark:text-gray-400">
           {t('admin.euAiAct.detector.lastSelfTest', 'Last self-test')}
         </dt>

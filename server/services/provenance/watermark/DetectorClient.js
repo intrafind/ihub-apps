@@ -44,6 +44,7 @@
  *
  * @module services/provenance/watermark/DetectorClient
  */
+import { createHash } from 'node:crypto';
 import { z } from 'zod';
 import { httpFetch } from '../../../utils/httpConfig.js';
 import { createPinnedLookup } from '../../../utils/ssrfGuard.js';
@@ -51,7 +52,11 @@ import { readBoundedBody } from '../../../utils/boundedBodyReader.js';
 import { redactUrl, scrubSecrets } from '../../../utils/secretRedaction.js';
 import { ServiceError } from '../../../utils/ServiceError.js';
 import credentialService from '../../CredentialService.js';
-import { resolveCredentialAuth } from '../../tools/OpenApiToolRunner.js';
+import {
+  ClientCredentialsTokenCache,
+  clientCredentialsBody,
+  credentialProfileAuth
+} from '../../integrations/auth/ServiceAccountAuth.js';
 import logger from '../../../utils/logger.js';
 import { checkDetectorUrl } from './detectorUrlPolicy.js';
 
@@ -59,6 +64,10 @@ const COMPONENT = 'WatermarkDetector';
 
 export const MAX_RESPONSE_BYTES = 64 * 1024;
 export const DEFAULT_TIMEOUT_MS = 15_000;
+const MAX_TOKEN_RESPONSE_BYTES = 64 * 1024;
+
+/** OAuth2 tokens of detector credentials, until shortly before they expire. */
+const tokenCache = new ClientCredentialsTokenCache();
 
 const responseSchema = z.object({
   num_scored_tokens: z.number().int().min(0),
@@ -134,6 +143,58 @@ function notConfigured(message) {
 }
 
 /**
+ * An OAuth2 client-credentials token for a detector credential. The request goes
+ * to the addresses the token URL policy accepted (no second DNS answer), through
+ * `httpFetch` (proxy, certificate whitelist), and stops with the detector call's
+ * deadline. Cached per credential and secret, so a changed credential fetches anew.
+ *
+ * @param {string} credentialRef
+ * @param {Object} profile - The resolved `oauth2` credential
+ * @param {string[]} addresses - From {@link checkDetectorUrl}
+ * @param {AbortSignal} [signal]
+ * @returns {Promise<string>}
+ */
+function fetchToken(credentialRef, profile, addresses, signal) {
+  const cacheKey = JSON.stringify([
+    credentialRef,
+    profile.tokenUrl,
+    profile.clientId,
+    profile.scope || '',
+    createHash('sha256')
+      .update(String(profile.clientSecret || ''))
+      .digest('hex')
+  ]);
+  return tokenCache.getToken(cacheKey, async () => {
+    const body = clientCredentialsBody({
+      clientId: profile.clientId,
+      clientSecret: profile.clientSecret,
+      scope: profile.scope,
+      grantType: profile.grantType || 'client_credentials',
+      refreshToken: profile.refreshToken
+    });
+    const res = await httpFetch(profile.tokenUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        Accept: 'application/json'
+      },
+      body: body.toString(),
+      signal,
+      redirect: 'error',
+      lookup: createPinnedLookup(addresses, { allowPrivate: true })
+    });
+    if (!res.ok) throw new Error(`OAuth token request failed: ${res.status}`);
+    const raw = await readBoundedBody(res, MAX_TOKEN_RESPONSE_BYTES, 'OAuth token response');
+    return JSON.parse(raw.toString('utf8'));
+  });
+}
+
+/** Forget cached detector tokens (tests, a credential change). */
+export function clearDetectorTokens() {
+  tokenCache.clear();
+}
+
+/**
  * The request headers of a detector credential, and the secrets they carry (for
  * scrubbing error messages). `bearer` (or an opaque `secret`) is sent as is; an
  * `oauth2` client gets a token from its token endpoint, which must pass the same
@@ -146,7 +207,7 @@ function notConfigured(message) {
  * @returns {Promise<{headers: Object<string, string>, secrets: string[]}>}
  * @throws {ServiceError} WATERMARK_DETECTOR_NOT_CONFIGURED | WATERMARK_DETECTOR_UNREACHABLE (`token`)
  */
-async function credentialHeaders(credentialRef, { resolve, bearerToken } = {}) {
+async function credentialHeaders(credentialRef, { resolve, bearerToken, signal } = {}) {
   if (!credentialRef) {
     return bearerToken
       ? { headers: { Authorization: `Bearer ${bearerToken}` }, secrets: [bearerToken] }
@@ -161,6 +222,7 @@ async function credentialHeaders(credentialRef, { resolve, bearerToken } = {}) {
       `The detector credential must be a bearer token or an OAuth2 client, not "${profile.type}"`
     );
   }
+  const headers = { ...credentialProfileAuth(profile).headers };
   if (profile.type === 'oauth2') {
     const check = await checkDetectorUrl(profile.tokenUrl, { resolve });
     if (!check.ok) {
@@ -168,22 +230,21 @@ async function credentialHeaders(credentialRef, { resolve, bearerToken } = {}) {
         reason: 'token'
       });
     }
+    try {
+      const token = await fetchToken(credentialRef, profile, check.addresses, signal);
+      headers.Authorization = `Bearer ${token}`;
+    } catch (error) {
+      logger.warn('Watermark detector token request failed', {
+        component: COMPONENT,
+        credentialRef,
+        error: scrubSecrets(String(error?.message || error), [profile.clientSecret].filter(Boolean))
+      });
+      throw unreachable('The token for the detector credential could not be fetched', {
+        reason: signal?.aborted ? 'timeout' : 'token'
+      });
+    }
   }
-  let auth;
-  try {
-    // The token URL passed the detector URL policy above; the token request
-    // itself goes through safeFetch, which applies the SSL whitelist.
-    auth = await resolveCredentialAuth(credentialRef, { blockPrivateIps: false });
-  } catch (error) {
-    logger.warn('Watermark detector token request failed', {
-      component: COMPONENT,
-      credentialRef,
-      error: scrubSecrets(String(error?.message || error), [profile.clientSecret].filter(Boolean))
-    });
-    throw unreachable('The token for the detector credential could not be fetched', {
-      reason: 'token'
-    });
-  }
+  const auth = { headers };
   const secrets = Object.values(auth.headers).filter(Boolean);
   if (profile.clientSecret) secrets.push(profile.clientSecret);
   return { headers: auth.headers, secrets };
@@ -207,11 +268,7 @@ async function postJson({
   resolve
 }) {
   if (!url) throw notConfigured('No detector URL is configured');
-  const auth = await credentialHeaders(credentialRef, { resolve, bearerToken });
-  const check = await checkDetectorUrl(url, { resolve });
-  if (!check.ok) throw unreachable(check.reason, { reason: 'url_refused' });
-
-  const secrets = [...auth.secrets, ...bodySecrets];
+  // One deadline for the whole call, the token request of an OAuth2 credential included.
   const controller = new AbortController();
   const onAbort = () => controller.abort();
   if (signal) {
@@ -222,6 +279,14 @@ async function postJson({
   const started = Date.now();
   const safeUrl = redactUrl(url);
   try {
+    const auth = await credentialHeaders(credentialRef, {
+      resolve,
+      bearerToken,
+      signal: controller.signal
+    });
+    const check = await checkDetectorUrl(url, { resolve });
+    if (!check.ok) throw unreachable(check.reason, { reason: 'url_refused' });
+    const secrets = [...auth.secrets, ...bodySecrets];
     let res;
     try {
       res = await httpFetch(url, {

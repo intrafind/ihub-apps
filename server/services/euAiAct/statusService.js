@@ -156,7 +156,7 @@ export async function buildStatus({ refresh = false, deps = {} } = {}) {
               checkedAt: probe?.checkedAt ?? null
             }
           : null,
-      keyHolder: text.by === 'ihub' ? (modelHeld ? 'model' : 'ihub') : null,
+      keyHolder: keyHolderOf(text, modelHeld),
       activeKeyId: text.by === 'ihub' && !modelHeld ? activeKeyId : null,
       selfTest: text.by === 'ihub' ? selfTest : null
     });
@@ -180,3 +180,9 @@ export async function buildStatus({ refresh = false, deps = {} } = {}) {
 }
 
 export { LEVEL };
+
+/** Who holds the watermark key of a model iHub marks: the model image or iHub. */
+function keyHolderOf(text, modelHeld) {
+  if (text.by !== 'ihub') return null;
+  return modelHeld ? 'model' : 'ihub';
+}

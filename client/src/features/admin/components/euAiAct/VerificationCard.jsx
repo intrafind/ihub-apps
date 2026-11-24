@@ -33,6 +33,50 @@ function rowTitle(row, t) {
   }[row.id];
 }
 
+/** The text of a detected watermark, by the route that decided (see verificationResult). */
+function detectedText(t, source, values) {
+  if (source === 'gateway') {
+    return t(
+      'admin.euAiAct.verify.wmDetectedGateway',
+      'Watermark detected by the iFinder Model Gateway. Key file: {{keyId}}. p-value {{p}}, {{n}} tokens scored. The gateway checks with all detectors configured there: the text is consistent with the watermark of one of their models, which need not be one of this installation.',
+      values
+    );
+  }
+  if (source === 'model') {
+    return t(
+      'admin.euAiAct.verify.wmDetectedModel',
+      'Watermark detected by the model image. Key file: {{keyId}}. p-value {{p}}, {{n}} tokens scored.',
+      values
+    );
+  }
+  return t(
+    'admin.euAiAct.verify.wmDetected',
+    'Watermark detected. Technique: iHub text watermark. Key ID: {{keyId}}. p-value {{p}}, {{n}} tokens scored.',
+    values
+  );
+}
+
+/** The text of an undetected watermark, by the route that decided. */
+function notDetectedText(t, row) {
+  if (row.source === 'gateway') {
+    return t(
+      'admin.euAiAct.verify.wmNotDetectedGateway',
+      'No watermark detected by the detectors of the iFinder Model Gateway. This does not show that the text is not AI-generated: it may be edited, come from another model or have been generated without a watermark.'
+    );
+  }
+  if (row.source === 'model') {
+    return t(
+      'admin.euAiAct.verify.wmNotDetectedModel',
+      'No watermark detected by the model images. This does not show that the text is not AI-generated: it may be edited, come from another model or have been generated without a watermark.'
+    );
+  }
+  return t(
+    'admin.euAiAct.verify.wmNotDetected',
+    'No watermark detected with the {{k}} keys held by this installation. This does not show that the text is not AI-generated: it may be edited, come from another model or have been generated without a watermark.',
+    { k: row.keysChecked ?? '-' }
+  );
+}
+
 /** Badge word and sentence of one row. Negatives never claim an origin. */
 function describeRow(row, t) {
   if (row.id === 'record') {
@@ -68,45 +112,13 @@ function describeRow(row, t) {
         };
         return {
           word: t('admin.euAiAct.verify.detected', 'Detected'),
-          text:
-            row.source === 'gateway'
-              ? t(
-                  'admin.euAiAct.verify.wmDetectedGateway',
-                  'Watermark detected by the iFinder Model Gateway. Key file: {{keyId}}. p-value {{p}}, {{n}} tokens scored. The gateway checks with all detectors configured there, so the text comes from one of their models, not necessarily through this installation.',
-                  values
-                )
-              : row.source === 'model'
-                ? t(
-                    'admin.euAiAct.verify.wmDetectedModel',
-                    'Watermark detected by the model image. Key file: {{keyId}}. p-value {{p}}, {{n}} tokens scored.',
-                    values
-                  )
-                : t(
-                    'admin.euAiAct.verify.wmDetected',
-                    'Watermark detected. Technique: iHub text watermark. Key ID: {{keyId}}. p-value {{p}}, {{n}} tokens scored.',
-                    values
-                  )
+          text: detectedText(t, row.source, values)
         };
       }
       case 'not_detected':
         return {
           word: t('admin.euAiAct.verify.notDetected', 'Not detected'),
-          text:
-            row.source === 'gateway'
-              ? t(
-                  'admin.euAiAct.verify.wmNotDetectedGateway',
-                  'No watermark detected by the detectors of the iFinder Model Gateway. This does not show that the text is not AI-generated: it may be edited, come from another model or have been generated without a watermark.'
-                )
-              : row.source === 'model'
-                ? t(
-                    'admin.euAiAct.verify.wmNotDetectedModel',
-                    'No watermark detected by the model images. This does not show that the text is not AI-generated: it may be edited, come from another model or have been generated without a watermark.'
-                  )
-                : t(
-                    'admin.euAiAct.verify.wmNotDetected',
-                    'No watermark detected with the {{k}} keys held by this installation. This does not show that the text is not AI-generated: it may be edited, come from another model or have been generated without a watermark.',
-                    { k: row.keysChecked ?? '-' }
-                  )
+          text: notDetectedText(t, row)
         };
       case 'too_short':
         return {

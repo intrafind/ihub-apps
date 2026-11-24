@@ -9259,7 +9259,7 @@
         "recordTitle": "Herkunftsnachweis",
         "recordsTitle": "Herkunftsnachweise ({{count}}, neueste zuerst)",
         "recordHelp": "Was diese Installation gespeichert hat, als sie die Ausgabe erzeugt hat. Er enthält einen Hash, nie den Inhalt; einen Benutzer nennt er nur, wenn „Wen ein Nachweis nennt“ gesetzt ist.",
-        "wmDetectedGateway": "Wasserzeichen vom iFinder Model Gateway erkannt. Schlüsseldatei: {{keyId}}. p-Wert {{p}}, {{n}} Tokens bewertet. Das Gateway prüft mit allen dort konfigurierten Detektoren; der Text stammt also von einem ihrer Modelle, nicht unbedingt aus dieser Installation.",
+        "wmDetectedGateway": "Wasserzeichen vom iFinder Model Gateway erkannt. Schlüsseldatei: {{keyId}}. p-Wert {{p}}, {{n}} Tokens bewertet. Das Gateway prüft mit allen dort konfigurierten Detektoren: Der Text passt zum Wasserzeichen eines ihrer Modelle, das nicht zu dieser Installation gehören muss.",
         "wmDetectedModel": "Wasserzeichen vom Modell-Image erkannt. Schlüsseldatei: {{keyId}}. p-Wert {{p}}, {{n}} Tokens bewertet.",
         "wmNotDetectedGateway": "Die Detektoren des iFinder Model Gateway haben kein Wasserzeichen erkannt. Das zeigt nicht, dass der Text nicht KI-generiert ist: Er kann bearbeitet sein, von einem anderen Modell stammen oder ohne Wasserzeichen erzeugt worden sein.",
         "wmNotDetectedModel": "Die Modell-Images haben kein Wasserzeichen erkannt. Das zeigt nicht, dass der Text nicht KI-generiert ist: Er kann bearbeitet sein, von einem anderen Modell stammen oder ohne Wasserzeichen erzeugt worden sein."

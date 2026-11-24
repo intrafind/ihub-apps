@@ -332,7 +332,9 @@ function modelDetectorPlaceholder(chatUrl) {
   try {
     const url = new URL(chatUrl);
     const index = url.pathname.search(/\/v1(\/|$)/);
-    const prefix = (index >= 0 ? url.pathname.slice(0, index) : '').replace(/\/+$/, '');
+    let prefix = index >= 0 ? url.pathname.slice(0, index) : '';
+    // A loop instead of /\/+$/: no backtracking regex.
+    while (prefix.endsWith('/')) prefix = prefix.slice(0, -1);
     return `${url.origin}${prefix}/watermark/v1/detect`;
   } catch {
     return 'https://vllm.internal/watermark/v1/detect';
