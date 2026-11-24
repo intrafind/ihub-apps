@@ -230,6 +230,15 @@ jobs:
           else
             tar -czf "../$ARCHIVE_FILE" .
           fi
+          # Installations that update with the updater of a version before 5.6.2 look for
+          # ihub-apps-<tag>-windows.tar.gz, which Windows never had. Publish the same files under
+          # that name, or those installations report "No binary available for platform: windows".
+          # It is listed in the signed checksums.sha256 like every archive. Prints nothing for
+          # Linux and macOS, whose archive that updater already finds.
+          LEGACY_ARCHIVE_FILE=$(node ../scripts/update-archive-name.js "$VERSION" "$MATRIX_PLATFORM" --legacy)
+          if [ -n "$LEGACY_ARCHIVE_FILE" ]; then
+            tar -czf "../$LEGACY_ARCHIVE_FILE" .
+          fi
           VERSIONED_ARCHIVE_NAME="${ARCHIVE_FILE%.zip}"
           VERSIONED_ARCHIVE_NAME="${VERSIONED_ARCHIVE_NAME%.tar.gz}"
           echo "VERSIONED_ARCHIVE_NAME=$VERSIONED_ARCHIVE_NAME" >> $GITHUB_ENV
@@ -283,6 +292,7 @@ jobs:
           path: |
             ${{ env.VERSIONED_ARCHIVE_NAME }}.tar.gz
             ${{ env.VERSIONED_ARCHIVE_NAME }}.zip
+            ihub-apps-*-windows.tar.gz
             ${{ env.BASE64_FILE }}
 
   # Commit the release version and the published release notes, then land them on the default
