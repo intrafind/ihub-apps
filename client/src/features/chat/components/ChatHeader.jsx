@@ -10,6 +10,7 @@ import ChatActionsMenu from './ChatActionsMenu';
 import ExportDialog from './ExportDialog';
 import { useAuth } from '../../../shared/contexts/AuthContext';
 import useFeatureFlags from '../../../shared/hooks/useFeatureFlags';
+import { appEditPath } from '../../apps/utils/appEditTarget';
 
 /**
  * A reusable header component for chat interfaces
@@ -56,6 +57,7 @@ function ChatHeader({
   const navigate = useNavigate();
   const { user } = useAuth();
   const featureFlags = useFeatureFlags();
+  const editPath = showEditAppButton ? appEditPath(app, user, appId) : null;
 
   // Check if export is enabled at both platform and app levels
   const exportEnabled = featureFlags.isBothEnabled(app, 'export', true);
@@ -221,9 +223,9 @@ function ChatHeader({
                 <Icon name="document-duplicate" size="sm" />
               </button>
             )}
-            {showEditAppButton && user?.isAdmin && appId && (
+            {editPath && (
               <button
-                onClick={() => navigate(`/admin/apps/${appId}`)}
+                onClick={() => navigate(editPath)}
                 className="bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 text-gray-800 dark:text-gray-200 p-2 rounded-full flex items-center justify-center h-10 w-10"
                 title={t('pages.appChat.editApp', 'Edit App')}
                 aria-label={t('pages.appChat.editApp', 'Edit App')}
