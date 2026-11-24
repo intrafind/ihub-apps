@@ -11,6 +11,7 @@ import {
   changedLanguages,
   linesOf,
   offeredSuggestions,
+  settingSentence,
   unsavedOutsideChange,
   warningKey
 } from './conversationState';
@@ -183,7 +184,7 @@ function ChangeSection({ section, before, patch, language }) {
  * @param {object|null} [props.saved=null] - The app as it was last loaded or saved. Apply
  *   and Undo save the whole form: when the form differs from it outside the keys this
  *   change writes, the card says those edits are saved too (`unsavedOutsideChange`).
- * @param {(ticked: { webSearch: boolean, integrationIds: string[] }) => void} props.onApply
+ * @param {(ticked: { webSearch: boolean, integrationIds: string[], settingKeys: string[] }) => void} props.onApply
  * @param {() => void} props.onDismiss
  * @param {() => void} props.onUndo
  * @param {{ current: HTMLElement|null }} [props.appliedRef] - The "Applied" line, for the focus.
@@ -207,7 +208,7 @@ function ChangeCard({
 }) {
   const { t } = useTranslation();
   const baseId = useId();
-  const [ticked, setTicked] = useState({ webSearch: false, integrationIds: [] });
+  const [ticked, setTicked] = useState({ webSearch: false, integrationIds: [], settingKeys: [] });
   const patch = entry.patch || {};
   const before = entry.baseSnapshot || {};
   const sections = changeSections(Object.keys(patch));
@@ -215,7 +216,7 @@ function ChangeCard({
   const proposed = status === 'proposed' || status === 'applying';
   const offered = proposed
     ? offeredSuggestions(target, form, entry.suggestions)
-    : { webSearch: false, integrations: [] };
+    : { webSearch: false, integrations: [], settings: [] };
   // Per card: the author's unsaved edits are what differs from the saved app outside the keys
   // this change (with the suggestions ticked now) writes.
   const savesOtherChanges = unsavedOutsideChange(
@@ -233,6 +234,13 @@ function ChangeCard({
     [stale ? staleId : null, savesOtherChanges ? alsoSavesId : null].filter(Boolean).join(' ') ||
     undefined;
 
+  const toggleSetting = (key, checked) =>
+    setTicked(held => ({
+      ...held,
+      settingKeys: checked
+        ? [...held.settingKeys, key]
+        : held.settingKeys.filter(other => other !== key)
+    }));
   const toggleSystem = (id, checked) =>
     setTicked(held => ({
       ...held,
@@ -276,35 +284,50 @@ function ChangeCard({
         </ul>
       )}
 
-      {proposed && interactive && (offered.webSearch || offered.integrations.length > 0) && (
-        <fieldset className="space-y-1 text-sm text-gray-800 dark:text-gray-200">
-          <legend className="font-medium">{t('admin.apps.conversation.change.suggestions')}</legend>
-          {offered.webSearch && (
-            <label className="flex items-center gap-2">
-              <input
-                type="checkbox"
-                className={CHECKBOX_CLASS}
-                checked={ticked.webSearch}
-                onChange={event =>
-                  setTicked(held => ({ ...held, webSearch: event.target.checked }))
-                }
-              />
-              {t('admin.apps.conversation.change.webSearch')}
-            </label>
-          )}
-          {offered.integrations.map(system => (
-            <label key={system.id} className="flex items-center gap-2">
-              <input
-                type="checkbox"
-                className={CHECKBOX_CLASS}
-                checked={ticked.integrationIds.includes(system.id)}
-                onChange={event => toggleSystem(system.id, event.target.checked)}
-              />
-              {t('admin.apps.conversation.change.integration', { name: system.label })}
-            </label>
-          ))}
-        </fieldset>
-      )}
+      {proposed &&
+        interactive &&
+        (offered.webSearch || offered.integrations.length > 0 || offered.settings.length > 0) && (
+          <fieldset className="space-y-1 text-sm text-gray-800 dark:text-gray-200">
+            <legend className="font-medium">
+              {t('admin.apps.conversation.change.suggestions')}
+            </legend>
+            {offered.webSearch && (
+              <label className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  className={CHECKBOX_CLASS}
+                  checked={ticked.webSearch}
+                  onChange={event =>
+                    setTicked(held => ({ ...held, webSearch: event.target.checked }))
+                  }
+                />
+                {t('admin.apps.conversation.change.webSearch')}
+              </label>
+            )}
+            {offered.settings.map(setting => (
+              <label key={setting.key} className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  className={CHECKBOX_CLASS}
+                  checked={ticked.settingKeys.includes(setting.key)}
+                  onChange={event => toggleSetting(setting.key, event.target.checked)}
+                />
+                {settingSentence(setting, t)}
+              </label>
+            ))}
+            {offered.integrations.map(system => (
+              <label key={system.id} className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  className={CHECKBOX_CLASS}
+                  checked={ticked.integrationIds.includes(system.id)}
+                  onChange={event => toggleSystem(system.id, event.target.checked)}
+                />
+                {t('admin.apps.conversation.change.integration', { name: system.label })}
+              </label>
+            ))}
+          </fieldset>
+        )}
 
       {proposed && stakes.length > 0 && (
         <p data-testid="change-stakes" className="text-sm text-gray-700 dark:text-gray-300">

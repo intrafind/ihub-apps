@@ -66,6 +66,12 @@ const everyKey = () =>
       }
     ],
     starterPrompts: [{ title: { en: 'Developer' }, message: { en: 'An ad for a developer' } }],
+    greeting: { en: { title: 'Job ads', subtitle: 'Tell me the role' } },
+    inputMode: { type: 'multiline', rows: 6 },
+    preferredOutputFormat: 'markdown',
+    startForm: { enabled: true, submitLabel: { en: 'Write' } },
+    variablesPanel: { pinned: true },
+    autoStart: true,
     preferredModel: 'gpt-4o',
     capabilities: {
       upload: true,
@@ -168,6 +174,220 @@ describe('the content schema is an allow-list', () => {
         `${key} blank`
       );
     }
+  });
+});
+
+describe('how the chat looks and starts', () => {
+  const parse = extra => userAppContentSchema.safeParse(content(extra));
+
+  it('keeps a greeting per language, a title and a subtitle each, at most five languages', () => {
+    assert.equal(
+      accepts(userAppContentSchema, content({ greeting: { en: { title: 'T', subtitle: 'S' } } })),
+      true
+    );
+    for (const greeting of [
+      { en: { title: 'Only a title' } },
+      { en: { title: 'T', subtitle: 'S', extra: 'x' } },
+      { en: { title: 'x'.repeat(USER_APP_LIMITS.greetingTitle + 1), subtitle: 'S' } },
+      { en: { title: 'T', subtitle: 'x'.repeat(USER_APP_LIMITS.greetingSubtitle + 1) } },
+      Object.fromEntries(
+        ['en', 'de', 'fr', 'es', 'it', 'nl'].map(language => [
+          language,
+          { title: 'T', subtitle: 'S' }
+        ])
+      )
+    ]) {
+      assert.equal(parse({ greeting }).success, false, JSON.stringify(greeting).slice(0, 60));
+    }
+  });
+
+  it('cleans hidden characters from the greeting before it counts the length', () => {
+    const parsed = userAppContentSchema.parse(
+      content({ greeting: { en: { title: 'Hel\u200Blo', subtitle: 'S' } } })
+    );
+    assert.equal(parsed.greeting.en.title, 'Hello');
+  });
+
+  it('takes the type and the rows of the input line, not the microphone', () => {
+    assert.deepEqual(userAppContentSchema.parse(content({ inputMode: { rows: 3 } })).inputMode, {
+      rows: 3
+    });
+    for (const inputMode of [
+      { rows: 0 },
+      { rows: USER_APP_LIMITS.inputRows + 1 },
+      { rows: 2.5 },
+      { type: 'banner' },
+      { microphone: { enabled: false } }
+    ]) {
+      assert.equal(parse({ inputMode }).success, false, JSON.stringify(inputMode));
+    }
+  });
+
+  it('takes markdown or text as the output format, not json or html', () => {
+    for (const format of ['markdown', 'text']) {
+      assert.equal(parse({ preferredOutputFormat: format }).success, true);
+    }
+    for (const format of ['json', 'html', 'x']) {
+      assert.equal(parse({ preferredOutputFormat: format }).success, false, format);
+    }
+  });
+
+  it('stores autoStart only when it is on, and the start form and the panel as set', () => {
+    const on = userAppContentSchema.parse(
+      content({ autoStart: true, startForm: { enabled: false }, variablesPanel: { pinned: true } })
+    );
+    assert.equal(on.autoStart, true);
+    assert.deepEqual(on.startForm, { enabled: false });
+    assert.deepEqual(on.variablesPanel, { pinned: true });
+    assert.equal(
+      Object.hasOwn(userAppContentSchema.parse(content({ autoStart: false })), 'autoStart'),
+      false
+    );
+    assert.equal(parse({ startForm: { enabled: true, mode: 'x' } }).success, false);
+    assert.equal(parse({ variablesPanel: { pinned: 'yes' } }).success, false);
+  });
+
+  it('removes each key with null in a merge patch', () => {
+    const stored = userAppContentSchema.parse(everyKey());
+    const merged = mergeUserAppContent(stored, {
+      greeting: null,
+      inputMode: null,
+      preferredOutputFormat: null,
+      startForm: null,
+      variablesPanel: null,
+      autoStart: null
+    });
+    for (const key of [
+      'greeting',
+      'inputMode',
+      'preferredOutputFormat',
+      'startForm',
+      'variablesPanel',
+      'autoStart'
+    ]) {
+      assert.equal(Object.hasOwn(merged, key), false, key);
+    }
+  });
+});
+
+describe('the models and the web search settings of an app', () => {
+  const caps = extra => content({ capabilities: { upload: true, ...extra } });
+  const parse = extra => userAppContentSchema.safeParse(caps(extra));
+
+  it('keeps a list of models, each once, and a lock', () => {
+    const parsed = userAppContentSchema.parse(
+      content({
+        preferredModel: 'gpt-4o',
+        capabilities: { models: { allowed: ['gpt-4o', 'gpt-4o', 'gpt-4o-mini'], lock: true } }
+      })
+    );
+    assert.deepEqual(parsed.capabilities.models, {
+      allowed: ['gpt-4o', 'gpt-4o-mini'],
+      lock: true
+    });
+  });
+
+  it('stores nothing for an empty choice, and removes it with null', () => {
+    for (const models of [{}, { allowed: [] }, { lock: false }, null]) {
+      const parsed = userAppContentSchema.parse(caps({ models }));
+      assert.equal(Object.hasOwn(parsed.capabilities, 'models'), false, JSON.stringify(models));
+    }
+    const stored = userAppContentSchema.parse(
+      caps({ models: { allowed: ['gpt-4o'] }, webSearchSettings: { maxPageReads: 3 } })
+    );
+    const merged = mergeUserAppContent(stored, {
+      capabilities: { models: null, webSearchSettings: null }
+    });
+    assert.equal(Object.hasOwn(merged.capabilities, 'models'), false);
+    assert.equal(Object.hasOwn(merged.capabilities, 'webSearchSettings'), false);
+  });
+
+  it('refuses a list that is too long, an unknown model ID and an unknown key', () => {
+    const many = Array.from({ length: USER_APP_LIMITS.models + 1 }, (_, i) => `model-${i}`);
+    assert.equal(parse({ models: { allowed: many } }).success, false);
+    for (const id of ['', '../x', 'a b', ':no-model-available']) {
+      assert.equal(parse({ models: { allowed: [id] } }).success, false, id);
+    }
+    assert.equal(parse({ models: { allowed: ['gpt-4o'], extra: 1 } }).success, false);
+  });
+
+  it('needs a preferred model for a lock, and the list to name the preferred model', () => {
+    assert.equal(parse({ models: { lock: true } }).success, false);
+    assert.equal(
+      userAppContentSchema.safeParse(
+        content({ preferredModel: 'b', capabilities: { models: { allowed: ['a'] } } })
+      ).success,
+      false
+    );
+    assert.equal(
+      userAppContentSchema.safeParse(
+        content({ preferredModel: 'a', capabilities: { models: { allowed: ['a'], lock: true } } })
+      ).success,
+      true
+    );
+  });
+
+  it('keeps the settings of web search, cleaned and within their limits', () => {
+    const parsed = userAppContentSchema.parse(
+      caps({ webSearchSettings: { maxPageReads: 4, researchGuidance: 'Check\u200B two sources.' } })
+    );
+    assert.deepEqual(parsed.capabilities.webSearchSettings, {
+      maxPageReads: 4,
+      researchGuidance: 'Check two sources.'
+    });
+    for (const webSearchSettings of [
+      { maxPageReads: 0 },
+      { maxPageReads: USER_APP_LIMITS.pageReads + 1 },
+      { maxPageReads: 1.5 },
+      { researchGuidance: 'x'.repeat(USER_APP_LIMITS.researchGuidance + 1) },
+      { maxSearches: 3 }
+    ]) {
+      assert.equal(parse({ webSearchSettings }).success, false, JSON.stringify(webSearchSettings));
+    }
+    // A guidance of spaces is no guidance.
+    const blank = userAppContentSchema.parse(
+      caps({ webSearchSettings: { researchGuidance: '  ' } })
+    );
+    assert.equal(Object.hasOwn(blank.capabilities, 'webSearchSettings'), false);
+  });
+});
+
+describe('the linked projects of an app', () => {
+  const caps = projects => content({ capabilities: { upload: true, projects } });
+  const parse = projects => userAppContentSchema.safeParse(caps(projects));
+
+  it('keeps the IDs of up to three projects, each once, and nothing else of a link', () => {
+    const parsed = userAppContentSchema.parse(caps([{ id: 'prj_abc' }, { id: 'faq' }]));
+    assert.deepEqual(parsed.capabilities.projects, [{ id: 'prj_abc' }, { id: 'faq' }]);
+    const many = Array.from({ length: USER_APP_LIMITS.projects + 1 }, (_, i) => ({ id: `p${i}` }));
+    assert.equal(parse(many).success, false);
+    for (const link of [
+      { id: '' },
+      { id: '../x' },
+      { id: 'a b' },
+      { id: 'a', mode: 'tools' },
+      { id: 'a', write: true },
+      {}
+    ]) {
+      assert.equal(parse([link]).success, false, JSON.stringify(link));
+    }
+    assert.equal(parse([{ id: 'a' }, { id: 'a' }]).success, false);
+  });
+
+  it('stores nothing for an empty list, and removes it with null', () => {
+    for (const projects of [[], null]) {
+      const parsed = userAppContentSchema.parse(caps(projects));
+      assert.equal(Object.hasOwn(parsed.capabilities, 'projects'), false);
+    }
+    const stored = userAppContentSchema.parse(caps([{ id: 'faq' }]));
+    const merged = mergeUserAppContent(stored, { capabilities: { projects: null } });
+    assert.equal(Object.hasOwn(merged.capabilities, 'projects'), false);
+  });
+
+  it('replaces the list as a whole in a merge patch', () => {
+    const stored = userAppContentSchema.parse(caps([{ id: 'faq' }, { id: 'prj_abc' }]));
+    const merged = mergeUserAppContent(stored, { capabilities: { projects: [{ id: 'prj_abc' }] } });
+    assert.deepEqual(merged.capabilities.projects, [{ id: 'prj_abc' }]);
   });
 });
 
@@ -395,6 +615,23 @@ describe('the bodies of create and update', () => {
     assert.equal(parsed.language, 'de');
     assert.equal(parsed.origin, 'generated');
     assert.deepEqual(parsed.content, userAppContentSchema.parse(everyKey()));
+  });
+
+  it('create holds a new app to the rules about its models, as a saved one is', () => {
+    const locked = { models: { lock: true } };
+    assert.equal(userAppCreateSchema.safeParse(content({ capabilities: locked })).success, false);
+    assert.equal(
+      userAppCreateSchema.safeParse(
+        content({ preferredModel: 'b', capabilities: { models: { allowed: ['a'] } } })
+      ).success,
+      false
+    );
+    assert.equal(
+      userAppCreateSchema.safeParse(
+        content({ preferredModel: 'a', capabilities: { models: { allowed: ['a'], lock: true } } })
+      ).success,
+      true
+    );
   });
 
   it('create defaults to the first language of the name and to the origin "blank"', () => {

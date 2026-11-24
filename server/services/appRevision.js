@@ -37,12 +37,30 @@ import {
   baseLanguage,
   installationsFor,
   integrationsBlock,
+  modelsBlock,
+  modelsFor,
   parseGeneratedAnswer,
+  projectsBlock,
   pickDraftModel,
   sanitizeGeneratedApp,
   searchFor
 } from './appGenerator.js';
 import { buildRevisionMessages } from './appGeneratorBrief.js';
+import {
+  isUnsetSetting,
+  readSettings,
+  settingOf,
+  settingsToPropose
+} from './appSettingsProposal.js';
+import { checkCapabilitiesForSave } from './userApps/ceiling.js';
+import { userAppCatalog } from './userApps/userAppResolution.js';
+import {
+  linkedProjectIdsOf,
+  projectAccessFor,
+  usableProjectsFor
+} from './userApps/userAppProjects.js';
+import { isProjectsConfigured } from './projects/projectSettings.js';
+import { userAppField } from '../../shared/userAppFields.js';
 import { newAppDefaults } from '../../shared/appDefaults.js';
 import {
   REVISE_CHOICES_MAX,
@@ -50,6 +68,7 @@ import {
   REVISE_CHOICE_MAX,
   REVISE_LOCALIZED_KEYS,
   REVISE_QUESTION_CAP,
+  REVISE_SETTINGS_KEY,
   REVISE_SYSTEM_MAX,
   REVISE_TEXT_MAX,
   REVISE_WARNINGS,
@@ -702,7 +721,7 @@ function proposalOf(proposed, allowed, language) {
   const proposal = {};
   const warnings = [];
   for (const [key, value] of Object.entries(proposed)) {
-    if (SUGGESTION_KEYS.includes(key)) continue;
+    if (SUGGESTION_KEYS.includes(key) || key === REVISE_SETTINGS_KEY) continue;
     if (!allowed.includes(key)) {
       warnings.push({ code: 'KEY_IGNORED', field: ignoredField(key) });
       continue;
@@ -796,8 +815,8 @@ function changeOf({
     changed,
     warnings,
     suggestions: sanitizeOptions.mayPropose
-      ? after.suggestions
-      : { websearch: false, integrations: [] }
+      ? { ...after.suggestions, settings: [] }
+      : { websearch: false, integrations: [], settings: [] }
   };
 }
 
@@ -807,7 +826,7 @@ function changeOf({
  * @returns {{ keys: string[], allowed: string[], mayPropose: boolean, input: object,
  *   source: object, current: object }}
  */
-function readContent({ draft, fields, language, target }) {
+function readContent({ draft, fields, language, target, personal, user }) {
   // 1. Keys: the target's content keys, narrowed by `fields`.
   const keys = appRevisionKeys(target);
   const narrowed = Array.isArray(fields) && fields.length > 0;
@@ -818,13 +837,40 @@ function readContent({ draft, fields, language, target }) {
   const source = {};
   for (const key of keys) if (input[key] !== undefined) source[key] = visibleDeep(input[key]);
   assertRevisable(source, language, target);
+
+  // The settings of the registry: offered unless the request names other `fields`. The
+  // model sees the ones the app has set, so it changes them and does not guess.
+  const offered = settingsToPropose({
+    target,
+    fields: narrowed ? fields : undefined,
+    personal: personal
+      ? {
+          settings: personal.settings,
+          searchAvailable: searchFor(user),
+          projectsAvailable: isProjectsConfigured(configCache.getFeatures())
+        }
+      : null
+  });
+  const settingsCurrent = {};
+  for (const { key } of offered) {
+    const value = settingOf(input, key);
+    if (!isUnsetSetting(value)) settingsCurrent[key] = visibleDeep(value);
+  }
+  const current = contentForModel(source, keys, language);
   return {
     keys,
     allowed,
     mayPropose: !narrowed,
     input,
     source,
-    current: contentForModel(source, keys, language)
+    current,
+    offered,
+    settingsCurrent,
+    // What the model reads: the content and, apart from it, the settings that are set.
+    forModel:
+      Object.keys(settingsCurrent).length > 0
+        ? { ...current, [REVISE_SETTINGS_KEY]: settingsCurrent }
+        : current
   };
 }
 
@@ -845,7 +891,7 @@ async function callModel({
   signal,
   llmClient
 }) {
-  const { allowed, mayPropose, current } = content;
+  const { allowed, mayPropose, forModel, offered } = content;
   // 4. Messages.
   const turns = Array.isArray(conversation) ? conversation : [];
   const mayAsk = allowQuestions !== false && questionsSinceLastChange(turns) < REVISE_QUESTION_CAP;
@@ -853,8 +899,14 @@ async function callModel({
   const installed = mayPropose
     ? await installationsFor(user, language, personal ? { settings: personal.settings } : null)
     : [];
+  const namesModels = offered.some(({ key }) => key === 'preferredModel' || key === 'models');
   const { messages } = buildRevisionMessages({
-    content: current,
+    content: forModel,
+    settings: offered,
+    modelsBlock: namesModels ? modelsBlock(modelsFor(user, language)) : '',
+    projectsBlock: offered.some(({ key }) => key === 'projects')
+      ? projectsBlock(await usableProjectsFor(user, language))
+      : '',
     earlier: turns.slice(0, -1),
     latest: turns.at(-1)?.text ?? '',
     language,
@@ -880,7 +932,10 @@ async function callModel({
     signal,
     telemetry: { kind: 'utility', purpose: 'app-revise', user }
   });
-  return { result, mayAsk, categories, installed };
+  // What the ceiling needs to decide whether the caller may have a setting that adds reach.
+  const needsCatalog = personal && offered.some(({ proposal }) => proposal === 'confirm');
+  const catalog = needsCatalog ? await userAppCatalog({ owner: user, runner: user }) : null;
+  return { result, mayAsk, categories, installed, catalog };
 }
 
 /** An `OTHER_LANGUAGES_UNCHANGED` warning per changed text key of an app with other languages. */
@@ -900,7 +955,7 @@ function unchangedParts() {
     patch: {},
     changed: [],
     warnings: [],
-    suggestions: { websearch: false, integrations: [] }
+    suggestions: { websearch: false, integrations: [], settings: [] }
   };
 }
 
@@ -910,6 +965,65 @@ function questionReply(answer, text, mayAsk) {
   if (mayAsk && asked.text)
     return { ...unchangedParts(), reply: 'question', text, question: asked };
   return { ...unchangedParts(), reply: 'message', text: text || asked.text };
+}
+
+/** The capability the ceiling names for a setting that adds reach (`ceiling.js`). */
+const CAPABILITY_OF_SETTING = Object.freeze({
+  preferredModel: 'model',
+  models: 'models',
+  webSearchSettings: 'webSearch'
+});
+
+/**
+ * Whether the caller may have a setting that adds reach, as the ceiling of
+ * personal apps would decide it on a save: the draft with the setting set must
+ * pass `checkCapabilitiesForSave` for the capability the setting belongs to.
+ * The caller stands in for the owner; the save by the real owner is the
+ * authority. A setting without a capability is not restricted here.
+ */
+function mayHaveSetting({ key, value, draft, personal, user, call }) {
+  if (key === 'projects') return mayLinkProjects({ value, draft, personal, user, call });
+  const capability = CAPABILITY_OF_SETTING[key];
+  if (!capability || !call.catalog) return true;
+  const base = isPlainObject(draft) ? draft : {};
+  // How the app researches means something only while web search is on.
+  if (key === 'webSearchSettings' && base.capabilities?.webSearch !== true) return false;
+  const merged =
+    userAppField(key)?.store === 'capabilities'
+      ? { ...base, capabilities: { ...(base.capabilities || {}), [key]: value } }
+      : { ...base, [key]: value };
+  const denied = checkCapabilitiesForSave(merged, {
+    actor: user,
+    owner: user,
+    settings: personal.settings,
+    catalog: call.catalog
+  });
+  return !denied.some(entry => entry.capability === capability);
+}
+
+/**
+ * The links of a proposed list of projects that the caller may have: the project exists, the
+ * administrator allows it and the caller may use it (`checkCapabilitiesForSave` for each
+ * `project:<id>`). A proposal with some links the caller may not have is shortened to the others;
+ * with none left it is dropped. The caller stands in for the owner; the save by the real owner
+ * is the authority.
+ *
+ * @returns {false|{ value: Array<{ id: string }> }}
+ */
+function mayLinkProjects({ value, draft, personal, user, call }) {
+  if (!call.catalog) return false;
+  const base = isPlainObject(draft) ? draft : {};
+  const merged = { ...base, capabilities: { ...(base.capabilities || {}), projects: value } };
+  const denied = new Set(
+    checkCapabilitiesForSave(merged, {
+      actor: user,
+      owner: user,
+      settings: personal.settings,
+      catalog: call.catalog
+    }).map(entry => entry.capability)
+  );
+  const allowed = value.filter(link => !denied.has(`project:${link.id}`));
+  return allowed.length > 0 ? { value: allowed } : false;
 }
 
 /** Steps 7 to 10 for a change: the patch, checked against the schema, or a message. */
@@ -938,9 +1052,26 @@ function changeReply({ answer, text, content, call, user, personal, language, la
     sanitizeOptions
   };
   let outcome = changeOf(changeInput);
-  if (outcome.changed.length === 0) {
+  // The settings of the registry: checked per key, apart from the content above.
+  const settings = readSettings(
+    isPlainObject(answer.change) ? answer.change[REVISE_SETTINGS_KEY] : undefined,
+    {
+      target: personal ? 'personal' : 'admin',
+      offered: content.offered,
+      current: content.settingsCurrent,
+      allow: personal
+        ? (key, value) => mayHaveSetting({ key, value, draft: input, personal, user, call })
+        : undefined
+    }
+  );
+  if (
+    outcome.changed.length === 0 &&
+    settings.changed.length === 0 &&
+    settings.suggestions.length === 0
+  ) {
     const warnings = [
       ...outcome.warnings.filter(warning => warning.code === 'KEY_IGNORED'),
+      ...settings.warnings,
       { code: REVISE_WARNINGS.NO_CHANGE, field: '' }
     ];
     return { ...unchangedParts(), reply: 'message', text, warnings };
@@ -949,18 +1080,25 @@ function changeReply({ answer, text, content, call, user, personal, language, la
   // in `variables` and `starterPrompts` are the author's, possibly half-edited in the form: when
   // they break the schema, the entries are built from the sanitiser alone, as a draft's are.
   const schemaCheck = { source, draft: input, personal, lang };
-  if (patchSchemaIssues({ ...schemaCheck, patch: outcome.patch }).length > 0) {
+  const withSettings = patch => ({ ...patch, ...settings.patch });
+  if (patchSchemaIssues({ ...schemaCheck, patch: withSettings(outcome.patch) }).length > 0) {
     outcome = changeOf({ ...changeInput, keepDraft: false });
   }
-  assertPatchFitsSchema({ ...schemaCheck, patch: outcome.patch, modelId });
+  const patch = withSettings(outcome.patch);
+  assertPatchFitsSchema({ ...schemaCheck, patch, modelId });
+  const changed = [...outcome.changed, ...settings.changed];
   return {
     reply: 'change',
     text,
     question: null,
-    patch: outcome.patch,
-    changed: outcome.changed,
-    suggestions: outcome.suggestions,
-    warnings: [...outcome.warnings, ...otherLanguageWarnings(source, language, outcome.changed)]
+    patch,
+    changed,
+    suggestions: { ...outcome.suggestions, settings: settings.suggestions },
+    warnings: [
+      ...outcome.warnings,
+      ...settings.warnings,
+      ...otherLanguageWarnings(source, language, changed)
+    ]
   };
 }
 
@@ -1031,7 +1169,7 @@ export async function reviseApp({
   const lang = baseLanguage(language);
 
   // 1. and 2. Keys and current content.
-  const content = readContent({ draft, fields, language, target });
+  const content = readContent({ draft, fields, language, target, personal, user });
 
   // 3. Model.
   const model = pickDraftModel(user);
@@ -1055,6 +1193,23 @@ export async function reviseApp({
 
   // 6. to 10. Parse, interpret, patch, schema check.
   const answer = parseGeneratedAnswer(result?.content, result?.finishReason);
+  // Who may use the projects the model proposes (and those the draft links) is looked up once the
+  // answer is known; the ceiling is pure and reads the result from the catalog.
+  if (personal && call.catalog) {
+    const proposed = isPlainObject(answer.change?.settings)
+      ? answer.change.settings.projects
+      : null;
+    const ids = [
+      ...linkedProjectIdsOf({
+        capabilities: { projects: Array.isArray(proposed) ? proposed : [] }
+      }),
+      ...linkedProjectIdsOf(draft)
+    ];
+    call.catalog.projects = await projectAccessFor([...new Set(ids)], {
+      owner: user,
+      runner: user
+    });
+  }
   const turn = interpretAnswer({
     answer,
     call,

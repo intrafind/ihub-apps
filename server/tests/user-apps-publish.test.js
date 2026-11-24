@@ -678,6 +678,162 @@ describe('the start state and the projection, for every kind of tool', () => {
     assert.equal(appConfigSchema.safeParse(app).success, true);
   });
 
+  it('how the chat looks and starts is copied, and the input line only when the author set it', () => {
+    const looks = {
+      greeting: { de: { title: 'Recherche', subtitle: 'Was suchen Sie?' } },
+      preferredOutputFormat: 'text',
+      startForm: { enabled: true, submitLabel: { de: 'Suchen' } },
+      variablesPanel: { pinned: false },
+      autoStart: true,
+      inputMode: { type: 'multiline', rows: 7, microphone: { enabled: true } }
+    };
+    const result = effective(looks, []);
+    const withInput = toAdminApp(
+      { ...record, content: { inputMode: { rows: 7 } } },
+      { effective: result, id: 'recherche', enabled: true }
+    );
+    assert.deepEqual(withInput.greeting, looks.greeting);
+    assert.equal(withInput.preferredOutputFormat, 'text');
+    assert.deepEqual(withInput.startForm, looks.startForm);
+    assert.deepEqual(withInput.variablesPanel, looks.variablesPanel);
+    assert.equal(withInput.autoStart, true);
+    assert.equal(withInput.inputMode.rows, 7);
+    assert.equal(appConfigSchema.safeParse(withInput).success, true);
+
+    // Every personal app has an input line with the microphone of the base; an author
+    // who set nothing does not get that block written into the company app.
+    const withoutInput = toAdminApp(
+      { ...record, content: {} },
+      { effective: result, id: 'recherche', enabled: true }
+    );
+    // A marker in the effective input line of the personal app (nine rows is not a default)
+    // would show if it were copied: the company app is the same with and without it.
+    const marked = toAdminApp(
+      { ...record, content: {} },
+      {
+        effective: effective({ ...looks, inputMode: { type: 'multiline', rows: 9 } }, []),
+        id: 'recherche',
+        enabled: true
+      }
+    );
+    assert.equal(marked.inputMode?.rows === 9, false);
+    assert.deepEqual(marked.inputMode, withoutInput.inputMode);
+  });
+
+  it('the models of the app and how it researches are written as the ceiling built them', () => {
+    const result = effective(
+      {
+        preferredModel: 'gpt-4o',
+        allowedModels: ['gpt-4o', 'gpt-4o-mini'],
+        disallowModelSelection: true,
+        websearch: {
+          enabled: true,
+          provider: 'auto',
+          useNativeSearch: false,
+          maxPageReads: 3,
+          researchGuidance: 'Check two sources.'
+        }
+      },
+      [granted('webSearch'), granted('models')]
+    );
+    const app = toAdminApp(record, { effective: result, id: 'recherche', enabled: false });
+    assert.deepEqual(app.allowedModels, ['gpt-4o', 'gpt-4o-mini']);
+    assert.equal(app.disallowModelSelection, true);
+    assert.equal(app.preferredModel, 'gpt-4o');
+    // Only what the author set about the research, not the engine settings of a personal app.
+    assert.deepEqual(app.websearch, {
+      enabled: true,
+      maxPageReads: 3,
+      researchGuidance: 'Check two sources.'
+    });
+    assert.equal(appConfigSchema.safeParse(app).success, true);
+  });
+
+  it('an app without a model list gets none, and stays open to every model', () => {
+    const app = toAdminApp(record, {
+      effective: effective({ websearch: { enabled: true } }, [granted('webSearch')]),
+      id: 'recherche',
+      enabled: false
+    });
+    assert.equal(Object.hasOwn(app, 'allowedModels'), false);
+    assert.equal(Object.hasOwn(app, 'disallowModelSelection'), false);
+    assert.deepEqual(app.websearch, { enabled: true });
+  });
+
+  describe('linked projects', () => {
+    const link = (id, ownership, name) => ({ id: `project:${id}`, name, ownership });
+    const withProjects = projects =>
+      effective(
+        {
+          projects: projects.map(entry => entry.id),
+          features: { projects: true, userProjects: false }
+        },
+        projects.map(entry => granted(`project:${entry.id}`))
+      );
+
+    it('carries the projects of the company, and starts the app switched off for review', () => {
+      const result = {
+        ...withProjects([{ id: 'faq' }]),
+        bindings: [link('faq', 'admin', 'FAQ')]
+      };
+      const projected = projectCapabilities(result);
+      assert.deepEqual(projected.capabilities, [
+        { id: 'project:faq', projectId: 'faq', name: 'FAQ' }
+      ]);
+      assert.deepEqual(projected.tools, ['projects']);
+      assert.equal(startsEnabled(projected.tools, settings('withTools')), false);
+      const app = toAdminApp(record, { effective: result, id: 'handbuch', enabled: false });
+      assert.deepEqual(app.projects, ['faq']);
+      assert.deepEqual(app.features, { projects: true, userProjects: false });
+      assert.deepEqual(app.toolApproval, { default: 'writes' });
+      assert.equal(appConfigSchema.safeParse(app).success, true);
+    });
+
+    it('leaves a project of a person behind, and says why', () => {
+      const result = {
+        ...withProjects([{ id: 'prj_abc' }, { id: 'faq' }]),
+        bindings: [link('prj_abc', 'user', 'My notes'), link('faq', 'admin', 'FAQ')]
+      };
+      const projected = projectCapabilities(result);
+      assert.deepEqual(
+        projected.capabilities.map(entry => entry.id),
+        ['project:faq']
+      );
+      assert.deepEqual(projected.dropped, [
+        { id: 'project:prj_abc', reason: 'userProject', name: 'My notes' }
+      ]);
+      const app = toAdminApp(record, { effective: result, id: 'handbuch', enabled: false });
+      assert.deepEqual(app.projects, ['faq']);
+      assert.equal(JSON.stringify(app).includes('prj_abc'), false);
+    });
+
+    it('with only a project of a person the company app links nothing and uses no projects', () => {
+      const result = {
+        ...withProjects([{ id: 'prj_abc' }]),
+        bindings: [link('prj_abc', 'user', 'My notes')]
+      };
+      const projected = projectCapabilities(result);
+      assert.deepEqual(projected.tools, []);
+      assert.equal(startsEnabled(projected.tools, settings('withTools')), true);
+      const app = toAdminApp(record, { effective: result, id: 'handbuch', enabled: true });
+      assert.equal(Object.hasOwn(app, 'projects'), false);
+      assert.deepEqual(app.features, { projects: false, userProjects: false });
+    });
+
+    it('reports a link that the ceiling withheld with its own reason', () => {
+      const result = {
+        app: { name: { de: 'R' }, description: { de: 'S' }, system: { de: 'T' } },
+        capabilities: [
+          { id: 'project:faq', requested: true, granted: false, reason: 'ownerMayNot' }
+        ],
+        bindings: [link('faq', 'admin', 'FAQ')]
+      };
+      assert.deepEqual(projectCapabilities(result).dropped, [
+        { id: 'project:faq', reason: 'ownerMayNot', name: 'FAQ' }
+      ]);
+    });
+  });
+
   it('skills are written as the explicit list of granted IDs, never as a wildcard', () => {
     const result = effective(
       { skillSettings: { enabled: true, allowPersonal: true }, skills: ['brand-voice', '*'] },

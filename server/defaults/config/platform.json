@@ -542,7 +542,11 @@
       "upload": true,
       "webSearch": false,
       "skills": false,
-      "integrations": []
+      "projects": false,
+      "integrations": [],
+      "webSearchLimits": {
+        "maxPageReads": 10
+      }
     },
     "publishing": {
       "adminEnables": "withTools"

@@ -1317,9 +1317,11 @@
         "capabilities": {
           "integrations": [],
           "modelChoice": "boolean",
+          "projects": "boolean",
           "skills": "boolean",
           "upload": "boolean",
-          "webSearch": "boolean"
+          "webSearch": "boolean",
+          "webSearchLimits": "object"
         },
         "limits": {
           "maxAppsPerUser": "number",
@@ -4299,9 +4301,13 @@
       "capabilities": {
         "integrations": [],
         "modelChoice": "boolean",
+        "projects": "boolean",
         "skills": "boolean",
         "upload": "boolean",
-        "webSearch": "boolean"
+        "webSearch": "boolean",
+        "webSearchLimits": {
+          "maxPageReads": "number"
+        }
       },
       "limits": {
         "maxAppsPerUser": "number",
@@ -4569,9 +4575,11 @@
         "capabilities": {
           "integrations": [],
           "modelChoice": "boolean",
+          "projects": "boolean",
           "skills": "boolean",
           "upload": "boolean",
-          "webSearch": "boolean"
+          "webSearch": "boolean",
+          "webSearchLimits": "object"
         },
         "enabled": "boolean",
         "generator": "boolean",

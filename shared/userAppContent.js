@@ -7,14 +7,23 @@
  * the verdict on every key of the app schema, and the fixed parts of the app
  * object a chat runs with.
  *
- * Pure; no function modifies its argument. This file imports nothing, so
- * `shared/appId.js` and the validators can import it without a cycle.
+ * Pure; no function modifies its argument. This file imports only
+ * `shared/userAppFields.js` and `shared/appDefaults.js`, which import nothing,
+ * so `shared/appId.js` and the validators can import it without a cycle.
  *
  * Design: concepts/app-builder-rework-2026-11/02-personal-apps.md, sections
  * 4.2 and 4.4.
  *
  * @module shared/userAppContent
  */
+
+import { newAppDefaults } from './appDefaults.js';
+import {
+  USER_APP_STORED_CONTENT_KEYS,
+  USER_APP_STORED_LOCALIZED_KEYS,
+  USER_APP_STORED_REQUIRED_KEYS,
+  appKeyVerdicts
+} from './userAppFields.js';
 
 /** The prefix of every personal app ID. An admin app may start with it too (`uap_helper`). */
 export const USER_APP_ID_PREFIX = 'uap_';
@@ -44,31 +53,13 @@ export function isUserAppId(id) {
  * and of `content` in the stored record. There is no `category`: a personal
  * app has none.
  */
-export const USER_APP_CONTENT_KEYS = Object.freeze([
-  'name',
-  'description',
-  'system',
-  'icon',
-  'color',
-  'prompt',
-  'messagePlaceholder',
-  'variables',
-  'starterPrompts',
-  'preferredModel',
-  'capabilities'
-]);
+export const USER_APP_CONTENT_KEYS = USER_APP_STORED_CONTENT_KEYS;
 
 /** The content keys that hold one text per language. */
-export const USER_APP_LOCALIZED_KEYS = Object.freeze([
-  'name',
-  'description',
-  'system',
-  'prompt',
-  'messagePlaceholder'
-]);
+export const USER_APP_LOCALIZED_KEYS = USER_APP_STORED_LOCALIZED_KEYS;
 
 /** The localized content keys an app cannot be saved without. */
-export const USER_APP_REQUIRED_KEYS = Object.freeze(['name', 'description', 'system']);
+export const USER_APP_REQUIRED_KEYS = USER_APP_STORED_REQUIRED_KEYS;
 
 /** The keys of an input field a personal app may store. */
 export const USER_APP_VARIABLE_KEYS = Object.freeze([
@@ -83,13 +74,58 @@ export const USER_APP_VARIABLE_KEYS = Object.freeze([
 /** The keys of a conversation starter a personal app may store. */
 export const USER_APP_STARTER_PROMPT_KEYS = Object.freeze(['title', 'message']);
 
-/** The keys of `capabilities`: three switches and the list of bound installations. */
+/** The keys of the greeting of one language a personal app may store. */
+export const USER_APP_GREETING_KEYS = Object.freeze(['title', 'subtitle']);
+
+/** The keys of the input line a personal app may set; the microphone stays fixed. */
+export const USER_APP_INPUT_MODE_KEYS = Object.freeze(['type', 'rows']);
+
+/** The values of `inputMode.type`. */
+export const USER_APP_INPUT_MODE_TYPES = Object.freeze(['singleline', 'multiline']);
+
+/** The values of the output format a personal app may choose. */
+export const USER_APP_OUTPUT_FORMATS = Object.freeze(['markdown', 'text']);
+
+/** The keys of the start form a personal app may set. */
+export const USER_APP_START_FORM_KEYS = Object.freeze(['enabled', 'submitLabel']);
+
+/** The keys of the input panel a personal app may set. */
+export const USER_APP_VARIABLES_PANEL_KEYS = Object.freeze(['pinned']);
+
+/**
+ * The keys of `capabilities`: three switches, the list of bound installations,
+ * the choice of models and the settings of web search.
+ */
 export const USER_APP_CAPABILITY_KEYS = Object.freeze([
   'upload',
   'webSearch',
   'skills',
-  'integrations'
+  'integrations',
+  'models',
+  'webSearchSettings',
+  'projects'
 ]);
+
+/** The keys of one entry of `capabilities.projects`. */
+export const USER_APP_PROJECT_KEYS = Object.freeze(['id']);
+
+/** The keys of `capabilities.models`: the models the app may use, and whether the choice is locked. */
+export const USER_APP_MODELS_KEYS = Object.freeze(['allowed', 'lock']);
+
+/** The keys of `capabilities.webSearchSettings`. */
+export const USER_APP_WEB_SEARCH_SETTINGS_KEYS = Object.freeze([
+  'maxPageReads',
+  'researchGuidance'
+]);
+
+/**
+ * The one entry the ceiling writes to `allowedModels` when an app restricts its
+ * models and the owner or the person chatting may use none of them. No model
+ * has this ID, so the chat does not start (`noCompatibleModels` of
+ * `RequestBuilder`); dropping the restriction instead would give the person a
+ * model the author excluded.
+ */
+export const NO_MODEL_AVAILABLE_ID = ':no-model-available';
 
 /** The keys of one entry of `capabilities.integrations`. `actions` is required and not empty. */
 export const USER_APP_INTEGRATION_KEYS = Object.freeze(['id', 'actions']);
@@ -130,7 +166,22 @@ export const USER_APP_LIMITS = Object.freeze({
   /** Named actions per bound installation. */
   integrationActions: 30,
   /** Member entries per app. */
-  members: 100
+  members: 100,
+  /** The title and the subtitle of the greeting on an empty chat. */
+  greetingTitle: 80,
+  greetingSubtitle: 200,
+  /** The label of the send button of the start form. */
+  submitLabel: 60,
+  /** The most rows the input line may have. */
+  inputRows: 20,
+  /** Models an app may list in `capabilities.models.allowed`. */
+  models: 10,
+  /** The most pages the page reader may open for one answer. */
+  pageReads: 50,
+  /** The research guidance of web search. */
+  researchGuidance: 1000,
+  /** Projects an app may link: the documents it answers from. */
+  projects: 3
 });
 
 /** The values of `origin`: how the app was started. `chat` is added with the chat-based builder. */
@@ -159,40 +210,23 @@ export const USER_APP_STATES = Object.freeze(['active', 'promoted']);
  * personal app.
  */
 export const USER_APP_FIELD_POLICY = Object.freeze({
-  name: 'content',
-  description: 'content',
-  icon: 'content',
-  color: 'content',
-  system: 'content',
-  prompt: 'content',
-  messagePlaceholder: 'content',
-  variables: 'content',
-  starterPrompts: 'content',
-
-  preferredModel: 'capability',
-  upload: 'capability',
-  websearch: 'capability',
-  skills: 'capability',
-  skillSettings: 'capability',
-  integrations: 'capability',
-  toolApproval: 'capability',
+  // `content`, `capability` and the `never` of `category`: decided by the
+  // registry (`shared/userAppFields.js`).
+  ...appKeyVerdicts(),
 
   id: 'fixed',
   type: 'fixed',
   enabled: 'fixed',
   sendChatHistory: 'fixed',
   allowEmptyContent: 'fixed',
-  inputMode: 'fixed',
   features: 'fixed',
 
   redirectConfig: 'never',
   iframeConfig: 'never',
-  preferredOutputFormat: 'never',
   preferredStyle: 'never',
   outputSchema: 'never',
   customResponseRenderer: 'never',
   rendererConfig: 'never',
-  projects: 'never',
   apps: 'never',
   workflows: 'never',
   iassistant: 'never',
@@ -200,20 +234,13 @@ export const USER_APP_FIELD_POLICY = Object.freeze({
   toolSearch: 'never',
   thinking: 'never',
   imageGeneration: 'never',
-  startForm: 'never',
-  variablesPanel: 'never',
-  greeting: 'never',
   aiDisclosure: 'never',
   usageGuide: 'never',
-  allowedModels: 'never',
-  disallowModelSelection: 'never',
-  autoStart: 'never',
   ephemeral: 'never',
   documentTemplate: 'never',
   allowUserTemplateUploads: 'never',
   uploads: 'never',
   settings: 'never',
-  category: 'never',
   order: 'never',
   requiredFeatures: 'never',
   requiredIntegrations: 'never',
@@ -247,8 +274,6 @@ export const USER_APP_RUN_KEYS = Object.freeze([
  * values and no other key outside {@link USER_APP_RUN_KEYS}.
  */
 export const USER_APP_SCHEMA_DEFAULTS = Object.freeze({
-  disallowModelSelection: false,
-  autoStart: false,
   ephemeral: false,
   allowInheritance: false
 });
@@ -391,6 +416,51 @@ function pickIntegrations(value) {
 }
 
 /**
+ * `capabilities.models` from either form: the personal object `{ allowed, lock }`,
+ * or an app config (`allowedModels`, `disallowModelSelection`). Only strings
+ * that can be a model ID and a boolean `lock` are kept.
+ */
+function pickModels(value) {
+  if (!isPlainObject(value)) return undefined;
+  const list = Array.isArray(value.allowed) ? value.allowed : value.allowedModels;
+  const lock = typeof value.lock === 'boolean' ? value.lock : value.disallowModelSelection;
+  const allowed = Array.isArray(list)
+    ? [...new Set(list.filter(id => typeof id === 'string' && id !== '' && id !== '*'))]
+    : [];
+  const models = {};
+  if (allowed.length > 0) models.allowed = allowed;
+  if (lock === true) models.lock = true;
+  return Object.keys(models).length > 0 ? models : undefined;
+}
+
+/**
+ * `capabilities.projects` from either form: the personal list `[{ id }]` or the
+ * `projects` of an app config (a bare ID or `{ id, mode, write }`). Only the ID
+ * is kept: a personal app links a project and the project's own knowledge mode
+ * applies; it never writes into one.
+ */
+function pickProjects(value) {
+  if (!Array.isArray(value)) return undefined;
+  const ids = [];
+  for (const entry of value) {
+    const id = typeof entry === 'string' ? entry : isPlainObject(entry) ? entry.id : undefined;
+    if (typeof id === 'string' && id !== '' && !ids.includes(id)) ids.push(id);
+  }
+  return ids.length > 0 ? ids.map(id => ({ id })) : undefined;
+}
+
+/** `capabilities.webSearchSettings` from the personal object or from `websearch` of an app config. */
+function pickWebSearchSettings(value) {
+  if (!isPlainObject(value)) return undefined;
+  const settings = {};
+  if (Number.isInteger(value.maxPageReads)) settings.maxPageReads = value.maxPageReads;
+  if (typeof value.researchGuidance === 'string' && value.researchGuidance.trim() !== '') {
+    settings.researchGuidance = value.researchGuidance;
+  }
+  return Object.keys(settings).length > 0 ? settings : undefined;
+}
+
+/**
  * The `capabilities` object of a personal app. A draft that carries
  * `capabilities` already (a personal body, the editor's state) is read from
  * there, key by key; what it does not say is read from the keys of an app
@@ -401,7 +471,7 @@ function pickCapabilities(draft) {
   const own = isPlainObject(draft.capabilities) ? draft.capabilities : {};
   const flag = (key, fromConfig) =>
     typeof own[key] === 'boolean' ? own[key] : fromConfig?.enabled === true;
-  return {
+  const capabilities = {
     upload: flag('upload', draft.upload),
     webSearch: flag('webSearch', draft.websearch),
     skills: flag('skills', draft.skillSettings),
@@ -409,6 +479,71 @@ function pickCapabilities(draft) {
       Object.hasOwn(own, 'integrations') ? own.integrations : draft.integrations
     )
   };
+  const models = pickModels(Object.hasOwn(own, 'models') ? own.models : draft);
+  if (models) capabilities.models = models;
+  const projects = pickProjects(Object.hasOwn(own, 'projects') ? own.projects : draft.projects);
+  if (projects) capabilities.projects = projects;
+  const search = pickWebSearchSettings(
+    Object.hasOwn(own, 'webSearchSettings') ? own.webSearchSettings : draft.websearch
+  );
+  if (search) capabilities.webSearchSettings = search;
+  return capabilities;
+}
+
+/**
+ * The greeting: one `{ title, subtitle }` per language that has both texts and
+ * is not the platform's default text of that language.
+ */
+function pickGreeting(value, defaults) {
+  if (!isPlainObject(value)) return undefined;
+  const greeting = {};
+  for (const [language, entry] of Object.entries(value)) {
+    if (!isPlainObject(entry)) continue;
+    const picked = pickKeys(entry, USER_APP_GREETING_KEYS);
+    if (typeof picked.title !== 'string' || typeof picked.subtitle !== 'string') continue;
+    const standard = defaults?.[language];
+    if (standard?.title === picked.title && standard?.subtitle === picked.subtitle) continue;
+    greeting[language] = picked;
+  }
+  return Object.keys(greeting).length > 0 ? greeting : undefined;
+}
+
+/**
+ * The keys that change how the chat looks and starts: greeting, input line,
+ * output format, start form, input panel and `autoStart`. Each is picked only
+ * when it is set, has a value a personal app may store, and is not what a new
+ * app starts with anyway (`newAppDefaults()`): a default is not a choice of the
+ * author, and an app from a draft or from the run object of a chat would
+ * otherwise store the platform's defaults as its own.
+ */
+function pickLooks(source) {
+  const defaults = newAppDefaults('en');
+  const looks = {};
+  const greeting = pickGreeting(source.greeting, defaults.greeting);
+  if (greeting) looks.greeting = greeting;
+  if (isPlainObject(source.inputMode)) {
+    const inputMode = pickKeys(source.inputMode, USER_APP_INPUT_MODE_KEYS);
+    for (const key of Object.keys(inputMode)) {
+      if (inputMode[key] === defaults.inputMode[key]) delete inputMode[key];
+    }
+    if (Object.keys(inputMode).length > 0) looks.inputMode = inputMode;
+  }
+  if (
+    USER_APP_OUTPUT_FORMATS.includes(source.preferredOutputFormat) &&
+    source.preferredOutputFormat !== defaults.preferredOutputFormat
+  ) {
+    looks.preferredOutputFormat = source.preferredOutputFormat;
+  }
+  if (isPlainObject(source.startForm)) {
+    const startForm = structuredClone(pickKeys(source.startForm, USER_APP_START_FORM_KEYS));
+    if (Object.keys(startForm).length > 0) looks.startForm = startForm;
+  }
+  if (isPlainObject(source.variablesPanel)) {
+    const panel = pickKeys(source.variablesPanel, USER_APP_VARIABLES_PANEL_KEYS);
+    if (Object.keys(panel).length > 0) looks.variablesPanel = panel;
+  }
+  if (source.autoStart === true) looks.autoStart = true;
+  return looks;
 }
 
 /**
@@ -450,6 +585,7 @@ export function pickUserAppContent(draft) {
       .filter(isPlainObject)
       .map(starter => structuredClone(pickKeys(starter, USER_APP_STARTER_PROMPT_KEYS)));
   }
+  Object.assign(content, pickLooks(source));
   if (typeof source.preferredModel === 'string' && source.preferredModel !== '') {
     content.preferredModel = source.preferredModel;
   }

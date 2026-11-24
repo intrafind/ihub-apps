@@ -12,7 +12,10 @@ import {
   LABEL_CLASS,
   SECONDARY_BUTTON_CLASS
 } from '../../../admin/components/formStyles';
+import { USER_APP_LIMITS } from '../../../../../../shared/userAppContent.js';
 import { WITHHELD_MODEL, stillAsksFor } from './userAppForm';
+
+const isPlainObject = value => Boolean(value) && typeof value === 'object' && !Array.isArray(value);
 
 /** The names of the actions an installation offers personal apps, as strings. */
 const actionNames = system =>
@@ -28,9 +31,10 @@ const actionNames = system =>
  * @param {(checked: boolean) => void} props.onChange
  * @param {string} props.label
  * @param {string} [props.help]
+ * @param {boolean} [props.disabled=false]
  * @returns {JSX.Element}
  */
-function Switch({ checked, onChange, label, help }) {
+function Switch({ checked, onChange, label, help, disabled = false }) {
   const id = useId();
   return (
     <div>
@@ -41,6 +45,7 @@ function Switch({ checked, onChange, label, help }) {
           checked={checked}
           onChange={event => onChange(event.target.checked)}
           aria-describedby={help ? `${id}-help` : undefined}
+          disabled={disabled}
           className={CHECKBOX_CLASS}
         />
         <label htmlFor={id} className="ml-2 block text-sm text-gray-900 dark:text-gray-100">
@@ -72,9 +77,15 @@ function Switch({ checked, onChange, label, help }) {
  * @param {(form: object) => void} props.onChange - Receives the changed form state.
  * @param {{modelChoice?: boolean, upload?: boolean, webSearch?: boolean, skills?: boolean,
  *   integrations?: Array<{id: string, label?: string, actions?: Array<string|{name: string,
- *   description?: string}>}>}|null} props.allowed - What may be offered; nothing without it.
+ *   description?: string}>}>, webSearchLimits?: {maxPageReads?: number}}|null} props.allowed -
+ *   What may be offered; nothing without it.
  * @param {Array<{id: string, name?: object|string}>} [props.models] - The models the caller
  *   may choose.
+ * @param {Array<{id: string, name?: object|string, description?: string}>} [props.projects] -
+ *   The projects the caller may link (`GET /api/projects`).
+ * @param {boolean} [props.projectsError=false] - The list could not be loaded.
+ * @param {boolean} [props.projectsLoading=false] - The list is being loaded: no "none" text yet.
+ * @param {() => void} [props.onRetryProjects] - Loads the list again.
  * @param {Array<{id: string, kind: string, installationId: string|null}>} [props.withheld] -
  *   The result of `withheldCapabilities(app)`.
  * @param {(capability: object) => string} props.capabilityName - A capability's name for a sentence.
@@ -87,6 +98,10 @@ function UserAppExtrasSection({
   onChange,
   allowed,
   models = [],
+  projects = [],
+  projectsError = false,
+  projectsLoading = false,
+  onRetryProjects,
   withheld = [],
   capabilityName,
   onRemove,
@@ -94,6 +109,8 @@ function UserAppExtrasSection({
 }) {
   const { t } = useTranslation();
   const modelId = useId();
+  const pagesId = useId();
+  const guidanceId = useId();
   const may = allowed || {};
   const capabilities = form.capabilities;
   const setFlag = (flag, value) =>
@@ -142,11 +159,68 @@ function UserAppExtrasSection({
       : models;
 
   const showModel = may.modelChoice === true && !isGone('model');
+  // The list of models goes with the choice of model, and the way to research with web search.
+  const showModels = may.modelChoice === true && !isGone('models');
+  const showResearch = may.webSearch === true && capabilities.webSearch === true;
+  const modelsChoice = isPlainObject(capabilities.models) ? capabilities.models : {};
+  const allowedModels = Array.isArray(modelsChoice.allowed) ? modelsChoice.allowed : [];
+  const listedModels = [
+    ...models,
+    ...allowedModels
+      .filter(id => !models.some(model => model.id === id))
+      .map(id => ({ id, name: id }))
+  ];
+  const showProjects = may.projects === true;
+  const linked = Array.isArray(capabilities.projects) ? capabilities.projects : [];
+  const linkedIds = linked.map(link => link.id);
+  const listedProjects = [
+    ...projects,
+    ...linkedIds
+      .filter(id => !projects.some(project => project.id === id))
+      .map(id => ({ id, name: id }))
+  ];
+  const toggleProject = (id, checked) => {
+    const ids = checked
+      ? [...linkedIds.filter(other => other !== id), id].slice(0, USER_APP_LIMITS.projects)
+      : linkedIds.filter(other => other !== id);
+    const next = { ...capabilities };
+    if (ids.length > 0) next.projects = ids.map(entry => ({ id: entry }));
+    else delete next.projects;
+    onChange({ ...form, capabilities: next });
+  };
+  const search = isPlainObject(capabilities.webSearchSettings)
+    ? capabilities.webSearchSettings
+    : {};
+  const maxPageReads = Number(may.webSearchLimits?.maxPageReads) || USER_APP_LIMITS.pageReads;
+
+  /** Sets one of the two objects of `capabilities`; an object without a value is removed. */
+  const setCapabilityObject = (key, value) => {
+    const next = { ...capabilities };
+    const empty = Object.values(value).every(
+      entry =>
+        entry === undefined ||
+        entry === '' ||
+        entry === false ||
+        (Array.isArray(entry) && entry.length === 0)
+    );
+    if (empty) delete next[key];
+    else next[key] = value;
+    onChange({ ...form, capabilities: next });
+  };
+  const toggleModel = (id, checked) =>
+    setCapabilityObject('models', {
+      ...modelsChoice,
+      allowed: checked
+        ? [...allowedModels.filter(other => other !== id), id]
+        : allowedModels.filter(other => other !== id)
+    });
   const showUpload = may.upload === true && !isGone('upload');
   const showWebSearch = may.webSearch === true && !isGone('webSearch');
   const showSkills = may.skills === true && !isGone('skills');
   const nothing =
     !showModel &&
+    !showModels &&
+    !showProjects &&
     !showUpload &&
     !showWebSearch &&
     !showSkills &&
@@ -197,6 +271,30 @@ function UserAppExtrasSection({
         </div>
       )}
 
+      {showModels && (
+        <fieldset className="space-y-2" data-testid="user-app-models">
+          <legend className={LABEL_CLASS}>{t('userApps.edit.extras.modelsTitle')}</legend>
+          <p className={HELP_CLASS}>{t('userApps.edit.extras.modelsHelp')}</p>
+          <div className="space-y-1.5">
+            {listedModels.map(model => (
+              <Switch
+                key={model.id}
+                checked={allowedModels.includes(model.id)}
+                onChange={checked => toggleModel(model.id, checked)}
+                label={getLocalizedContent(model.name, language) || model.id}
+              />
+            ))}
+          </div>
+          <Switch
+            checked={modelsChoice.lock === true}
+            onChange={lock => setCapabilityObject('models', { ...modelsChoice, lock })}
+            label={t('userApps.edit.extras.modelsLock')}
+            help={chosenModel ? undefined : t('userApps.edit.extras.modelsLockNeedsModel')}
+            disabled={!chosenModel && modelsChoice.lock !== true}
+          />
+        </fieldset>
+      )}
+
       {showUpload && (
         <Switch
           checked={capabilities.upload === true}
@@ -211,6 +309,98 @@ function UserAppExtrasSection({
           label={t('userApps.edit.extras.webSearch')}
           help={t('userApps.edit.extras.webSearchHelp')}
         />
+      )}
+      {showResearch && (
+        <div className="space-y-3" data-testid="user-app-research">
+          <div>
+            <label htmlFor={pagesId} className={LABEL_CLASS}>
+              {t('userApps.edit.extras.pageReads')}
+            </label>
+            <input
+              id={pagesId}
+              type="number"
+              min={1}
+              max={maxPageReads}
+              value={search.maxPageReads ?? ''}
+              onChange={event =>
+                setCapabilityObject('webSearchSettings', {
+                  ...search,
+                  maxPageReads: event.target.value
+                })
+              }
+              aria-describedby={`${pagesId}-help`}
+              className={INPUT_CLASS}
+            />
+            <p id={`${pagesId}-help`} className={HELP_CLASS}>
+              {t('userApps.edit.extras.pageReadsHelp', { max: maxPageReads })}
+            </p>
+          </div>
+          <div>
+            <label htmlFor={guidanceId} className={LABEL_CLASS}>
+              {t('userApps.edit.extras.researchGuidance')}
+            </label>
+            <textarea
+              id={guidanceId}
+              rows={3}
+              maxLength={USER_APP_LIMITS.researchGuidance}
+              value={search.researchGuidance ?? ''}
+              onChange={event =>
+                setCapabilityObject('webSearchSettings', {
+                  ...search,
+                  researchGuidance: event.target.value
+                })
+              }
+              aria-describedby={`${guidanceId}-help`}
+              className={INPUT_CLASS}
+            />
+            <p id={`${guidanceId}-help`} className={HELP_CLASS}>
+              {t('userApps.edit.extras.researchGuidanceHelp')}
+            </p>
+          </div>
+        </div>
+      )}
+      {showProjects && (
+        <fieldset className="space-y-2" data-testid="user-app-projects">
+          <legend className={LABEL_CLASS}>{t('userApps.edit.extras.projectsTitle')}</legend>
+          <p className={HELP_CLASS}>
+            {t('userApps.edit.extras.projectsHelp', { max: USER_APP_LIMITS.projects })}
+          </p>
+          {projectsError && (
+            <div
+              role="alert"
+              className="flex items-center gap-3 text-sm text-red-700 dark:text-red-300"
+            >
+              <span>{t('userApps.edit.extras.projectsError')}</span>
+              {onRetryProjects && (
+                <button type="button" onClick={onRetryProjects} className={SECONDARY_BUTTON_CLASS}>
+                  {t('common.retry')}
+                </button>
+              )}
+            </div>
+          )}
+          {projectsLoading && !projectsError && listedProjects.length === 0 && (
+            <p className="text-sm text-gray-600 dark:text-gray-400">{t('common.loading')}</p>
+          )}
+          {!projectsLoading && !projectsError && listedProjects.length === 0 && (
+            <p className="text-sm text-gray-600 dark:text-gray-400">
+              {t('userApps.edit.extras.projectsNone')}
+            </p>
+          )}
+          <div className="space-y-1.5">
+            {listedProjects.map(project => (
+              <Switch
+                key={project.id}
+                checked={linkedIds.includes(project.id)}
+                onChange={checked => toggleProject(project.id, checked)}
+                label={getLocalizedContent(project.name, language) || project.id}
+                help={typeof project.description === 'string' ? project.description : undefined}
+                disabled={
+                  !linkedIds.includes(project.id) && linkedIds.length >= USER_APP_LIMITS.projects
+                }
+              />
+            ))}
+          </div>
+        </fieldset>
       )}
       {showSkills && (
         <Switch

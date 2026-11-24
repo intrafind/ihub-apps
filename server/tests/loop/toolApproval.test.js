@@ -241,3 +241,92 @@ test('segment planner: a gated call gets its own batch', () => {
     [['a'], ['b'], ['c']]
   );
 });
+
+// ---------------------------------------------------------------------------
+// The exemption of personal apps: internal reads that iHub ships
+// ---------------------------------------------------------------------------
+
+/** A tool as `readShippedToolDefinitions` returns it for the knowledge tools. */
+const knowledgeSearch = {
+  id: 'knowledge_search',
+  name: 'Project knowledge_search',
+  sideEffect: 'read',
+  dataFlow: 'internal',
+  _shipped: true
+};
+const sharedApp = (toolApproval = {}) => ({
+  id: 'uap_3f9c2a0b1d4e5f60718293a4b5c6d7e8',
+  toolApproval: { default: 'always', exemptInternalReads: true, ...toolApproval }
+});
+
+test('exemptInternalReads: a shipped tool that only reads and stays inside iHub does not ask', () => {
+  const policy = resolveToolApproval(knowledgeSearch, sharedApp(), {});
+  assert.equal(policy.approval, 'never');
+  assert.equal(needsApproval(policy), false);
+  assert.deepEqual(
+    [policy.sideEffect, policy.sideEffectSource, policy.dataFlow],
+    ['read', 'tool', 'internal']
+  );
+});
+
+test('exemptInternalReads: without the flag the app default asks for the same tool', () => {
+  const app = { id: 'app', toolApproval: { default: 'always' } };
+  const policy = resolveToolApproval(knowledgeSearch, app, {});
+  assert.deepEqual([policy.approval, policy.approvalSource], ['always', 'app']);
+});
+
+test('exemptInternalReads: every other tool keeps the app default', () => {
+  const cases = {
+    'a tool that writes': { ...knowledgeSearch, sideEffect: 'write' },
+    'a tool that leaves iHub': { ...knowledgeSearch, dataFlow: 'external' },
+    'a shipped tool with only the legacy read-only flag': {
+      ...knowledgeSearch,
+      sideEffect: undefined,
+      readOnly: true
+    },
+    'a shipped tool that names no data flow': { ...knowledgeSearch, dataFlow: undefined },
+    'a tool that is not shipped, but claims to read': { ...knowledgeSearch, _shipped: undefined },
+    'a tool an author could name, without the mark': { id: 'read_url', sideEffect: 'read' },
+    'an integration action': {
+      ...knowledgeSearch,
+      _integration: { instanceId: 'wiki', action: 'search' }
+    },
+    'an MCP tool that calls itself read-only': mcpTool({ readOnlyHint: true }),
+    'a tool with no declaration': local()
+  };
+  for (const [name, tool] of Object.entries(cases)) {
+    const policy = resolveToolApproval(tool, sharedApp(), {});
+    assert.equal(policy.approval, 'always', name);
+  }
+});
+
+test('exemptInternalReads: what is configured for the tool, the platform or the tool file still applies', () => {
+  // A mode for this very tool in the app.
+  let policy = resolveToolApproval(
+    knowledgeSearch,
+    sharedApp({ tools: { knowledge_search: 'always' } }),
+    {}
+  );
+  assert.deepEqual([policy.approval, policy.approvalSource], ['always', 'app']);
+  // The platform default by data flow: the exemption leaves the app's own default out, not this.
+  policy = resolveToolApproval(knowledgeSearch, sharedApp(), {
+    toolApproval: { defaults: { internal: 'always' } }
+  });
+  assert.deepEqual([policy.approval, policy.approvalSource], ['always', 'platform:internal']);
+  // The tool file asks for approval itself.
+  policy = resolveToolApproval({ ...knowledgeSearch, requiresApproval: true }, sharedApp(), {});
+  assert.deepEqual([policy.approval, policy.approvalSource], ['always', 'tool']);
+});
+
+test('exemptInternalReads: stamping gives the knowledge tools never and the web tools always', () => {
+  const read = { id: 'read_url', name: 'read_url', sideEffect: 'read', dataFlow: 'external' };
+  const stamped = stampToolApproval([knowledgeSearch, read, jiraComment], sharedApp(), {});
+  assert.deepEqual(
+    stamped.map(tool => [tool.id, tool.approval]),
+    [
+      ['knowledge_search', 'never'],
+      ['read_url', 'always'],
+      ['jira__comment', 'always']
+    ]
+  );
+});

@@ -36,8 +36,10 @@ import {
   removesCapabilitiesOnly
 } from '../services/userApps/ceiling.js';
 import { userAppSettings } from '../services/userApps/userAppSettings.js';
+import { filterModelsForApp } from '../services/chat/RequestBuilder.js';
 import { appConfigSchema } from '../validators/appConfigSchema.js';
 import {
+  NO_MODEL_AVAILABLE_ID,
   PERSONAL_UPLOAD_OFF,
   PERSONAL_UPLOAD_ON,
   USER_APP_RUN_KEYS,
@@ -51,6 +53,7 @@ const DAY = 24 * 60 * 60 * 1000;
 
 const MODEL = 'model-a';
 const INSTALLATION = 'jira';
+const PROJECT = 'prj_handbook';
 
 /** A principal with resolved permissions. */
 function principal(id, { models = ['*'], integrations = ['*'], authMode = 'local' } = {}) {
@@ -79,6 +82,7 @@ function settingsWith(capabilities = {}, limits = {}) {
         upload: true,
         webSearch: true,
         skills: true,
+        projects: true,
         integrations: [{ id: INSTALLATION, actions: ['search', 'read'] }],
         ...capabilities
       }
@@ -97,7 +101,10 @@ function catalogWith({ webSearch = { owner: true, runner: true }, skills, ...res
       { id: INSTALLATION, definition: 'jira', enabled: true },
       { id: 'wiki', definition: 'confluence', enabled: false }
     ],
-    features: { skills: true, integrations: true },
+    features: { skills: true, integrations: true, projects: true, userProjects: true },
+    projects: {
+      [PROJECT]: { exists: true, ownership: 'user', name: 'Handbook', owner: true, runner: true }
+    },
     webSearch,
     skills: skills || {
       owner: ['write-well', 'only-owner'],
@@ -131,12 +138,21 @@ function recordWith(content = {}, fields = {}) {
       messagePlaceholder: { en: 'Your notes' },
       variables: [{ name: 'role', label: { en: 'Role' }, type: 'string', required: false }],
       starterPrompts: [{ title: { en: 'Start' }, message: { en: 'Write an ad' } }],
+      greeting: { en: { title: 'Job ads', subtitle: 'Tell me the role' } },
+      inputMode: { type: 'multiline', rows: 8 },
+      preferredOutputFormat: 'text',
+      startForm: { enabled: false, submitLabel: { en: 'Write' } },
+      variablesPanel: { pinned: false },
+      autoStart: true,
       preferredModel: MODEL,
       capabilities: {
         upload: true,
         webSearch: true,
         skills: true,
-        integrations: [{ id: INSTALLATION, actions: ['search'] }]
+        integrations: [{ id: INSTALLATION, actions: ['search'] }],
+        models: { allowed: [MODEL], lock: true },
+        webSearchSettings: { maxPageReads: 3, researchGuidance: 'Check two sources.' },
+        projects: [{ id: PROJECT }]
       },
       ...content
     },
@@ -181,10 +197,85 @@ describe('the run object', () => {
     });
     const base = personalAppBase(APP_ID);
     for (const key of Object.keys(base)) {
-      if (key === 'allowEmptyContent') continue;
+      // The derived flag, the input line the author may change, and `features`, which the
+      // granted project changes (below).
+      if (key === 'allowEmptyContent' || key === 'inputMode' || key === 'features') continue;
       assert.deepEqual(app[key], base[key], key);
     }
-    assert.deepEqual(app.features, { projects: false, userProjects: false });
+    // The one project the app links is granted: the app uses projects, people still cannot
+    // attach their own (`userProjects` stays off).
+    assert.deepEqual(app.features, { projects: true, userProjects: false });
+  });
+
+  it('writes how the chat looks and starts, and keeps the microphone of the base', () => {
+    const { app } = effectiveUserApp(recordWith(), {
+      runner: BEN,
+      owner: ANNA,
+      settings: settingsWith(),
+      catalog: catalogWith(),
+      now: NOW
+    });
+    assert.deepEqual(app.greeting, { en: { title: 'Job ads', subtitle: 'Tell me the role' } });
+    assert.deepEqual(app.inputMode, {
+      ...personalAppBase(APP_ID).inputMode,
+      type: 'multiline',
+      rows: 8
+    });
+    assert.equal(app.preferredOutputFormat, 'text');
+    assert.deepEqual(app.startForm, { enabled: false, submitLabel: { en: 'Write' } });
+    assert.deepEqual(app.variablesPanel, { pinned: false });
+    assert.equal(app.autoStart, true);
+    parseAsApp(app);
+  });
+
+  it('leaves the looks of the base alone when the author set none', () => {
+    const record = recordWith();
+    for (const key of [
+      'greeting',
+      'inputMode',
+      'preferredOutputFormat',
+      'startForm',
+      'variablesPanel',
+      'autoStart'
+    ]) {
+      delete record.content[key];
+    }
+    const { app } = effectiveUserApp(record, {
+      runner: BEN,
+      owner: ANNA,
+      settings: settingsWith(),
+      catalog: catalogWith(),
+      now: NOW
+    });
+    assert.deepEqual(app.inputMode, personalAppBase(APP_ID).inputMode);
+    for (const key of ['greeting', 'preferredOutputFormat', 'startForm', 'variablesPanel']) {
+      assert.equal(Object.hasOwn(app, key), false, key);
+    }
+    assert.equal(Object.hasOwn(app, 'autoStart'), false);
+  });
+
+  it('checks the looks again, because a record is not trusted', () => {
+    const record = recordWith({
+      greeting: { en: { title: 'Only a title' }, de: 'text', fr: { title: 'T', subtitle: 'S' } },
+      inputMode: { type: 'banner', rows: 99 },
+      preferredOutputFormat: 'html',
+      startForm: { enabled: 'yes' },
+      variablesPanel: { pinned: 'no' },
+      autoStart: 'true'
+    });
+    const { app } = effectiveUserApp(record, {
+      runner: BEN,
+      owner: ANNA,
+      settings: settingsWith(),
+      catalog: catalogWith(),
+      now: NOW
+    });
+    assert.deepEqual(app.greeting, { fr: { title: 'T', subtitle: 'S' } });
+    assert.deepEqual(app.inputMode, personalAppBase(APP_ID).inputMode);
+    for (const key of ['preferredOutputFormat', 'startForm', 'variablesPanel', 'autoStart']) {
+      assert.equal(Object.hasOwn(app, key), false, key);
+    }
+    parseAsApp(app);
   });
 
   it('derives allowEmptyContent from the message template', () => {
@@ -212,7 +303,10 @@ describe('the run object', () => {
         apps: ['*'],
         workflows: ['payroll'],
         iassistant: { baseUrl: 'https://evil.example' },
+        // `html` is not an output format a personal app may choose.
         preferredOutputFormat: 'html',
+        // The keys of the app schema beside the real settings of `capabilities`: not read.
+        disallowModelSelection: false,
         customResponseRenderer: 'evil',
         rendererConfig: { script: 'x' },
         outputSchema: { type: 'object' },
@@ -250,12 +344,25 @@ describe('the run object', () => {
       catalog: catalogWith(),
       now: NOW
     });
-    assert.deepEqual(Object.keys(app).sort(), [...USER_APP_RUN_KEYS].sort());
+    // Everything but the output format, which the hostile record sets to `html`.
+    assert.deepEqual(
+      Object.keys(app).sort(),
+      USER_APP_RUN_KEYS.filter(key => key !== 'preferredOutputFormat').sort()
+    );
+    assert.equal(app.preferredOutputFormat, undefined);
+    // `allowedModels: ['*']` beside the real keys is not read; the list is the author's own.
+    assert.deepEqual(app.allowedModels, [MODEL]);
+    assert.equal(app.disallowModelSelection, true);
+    // The row count of 99 is dropped; the type is a valid one and stays.
+    assert.equal(app.inputMode.rows, personalAppBase(APP_ID).inputMode.rows);
     assert.equal(app.type, 'chat');
     assert.equal(app.enabled, true);
     assert.equal(app.sendChatHistory, true);
-    assert.deepEqual(app.toolApproval, { default: 'always' });
-    assert.deepEqual(app.features, { projects: false, userProjects: false });
+    assert.deepEqual(app.toolApproval, { default: 'always', exemptInternalReads: true });
+    // `features: { projects: true, userProjects: true }` of the record is not read: the app uses
+    // projects because it links one that both may use, and `userProjects` is never the author's.
+    assert.deepEqual(app.features, { projects: true, userProjects: false });
+    assert.deepEqual(app.projects, [PROJECT]);
     assert.deepEqual(app.upload, PERSONAL_UPLOAD_ON);
     assert.deepEqual(app.variables, [{ name: 'role', label: { en: 'Role' }, type: 'string' }]);
     assert.deepEqual(app.starterPrompts, [{ title: { en: 'Start' }, message: { en: 'Go' } }]);
@@ -332,9 +439,10 @@ describe('what the app object gets (6.3, last column)', () => {
       now: NOW
     }).app;
 
-  it('preferred model: the ID, and never allowedModels', () => {
+  it("preferred model: the ID; the models are the author's own list, cut to what both may use", () => {
     assert.equal(granted().preferredModel, MODEL);
-    assert.equal(granted().allowedModels, undefined);
+    assert.deepEqual(granted().allowedModels, [MODEL]);
+    assert.equal(granted().disallowModelSelection, true);
   });
 
   it('upload: one of the two fixed objects', () => {
@@ -354,7 +462,9 @@ describe('what the app object gets (6.3, last column)', () => {
       enabled: true,
       provider: 'auto',
       enabledByDefault: false,
-      useNativeSearch: false
+      useNativeSearch: false,
+      maxPageReads: 3,
+      researchGuidance: 'Check two sources.'
     });
     // Whoever chats: native search is off whenever web search is granted.
     for (const runner of [ANNA, BEN]) {
@@ -458,9 +568,9 @@ describe('what the app object gets (6.3, last column)', () => {
     assert.equal(capabilityOf({ capabilities }, JIRA).reason, CAPABILITY_REASONS.offOnInstallation);
   });
 
-  it('no key that adds tools beyond the four switches', () => {
+  it('no key that adds tools beyond the switches, the models and the linked projects', () => {
     const app = granted();
-    for (const key of ['projects', 'apps', 'workflows', 'iassistant', 'toolChoice', 'toolSearch']) {
+    for (const key of ['apps', 'workflows', 'iassistant', 'toolChoice', 'toolSearch']) {
       assert.equal(Object.hasOwn(app, key), false, key);
     }
   });
@@ -471,14 +581,14 @@ describe('approval (6.3)', () => {
 
   it('the owner: writes ask, and a tool can be allowed for the chat', () => {
     const { app, approval } = effectiveUserApp(recordWith(), { ...context, runner: ANNA });
-    assert.deepEqual(app.toolApproval, { default: 'writes' });
+    assert.deepEqual(app.toolApproval, { default: 'writes', exemptInternalReads: true });
     assert.deepEqual(approval, { mode: 'writes', chatGrants: true });
   });
 
   it('the owner runs content an editor saved under the owner settings: nobody confirms it', () => {
     const edited = recordWith({}, { updatedBy: { id: 'carol', name: 'Carol' } });
     const { app, approval } = effectiveUserApp(edited, { ...context, runner: ANNA });
-    assert.deepEqual(app.toolApproval, { default: 'writes' });
+    assert.deepEqual(app.toolApproval, { default: 'writes', exemptInternalReads: true });
     assert.deepEqual(approval, { mode: 'writes', chatGrants: true });
     // A field an earlier build stored at the accept of an offer is ignored.
     const handedOver = recordWith(
@@ -500,7 +610,11 @@ describe('approval (6.3)', () => {
     const admin = { ...principal('root'), isAdmin: true };
     for (const runner of [BEN, editor, admin]) {
       const { app, approval } = effectiveUserApp(recordWith(), { ...context, runner });
-      assert.deepEqual(app.toolApproval, { default: 'always' }, runner.id);
+      assert.deepEqual(
+        app.toolApproval,
+        { default: 'always', exemptInternalReads: true },
+        runner.id
+      );
       assert.deepEqual(approval, { mode: 'always', chatGrants: false }, runner.id);
     }
   });
@@ -632,7 +746,7 @@ describe('the matrix of 6.3', () => {
     });
     assert.deepEqual(
       capabilities.map(entry => entry.id),
-      [...USER_APP_CAPABILITY_IDS, JIRA]
+      [...USER_APP_CAPABILITY_IDS, JIRA, `project:${PROJECT}`]
     );
   });
 
@@ -691,6 +805,402 @@ describe('the preferred model', () => {
     });
     assert.equal(result.app.preferredModel, undefined);
     assert.equal(capabilityOf(result, 'model').reason, CAPABILITY_REASONS.youMayNot);
+  });
+});
+
+describe('the models of an app (design 07, section 2.2)', () => {
+  const MODELS = [
+    { id: 'model-a', enabled: true, modelType: 'chat' },
+    { id: 'model-b', enabled: true, modelType: 'chat' },
+    { id: 'model-c', enabled: true, modelType: 'chat' },
+    { id: 'model-off', enabled: false, modelType: 'chat' }
+  ];
+  const asking = (models, extra = {}) =>
+    recordWith({
+      preferredModel: undefined,
+      capabilities: { upload: false, webSearch: false, skills: false, integrations: [], models },
+      ...extra
+    });
+  const run = (record, { runner = BEN, owner = ANNA, settings = settingsWith() } = {}) =>
+    effectiveUserApp(record, {
+      runner,
+      owner,
+      settings,
+      catalog: catalogWith({ models: MODELS }),
+      now: NOW
+    });
+  const entry = (result, id) => result.capabilities.find(capability => capability.id === id);
+
+  it('narrows the chat to the list, cut to the models the owner and the runner both may use', () => {
+    const result = run(
+      asking({ allowed: ['model-a', 'model-b', 'model-c', 'model-off', 'nope'] }),
+      {
+        owner: principal('anna', { models: ['model-a', 'model-b'] }),
+        runner: principal('ben', { models: ['model-b', 'model-c'] })
+      }
+    );
+    assert.deepEqual(result.app.allowedModels, ['model-b']);
+    assert.equal(result.app.disallowModelSelection, undefined);
+    assert.deepEqual(entry(result, 'models'), { id: 'models', requested: true, granted: true });
+  });
+
+  it('stops the chat when none is left for the runner, and says it is the runner', () => {
+    const result = run(asking({ allowed: ['model-a'] }), {
+      owner: principal('anna'),
+      runner: principal('ben', { models: ['model-b'] })
+    });
+    // No model has this ID, so `RequestBuilder` answers `noCompatibleModels`: the restriction is
+    // not dropped, because that would give the runner a model the author excluded.
+    assert.deepEqual(result.app.allowedModels, [NO_MODEL_AVAILABLE_ID]);
+    assert.deepEqual(entry(result, 'models'), {
+      id: 'models',
+      requested: true,
+      granted: false,
+      reason: CAPABILITY_REASONS.youMayNot
+    });
+  });
+
+  it('stops the chat when the owner may use none of them, and says it is the owner', () => {
+    const result = run(asking({ allowed: ['model-a'] }), {
+      owner: principal('anna', { models: ['model-b'] }),
+      runner: BEN
+    });
+    assert.deepEqual(result.app.allowedModels, [NO_MODEL_AVAILABLE_ID]);
+    assert.equal(entry(result, 'models').reason, CAPABILITY_REASONS.ownerMayNot);
+  });
+
+  it('locks the choice to the preferred model, which the list names', () => {
+    const result = run(
+      asking({ allowed: ['model-a', 'model-b'], lock: true }, { preferredModel: 'model-b' })
+    );
+    assert.equal(result.app.preferredModel, 'model-b');
+    assert.equal(result.app.disallowModelSelection, true);
+    assert.deepEqual(result.app.allowedModels, ['model-b']);
+  });
+
+  it('writes the models of a list as they are configured, once each', () => {
+    const result = run(asking({ allowed: ['MODEL-B', 'model-b', 'Model-A'] }));
+    assert.deepEqual(result.app.allowedModels, ['model-b', 'model-a']);
+  });
+
+  it('names the preferred model of a lock in any letter case', () => {
+    const result = run(asking({ allowed: ['MODEL-B'], lock: true }, { preferredModel: 'model-b' }));
+    assert.equal(result.app.preferredModel, 'model-b');
+    assert.deepEqual(result.app.allowedModels, ['model-b']);
+  });
+
+  it('stops the chat when a locked model is one the runner may not use', () => {
+    const result = run(asking({ lock: true }, { preferredModel: 'model-a' }), {
+      owner: ANNA,
+      runner: principal('ben', { models: ['model-b'] })
+    });
+    assert.deepEqual(result.app.allowedModels, [NO_MODEL_AVAILABLE_ID]);
+    assert.equal(result.app.disallowModelSelection, undefined);
+    assert.equal(entry(result, 'models').reason, CAPABILITY_REASONS.youMayNot);
+  });
+
+  it('stops the chat when the lock has no preferred model, or one outside the list', () => {
+    assert.deepEqual(run(asking({ lock: true })).app.allowedModels, [NO_MODEL_AVAILABLE_ID]);
+    const outside = run(
+      asking({ allowed: ['model-a'], lock: true }, { preferredModel: 'model-b' })
+    );
+    assert.deepEqual(outside.app.allowedModels, [NO_MODEL_AVAILABLE_ID]);
+  });
+
+  it('leaves the chat of the app no model to pick, as the request builder reads allowedModels', () => {
+    const models = [
+      { id: 'model-a', modelType: 'chat' },
+      { id: 'model-b', modelType: 'chat' }
+    ];
+    const narrowed = run(asking({ allowed: ['model-a', 'model-b'] }), {
+      owner: ANNA,
+      runner: principal('ben', { models: ['model-b'] })
+    }).app;
+    // The list is cut to the models both may use; the request builder cuts it again to the
+    // models of the person chatting.
+    assert.deepEqual(
+      filterModelsForApp(models, narrowed).map(model => model.id),
+      ['model-b']
+    );
+    const refused = run(asking({ allowed: ['model-a'] }), {
+      owner: ANNA,
+      runner: principal('ben', { models: ['model-b'] })
+    }).app;
+    assert.deepEqual(filterModelsForApp(models, refused), []);
+    // An app without a restriction leaves every model.
+    assert.equal(filterModelsForApp(models, run(asking(undefined)).app).length, 2);
+  });
+
+  it('leaves the preferred model out when the list does not name it', () => {
+    const result = run(asking({ allowed: ['model-a'] }, { preferredModel: 'model-b' }));
+    assert.deepEqual(result.app.allowedModels, ['model-a']);
+    assert.equal(result.app.preferredModel, undefined);
+  });
+
+  it('has no effect while the installation does not allow a choice of model', () => {
+    const result = run(
+      asking({ allowed: ['model-a'], lock: true }, { preferredModel: 'model-a' }),
+      {
+        settings: settingsWith({ modelChoice: false })
+      }
+    );
+    for (const key of ['allowedModels', 'disallowModelSelection', 'preferredModel']) {
+      assert.equal(result.app[key], undefined, key);
+    }
+    assert.equal(entry(result, 'models').reason, CAPABILITY_REASONS.offOnInstallation);
+  });
+
+  it('has no effect on an app that does not ask for it', () => {
+    const result = run(asking(undefined));
+    assert.equal(result.app.allowedModels, undefined);
+    assert.equal(entry(result, 'models').reason, CAPABILITY_REASONS.notRequested);
+  });
+
+  it('is refused on a save for a person who may use none of the models', () => {
+    const content = asking({ allowed: ['model-a'] }).content;
+    const context = {
+      actor: principal('carol', { models: ['model-b'] }),
+      owner: ANNA,
+      settings: settingsWith(),
+      catalog: catalogWith({ models: MODELS })
+    };
+    assert.deepEqual(checkCapabilitiesForSave(content, context), [
+      { capability: 'models', reason: CAPABILITY_REASONS.youMayNot }
+    ]);
+    assert.deepEqual(
+      checkCapabilitiesForSave(content, { ...context, actor: principal('carol') }),
+      []
+    );
+  });
+
+  it('may stay or go in a save by an editor, but not change', () => {
+    const before = asking({ allowed: ['model-a'] }).content;
+    const without = { ...before, capabilities: { ...before.capabilities, models: undefined } };
+    assert.equal(removesCapabilitiesOnly(before, without), true);
+    assert.equal(removesCapabilitiesOnly(before, before), true);
+    const changed = {
+      ...before,
+      capabilities: { ...before.capabilities, models: { allowed: ['model-a', 'model-b'] } }
+    };
+    assert.equal(removesCapabilitiesOnly(before, changed), false);
+  });
+});
+
+describe('how an app researches on the web (design 07, section 2.2)', () => {
+  const run = (settings, search) =>
+    effectiveUserApp(
+      recordWith({
+        capabilities: {
+          upload: false,
+          webSearch: true,
+          skills: false,
+          integrations: [],
+          webSearchSettings: search
+        }
+      }),
+      { runner: BEN, owner: ANNA, settings, catalog: catalogWith(), now: NOW }
+    ).app;
+
+  it('sets the pages the page reader may open and the guidance, cut to the limit', () => {
+    const app = run(settingsWith({ webSearchLimits: { maxPageReads: 4 } }), {
+      maxPageReads: 9,
+      researchGuidance: 'Check two sources.'
+    });
+    assert.equal(app.websearch.maxPageReads, 4);
+    assert.equal(app.websearch.researchGuidance, 'Check two sources.');
+    assert.equal(app.websearch.useNativeSearch, false);
+  });
+
+  it('keeps a smaller value and leaves out what is not of the right kind', () => {
+    assert.equal(run(settingsWith(), { maxPageReads: 2 }).websearch.maxPageReads, 2);
+    const junk = run(settingsWith(), { maxPageReads: '9', researchGuidance: '   ' }).websearch;
+    assert.equal(Object.hasOwn(junk, 'maxPageReads'), false);
+    assert.equal(Object.hasOwn(junk, 'researchGuidance'), false);
+  });
+
+  it('caps the platform default of pages at a limit below it, and leaves a higher limit alone', () => {
+    const low = run(settingsWith({ webSearchLimits: { maxPageReads: 3 } }), {
+      researchGuidance: 'Check two sources.'
+    });
+    assert.equal(low.websearch.maxPageReads, 3);
+    const high = run(settingsWith({ webSearchLimits: { maxPageReads: 20 } }), {
+      researchGuidance: 'Check two sources.'
+    });
+    assert.equal(Object.hasOwn(high.websearch, 'maxPageReads'), false);
+  });
+
+  it('has no effect while web search is off', () => {
+    const app = run(settingsWith({ webSearch: false }), { maxPageReads: 2 });
+    assert.deepEqual(app.websearch, { enabled: false });
+  });
+});
+
+describe('the projects of an app (design 07, section 2.4)', () => {
+  const asking = projects =>
+    recordWith({
+      preferredModel: undefined,
+      capabilities: { upload: false, webSearch: false, skills: false, integrations: [], projects }
+    });
+  const access = (entries = {}) => ({
+    [PROJECT]: { exists: true, ownership: 'user', name: 'Handbook', owner: true, runner: true },
+    ...entries
+  });
+  const run = (
+    record,
+    { catalog = catalogWith({ projects: access() }), settings = settingsWith(), runner = BEN } = {}
+  ) => effectiveUserApp(record, { runner, owner: ANNA, settings, catalog, now: NOW });
+  const entry = (result, id) => result.capabilities.find(capability => capability.id === id);
+  const link = id => ({ id: `project:${id}` });
+
+  it('links the projects both may use, and nothing else, with the picker off', () => {
+    const result = run(asking([{ id: PROJECT }]));
+    assert.deepEqual(result.app.projects, [PROJECT]);
+    assert.deepEqual(result.app.features, { projects: true, userProjects: false });
+    assert.deepEqual(entry(result, link(PROJECT).id), {
+      id: link(PROJECT).id,
+      requested: true,
+      granted: true
+    });
+    // The name and the ownership go to the views and to publish, which decide who may read them.
+    assert.deepEqual(
+      result.bindings.find(binding => binding.id === link(PROJECT).id),
+      { id: link(PROJECT).id, name: 'Handbook', ownership: 'user' }
+    );
+    parseAsApp(result.app);
+  });
+
+  it('gives a runner who may not use the project nothing from it, and says so', () => {
+    const result = run(asking([{ id: PROJECT }]), {
+      catalog: catalogWith({
+        projects: access({
+          [PROJECT]: { exists: true, ownership: 'user', name: 'H', owner: true, runner: false }
+        })
+      })
+    });
+    assert.equal(Object.hasOwn(result.app, 'projects'), false);
+    assert.deepEqual(result.app.features, { projects: false, userProjects: false });
+    assert.equal(entry(result, link(PROJECT).id).reason, CAPABILITY_REASONS.youMayNot);
+  });
+
+  it('gives nobody the project when the owner lost it', () => {
+    const result = run(asking([{ id: PROJECT }]), {
+      catalog: catalogWith({
+        projects: access({
+          [PROJECT]: { exists: true, ownership: 'user', name: 'H', owner: false, runner: true }
+        })
+      })
+    });
+    assert.equal(Object.hasOwn(result.app, 'projects'), false);
+    assert.equal(entry(result, link(PROJECT).id).reason, CAPABILITY_REASONS.ownerMayNot);
+  });
+
+  it('decides each link on its own', () => {
+    const result = run(asking([{ id: PROJECT }, { id: 'faq' }, { id: 'gone' }]), {
+      catalog: catalogWith({
+        projects: access({
+          faq: { exists: true, ownership: 'admin', name: 'FAQ', owner: true, runner: true },
+          gone: { exists: false, ownership: null, name: '', owner: false, runner: false }
+        })
+      })
+    });
+    assert.deepEqual(result.app.projects, [PROJECT, 'faq']);
+    assert.equal(entry(result, link('gone').id).granted, false);
+  });
+
+  it('is off while the administrator did not switch it on, or the feature is off', () => {
+    for (const [settings, catalog] of [
+      [settingsWith({ projects: false }), catalogWith({ projects: access() })],
+      [settingsWith(), catalogWith({ projects: access(), features: { projects: false } })],
+      // A user project also needs the feature of user projects; an admin project does not.
+      [
+        settingsWith(),
+        catalogWith({
+          projects: access(),
+          features: { projects: true, userProjects: false }
+        })
+      ]
+    ]) {
+      const result = run(asking([{ id: PROJECT }]), { settings, catalog });
+      assert.equal(Object.hasOwn(result.app, 'projects'), false);
+      assert.equal(entry(result, link(PROJECT).id).reason, CAPABILITY_REASONS.offOnInstallation);
+    }
+    const admin = run(asking([{ id: 'faq' }]), {
+      catalog: catalogWith({
+        projects: access({
+          faq: { exists: true, ownership: 'admin', name: 'FAQ', owner: true, runner: true }
+        }),
+        features: { projects: true, userProjects: false }
+      })
+    });
+    assert.deepEqual(admin.app.projects, ['faq']);
+  });
+
+  it('is withheld with everything else when the owner cannot be checked', () => {
+    const result = effectiveUserApp(asking([{ id: PROJECT }]), {
+      runner: BEN,
+      owner: null,
+      settings: settingsWith(),
+      catalog: catalogWith({ projects: access() }),
+      now: NOW
+    });
+    assert.equal(Object.hasOwn(result.app, 'projects'), false);
+    assert.equal(entry(result, link(PROJECT).id).reason, CAPABILITY_REASONS.ownerInactive);
+  });
+
+  it('does not read a `projects` key or a `features` key beside the real ones', () => {
+    const result = run(
+      recordWith({
+        projects: ['hr-handbook'],
+        features: { projects: true, userProjects: true },
+        capabilities: { upload: false, webSearch: false, skills: false, integrations: [] }
+      })
+    );
+    assert.equal(Object.hasOwn(result.app, 'projects'), false);
+    assert.deepEqual(result.app.features, { projects: false, userProjects: false });
+  });
+
+  it('is refused on a save for a person who may not use the project, or for a project that is gone', () => {
+    const content = asking([{ id: PROJECT }]).content;
+    const context = {
+      actor: ANNA,
+      owner: ANNA,
+      settings: settingsWith(),
+      catalog: catalogWith({ projects: access() })
+    };
+    assert.deepEqual(checkCapabilitiesForSave(content, context), []);
+    assert.deepEqual(
+      checkCapabilitiesForSave(content, {
+        ...context,
+        catalog: catalogWith({
+          projects: access({
+            [PROJECT]: { exists: true, ownership: 'user', name: 'H', owner: true, runner: false }
+          })
+        })
+      }),
+      [{ capability: link(PROJECT).id, reason: CAPABILITY_REASONS.youMayNot }]
+    );
+    assert.deepEqual(
+      checkCapabilitiesForSave(content, {
+        ...context,
+        catalog: catalogWith({
+          projects: access({
+            [PROJECT]: { exists: false, ownership: null, name: '', owner: false, runner: false }
+          })
+        })
+      }),
+      [{ capability: link(PROJECT).id, reason: CAPABILITY_REASONS.offOnInstallation }]
+    );
+  });
+
+  it('may be taken away in a save by an editor, not added', () => {
+    const before = asking([{ id: PROJECT }]).content;
+    const without = { ...before, capabilities: { ...before.capabilities, projects: undefined } };
+    assert.equal(removesCapabilitiesOnly(before, without), true);
+    const more = {
+      ...before,
+      capabilities: { ...before.capabilities, projects: [{ id: PROJECT }, { id: 'other' }] }
+    };
+    assert.equal(removesCapabilitiesOnly(before, more), false);
   });
 });
 
@@ -828,7 +1338,7 @@ describe('checkCapabilitiesForSave', () => {
     });
     assert.deepEqual(
       denied,
-      ['model', 'upload', 'webSearch', 'skills', JIRA].map(capability => ({
+      ['model', 'models', 'upload', 'webSearch', 'skills', JIRA].map(capability => ({
         capability,
         reason: CAPABILITY_REASONS.offOnInstallation
       }))
@@ -857,6 +1367,7 @@ describe('checkCapabilitiesForSave', () => {
     });
     assert.deepEqual(denied, [
       { capability: 'model', reason: CAPABILITY_REASONS.youMayNot },
+      { capability: 'models', reason: CAPABILITY_REASONS.youMayNot },
       { capability: 'webSearch', reason: CAPABILITY_REASONS.youMayNot },
       { capability: JIRA, reason: CAPABILITY_REASONS.youMayNot }
     ]);
@@ -875,6 +1386,7 @@ describe('checkCapabilitiesForSave', () => {
       [
         CAPABILITY_REASONS.ownerMayNot,
         CAPABILITY_REASONS.ownerMayNot,
+        CAPABILITY_REASONS.ownerMayNot,
         CAPABILITY_REASONS.ownerMayNot
       ]
     );
@@ -884,7 +1396,7 @@ describe('checkCapabilitiesForSave', () => {
     const denied = checkCapabilitiesForSave(content, { ...context, actor: BEN, owner: null });
     assert.deepEqual(
       denied.map(entry => entry.capability),
-      ['model', 'upload', 'webSearch', 'skills', JIRA]
+      ['model', 'models', 'upload', 'webSearch', 'skills', JIRA, `project:${PROJECT}`]
     );
     assert.ok(denied.every(entry => entry.reason === CAPABILITY_REASONS.ownerInactive));
   });

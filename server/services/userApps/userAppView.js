@@ -140,8 +140,10 @@ function capabilitiesFor(capabilities, full, bindings) {
     name: about.get(entry.id)?.name,
     actions: about.get(entry.id)?.actions
   }));
-  // The name of a connected system goes to every role: the notice names it.
-  const named = entry => (entry.name ? { name: entry.name } : {});
+  // The name of a connected system goes to every role: the notice names it. The name of a
+  // project goes to the roles that may edit the app only: it may be one the others cannot see.
+  const named = entry =>
+    entry.name && (full || !String(entry.id).startsWith('project:')) ? { name: entry.name } : {};
   if (full) {
     return list.map(entry => ({
       id: entry.id,
@@ -166,6 +168,23 @@ function capabilitiesFor(capabilities, full, bindings) {
             reason: MEMBER_REASONS.includes(entry.reason) ? entry.reason : 'unavailable'
           }
     );
+}
+
+/** The settings of `capabilities` the app object of a run does not carry as the author wrote them. */
+const AUTHORED_CAPABILITY_KEYS = Object.freeze(['models', 'webSearchSettings']);
+
+/**
+ * `{ capabilities: { models, webSearchSettings } }` as stored, or undefined
+ * when the author set neither. For the callers who may edit the app.
+ */
+function authoredSettings(content) {
+  const stored = content?.capabilities;
+  if (!stored || typeof stored !== 'object') return undefined;
+  const capabilities = {};
+  for (const key of AUTHORED_CAPABILITY_KEYS) {
+    if (stored[key] !== undefined) capabilities[key] = structuredClone(stored[key]);
+  }
+  return Object.keys(capabilities).length > 0 ? { capabilities } : undefined;
 }
 
 /**
@@ -231,7 +250,13 @@ export function userAppView(
     updatedAt: record.updatedAt || null,
     updatedBy: person(record.updatedBy)
   };
-  if (full) view.members = (record.members || []).map(memberView);
+  if (full) {
+    view.members = (record.members || []).map(memberView);
+    // What the author stored where the app object of a run has less: the ceiling cuts
+    // the models to what this caller may use, so the editor cannot rebuild the list from it.
+    const authored = authoredSettings(record.content);
+    if (authored) view.authored = authored;
+  }
   // The receiver of an offer may already be a member; the offer reaches them all the same.
   if (
     role === 'owner' ||

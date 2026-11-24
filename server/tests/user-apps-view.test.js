@@ -111,7 +111,7 @@ const effective = () => ({
     websearch: { enabled: false },
     toolApproval: { default: 'always' },
     // Keys the ceiling never writes. The view must not pass them on.
-    projects: ['secret-project'],
+    workflows: ['secret-project'],
     ownerPrincipal: { email: SECRET_EMAIL }
   },
   capabilities: [
@@ -297,6 +297,41 @@ describe('what a person with "Can use" is told', () => {
     assert.equal(view.permissions.role, 'user');
     assert.equal(view.revision, 7);
     assert.deepEqual(view.updatedBy, { id: 'carol', name: 'Carol' });
+  });
+});
+
+describe('what the author stored beyond the app object of a run', () => {
+  const withSettings = record({
+    content: {
+      ...content,
+      capabilities: {
+        ...content.capabilities,
+        models: { allowed: ['gpt-4o', 'gpt-4o-mini'], lock: true },
+        webSearchSettings: { maxPageReads: 3 }
+      }
+    }
+  });
+
+  it('is told to the roles that may edit the app, as stored, and to nobody else', () => {
+    for (const role of ['owner', 'editor', 'offered', 'admin']) {
+      assert.deepEqual(
+        viewFor(role, withSettings).authored,
+        {
+          capabilities: {
+            models: { allowed: ['gpt-4o', 'gpt-4o-mini'], lock: true },
+            webSearchSettings: { maxPageReads: 3 }
+          }
+        },
+        role
+      );
+    }
+    assert.equal(Object.hasOwn(viewFor('user', withSettings), 'authored'), false);
+  });
+
+  it('is left out when the author set nothing of it', () => {
+    for (const role of ['owner', 'editor', 'offered', 'admin']) {
+      assert.equal(Object.hasOwn(viewFor(role), 'authored'), false, role);
+    }
   });
 });
 

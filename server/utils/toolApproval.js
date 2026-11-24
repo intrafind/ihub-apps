@@ -26,7 +26,7 @@
  * | 2 | Installation default      | `integrations.json` → `installed[].approval.default`         |
  * | 3 | Installation action       | `installed[].approval.actions[<action name>]`                |
  * | 3 | New or changed action     | `installed[].approval.newOrChanged` (default `always`) while the action's fingerprint is not the one an admin accepted (#2916) |
- * | 4 | App override              | app `toolApproval.tools[<tool id or installation id>]`, else `toolApproval.default` |
+ * | 4 | App override              | app `toolApproval.tools[<tool id or installation id>]`, else `toolApproval.default` (not for a shipped internal read when `exemptInternalReads` is set) |
  *
  * Nothing configured resolves to `never`: approval is opt-in. The new-or-changed
  * layer applies only to an installation that has an `approval` setting and a
@@ -206,9 +206,12 @@ export function resolveDataFlow(toolDef, installation = null) {
  *
  * @param {Object|null} app
  * @param {Object} toolDef
+ * @param {Object} [options]
+ * @param {boolean} [options.exemptDefault=false] - Leave the app's `default` out, for a tool
+ *   that {@link isExemptInternalRead} names.
  * @returns {string|null}
  */
-export function appApprovalFor(app, toolDef) {
+export function appApprovalFor(app, toolDef, { exemptDefault = false } = {}) {
   const config = app?.toolApproval;
   if (!config || typeof config !== 'object') return null;
   const tools = config.tools && typeof config.tools === 'object' ? config.tools : {};
@@ -216,13 +219,49 @@ export function appApprovalFor(app, toolDef) {
   const candidates = [
     tools[toolDef?.id],
     instanceId ? tools[instanceId] : undefined,
-    config.default
+    // A mode set for this very tool or its installation still applies; the app's blanket one
+    // does not, for a tool the exemption names.
+    exemptDefault ? undefined : config.default
   ];
   let strictest = null;
   for (const mode of candidates) {
     if (modeRank(mode) > modeRank(strictest)) strictest = mode;
   }
   return strictest;
+}
+
+/**
+ * Whether the app's blanket mode (`toolApproval.default`) leaves this tool out:
+ * the app sets `toolApproval.exemptInternalReads`, and the tool is one iHub ships
+ * (`_shipped`, read from `server/defaults/tools`), declares that it only reads
+ * (`sideEffect: 'read'`, from the definition and not from an annotation) and
+ * keeps its data inside iHub (`dataFlow: 'internal'`).
+ *
+ * An integration, an MCP or A2A tool, a tool an admin wrote and everything that writes
+ * or sends data out is never exempt: `read_url`, web search and every connected
+ * system keep asking. The exemption does not loosen the platform, the tool, the
+ * installation or the action, which are applied before the app.
+ *
+ * @param {Object|null} app
+ * @param {Object} toolDef
+ * @param {{ sideEffect: string, sideEffectSource: string, dataFlow: string }} resolved
+ * @returns {boolean}
+ */
+export function isExemptInternalRead(app, toolDef, resolved) {
+  return (
+    app?.toolApproval?.exemptInternalReads === true &&
+    toolDef?._shipped === true &&
+    !toolDef._integration &&
+    !toolDef._mcp &&
+    !toolDef._a2a &&
+    // Declared on the definition: the legacy `readOnly` flag and the `internal` default of a
+    // tool that names no data flow do not qualify.
+    toolDef.sideEffect === 'read' &&
+    toolDef.dataFlow === 'internal' &&
+    resolved.sideEffect === 'read' &&
+    resolved.sideEffectSource === 'tool' &&
+    resolved.dataFlow === 'internal'
+  );
 }
 
 /**
@@ -299,7 +338,9 @@ export function resolveToolApproval(toolDef, app, platform, options = {}) {
   }
 
   // 4. the app: may only tighten
-  const appMode = appApprovalFor(app, toolDef);
+  const appMode = appApprovalFor(app, toolDef, {
+    exemptDefault: isExemptInternalRead(app, toolDef, { sideEffect, sideEffectSource, dataFlow })
+  });
   if (appMode) {
     if (modeRank(appMode) < modeRank(approval)) {
       const key = `${app?.id}|${toolDef?.id}|${appMode}`;

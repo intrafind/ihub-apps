@@ -125,8 +125,20 @@ describe('V260 add_user_apps_settings', () => {
     await up(ctx);
     const platform = await read(dir, 'config/platform.json');
     assert.deepEqual(platform.userApps, EXPECTED_BLOCK);
-    assert.deepEqual(platform.userApps, JSON.parse(JSON.stringify(DEFAULT_USER_APP_SETTINGS)));
-    assert.deepEqual(userAppSettings(platform), EXPECTED_BLOCK);
+    // V260 seeds what it shipped with; the web search limit came with V263.
+    const { webSearchLimits, projects, ...shipped } = JSON.parse(
+      JSON.stringify(DEFAULT_USER_APP_SETTINGS.capabilities)
+    );
+    assert.equal(projects, false);
+    assert.deepEqual(platform.userApps, {
+      ...JSON.parse(JSON.stringify(DEFAULT_USER_APP_SETTINGS)),
+      capabilities: shipped
+    });
+    assert.equal(webSearchLimits.maxPageReads, 10);
+    assert.deepEqual(userAppSettings(platform), {
+      ...EXPECTED_BLOCK,
+      capabilities: { ...EXPECTED_BLOCK.capabilities, webSearchLimits, projects }
+    });
     assert.equal(platform.defaultLanguage, 'de', 'the rest of the file is kept');
   });
 

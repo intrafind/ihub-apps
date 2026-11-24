@@ -21,7 +21,8 @@ import {
   REVISE_BUILDER_TEXT_MAX,
   REVISE_CONVERSATION_MAX,
   REVISE_ROLES,
-  appRevisionKeys
+  appRevisionKeys,
+  appSettingsKeys
 } from '../../../shared/appRevision.js';
 
 /** The feature that switches drafting with AI on and off (Admin → Features). */
@@ -154,7 +155,7 @@ export function parseRevisionRequest(body, { target = 'admin' } = {}) {
 
   let fields;
   if (input.fields !== undefined && input.fields !== null) {
-    const keys = appRevisionKeys(target);
+    const keys = [...appRevisionKeys(target), ...appSettingsKeys(target)];
     if (!Array.isArray(input.fields) || input.fields.length === 0) {
       throw invalid('fields', 'INVALID', 'fields must be a list of at least one content key');
     }
@@ -531,7 +532,7 @@ export default function registerAdminAppBuilderRoutes(app, { llmClient } = {}) {
    *           items: { type: string }
    *         suggestions:
    *           type: object
-   *           required: [websearch, integrations]
+   *           required: [websearch, integrations, settings]
    *           description: What the model proposed and the caller may use; never part of `patch`
    *           properties:
    *             websearch: { type: boolean }
@@ -544,6 +545,15 @@ export default function registerAdminAppBuilderRoutes(app, { llmClient } = {}) {
    *                   id: { type: string }
    *                   label: { type: string }
    *                   actions: { type: array, items: { type: string } }
+   *             settings:
+   *               type: array
+   *               description: Settings that add cost, data reach or access, each for the author to confirm. Empty while only settings that change how the chat looks and starts exist; those are part of `patch`.
+   *               items:
+   *                 type: object
+   *                 required: [key, value]
+   *                 properties:
+   *                   key: { type: string }
+   *                   value: {}
    *         warnings:
    *           type: array
    *           description: What the server dropped, shortened, replaced or added on the changed keys; `NO_CHANGE` when a change changed nothing (`reply` is then `message`); `OTHER_LANGUAGES_UNCHANGED` per changed key of an app with texts in other languages
@@ -632,10 +642,10 @@ export default function registerAdminAppBuilderRoutes(app, { llmClient } = {}) {
    *               fields:
    *                 type: array
    *                 minItems: 1
-   *                 description: The content keys the change may touch; all of them when absent. With fields, nothing is proposed under `suggestions`.
+   *                 description: The content keys and settings the change may touch; all of them when absent. With fields, nothing is proposed under `suggestions.websearch` or `suggestions.integrations`.
    *                 items:
    *                   type: string
-   *                   enum: [name, description, system, prompt, messagePlaceholder, variables, starterPrompts, category, color, icon]
+   *                   enum: [name, description, system, prompt, messagePlaceholder, variables, starterPrompts, category, color, icon, greeting, inputMode, preferredOutputFormat, startForm, variablesPanel, autoStart]
    *               allowQuestions:
    *                 type: boolean
    *                 default: true
@@ -668,7 +678,7 @@ export default function registerAdminAppBuilderRoutes(app, { llmClient } = {}) {
    *               patch:
    *                 system: { de: "Sie beantworten Fragen neuer Kolleginnen und Kollegen.", en: "You answer questions of new colleagues." }
    *               changed: [system]
-   *               suggestions: { websearch: false, integrations: [] }
+   *               suggestions: { websearch: false, integrations: [], settings: [] }
    *               warnings: [{ code: OTHER_LANGUAGES_UNCHANGED, field: system }]
    *               model: { id: "gemini-flash", name: "Gemini Flash" }
    *       400:

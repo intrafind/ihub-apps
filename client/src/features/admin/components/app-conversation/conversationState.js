@@ -25,9 +25,12 @@ import {
   REVISE_BUILDER_TEXT_MAX,
   REVISE_CONVERSATION_MAX,
   appRevisionKeys,
+  appSettingsKeys,
   applyRevisionPatch
 } from '../../../../../../shared/appRevision.js';
 import { APP_GENERATOR_WARNINGS } from '../../../../../../shared/appGenerator.js';
+import { pickUserAppContent } from '../../../../../../shared/userAppContent.js';
+import { userAppField } from '../../../../../../shared/userAppFields.js';
 
 /** The suggestions under the builder's first message; each is sent as the author's message. */
 export const STARTER_CHIP_KEYS = Object.freeze([
@@ -49,8 +52,18 @@ export const CHANGE_FIELD_KEYS = Object.freeze({
   variables: 'admin.apps.conversation.field.variables',
   starterPrompts: 'admin.apps.conversation.field.starterPrompts',
   category: 'admin.apps.conversation.field.category',
-  look: 'admin.apps.conversation.field.look'
+  look: 'admin.apps.conversation.field.look',
+  // The settings of the registry (`shared/userAppFields.js`), one heading each.
+  greeting: 'admin.apps.conversation.field.greeting',
+  inputMode: 'admin.apps.conversation.field.inputMode',
+  preferredOutputFormat: 'admin.apps.conversation.field.preferredOutputFormat',
+  startForm: 'admin.apps.conversation.field.startForm',
+  variablesPanel: 'admin.apps.conversation.field.variablesPanel',
+  autoStart: 'admin.apps.conversation.field.autoStart'
 });
+
+/** The keys a change sets through `change.settings`, for either target. */
+const SETTING_KEYS = new Set([...appSettingsKeys('admin'), ...appSettingsKeys('personal')]);
 
 /** The keys shown together under "Look". */
 const LOOK_KEYS = Object.freeze(['color', 'icon']);
@@ -131,6 +144,13 @@ export function sameValue(a, b) {
 const isBlank = value => value === undefined || value === null || value === '';
 
 /**
+ * A setting that is "not set": the form holds one as an empty object, an empty
+ * text or `false`; an app file as nothing at all.
+ */
+const isUnsetSetting = value =>
+  isBlank(value) || value === false || (isPlainObject(value) && Object.keys(value).length === 0);
+
+/**
  * The content a turn sends as `draft`: the keys a revision may change, as the
  * form holds them. A key without a value (a personal app without a colour) is
  * left out rather than sent empty.
@@ -144,6 +164,24 @@ export function draftOf(form, target) {
   if (!isPlainObject(form)) return draft;
   for (const key of appRevisionKeys(target)) {
     if (!isBlank(form[key])) draft[key] = form[key];
+  }
+  // The settings the builder may set, where the app has one: the model reads them, and a
+  // change of one makes a proposal stale like a change of a text does. They are read the way
+  // a personal app stores them: only the parts an author sets, and not what every new app
+  // starts with (the default greeting, the input line with its microphone), which the form
+  // of an admin app is padded with.
+  const looks = pickUserAppContent(form);
+  for (const key of appSettingsKeys(target)) {
+    if (!isUnsetSetting(looks[key])) draft[key] = looks[key];
+  }
+  // A personal app also sends its model and its switches. The server checks a proposal
+  // that adds reach (a model, a list of models, how web search works) against them; a
+  // change of them by hand is not a change of the content (see `contentChangedSince`).
+  if (target === 'personal') {
+    if (typeof form.preferredModel === 'string' && !form.preferredModel.startsWith(':')) {
+      draft.preferredModel = form.preferredModel;
+    }
+    if (isPlainObject(form.capabilities)) draft.capabilities = form.capabilities;
   }
   return draft;
 }
@@ -159,7 +197,13 @@ export function draftOf(form, target) {
  * @returns {boolean}
  */
 export function contentChangedSince(form, baseSnapshot, target) {
-  return !sameValue(draftOf(form, target), baseSnapshot || {});
+  const withoutContext = draft =>
+    Object.fromEntries(
+      Object.entries(isPlainObject(draft) ? draft : {}).filter(
+        ([key]) => key !== 'preferredModel' && key !== 'capabilities'
+      )
+    );
+  return !sameValue(withoutContext(draftOf(form, target)), withoutContext(baseSnapshot));
 }
 
 /**
@@ -191,8 +235,10 @@ export function unsavedOutsideChange(form, saved, changeKeys) {
  *
  * @param {'admin'|'personal'} target
  * @param {object|null} form
- * @param {{ websearch?: boolean, integrations?: Array<{ id: string, label?: string, actions?: string[] }> }|null} suggestions
- * @returns {{ webSearch: boolean, integrations: Array<{ id: string, label: string, actions: string[] }> }}
+ * @param {{ websearch?: boolean, integrations?: Array<{ id: string, label?: string, actions?: string[] }>,
+ *   settings?: Array<{ key: string, value: unknown }> }|null} suggestions
+ * @returns {{ webSearch: boolean, integrations: Array<{ id: string, label: string, actions: string[] }>,
+ *   settings: Array<{ key: string, value: unknown }> }}
  */
 export function offeredSuggestions(target, form, suggestions) {
   const source = isPlainObject(suggestions) ? suggestions : {};
@@ -218,7 +264,53 @@ export function offeredSuggestions(target, form, suggestions) {
         ? system.actions.filter(action => typeof action === 'string')
         : []
     }));
-  return { webSearch: source.websearch === true && !webSearchOn, integrations };
+  // The settings that add reach: only those the form does not have yet, one value each.
+  const settings = (Array.isArray(source.settings) ? source.settings : [])
+    .filter(
+      entry => isPlainObject(entry) && typeof entry.key === 'string' && userAppField(entry.key)
+    )
+    .filter(entry => !sameValue(settingOfForm(form, entry.key), entry.value));
+  return { webSearch: source.websearch === true && !webSearchOn, integrations, settings };
+}
+
+/** The value of a setting in the form: inside `capabilities` for one that lives there. */
+function settingOfForm(form, key) {
+  if (!isPlainObject(form)) return undefined;
+  return userAppField(key)?.store === 'capabilities' ? form.capabilities?.[key] : form[key];
+}
+
+/**
+ * The sentence of a setting that adds reach, as the change card offers it next
+ * to its checkbox: what the app would do, with the value in plain words.
+ *
+ * @param {{ key: string, value: unknown }} setting
+ * @param {(key: string, values?: object) => string} t
+ * @returns {string}
+ */
+export function settingSentence({ key, value }, t) {
+  const values = isPlainObject(value) ? value : {};
+  switch (key) {
+    case 'preferredModel':
+      return t('admin.apps.conversation.change.setting.preferredModel', { model: String(value) });
+    case 'models':
+      return t(
+        values.lock === true
+          ? 'admin.apps.conversation.change.setting.modelsLocked'
+          : 'admin.apps.conversation.change.setting.models',
+        { models: (Array.isArray(values.allowed) ? values.allowed : []).join(', ') }
+      );
+    case 'projects':
+      return t('admin.apps.conversation.change.setting.projects', {
+        projects: (Array.isArray(value) ? value : []).map(link => link?.id).join(', ')
+      });
+    case 'webSearchSettings':
+      return t('admin.apps.conversation.change.setting.webSearchSettings', {
+        pages: Number.isInteger(values.maxPageReads) ? values.maxPageReads : '–',
+        guidance: typeof values.researchGuidance === 'string' ? values.researchGuidance : ''
+      });
+    default:
+      return key;
+  }
 }
 
 /**
@@ -229,20 +321,24 @@ export function offeredSuggestions(target, form, suggestions) {
  *
  * @param {'admin'|'personal'} target
  * @param {object} form
- * @param {{ webSearch: boolean, integrations: object[] }} offered - {@link offeredSuggestions}.
- * @param {{ webSearch?: boolean, integrationIds?: string[] }} ticked
+ * @param {{ webSearch: boolean, integrations: object[], settings?: object[] }} offered - {@link offeredSuggestions}.
+ * @param {{ webSearch?: boolean, integrationIds?: string[], settingKeys?: string[] }} ticked
  * @returns {object} Possibly empty.
  */
 export function suggestionChanges(target, form, offered, ticked) {
   const wantSearch = ticked?.webSearch === true && offered.webSearch;
   const wanted = new Set(Array.isArray(ticked?.integrationIds) ? ticked.integrationIds : []);
   const systems = offered.integrations.filter(system => wanted.has(system.id));
-  if (!wantSearch && systems.length === 0) return {};
+  const pickedKeys = new Set(Array.isArray(ticked?.settingKeys) ? ticked.settingKeys : []);
+  const settings = (Array.isArray(offered.settings) ? offered.settings : []).filter(entry =>
+    pickedKeys.has(entry.key)
+  );
+  if (!wantSearch && systems.length === 0 && settings.length === 0) return {};
 
   if (target === 'personal') {
     const capabilities = isPlainObject(form.capabilities) ? form.capabilities : {};
     const current = Array.isArray(capabilities.integrations) ? capabilities.integrations : [];
-    return {
+    const changes = {
       capabilities: {
         ...capabilities,
         ...(wantSearch ? { webSearch: true } : {}),
@@ -252,6 +348,12 @@ export function suggestionChanges(target, form, offered, ticked) {
         ]
       }
     };
+    // A setting lives inside `capabilities` or at the top, as the registry says.
+    for (const { key, value } of settings) {
+      if (userAppField(key)?.store === 'capabilities') changes.capabilities[key] = value;
+      else changes[key] = value;
+    }
+    return changes;
   }
 
   const changes = {};
@@ -472,6 +574,66 @@ function fieldLine(variable, language, t) {
 }
 
 /**
+ * The line of a setting as the change card compares it: what the setting is
+ * now, in a plain sentence. A setting that is off, removed or never set has no
+ * line, so that turning it on shows as an added line and removing it as a
+ * removed one.
+ *
+ * @param {string} key
+ * @param {unknown} value
+ * @param {(key: string, values?: object) => string} t
+ * @returns {string[]}
+ */
+function settingLines(key, value, t) {
+  if (key === 'greeting') {
+    return Object.entries(isPlainObject(value) ? value : {})
+      .filter(([, entry]) => isPlainObject(entry))
+      .map(([lang, entry]) => `${lang}: ${entry.title ?? ''} / ${entry.subtitle ?? ''}`);
+  }
+  if (key === 'inputMode') {
+    const parts = [];
+    if (value?.type === 'singleline') parts.push(t('admin.apps.edit.singleLine'));
+    if (value?.type === 'multiline') parts.push(t('admin.apps.edit.multiLine'));
+    if (Number.isInteger(Number(value?.rows)) && value?.rows !== undefined) {
+      parts.push(t('admin.apps.conversation.line.rows', { count: Number(value.rows) }));
+    }
+    return parts.length > 0 ? [parts.join(' · ')] : [];
+  }
+  if (key === 'preferredOutputFormat') {
+    if (value === 'text') return [t('admin.apps.conversation.line.formatText')];
+    if (value === 'markdown') return [t('admin.apps.conversation.line.formatMarkdown')];
+    return [];
+  }
+  if (key === 'startForm') {
+    if (!isPlainObject(value) || typeof value.enabled !== 'boolean') return [];
+    // One text per language, so that a change of one language shows on the card.
+    const texts = isPlainObject(value.submitLabel)
+      ? Object.entries(value.submitLabel).filter(([, text]) => typeof text === 'string')
+      : [];
+    const label =
+      texts.length > 1
+        ? texts.map(([lang, text]) => `${lang}: ${text}`).join(' · ')
+        : labelIn(value.submitLabel, '');
+    return [
+      value.enabled
+        ? t('admin.apps.conversation.line.startFormOn', { label })
+        : t('admin.apps.conversation.line.startFormOff')
+    ];
+  }
+  if (key === 'variablesPanel') {
+    if (typeof value?.pinned !== 'boolean') return [];
+    return [
+      value.pinned
+        ? t('admin.apps.conversation.line.panelPinned')
+        : t('admin.apps.conversation.line.panelCollapsed')
+    ];
+  }
+  if (key === 'autoStart')
+    return value === true ? [t('admin.apps.conversation.line.autoStart')] : [];
+  return [];
+}
+
+/**
  * The lines the change card compares for a key: a text by its own lines, an
  * input field or an example question as one line each, a colour or icon as
  * one line. Pure data, so that the card can diff any key the same way.
@@ -506,6 +668,7 @@ export function linesOf(key, value, language, t) {
       : [];
   }
   if (key === 'category') return typeof value === 'string' && value ? [value] : [];
+  if (SETTING_KEYS.has(key)) return settingLines(key, value, t);
   const text = textIn(value, language);
   return text === '' ? [] : text.replace(/\r\n?/g, '\n').replace(/\n$/, '').split('\n');
 }
@@ -521,6 +684,9 @@ export function linesOf(key, value, language, t) {
  * @returns {string[]}
  */
 export function changedLanguages(key, before, after, language) {
+  // A setting is compared as a whole, not language by language: a greeting names its
+  // languages in its own lines.
+  if (SETTING_KEYS.has(key)) return [''];
   if (!isPlainObject(before) && !isPlainObject(after)) return [''];
   if (['variables', 'starterPrompts'].includes(key)) return [language];
   const all = new Set([

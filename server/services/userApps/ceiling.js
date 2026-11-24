@@ -25,9 +25,12 @@
  * {
  *   models: [{ id, enabled, modelType }],          // every model, disabled ones included
  *   installations: [{ id, definition, enabled }],  // every installed integration
- *   features: { skills: true, integrations: true },// feature flags; `false` withholds
+ *   features: { skills: true, integrations: true, projects: true, userProjects: true },
+ *                                                  // feature flags; `false` withholds
  *   webSearch: { owner: true, runner: true },      // a search engine is available to them
- *   skills: { owner: ['a'], runner: ['a', 'b'] }   // global skills granted to them
+ *   skills: { owner: ['a'], runner: ['a', 'b'] },  // global skills granted to them
+ *   projects: { [id]: { exists, ownership, name, owner, runner } }
+ *                                                  // who may use each linked project
  * }
  * ```
  *
@@ -42,20 +45,35 @@ import { canUserAccessResource } from '../../utils/authorization.js';
 import { mayUseIntegration } from '../integrations/integrationAccess.js';
 import { placeholdersIn } from '../../../shared/appPlaceholders.js';
 import {
+  NO_MODEL_AVAILABLE_ID,
   PERSONAL_UPLOAD_OFF,
   PERSONAL_UPLOAD_ON,
+  USER_APP_GREETING_KEYS,
+  USER_APP_INPUT_MODE_TYPES,
+  USER_APP_LIMITS,
   USER_APP_LOCALIZED_KEYS,
+  USER_APP_OUTPUT_FORMATS,
   USER_APP_STARTER_PROMPT_KEYS,
   USER_APP_VARIABLE_KEYS,
   personalAppBase
 } from '../../../shared/userAppContent.js';
 import { isOwnerSnapshotStale } from './userAppAccess.js';
+import { DEFAULT_MAX_PAGE_READS } from '../chat/pageReadLimit.js';
 
 /** The capability IDs that are not a bound installation, in the order they are reported. */
-export const USER_APP_CAPABILITY_IDS = Object.freeze(['model', 'upload', 'webSearch', 'skills']);
+export const USER_APP_CAPABILITY_IDS = Object.freeze([
+  'model',
+  'models',
+  'upload',
+  'webSearch',
+  'skills'
+]);
 
 /** The prefix of the capability ID of one bound installation. */
 export const INTEGRATION_CAPABILITY_PREFIX = 'integration:';
+
+/** The prefix of the capability ID of one linked project. */
+export const PROJECT_CAPABILITY_PREFIX = 'project:';
 
 /** Why a capability was withheld. */
 export const CAPABILITY_REASONS = Object.freeze({
@@ -78,6 +96,19 @@ export const CAPABILITY_REASONS = Object.freeze({
  */
 export function integrationCapabilityId(installationId) {
   return `${INTEGRATION_CAPABILITY_PREFIX}${installationId}`;
+}
+
+/**
+ * The capability ID of a linked project.
+ *
+ * @param {string} projectId
+ * @returns {string}
+ *
+ * @example
+ * projectCapabilityId('prj_abc'); // → 'project:prj_abc'
+ */
+export function projectCapabilityId(projectId) {
+  return `${PROJECT_CAPABILITY_PREFIX}${projectId}`;
 }
 
 function isPlainObject(value) {
@@ -109,6 +140,18 @@ function requestedBindings(content) {
     bindings.push({ id, actions: actionNames(entry.actions) });
   }
   return bindings;
+}
+
+/** The projects a content object asks for, as `[{ id }]`; each ID once. */
+function requestedProjects(content) {
+  const list = content?.capabilities?.projects;
+  if (!Array.isArray(list)) return [];
+  const links = [];
+  for (const entry of list) {
+    const id = typeof entry?.id === 'string' ? entry.id : '';
+    if (id && !links.some(link => link.id === id)) links.push({ id });
+  }
+  return links;
 }
 
 /**
@@ -144,9 +187,10 @@ function decide({ installation, ownerState, owner, runner }) {
 /**
  * Every capability of a content object, decided for one owner and one runner.
  *
- * @returns {{model: Object, upload: Object, webSearch: Object, skills: Object,
+ * @returns {{model: Object, models: Object, upload: Object, webSearch: Object, skills: Object,
  *   bindings: Array<Object>}} Each entry is `{ requested, reason }` (`reason`
- *   null when granted); `skills` adds `ids`, a binding adds `id` and `actions`.
+ *   null when granted); `skills` adds `ids`, `models` adds `ids`, `lock` and
+ *   `refuse`, a binding adds `id` and `actions`.
  */
 function evaluate(content, { runner, owner, settings, catalog, ownerState, strictActions }) {
   const allowed = settings?.capabilities || {};
@@ -173,6 +217,71 @@ function evaluate(content, { runner, owner, settings, catalog, ownerState, stric
             runner: canUserAccessResource(runner, 'models', modelId)
           })
   };
+
+  // Which models the app may use, and whether the choice is locked. It only ever narrows:
+  // the list is cut to the models the owner and the person the check is made for may both
+  // use. When the app restricts its models and none is left, the app does not run for this
+  // person (`refuse`): dropping the restriction would give them a model the author excluded.
+  const modelsAsked = isPlainObject(requested.models) ? requested.models : {};
+  const wantedModels = [
+    ...new Set(
+      (Array.isArray(modelsAsked.allowed) ? modelsAsked.allowed : []).filter(
+        id => typeof id === 'string' && id !== '' && id !== NO_MODEL_AVAILABLE_ID
+      )
+    )
+  ];
+  const lockModel = modelsAsked.lock === true;
+  const usableModel = (id, who) => {
+    const entry = (catalog?.models || []).find(known => sameId(known?.id, id));
+    return (
+      Boolean(entry) &&
+      entry.enabled !== false &&
+      (entry.modelType || 'chat') === 'chat' &&
+      canUserAccessResource(who, 'models', id)
+    );
+  };
+  const models = {
+    requested: wantedModels.length > 0 || lockModel,
+    ids: [],
+    lock: lockModel,
+    refuse: false,
+    reason: CAPABILITY_REASONS.notRequested
+  };
+  if (models.requested) {
+    models.reason = decide({
+      installation: allowed.modelChoice === true,
+      ownerState,
+      owner: true,
+      runner: true
+    });
+    if (!models.reason) {
+      // The chat compares IDs exactly, so each entry is written as the model is configured.
+      const canonical = id =>
+        (catalog?.models || []).find(known => sameId(known?.id, id))?.id ?? id;
+      models.ids = [
+        ...new Set(
+          wantedModels
+            .filter(id => usableModel(id, owner) && usableModel(id, runner))
+            .map(canonical)
+        )
+      ];
+      const noneLeft = wantedModels.length > 0 && models.ids.length === 0;
+      // A locked app runs on its preferred model, which both must be able to use and which
+      // the list, if there is one, must name.
+      const lockBroken =
+        lockModel &&
+        (Boolean(model.reason) ||
+          (wantedModels.length > 0 && !wantedModels.some(id => sameId(id, model.id))));
+      if (noneLeft || lockBroken) {
+        models.refuse = true;
+        const ownerCan = wantedModels.some(id => usableModel(id, owner));
+        models.reason =
+          (noneLeft && ownerCan) || (lockBroken && model.reason === CAPABILITY_REASONS.youMayNot)
+            ? CAPABILITY_REASONS.youMayNot
+            : CAPABILITY_REASONS.ownerMayNot;
+      }
+    }
+  }
 
   // File upload: the installation's switch. The owner's state still counts:
   // an app whose owner is gone or stale runs as plain chat.
@@ -253,7 +362,31 @@ function evaluate(content, { runner, owner, settings, catalog, ownerState, stric
     };
   });
 
-  return { model, upload, webSearch, skills, bindings };
+  // Linked projects, one decision per link: the switch, the features, and then whether the owner
+  // and the person the check is made for may each use the project in their own right. A
+  // personal app never gives access to a project.
+  const projects = requestedProjects(content).map(link => {
+    const access = catalog?.projects?.[link.id];
+    const user = access?.ownership !== 'admin';
+    return {
+      id: link.id,
+      requested: true,
+      name: access?.name || null,
+      ownership: access?.ownership || null,
+      reason: decide({
+        installation:
+          allowed.projects === true &&
+          features.projects !== false &&
+          (!user || features.userProjects !== false) &&
+          access?.exists === true,
+        ownerState,
+        owner: access?.owner === true,
+        runner: access?.runner === true
+      })
+    };
+  });
+
+  return { model, models, upload, webSearch, skills, bindings, projects };
 }
 
 /** One entry of the `capabilities` list of {@link effectiveUserApp}. */
@@ -285,6 +418,61 @@ function listCopy(value, keys) {
   });
 }
 
+/** The greeting as a new object: per language a title and a subtitle, both strings. */
+function greetingCopy(value) {
+  if (!isPlainObject(value)) return undefined;
+  const copy = {};
+  for (const [language, entry] of Object.entries(value)) {
+    if (!isPlainObject(entry)) continue;
+    const [title, subtitle] = USER_APP_GREETING_KEYS.map(key => entry[key]);
+    if (typeof title === 'string' && typeof subtitle === 'string') {
+      copy[language] = { title, subtitle };
+    }
+  }
+  return Object.keys(copy).length > 0 ? copy : undefined;
+}
+
+/**
+ * The input line the author set, checked again: the record was validated when
+ * it was saved, but the ceiling does not trust a record. A type or a row count
+ * outside the app schema is left out, and the base's value stays.
+ */
+function inputModeCopy(value) {
+  if (!isPlainObject(value)) return undefined;
+  const copy = {};
+  if (USER_APP_INPUT_MODE_TYPES.includes(value.type)) copy.type = value.type;
+  if (Number.isInteger(value.rows) && value.rows >= 1 && value.rows <= USER_APP_LIMITS.inputRows) {
+    copy.rows = value.rows;
+  }
+  return Object.keys(copy).length > 0 ? copy : undefined;
+}
+
+/**
+ * Write what the author chose about how the chat looks and starts into the app
+ * object: greeting, input line, output format, start form, input panel and
+ * `autoStart`. None of them adds a tool or reach, so no ceiling decides them;
+ * each value is still checked, because a record is not trusted. The input line
+ * keeps the microphone of {@link personalAppBase}.
+ */
+function applyLooks(app, content) {
+  const greeting = greetingCopy(content.greeting);
+  if (greeting) app.greeting = greeting;
+  const inputMode = inputModeCopy(content.inputMode);
+  if (inputMode) app.inputMode = { ...app.inputMode, ...inputMode };
+  if (USER_APP_OUTPUT_FORMATS.includes(content.preferredOutputFormat)) {
+    app.preferredOutputFormat = content.preferredOutputFormat;
+  }
+  if (isPlainObject(content.startForm) && typeof content.startForm.enabled === 'boolean') {
+    app.startForm = { enabled: content.startForm.enabled };
+    const label = localizedCopy(content.startForm.submitLabel);
+    if (label) app.startForm.submitLabel = label;
+  }
+  if (isPlainObject(content.variablesPanel) && typeof content.variablesPanel.pinned === 'boolean') {
+    app.variablesPanel = { pinned: content.variablesPanel.pinned };
+  }
+  if (content.autoStart === true) app.autoStart = true;
+}
+
 /**
  * Whether a person can send the form without typing a message: true when the
  * message template uses an input field (the rule of a generated draft).
@@ -312,6 +500,30 @@ export function isRunnerOwner(record, runner) {
 }
 
 /**
+ * What the author set about how the app researches on the web, cut to what the
+ * administrator allows: the pages the page reader may open for one answer, and a
+ * sentence of guidance. A value that is not of the right kind is left out.
+ */
+function webSearchTuning(stored, settings) {
+  const value = isPlainObject(stored) ? stored : {};
+  const tuning = {};
+  const limit = settings?.capabilities?.webSearchLimits?.maxPageReads;
+  if (Number.isInteger(value.maxPageReads) && value.maxPageReads >= 1) {
+    tuning.maxPageReads = Number.isInteger(limit)
+      ? Math.min(value.maxPageReads, limit)
+      : value.maxPageReads;
+  } else if (Number.isInteger(limit) && limit >= 1 && limit < DEFAULT_MAX_PAGE_READS) {
+    // The app names no number, so the run reads as many pages as the platform default. A limit
+    // below that default caps it too; a higher limit leaves the default as it is.
+    tuning.maxPageReads = limit;
+  }
+  if (typeof value.researchGuidance === 'string' && value.researchGuidance.trim() !== '') {
+    tuning.researchGuidance = value.researchGuidance.slice(0, USER_APP_LIMITS.researchGuidance);
+  }
+  return tuning;
+}
+
+/**
  * The app a chat request runs, with what the ceiling grants this runner.
  *
  * @param {Object} record - Stored personal app.
@@ -329,7 +541,8 @@ export function isRunnerOwner(record, runner) {
  *   reason?: string}>, bindings: Array<{id: string, name: Object|string|null, actions: string[]}>,
  *   approval: {mode: 'writes'|'always', chatGrants: boolean}}}
  *   `app` passes `appConfigSchema` and has only keys of `USER_APP_RUN_KEYS`.
- *   `capabilities` lists `model`, `upload`, `webSearch`, `skills` and one
+ *   `capabilities` lists `model`, `models`, `upload`, `webSearch`, `skills`, one `project:<id>`
+ *   per linked project and one
  *   `integration:<installationId>` per binding.
  *
  * @example
@@ -372,13 +585,35 @@ export function effectiveUserApp(record, { runner, owner, settings, catalog, now
   const starterPrompts = listCopy(content.starterPrompts, USER_APP_STARTER_PROMPT_KEYS);
   if (starterPrompts) app.starterPrompts = starterPrompts;
   app.allowEmptyContent = templateUsesField(app.prompt, app.variables);
+  applyLooks(app, content);
 
   // Capabilities: written here, never copied from the record.
-  if (!decided.model.reason) app.preferredModel = decided.model.id;
+  // The models of the app: a restriction that leaves no model stops the chat (the one entry
+  // that no model has, see `NO_MODEL_AVAILABLE_ID`); a list narrows what the chat may pick.
+  if (decided.models.refuse) app.allowedModels = [NO_MODEL_AVAILABLE_ID];
+  else if (!decided.models.reason) {
+    // A lock lets the chat run on the preferred model only: were the whole list kept, a preferred
+    // model that lacks a feature the chat needs would give way to the next model of the list.
+    if (decided.models.lock) {
+      app.allowedModels = [decided.model.id];
+      app.disallowModelSelection = true;
+    } else if (decided.models.ids.length > 0) {
+      app.allowedModels = [...decided.models.ids];
+    }
+  }
+  const preferredAllowed =
+    !app.allowedModels || app.allowedModels.some(id => sameId(id, decided.model.id));
+  if (!decided.model.reason && preferredAllowed) app.preferredModel = decided.model.id;
   app.upload = structuredClone(decided.upload.reason ? PERSONAL_UPLOAD_OFF : PERSONAL_UPLOAD_ON);
   app.websearch = decided.webSearch.reason
     ? { enabled: false }
-    : { enabled: true, provider: 'auto', enabledByDefault: false, useNativeSearch: false };
+    : {
+        enabled: true,
+        provider: 'auto',
+        enabledByDefault: false,
+        useNativeSearch: false,
+        ...webSearchTuning(content.capabilities?.webSearchSettings, settings)
+      };
   if (!decided.skills.reason) {
     app.skillSettings = { enabled: true, allowPersonal: true };
     app.skills = [...decided.skills.ids];
@@ -394,31 +629,57 @@ export function effectiveUserApp(record, { runner, owner, settings, catalog, now
       };
     }
   }
+  // Linked projects: the ones both may use. The projects of the run are exactly this list: a
+  // chat of a personal app attaches no other project and runs in none (`resolveProjectScope`),
+  // and the picker stays off for it (`userProjects: false`).
+  const grantedProjects = decided.projects.filter(link => !link.reason).map(link => link.id);
+  if (grantedProjects.length > 0) {
+    app.projects = grantedProjects;
+    app.features = { ...app.features, projects: true, userProjects: false };
+  }
   // The owner runs their app under their own approval settings, whoever
   // saved the content: anyone allowed to change the app changes it, and the
   // owner does not confirm an editor's change (design 6.3). Everyone else is
   // asked before every tool call, reads included, and cannot grant a tool
   // for the chat.
-  app.toolApproval = { default: runnerIsOwner ? 'writes' : 'always' };
+  // The one exception: the tools iHub ships that only read and keep the data inside iHub (the
+  // project knowledge tools) do not ask. A shared app that answers from a project would
+  // otherwise show a card for every search. Web search, the page reader and every connected
+  // system keep asking (`utils/toolApproval.js`, `isExemptInternalRead`).
+  app.toolApproval = {
+    default: runnerIsOwner ? 'writes' : 'always',
+    exemptInternalReads: true
+  };
 
   return {
     app,
     capabilities: [
       capabilityEntry('model', decided.model),
+      capabilityEntry('models', decided.models),
       capabilityEntry('upload', decided.upload),
       capabilityEntry('webSearch', decided.webSearch),
       capabilityEntry('skills', decided.skills),
       ...decided.bindings.map(binding =>
         capabilityEntry(integrationCapabilityId(binding.id), binding)
-      )
+      ),
+      ...decided.projects.map(link => capabilityEntry(projectCapabilityId(link.id), link))
     ],
     // Per connected system the app asks for: its display name and the
-    // functions the app stores, granted or not. For the views only.
-    bindings: decided.bindings.map(binding => ({
-      id: integrationCapabilityId(binding.id),
-      name: binding.name,
-      actions: [...binding.storedActions]
-    })),
+    // functions the app stores, granted or not; per linked project its name.
+    // For the views only.
+    bindings: [
+      ...decided.bindings.map(binding => ({
+        id: integrationCapabilityId(binding.id),
+        name: binding.name,
+        actions: [...binding.storedActions]
+      })),
+      // A linked project carries its name, so that an editor can tell which one is withheld.
+      ...decided.projects.map(link => ({
+        id: projectCapabilityId(link.id),
+        name: link.name,
+        ownership: link.ownership
+      }))
+    ],
     approval: { mode: runnerIsOwner ? 'writes' : 'always', chatGrants: runnerIsOwner }
   };
 }
@@ -459,10 +720,12 @@ export function checkCapabilitiesForSave(content, { actor, owner, settings, cata
     if (entry.requested && entry.reason) denied.push({ capability, reason: entry.reason });
   };
   note('model', decided.model);
+  note('models', decided.models);
   note('upload', decided.upload);
   note('webSearch', decided.webSearch);
   note('skills', decided.skills);
   for (const binding of decided.bindings) note(integrationCapabilityId(binding.id), binding);
+  for (const link of decided.projects) note(projectCapabilityId(link.id), link);
   return denied;
 }
 
@@ -492,6 +755,13 @@ export function removesCapabilitiesOnly(previous, next) {
   for (const flag of ['upload', 'webSearch', 'skills']) {
     if (is[flag] === true && was[flag] !== true) return false;
   }
+  // The choice of models and the settings of web search may stay or go, not change.
+  for (const key of ['models', 'webSearchSettings']) {
+    if (is[key] !== undefined && !same(was[key], is[key])) return false;
+  }
+  // Projects may be taken away, not added.
+  const wasLinked = new Set(requestedProjects(before).map(link => link.id));
+  if (requestedProjects(after).some(link => !wasLinked.has(link.id))) return false;
   const wasBound = new Map(requestedBindings(before).map(binding => [binding.id, binding.actions]));
   for (const binding of requestedBindings(after)) {
     const actions = wasBound.get(binding.id);

@@ -445,6 +445,14 @@ An app that answers from a fixed knowledge set turns personal projects off:
 { "features": { "userProjects": false } }
 ```
 
+A [personal app](personal-apps.md#what-the-app-may-use) can link up to three projects too, when an
+administrator allows it. It is not an admin app, so it never makes a project reachable for anyone:
+a person gets documents from a linked project only if they may use that project in their own right,
+and so must the owner of the app. A chat of a personal app runs inside no project and attaches
+none, the instructions of a linked project are not added to its prompt, and the app never writes
+into a project. The `features.userProjects` switch above does not stop it from using a user
+project its owner linked; the installation-wide feature flag does.
+
 The project page offers only apps that allow personal projects when you start a chat. The
 installation-wide feature flags `projects` and `userProjects` still have to be on; the app
 switches can only narrow them. A workflow step's own project links are the workflow's and are not

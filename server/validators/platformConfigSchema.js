@@ -820,6 +820,7 @@ export const platformConfigSchema = z
             upload: z.boolean().prefault(true),
             webSearch: z.boolean().prefault(false),
             skills: z.boolean().prefault(false),
+            projects: z.boolean().prefault(false),
             integrations: z
               .array(
                 z
@@ -834,7 +835,12 @@ export const platformConfigSchema = z
                   })
                   .strict()
               )
-              .prefault([])
+              .prefault([]),
+            // The most pages the page reader may open for one answer of a personal app.
+            webSearchLimits: z
+              .object({ maxPageReads: z.number().int().prefault(10) })
+              .passthrough()
+              .prefault({})
           })
           .passthrough()
           .prefault({}),

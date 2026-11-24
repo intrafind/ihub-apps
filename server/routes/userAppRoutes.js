@@ -337,6 +337,11 @@ export default function registerUserAppRoutes(app, { llmClient, service: injecte
    *                         upload: { type: boolean }
    *                         webSearch: { type: boolean }
    *                         skills: { type: boolean }
+   *                         webSearchLimits:
+   *                           type: object
+   *                           description: "How far web search may be tuned in an app of the caller"
+   *                           properties:
+   *                             maxPageReads: { type: integer, description: "The most pages the page reader may open for one answer" }
    *                         integrations:
    *                           type: array
    *                           items:
@@ -652,7 +657,7 @@ export default function registerUserAppRoutes(app, { llmClient, service: injecte
    *                 minItems: 1
    *                 items:
    *                   type: string
-   *                   enum: [name, description, system, icon, color, prompt, messagePlaceholder, variables, starterPrompts]
+   *                   enum: [name, description, system, icon, color, prompt, messagePlaceholder, variables, starterPrompts, greeting, inputMode, preferredOutputFormat, startForm, variablesPanel, autoStart, preferredModel, models, webSearchSettings, projects]
    *               allowQuestions: { type: boolean, default: true }
    *               language: { type: string, pattern: '^[a-z]{2}(-[A-Z]{2})?$' }
    *     responses:

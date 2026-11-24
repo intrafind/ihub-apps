@@ -72,6 +72,30 @@ beforeAll(async () => {
   });
 });
 
+describe('a setting of the app', () => {
+  test('is a part of its own, with the sentence it adds', () => {
+    renderCard({
+      entry: entry({ patch: { autoStart: true }, changed: ['autoStart'], baseSnapshot: {} })
+    });
+    expect(screen.getByRole('heading', { name: TEXT.field.autoStart })).toBeInTheDocument();
+    expect(document.querySelector('ins')).toHaveTextContent(TEXT.line.autoStart);
+    expect(document.querySelector('del')).toBeNull();
+  });
+
+  test('shows a removed setting as a removed line, and a greeting by language', () => {
+    renderCard({
+      entry: entry({
+        patch: { autoStart: null, greeting: { en: { title: 'Hi', subtitle: 'there' } } },
+        changed: ['autoStart', 'greeting'],
+        baseSnapshot: { autoStart: true }
+      })
+    });
+    expect(document.querySelector('del')).toHaveTextContent(TEXT.line.autoStart);
+    expect(screen.getByRole('heading', { name: TEXT.field.greeting })).toBeInTheDocument();
+    expect(document.body).toHaveTextContent('en: Hi / there');
+  });
+});
+
 describe('the diff', () => {
   test('names the part in plain words and marks lines with <del>/<ins> and hidden words', () => {
     renderCard();
@@ -156,7 +180,60 @@ describe('around the diff', () => {
     expect(search).not.toBeChecked();
     fireEvent.click(screen.getByRole('checkbox', { name: 'use Jira' }));
     fireEvent.click(screen.getByRole('button', { name: TEXT.change.apply }));
-    expect(onApply).toHaveBeenCalledWith({ webSearch: false, integrationIds: ['jira'] });
+    expect(onApply).toHaveBeenCalledWith({
+      webSearch: false,
+      integrationIds: ['jira'],
+      settingKeys: []
+    });
+  });
+
+  test('settings that add reach are separate items, unticked, in plain words', () => {
+    const { onApply } = renderCard({
+      target: 'personal',
+      form: { ...BEFORE, capabilities: { upload: false } },
+      entry: entry({
+        patch: {},
+        changed: [],
+        suggestions: {
+          websearch: false,
+          integrations: [],
+          settings: [
+            { key: 'preferredModel', value: 'gpt-4o' },
+            { key: 'models', value: { allowed: ['gpt-4o', 'gpt-4o-mini'], lock: true } }
+          ]
+        }
+      })
+    });
+    const model = screen.getByRole('checkbox', { name: 'use the model gpt-4o' });
+    const models = screen.getByRole('checkbox', {
+      name: 'always use the chosen model, and only these models: gpt-4o, gpt-4o-mini'
+    });
+    expect(model).not.toBeChecked();
+    expect(models).not.toBeChecked();
+    fireEvent.click(models);
+    fireEvent.click(screen.getByRole('button', { name: TEXT.change.apply }));
+    expect(onApply).toHaveBeenCalledWith({
+      webSearch: false,
+      integrationIds: [],
+      settingKeys: ['models']
+    });
+  });
+
+  test('a setting the form already has is not offered again', () => {
+    renderCard({
+      target: 'personal',
+      form: { ...BEFORE, preferredModel: 'gpt-4o', capabilities: {} },
+      entry: entry({
+        suggestions: {
+          websearch: false,
+          integrations: [],
+          settings: [{ key: 'preferredModel', value: 'gpt-4o' }]
+        }
+      })
+    });
+    expect(
+      screen.queryByRole('checkbox', { name: 'use the model gpt-4o' })
+    ).not.toBeInTheDocument();
   });
 
   test('Apply is disabled with a reason when the form changed since', () => {

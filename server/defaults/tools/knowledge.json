@@ -9,6 +9,8 @@
     "de": "Dokumente der Projekte durchsuchen, auflisten und lesen, die in diesem Chat, Workflow oder Agenten verfügbar sind. Wird automatisch hinzugefügt, wenn ein Projekt im Zugriff ist."
   },
   "script": "knowledge.js",
+  "sideEffect": "read",
+  "dataFlow": "internal",
   "enabled": true,
   "functions": {
     "search": {

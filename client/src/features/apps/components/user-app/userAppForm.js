@@ -19,10 +19,17 @@
  * @module features/apps/components/user-app/userAppForm
  */
 
-import { pickUserAppContent } from '../../../../../../shared/userAppContent.js';
+import {
+  USER_APP_LIMITS,
+  USER_APP_OUTPUT_FORMATS,
+  pickUserAppContent
+} from '../../../../../../shared/userAppContent.js';
 
 /** Prefix of the capability ID of a bound installation (`integration:<installationId>`). */
 const INTEGRATION_PREFIX = 'integration:';
+
+/** Prefix of the capability ID of a linked project (`project:<projectId>`). */
+const PROJECT_PREFIX = 'project:';
 
 /**
  * Stands for "the app asks for a model the server does not tell": the model
@@ -33,6 +40,20 @@ export const WITHHELD_MODEL = ':withheld';
 const LOCALIZED = ['name', 'description', 'system', 'prompt', 'messagePlaceholder'];
 const OPTIONAL_TEXTS = ['prompt', 'messagePlaceholder'];
 const FLAGS = ['upload', 'webSearch', 'skills'];
+
+/**
+ * The keys about how the chat looks and starts, each with the value of "not
+ * set" in the form. The form holds them as the content stores them, except
+ * that an empty object, an empty text or `false` stands for "not set".
+ */
+const LOOKS = Object.freeze({
+  greeting: {},
+  inputMode: {},
+  preferredOutputFormat: '',
+  startForm: {},
+  variablesPanel: {},
+  autoStart: false
+});
 
 const isPlainObject = value => Boolean(value) && typeof value === 'object' && !Array.isArray(value);
 const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
@@ -71,6 +92,8 @@ export function formFromApp(app) {
   form.color = content.color || '';
   form.variables = content.variables || [];
   form.starterPrompts = content.starterPrompts || [];
+  for (const [key, unset] of Object.entries(LOOKS))
+    form[key] = content[key] ?? structuredClone(unset);
   form.preferredModel =
     typeof source.preferredModel === 'string' && source.preferredModel
       ? source.preferredModel
@@ -94,7 +117,185 @@ export function formFromApp(app) {
         return { id: installationId, actions: Array.isArray(actions) ? [...actions] : [] };
       })
   };
+  // What the author stored where the app object of a run has less (the models are cut to
+  // what this caller may use): the answer's `authored` block, when the caller may edit.
+  // The linked projects: as stored where the caller may read it, else the ones the app asks for.
+  const requestedProjects = [...caps.keys()]
+    .filter(id => id.startsWith(PROJECT_PREFIX) && requested(id))
+    .map(id => ({ id: id.slice(PROJECT_PREFIX.length) }));
+  if (requestedProjects.length > 0) form.capabilities.projects = requestedProjects;
+  const authored = source.authored?.capabilities;
+  if (Array.isArray(authored?.projects))
+    form.capabilities.projects = structuredClone(authored.projects);
+  if (isPlainObject(authored?.models)) form.capabilities.models = structuredClone(authored.models);
+  if (isPlainObject(authored?.webSearchSettings)) {
+    form.capabilities.webSearchSettings = structuredClone(authored.webSearchSettings);
+  }
   return form;
+}
+
+/** The greeting with only the languages that have both a title and a subtitle. */
+function cleanGreeting(greeting) {
+  const clean = {};
+  for (const [language, entry] of Object.entries(isPlainObject(greeting) ? greeting : {})) {
+    const title = typeof entry?.title === 'string' ? entry.title.trim() : '';
+    const subtitle = typeof entry?.subtitle === 'string' ? entry.subtitle.trim() : '';
+    if (title && subtitle) clean[language] = { title, subtitle };
+  }
+  return clean;
+}
+
+/**
+ * One look as the server would store it: a value that is not set, or not one a
+ * personal app may store, becomes the value of "not set" ({@link LOOKS}).
+ */
+function cleanLook(key, value) {
+  switch (key) {
+    case 'greeting':
+      return cleanGreeting(value);
+    case 'inputMode': {
+      const clean = {};
+      if (value?.type === 'singleline' || value?.type === 'multiline') clean.type = value.type;
+      const rows = Number(value?.rows);
+      if (Number.isInteger(rows) && rows >= 1 && rows <= USER_APP_LIMITS.inputRows) {
+        clean.rows = rows;
+      }
+      return clean;
+    }
+    case 'preferredOutputFormat':
+      return USER_APP_OUTPUT_FORMATS.includes(value) && value !== 'markdown' ? value : '';
+    case 'startForm': {
+      if (typeof value?.enabled !== 'boolean') return {};
+      const clean = { enabled: value.enabled };
+      const label = {};
+      for (const [language, text] of Object.entries(
+        isPlainObject(value.submitLabel) ? value.submitLabel : {}
+      )) {
+        if (typeof text === 'string' && text.trim()) label[language] = text.trim();
+      }
+      if (Object.keys(label).length > 0) clean.submitLabel = label;
+      return clean;
+    }
+    case 'variablesPanel':
+      return typeof value?.pinned === 'boolean' ? { pinned: value.pinned } : {};
+    default:
+      return value === true;
+  }
+}
+
+/** Whether a look is "not set". */
+const isUnset = value =>
+  value === '' ||
+  value === false ||
+  value === undefined ||
+  value === null ||
+  (isPlainObject(value) && Object.keys(value).length === 0);
+
+/**
+ * The merge patch that turns `before` into `after`: objects key by key, a
+ * removed key as `null`, anything else as the whole new value. `undefined`
+ * when nothing differs.
+ */
+function mergeDiff(before, after) {
+  if (isPlainObject(after)) {
+    const old = isPlainObject(before) ? before : {};
+    const diff = {};
+    for (const [key, value] of Object.entries(after)) {
+      const change = mergeDiff(old[key], value);
+      if (change !== undefined) diff[key] = change;
+    }
+    for (const key of Object.keys(old)) if (!Object.hasOwn(after, key)) diff[key] = null;
+    return Object.keys(diff).length > 0 ? diff : undefined;
+  }
+  return same(before, after) ? undefined : after;
+}
+
+/** Whether a number field holds a text that is not empty and not a whole number in range. */
+function isBadWholeNumber(value, max) {
+  if (value === undefined || value === null || String(value).trim() === '') return false;
+  const number = Number(value);
+  return !(Number.isInteger(number) && number >= 1 && number <= max);
+}
+
+/**
+ * The number fields of the form that hold something no save can use, as
+ * `{ key, max }` entries: the rows of the input line and the pages the page
+ * reader may open. An empty field is not one: it clears the setting. Without
+ * this check an entry such as `0` or `4.5` would be cleaned away and the save
+ * would remove the stored number instead of reporting the input.
+ *
+ * @param {Object} form - The form state as edited.
+ * @returns {Array<{ key: 'rows'|'pageReads', max: number }>}
+ */
+export function invalidNumberFields(form) {
+  const bad = [];
+  if (isBadWholeNumber(form?.inputMode?.rows, USER_APP_LIMITS.inputRows)) {
+    bad.push({ key: 'rows', max: USER_APP_LIMITS.inputRows });
+  }
+  if (
+    isBadWholeNumber(form?.capabilities?.webSearchSettings?.maxPageReads, USER_APP_LIMITS.pageReads)
+  ) {
+    bad.push({ key: 'pageReads', max: USER_APP_LIMITS.pageReads });
+  }
+  return bad;
+}
+
+/** The patch of one look between two form states: `undefined` when it did not change. */
+function lookPatch(key, saved, current) {
+  const before = cleanLook(key, saved?.[key]);
+  const after = cleanLook(key, current?.[key]);
+  if (isUnset(after)) return isUnset(before) ? undefined : null;
+  return mergeDiff(before, after);
+}
+
+/**
+ * One of the capability objects as the server would store it, or `{}` when it
+ * says nothing: the models (each ID once, a lock only when it is on) and the
+ * settings of web search (a whole number of pages, a guidance that is not blank).
+ */
+function cleanCapabilityObject(key, value) {
+  if (key === 'models') {
+    const allowed = [
+      ...new Set(
+        (Array.isArray(value?.allowed) ? value.allowed : []).filter(
+          id => typeof id === 'string' && id !== ''
+        )
+      )
+    ];
+    return {
+      ...(allowed.length > 0 ? { allowed } : {}),
+      ...(value?.lock === true ? { lock: true } : {})
+    };
+  }
+  const clean = {};
+  const pages = Number(value?.maxPageReads);
+  if (value?.maxPageReads !== undefined && value?.maxPageReads !== '' && Number.isInteger(pages)) {
+    clean.maxPageReads = pages;
+  }
+  if (typeof value?.researchGuidance === 'string' && value.researchGuidance.trim()) {
+    clean.researchGuidance = value.researchGuidance.trim();
+  }
+  return clean;
+}
+
+/** The linked projects as the server would store them: each ID once, in order. */
+function cleanProjects(list) {
+  const ids = [];
+  for (const entry of Array.isArray(list) ? list : []) {
+    const id = typeof entry?.id === 'string' ? entry.id : '';
+    if (id && !ids.includes(id)) ids.push(id);
+  }
+  return ids.map(id => ({ id }));
+}
+
+/** The patch of one capability object between two form states; `undefined` when it did not change. */
+function capabilityObjectPatch(key, saved, current) {
+  const before = cleanCapabilityObject(key, saved?.capabilities?.[key]);
+  const after = cleanCapabilityObject(key, current?.capabilities?.[key]);
+  if (isUnset(after)) return isUnset(before) ? undefined : null;
+  // Lists are replaced as a whole, objects merge key by key.
+  const diff = mergeDiff(before, after);
+  return diff;
 }
 
 /** A localized text as a merge patch: changed languages, and `null` for removed ones. */
@@ -148,6 +349,10 @@ export function patchFor(saved, current) {
   for (const key of ['variables', 'starterPrompts']) {
     if (!same(picked[key], pickedSaved[key])) patch[key] = picked[key];
   }
+  for (const key of Object.keys(LOOKS)) {
+    const change = lookPatch(key, saved, current);
+    if (change !== undefined) patch[key] = change;
+  }
   if (
     current.preferredModel !== saved.preferredModel &&
     current.preferredModel !== WITHHELD_MODEL
@@ -165,6 +370,16 @@ export function patchFor(saved, current) {
       .filter(binding => binding.actions.length > 0)
       .map(binding => ({ id: binding.id, actions: [...binding.actions] }));
   }
+  for (const key of ['models', 'webSearchSettings']) {
+    const change = capabilityObjectPatch(key, saved, current);
+    if (change !== undefined) capabilities[key] = change;
+  }
+  // The linked projects are a list and go whole, or `null` when none is left.
+  const projectsBefore = cleanProjects(saved.capabilities?.projects);
+  const projectsAfter = cleanProjects(current.capabilities?.projects);
+  if (!same(projectsBefore, projectsAfter)) {
+    capabilities.projects = projectsAfter.length > 0 ? projectsAfter : null;
+  }
   if (Object.keys(capabilities).length > 0) patch.capabilities = capabilities;
   return Object.keys(patch).length > 0 ? patch : null;
 }
@@ -176,7 +391,7 @@ export function patchFor(saved, current) {
  * the form read-only for that editor.
  *
  * @param {Object} app - The answer of the server.
- * @returns {Array<{id: string, kind: 'model'|'upload'|'webSearch'|'skills'|'integration',
+ * @returns {Array<{id: string, kind: 'model'|'models'|'upload'|'webSearch'|'skills'|'integration'|'project',
  *   installationId: string|null, name: Object|string|null, reason: string|null}>}
  */
 export function withheldCapabilities(app) {
@@ -185,9 +400,11 @@ export function withheldCapabilities(app) {
     .filter(entry => isPlainObject(entry) && entry.requested === true && entry.granted !== true)
     .map(entry => {
       const integration = String(entry.id).startsWith(INTEGRATION_PREFIX);
+      const project = String(entry.id).startsWith(PROJECT_PREFIX);
       return {
         id: entry.id,
-        kind: integration ? 'integration' : entry.id,
+        kind: integration ? 'integration' : project ? 'project' : entry.id,
+        ...(project ? { projectId: String(entry.id).slice(PROJECT_PREFIX.length) } : {}),
         installationId: integration ? String(entry.id).slice(INTEGRATION_PREFIX.length) : null,
         name: entry.name ?? null,
         reason: entry.reason || null
@@ -205,6 +422,17 @@ export function withheldCapabilities(app) {
  */
 export function withoutCapability(form, capability) {
   if (capability.kind === 'model') return { ...form, preferredModel: null };
+  if (capability.kind === 'models') {
+    const { models: _removed, ...rest } = form.capabilities;
+    return { ...form, capabilities: rest };
+  }
+  if (capability.kind === 'project') {
+    const kept = cleanProjects(form.capabilities.projects).filter(
+      link => link.id !== capability.projectId
+    );
+    const { projects: _links, ...rest } = form.capabilities;
+    return { ...form, capabilities: kept.length > 0 ? { ...rest, projects: kept } : rest };
+  }
   if (capability.kind === 'integration') {
     return {
       ...form,
@@ -228,6 +456,11 @@ export function withoutCapability(form, capability) {
  */
 export function stillAsksFor(form, capability) {
   if (capability.kind === 'model') return form.preferredModel === WITHHELD_MODEL;
+  if (capability.kind === 'models')
+    return !isUnset(cleanCapabilityObject('models', form.capabilities.models));
+  if (capability.kind === 'project') {
+    return cleanProjects(form.capabilities.projects).some(link => link.id === capability.projectId);
+  }
   if (capability.kind === 'integration') {
     return form.capabilities.integrations.some(binding => binding.id === capability.installationId);
   }

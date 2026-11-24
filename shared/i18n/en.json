@@ -4846,7 +4846,14 @@
           "suggestions": "It could also",
           "webSearch": "search the web",
           "integration": "use {{name}}",
-          "languageLabel": "Language: {{language}}"
+          "languageLabel": "Language: {{language}}",
+          "setting": {
+            "preferredModel": "use the model {{model}}",
+            "models": "only use these models: {{models}}",
+            "modelsLocked": "always use the chosen model, and only these models: {{models}}",
+            "webSearchSettings": "research with at most {{pages}} pages per answer. {{guidance}}",
+            "projects": "link these projects: {{projects}}"
+          }
         },
         "field": {
           "name": "Name",
@@ -4857,14 +4864,29 @@
           "variables": "What users fill in first",
           "starterPrompts": "Example questions",
           "category": "Category",
-          "look": "Look"
+          "look": "Look",
+          "greeting": "Greeting",
+          "inputMode": "Input line",
+          "preferredOutputFormat": "Answer format",
+          "startForm": "Start form",
+          "variablesPanel": "Input panel",
+          "autoStart": "Auto-start"
         },
         "line": {
           "required": "(required)",
           "color": "Colour {{value}}",
           "icon": "Icon {{value}}",
           "default": "Default: {{value}}",
-          "typeBoolean": "Yes/no"
+          "typeBoolean": "Yes/no",
+          "rows_one": "{{count}} row",
+          "rows_other": "{{count}} rows",
+          "formatText": "Answers as plain text",
+          "formatMarkdown": "Answers as formatted text",
+          "startFormOn": "A chat starts with a form {{label}}",
+          "startFormOff": "A chat starts with the message box",
+          "panelPinned": "The input fields stay open beside the chat",
+          "panelCollapsed": "The input fields close after each message",
+          "autoStart": "The app sends the first message itself"
         },
         "warning": {
           "otherLanguages": "Only the text in this language changed. The other languages stay as they were.",
@@ -9627,7 +9649,10 @@
         "noInstallations": "No connected system is installed.",
         "noActions": "No functions",
         "unblock": "Switch on again",
-        "invalidMaxApps": "Enter a whole number for the limit of apps per user (0 means no limit)."
+        "invalidMaxApps": "Enter a whole number for the limit of apps per user (0 means no limit).",
+        "pageReads": "Most pages an app may open per answer",
+        "pageReadsHelp": "Applies where web search is allowed: an author may set how many pages the app opens for one answer, up to this number. The platform default is 5.",
+        "invalidPageReads": "Enter a whole number from 1 to 50."
       },
       "groups": {
         "userApps": "Personal apps",
@@ -9643,7 +9668,8 @@
       },
       "capability": {
         "model": "A chosen AI model",
-        "upload": "Files"
+        "upload": "Files",
+        "projects": "Projects"
       },
       "empty": "No personal apps yet.",
       "noMatch": "No personal app matches.",
@@ -14229,7 +14255,19 @@
         "integrations": "Connected systems",
         "approvalHelp": "When someone else uses your app, it asks them before every step in a connected system. In your own chats it asks before it changes something.",
         "gone": "{{capability}} is no longer available for your apps. The app runs without it.",
-        "remove": "Remove"
+        "remove": "Remove",
+        "modelsTitle": "Models people may use",
+        "modelsHelp": "Tick the models the app is limited to. Tick none to allow every model a person may use. Someone who may use none of the ticked models cannot chat with the app.",
+        "modelsLock": "Always use the AI model above and hide the model picker",
+        "modelsLockNeedsModel": "Choose an AI model above first.",
+        "pageReads": "Pages the app may open per answer",
+        "pageReadsHelp": "At most {{max}}. Empty uses the default of the installation.",
+        "researchGuidance": "How the app should research",
+        "researchGuidanceHelp": "One or two sentences, added to the instructions while web search is on.",
+        "projectsTitle": "Projects the app answers from",
+        "projectsHelp": "At most {{max}}. Everyone who uses the app gets documents only from the projects they may use themselves; people who are not members get nothing from them.",
+        "projectsNone": "You have no project yet.",
+        "projectsError": "The list of your projects could not be loaded."
       },
       "conflict": "Someone else changed this app. Reload to see the changes.",
       "readOnly": {
@@ -14252,7 +14290,9 @@
         "model": "The chosen AI model",
         "upload": "File upload",
         "webSearch": "Web search",
-        "skills": "Skills"
+        "skills": "Skills",
+        "models": "The chosen list of AI models",
+        "project": "The linked project"
       },
       "saveFirst": "Save your changes first",
       "instructionsDesc": "Tell the AI what its task is and how it should answer. It reads this before every chat. People you share the app with can read it. (Also called the system prompt.)",
@@ -14260,7 +14300,21 @@
         "model": "the chosen AI model",
         "upload": "file upload",
         "webSearch": "web search",
-        "skills": "skills"
+        "skills": "skills",
+        "models": "the chosen list of AI models",
+        "project": "the linked project"
+      },
+      "advanced": {
+        "title": "Advanced",
+        "intro": "How the chat looks and starts. None of this gives the app a tool or access to more data.",
+        "greetingTitle": "Greeting: title",
+        "greetingHelp": "Shown on the empty chat, in the language of the person chatting. A language needs a title and a subtitle.",
+        "greetingSubtitle": "Greeting: subtitle",
+        "formatMarkdown": "Formatted text",
+        "formatText": "Plain text",
+        "autoStartHelp": "The app sends the first message itself, so it speaks first. When someone else opens your app, that first answer counts against their own usage limit.",
+        "invalidRows": "The rows of the input line must be a whole number from 1 to {{max}}, or empty.",
+        "invalidPageReads": "The number of pages to read must be a whole number from 1 to {{max}}, or empty."
       }
     },
     "share": {
@@ -14305,12 +14359,14 @@
         "skills": "use the skills: {{list}}",
         "skillsNone": "use skills",
         "integration": "{{name}}: {{actions}}",
-        "none": "answer in the chat, and nothing else"
+        "none": "answer in the chat, and nothing else",
+        "project": "answer from the project {{name}}"
       },
       "tool": {
         "webSearch": "web search",
         "skills": "skills",
-        "integrations": "a connected system"
+        "integrations": "a connected system",
+        "projects": "a project"
       },
       "droppedItem": "{{name}} ({{reason}})",
       "reason": {
@@ -14318,7 +14374,8 @@
         "ownerMayNot": "the owner may not use it",
         "youMayNot": "you may not use it",
         "ownerInactive": "the owner's account is inactive",
-        "ownerStale": "the owner's rights are out of date"
+        "ownerStale": "the owner's rights are out of date",
+        "userProject": "a project of a person stays theirs; ask an administrator for a company project"
       }
     },
     "transfer": {

@@ -22,7 +22,7 @@
 import configCache from '../../configCache.js';
 import { isFeatureEnabled } from '../../featureRegistry.js';
 import logger from '../../utils/logger.js';
-import { isUserAppId } from '../../../shared/userAppContent.js';
+import { USER_APP_LIMITS, isUserAppId } from '../../../shared/userAppContent.js';
 import { ADMIN_ENABLES_VALUES, FORBIDDEN_INSTALLATION_ID } from '../../validators/userAppSchema.js';
 
 const COMPONENT = 'UserApps';
@@ -55,7 +55,12 @@ export const DEFAULT_USER_APP_SETTINGS = Object.freeze({
     upload: true,
     webSearch: false,
     skills: false,
-    integrations: Object.freeze([])
+    // Whether an app may link projects, the documents it answers from.
+    projects: false,
+    integrations: Object.freeze([]),
+    // How far web search may be tuned in an app of one person: the most pages the
+    // page reader may open for one answer (the platform default is 5).
+    webSearchLimits: Object.freeze({ maxPageReads: 10 })
   }),
   publishing: Object.freeze({ adminEnables: 'withTools' }),
   blockedOwners: Object.freeze([])
@@ -119,8 +124,9 @@ function readInstallations(value) {
  * @returns {{limits: {maxAppsPerUser: number, maxOpenOffersPerUser: number,
  *   ownerSnapshotMaxAgeDays: number}, sharing: {allowUsers: boolean, allowGroups: boolean,
  *   allowEveryone: boolean, allowPublish: boolean}, capabilities: {modelChoice: boolean,
- *   upload: boolean, webSearch: boolean, skills: boolean,
- *   integrations: Array<{id: string, actions: string[]}>},
+ *   upload: boolean, webSearch: boolean, skills: boolean, projects: boolean,
+ *   integrations: Array<{id: string, actions: string[]}>,
+ *   webSearchLimits: {maxPageReads: number}},
  *   publishing: {adminEnables: 'withTools'|'always'}, blockedOwners: string[]}}
  */
 export function userAppSettings(platformConfig) {
@@ -152,7 +158,17 @@ export function userAppSettings(platformConfig) {
       upload: readBoolean(capabilities.upload, defaults.capabilities.upload),
       webSearch: readBoolean(capabilities.webSearch, defaults.capabilities.webSearch),
       skills: readBoolean(capabilities.skills, defaults.capabilities.skills),
-      integrations: readInstallations(capabilities.integrations)
+      projects: readBoolean(capabilities.projects, defaults.capabilities.projects),
+      integrations: readInstallations(capabilities.integrations),
+      webSearchLimits: {
+        maxPageReads: Math.min(
+          USER_APP_LIMITS.pageReads,
+          readPositive(
+            capabilities.webSearchLimits?.maxPageReads,
+            defaults.capabilities.webSearchLimits.maxPageReads
+          )
+        )
+      }
     },
     publishing: {
       adminEnables: ADMIN_ENABLES_VALUES.includes(block.publishing?.adminEnables)

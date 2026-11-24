@@ -179,7 +179,8 @@ describe('a turn on a personal app', () => {
     // No search engine is installed; the wiki is not allowed for personal apps.
     assert.deepEqual(res.body.suggestions, {
       websearch: false,
-      integrations: [{ id: 'jira', label: 'Jira', actions: ['search', 'read'] }]
+      integrations: [{ id: 'jira', label: 'Jira', actions: ['search', 'read'] }],
+      settings: []
     });
     assert.equal('integrations' in res.body.patch, false);
     // Nora's group grants no integration.

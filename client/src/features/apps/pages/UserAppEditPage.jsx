@@ -10,6 +10,7 @@ import {
   deleteUserApp,
   duplicateUserApp,
   fetchModels,
+  fetchProjects,
   fetchUserApp,
   fetchUserAppShareTargets,
   offerUserApp,
@@ -52,6 +53,7 @@ import VariablesSection from '../../admin/components/app-form/VariablesSection';
 import { CALLOUT_CLASS, SECONDARY_BUTTON_CLASS } from '../../admin/components/formStyles';
 import { useUnsavedChanges } from '../../admin/hooks/useUnsavedChanges';
 import { isUserAppId, pickUserAppContent } from '../../../../../shared/userAppContent.js';
+import UserAppAdvancedSection from '../components/user-app/UserAppAdvancedSection';
 import UserAppBasicsSection from '../components/user-app/UserAppBasicsSection';
 import PublishDialog from '../components/user-app/PublishDialog';
 import UserAppEditorGroup from '../components/user-app/UserAppEditorGroup';
@@ -69,6 +71,7 @@ import {
 import {
   formFromApp,
   offersAiChanges,
+  invalidNumberFields,
   patchFor,
   readOnlyReason,
   userAppStateChip,
@@ -104,7 +107,13 @@ const SECTION_EMPTY = {
 const NOTHING_LOADED = Object.freeze({ appId: null, status: 'loading', app: null, error: null });
 /** From here up the test panel sits beside the editor; below it is a full-screen dialog. */
 const WIDE_QUERY = '(min-width: 1024px)';
-const GROUPS_OPEN = Object.freeze({ basics: true, instructions: true, extras: true });
+// "Advanced" starts closed: most apps never need it.
+const GROUPS_OPEN = Object.freeze({
+  basics: true,
+  instructions: true,
+  extras: true,
+  advanced: false
+});
 
 /**
  * The editor of a personal app (`/apps/:appId/edit`): three groups, the test
@@ -141,6 +150,10 @@ function UserAppEditPage() {
   // The stored content as a form state, and the form as edited.
   const [forms, setForms] = useState({ saved: null, form: null });
   const [models, setModels] = useState([]);
+  const [projects, setProjects] = useState([]);
+  const [projectsFailed, setProjectsFailed] = useState(false);
+  const [projectsLoaded, setProjectsLoaded] = useState(false);
+  const [projectsAttempt, setProjectsAttempt] = useState(0);
   const [groups, setGroups] = useState(GROUPS_OPEN);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState(null);
@@ -231,6 +244,23 @@ function UserAppEditPage() {
     };
   }, [modelChoice]);
 
+  // The projects the person may link, listed only where the installation allows linking.
+  const projectLinks = allowed?.projects === true;
+  useEffect(() => {
+    if (!projectLinks) return undefined;
+    let active = true;
+    fetchProjects()
+      .then(list => {
+        if (!active) return;
+        setProjects(Array.isArray(list) ? list : []);
+        setProjectsLoaded(true);
+      })
+      .catch(() => active && setProjectsFailed(true));
+    return () => {
+      active = false;
+    };
+  }, [projectLinks, projectsAttempt]);
+
   const permissions = app?.permissions || {};
   const form = forms.form;
   const contentLanguage =
@@ -269,6 +299,9 @@ function UserAppEditPage() {
           getLocalizedContent(capability.name, uiLanguage) ||
           capability.installationId
         );
+      }
+      if (capability.kind === 'project') {
+        return getLocalizedContent(capability.name, uiLanguage) || capability.projectId;
       }
       return wording === 'noun'
         ? t(`userApps.edit.capabilityNoun.${capability.kind}`)
@@ -332,8 +365,25 @@ function UserAppEditPage() {
     [setForm]
   );
 
+  /** Why the form cannot be saved because of a number field, else null. */
+  const invalidNumberMessage = candidate => {
+    const [invalid] = invalidNumberFields(candidate);
+    if (!invalid) return null;
+    return t(
+      invalid.key === 'rows'
+        ? 'userApps.edit.advanced.invalidRows'
+        : 'userApps.edit.advanced.invalidPageReads',
+      { max: invalid.max }
+    );
+  };
+
   const save = async () => {
     if (!app || !form || saving) return;
+    const invalid = invalidNumberMessage(form);
+    if (invalid) {
+      setSaveError(invalid);
+      return;
+    }
     const patch = patchFor(forms.saved, form);
     if (!patch) {
       // Only something a personal app cannot store was touched.
@@ -371,6 +421,9 @@ function UserAppEditPage() {
    */
   const persistFromConversation = async next => {
     if (!app || !form || saving) return { status: 'failed', message: null };
+    // Apply and Undo save the whole form: an invalid number in it would clear the stored one.
+    const invalid = invalidNumberMessage(next);
+    if (invalid) return { status: 'failed', message: invalid };
     const before = form;
     const patch = patchFor(forms.saved, next);
     if (!patch) {
@@ -734,11 +787,27 @@ function UserAppEditPage() {
                     onChange={setForm}
                     allowed={allowed}
                     models={models}
+                    projects={projects}
+                    projectsError={projectsFailed}
+                    projectsLoading={!projectsLoaded && !projectsFailed}
+                    onRetryProjects={() => {
+                      setProjectsFailed(false);
+                      setProjectsAttempt(count => count + 1);
+                    }}
                     withheld={withheld}
                     capabilityName={capabilityName}
                     onRemove={capability => setForm(held => withoutCapability(held, capability))}
                     language={uiLanguage}
                   />
+                </UserAppEditorGroup>
+
+                <UserAppEditorGroup
+                  title={t('userApps.edit.advanced.title')}
+                  open={groups.advanced}
+                  onToggle={() => toggleGroup('advanced')}
+                  disabled={formDisabled}
+                >
+                  <UserAppAdvancedSection form={form} onChange={setForm} />
                 </UserAppEditorGroup>
               </AppFormTranslateProvider>
             </AppFormLanguageProvider>

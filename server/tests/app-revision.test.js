@@ -357,6 +357,289 @@ describe('the messages of a turn', () => {
   });
 });
 
+// --- The settings of the registry ------------------------------------------
+
+describe('the settings of the registry (change.settings)', () => {
+  const personalTurn = (settings, extra = {}) => {
+    llm.answer = change({ settings, ...extra });
+    return revise({
+      draft: PERSONAL_DRAFT(),
+      language: 'en',
+      conversation: ask('Let it start by itself'),
+      personal: { settings: { capabilities: {} } }
+    });
+  };
+
+  it('puts a checked setting into the patch, apart from the content keys', async () => {
+    const turn = await personalTurn({
+      autoStart: true,
+      greeting: { en: { title: 'Job ads', subtitle: 'Tell me the role' } },
+      inputMode: { type: 'multiline', rows: 6 },
+      preferredOutputFormat: 'text'
+    });
+    assert.equal(turn.reply, 'change');
+    assert.deepEqual(turn.patch, {
+      autoStart: true,
+      greeting: { en: { title: 'Job ads', subtitle: 'Tell me the role' } },
+      inputMode: { type: 'multiline', rows: 6 },
+      preferredOutputFormat: 'text'
+    });
+    assert.deepEqual(turn.changed.sort(), [
+      'autoStart',
+      'greeting',
+      'inputMode',
+      'preferredOutputFormat'
+    ]);
+    assert.deepEqual(turn.suggestions.settings, []);
+  });
+
+  it('refuses a value the schema of its key refuses, with a warning, and keeps the rest', async () => {
+    const turn = await personalTurn({
+      autoStart: true,
+      inputMode: { type: 'multiline', rows: 99 },
+      preferredOutputFormat: 'html',
+      startForm: { enabled: 'yes' }
+    });
+    assert.deepEqual(turn.patch, { autoStart: true });
+    assert.deepEqual(
+      turn.warnings
+        .filter(warning => warning.code === 'KEY_IGNORED')
+        .map(warning => warning.field)
+        .sort(),
+      ['inputMode', 'preferredOutputFormat', 'startForm']
+    );
+  });
+
+  it('ignores a key that is not a setting, and one outside the target', async () => {
+    const turn = await personalTurn({
+      autoStart: true,
+      toolApproval: { default: 'never' },
+      projects: ['hr'],
+      capabilities: { webSearch: true },
+      // A content key is read from the content channel, not from the settings.
+      system: 'x'
+    });
+    assert.deepEqual(turn.patch, { autoStart: true });
+    assert.deepEqual(
+      turn.warnings
+        .filter(warning => warning.code === 'KEY_IGNORED')
+        .map(warning => warning.field)
+        .sort(),
+      ['capabilities', 'projects', 'system', 'toolApproval']
+    );
+  });
+
+  it('removes a setting with null, and leaves a setting that is already so alone', async () => {
+    const draft = {
+      ...PERSONAL_DRAFT(),
+      autoStart: true,
+      greeting: { en: { title: 'T', subtitle: 'S' } }
+    };
+    llm.answer = change({ settings: { greeting: null, autoStart: true, startForm: null } });
+    const turn = await revise({
+      draft,
+      language: 'en',
+      personal: { settings: { capabilities: {} } }
+    });
+    // `autoStart` is on already and `startForm` was never set: only the greeting changes.
+    assert.deepEqual(turn.patch, { greeting: null });
+    assert.deepEqual(turn.changed, ['greeting']);
+  });
+
+  it('counts the empty values of the form as "not set"', async () => {
+    const draft = {
+      ...PERSONAL_DRAFT(),
+      greeting: {},
+      inputMode: {},
+      preferredOutputFormat: '',
+      startForm: {},
+      variablesPanel: {},
+      autoStart: false
+    };
+    llm.answer = change({
+      settings: { greeting: null, inputMode: null, preferredOutputFormat: null, autoStart: false }
+    });
+    const turn = await revise({
+      draft,
+      language: 'en',
+      personal: { settings: { capabilities: {} } }
+    });
+    assert.equal(turn.reply, 'message');
+    assert.ok(turn.warnings.some(warning => warning.code === 'NO_CHANGE'));
+  });
+
+  it('removes hidden characters from a greeting before it counts', async () => {
+    const turn = await personalTurn({
+      greeting: { en: { title: `Hel${ZWSP}lo${RLO}`, subtitle: `Wel${TAG_A}come` } }
+    });
+    assert.deepEqual(turn.patch.greeting, { en: { title: 'Hello', subtitle: 'Welcome' } });
+    assert.equal(hasHidden(JSON.stringify(turn.patch)), false);
+  });
+
+  it('writes autoStart as false into an admin app, where a personal app removes it', async () => {
+    const draft = { ...ADMIN_DRAFT(), autoStart: true };
+    llm.answer = change({ settings: { autoStart: false } });
+    const turn = await revise({ draft });
+    assert.deepEqual(turn.patch, { autoStart: false });
+  });
+
+  it('is read for an admin app too, with the greeting as the app stores it', async () => {
+    llm.answer = change({
+      settings: { greeting: { de: { title: 'Hallo', subtitle: 'Wie kann ich helfen?' } } }
+    });
+    const turn = await revise();
+    assert.deepEqual(turn.patch, {
+      greeting: { de: { title: 'Hallo', subtitle: 'Wie kann ich helfen?' } }
+    });
+  });
+
+  it('can be the whole change, next to a content key, with both in the patch', async () => {
+    llm.answer = change({
+      system: 'Sie antworten förmlich.',
+      settings: { autoStart: true }
+    });
+    const turn = await revise();
+    assert.deepEqual(Object.keys(turn.patch).sort(), ['autoStart', 'system']);
+    assert.deepEqual(turn.changed.sort(), ['autoStart', 'system']);
+  });
+
+  it('tells the model which settings it may set, and which are set now', async () => {
+    const draft = { ...PERSONAL_DRAFT(), autoStart: true };
+    llm.answer = change({ settings: { autoStart: false } });
+    await revise({ draft, language: 'en', personal: { settings: { capabilities: {} } } });
+    const system = systemMessageOf(llm.calls[0]);
+    assert.match(system, /- "settings": an object/);
+    for (const key of [
+      'greeting',
+      'inputMode',
+      'preferredOutputFormat',
+      'startForm',
+      'variablesPanel',
+      'autoStart'
+    ]) {
+      assert.ok(system.includes(`  - "${key}"`), key);
+    }
+    assert.match(userMessageOf(llm.calls[0]), /"settings": \{\s+"autoStart": true/);
+  });
+
+  it('is not offered when the request names other fields', async () => {
+    llm.answer = change({ settings: { autoStart: true }, system: 'Sie antworten förmlich.' });
+    const turn = await revise({ fields: ['system'], allowQuestions: false });
+    assert.equal(systemMessageOf(llm.calls[0]).includes('"settings"'), false);
+    assert.deepEqual(Object.keys(turn.patch), ['system']);
+    assert.ok(
+      turn.warnings.some(warning => warning.code === 'KEY_IGNORED' && warning.field === 'autoStart')
+    );
+  });
+
+  it('is offered when the request names it in fields', async () => {
+    llm.answer = change({ settings: { autoStart: true } });
+    const turn = await revise({ fields: ['autoStart'], allowQuestions: false });
+    assert.deepEqual(turn.patch, { autoStart: true });
+  });
+});
+
+describe('the settings that add reach (confirm items)', () => {
+  const OPEN = { capabilities: { modelChoice: true, webSearch: false } };
+  const turn = (settings, { draft = PERSONAL_DRAFT(), policy = OPEN, ...rest } = {}) => {
+    llm.answer = change({ settings }, rest.answer);
+    return revise({
+      draft,
+      language: 'en',
+      conversation: ask('Use the big model'),
+      personal: { settings: policy }
+    });
+  };
+
+  it('are offered only behind the switch of the administrator, with the models listed', async () => {
+    await turn({ preferredModel: 'big-model' });
+    const system = systemMessageOf(llm.calls[0]);
+    assert.match(system, /- "preferredModel" \(confirm\)/);
+    assert.match(system, /- "models" \(confirm\)/);
+    assert.match(system, /<<<AVAILABLE_MODELS\n- big-model \(Big model\)\nAVAILABLE_MODELS>>>/);
+    // The research settings need web search, which is off here.
+    assert.equal(system.includes('"webSearchSettings"'), false);
+
+    llm.calls = [];
+    await turn(
+      { preferredModel: 'big-model' },
+      { policy: { capabilities: { modelChoice: false } } }
+    );
+    const closed = systemMessageOf(llm.calls[0]);
+    assert.equal(closed.includes('"preferredModel"'), false);
+    assert.equal(closed.includes('AVAILABLE_MODELS'), false);
+  });
+
+  it('come back as suggestions, never in the patch, and alone make a change', async () => {
+    const draft = { ...PERSONAL_DRAFT(), preferredModel: undefined };
+    const result = await turn({ preferredModel: 'big-model' }, { draft });
+    assert.equal(result.reply, 'change');
+    assert.deepEqual(result.patch, {});
+    assert.deepEqual(result.changed, []);
+    assert.deepEqual(result.suggestions.settings, [{ key: 'preferredModel', value: 'big-model' }]);
+  });
+
+  it('leave out a model the caller may not use, or that does not exist', async () => {
+    const draft = { ...PERSONAL_DRAFT(), preferredModel: undefined };
+    const result = await turn({ preferredModel: 'made-up-model' }, { draft });
+    assert.equal(result.reply, 'message');
+    assert.ok(result.warnings.some(warning => warning.code === 'NO_CHANGE'));
+  });
+
+  it('leave out a setting the app has already', async () => {
+    const result = await turn({ preferredModel: 'big-model' });
+    assert.equal(result.reply, 'message');
+  });
+
+  it('take a list of models, and a lock only when the app has a preferred model', async () => {
+    const withPreferred = await turn({ models: { allowed: ['big-model'], lock: true } });
+    assert.deepEqual(withPreferred.suggestions.settings, [
+      { key: 'models', value: { allowed: ['big-model'], lock: true } }
+    ]);
+    const without = await turn(
+      { models: { allowed: ['big-model'], lock: true } },
+      { draft: { ...PERSONAL_DRAFT(), preferredModel: undefined } }
+    );
+    assert.equal(without.reply, 'message');
+  });
+
+  it('refuse a value the schema of its key refuses', async () => {
+    const result = await turn({ models: { allowed: ['../x'] }, preferredModel: 'x'.repeat(300) });
+    assert.equal(result.reply, 'message');
+    assert.deepEqual(
+      result.warnings
+        .filter(warning => warning.code === 'KEY_IGNORED')
+        .map(warning => warning.field)
+        .sort(),
+      ['models', 'preferredModel']
+    );
+  });
+
+  it('are not offered for an admin app, which sets its model in the form', async () => {
+    llm.answer = change({ settings: { preferredModel: 'big-model' } });
+    const result = await revise();
+    assert.equal(systemMessageOf(llm.calls[0]).includes('"preferredModel"'), false);
+    assert.equal(result.reply, 'message');
+    assert.deepEqual(result.suggestions.settings, []);
+  });
+
+  it('show the model what the app has set now', async () => {
+    const draft = {
+      ...PERSONAL_DRAFT(),
+      capabilities: { ...PERSONAL_DRAFT().capabilities, models: { allowed: ['big-model'] } }
+    };
+    llm.answer = change({});
+    await revise({
+      draft,
+      language: 'en',
+      personal: { settings: OPEN }
+    });
+    const user = userMessageOf(llm.calls[0]);
+    assert.match(user, /"preferredModel": "big-model"/);
+    assert.match(user, /"models": \{\s+"allowed": \[\s+"big-model"/);
+  });
+});
+
 // --- Hostile and sloppy answers --------------------------------------------
 
 describe('what a change may hold', () => {
@@ -395,7 +678,8 @@ describe('what a change may hold', () => {
     // Proposals come back as suggestions, only for installations the caller may use.
     assert.deepEqual(turn.suggestions, {
       websearch: true,
-      integrations: [{ id: 'tickets', label: 'Tickets', actions: [] }]
+      integrations: [{ id: 'tickets', label: 'Tickets', actions: [] }],
+      settings: []
     });
   });
 
@@ -494,7 +778,7 @@ describe('fields and untouched keys', () => {
       turn.warnings.filter(w => w.code === 'KEY_IGNORED').map(w => w.field),
       ['name', 'icon']
     );
-    assert.deepEqual(turn.suggestions, { websearch: false, integrations: [] });
+    assert.deepEqual(turn.suggestions, { websearch: false, integrations: [], settings: [] });
   });
 
   it('leave a hand-written app untouched outside the changed keys', async () => {
@@ -807,7 +1091,8 @@ describe('suggestions', () => {
     const turn = await revise();
     assert.deepEqual(turn.suggestions, {
       websearch: true,
-      integrations: [{ id: 'tickets', label: 'Tickets', actions: ['searchTickets'] }]
+      integrations: [{ id: 'tickets', label: 'Tickets', actions: ['searchTickets'] }],
+      settings: []
     });
     assert.equal('websearch' in turn.patch || 'integrations' in turn.patch, false);
   });
@@ -821,7 +1106,8 @@ describe('suggestions', () => {
     // No search engine is installed, and only `readTicket` is allowed for personal apps.
     assert.deepEqual(turn.suggestions, {
       websearch: false,
-      integrations: [{ id: 'tickets', label: 'Tickets', actions: ['readTicket'] }]
+      integrations: [{ id: 'tickets', label: 'Tickets', actions: ['readTicket'] }],
+      settings: []
     });
 
     const none = await revise({
@@ -829,7 +1115,7 @@ describe('suggestions', () => {
       language: 'en',
       personal: { settings: { capabilities: { webSearch: false, integrations: [] } } }
     });
-    assert.deepEqual(none.suggestions, { websearch: false, integrations: [] });
+    assert.deepEqual(none.suggestions, { websearch: false, integrations: [], settings: [] });
   });
 });
 

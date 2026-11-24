@@ -108,7 +108,9 @@ export function readShippedToolDefinitions(fileIds, { dir = shippedToolsDir() } 
   const tools = new Map();
   for (const fileId of fileIds) {
     const file = JSON.parse(readFileSync(path.join(dir, `${fileId}.json`), 'utf8'));
-    for (const tool of expandShippedTool(file)) tools.set(tool.id, tool);
+    // `_shipped` says the definition is part of iHub and not something an admin or an
+    // author wrote; the approval rules of personal apps read it (`utils/toolApproval.js`).
+    for (const tool of expandShippedTool(file)) tools.set(tool.id, { ...tool, _shipped: true });
   }
   return tools;
 }
