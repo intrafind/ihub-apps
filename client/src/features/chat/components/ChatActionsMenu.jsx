@@ -8,6 +8,7 @@ import Icon from '../../../shared/components/Icon';
 import ExportDialog from './ExportDialog';
 import { useAuth } from '../../../shared/contexts/AuthContext';
 import useFeatureFlags from '../../../shared/hooks/useFeatureFlags';
+import { appEditPath } from '../../apps/utils/appEditTarget';
 
 function ChatActionsMenu({
   app,
@@ -39,6 +40,7 @@ function ChatActionsMenu({
   const navigate = useNavigate();
   const { user } = useAuth();
   const featureFlags = useFeatureFlags();
+  const editPath = showEditAppButton ? appEditPath(app, user, appId) : null;
   const [open, setOpen] = useState(false);
   const [showExportDialog, setShowExportDialog] = useState(false);
   const menuRef = useRef(null);
@@ -68,10 +70,10 @@ function ChatActionsMenu({
       </button>
       {open && (
         <div className="absolute right-0 mt-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-sm shadow-lg z-20 min-w-40">
-          {showEditAppButton && user?.isAdmin && appId && (
+          {editPath && (
             <button
               onClick={() => {
-                navigate(`/admin/apps/${appId}`);
+                navigate(editPath);
                 setOpen(false);
               }}
               className="w-full text-left px-3 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2 whitespace-nowrap"

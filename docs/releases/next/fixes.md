@@ -14,3 +14,15 @@ release only had `-win.zip`.
   it was written, such as `browser-extension\`, which stay missing until the next update, made
   with 5.6.2 or later.
 - From 5.6.2 on, an installation updates from `-win.zip` and does not use the extra archive.
+
+## "Edit App" in the Chat Opens the Right Editor for Personal Apps
+
+In the chat of a personal app, **Edit App** opened the admin editor, which answered "Not found:
+app …" because it does not know personal apps. A person who is not an administrator did not
+get the button at all.
+
+- The button opens the personal editor (`/apps/<id>/edit`) for the owner of a personal app and
+  for everyone it is shared with as "Can edit", administrator or not.
+- Someone who may only use a personal app, or an administrator who has no edit right on it,
+  sees no button.
+- For an app of the company, nothing changes: administrators land in the admin editor.
