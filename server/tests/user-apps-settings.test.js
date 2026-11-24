@@ -34,6 +34,7 @@ import {
 } from '../utils/authorization.js';
 import { groupConfigSchema } from '../validators/groupConfigSchema.js';
 import { platformConfigSchema } from '../validators/platformConfigSchema.js';
+import { userAppSettingsSchema } from '../validators/userAppSchema.js';
 import { DEFAULT_PROJECT_SETTINGS, projectSettings } from '../services/projects/projectSettings.js';
 import {
   ADMIN_ENABLES_VALUES,
@@ -246,7 +247,8 @@ describe('platform.userApps', () => {
       upload: true,
       webSearch: false,
       skills: false,
-      integrations: []
+      integrations: [],
+      webSearchLimits: { maxPageReads: 10 }
     },
     publishing: { adminEnables: 'withTools' },
     blockedOwners: []
@@ -592,6 +594,58 @@ describe('the start-up warnings', () => {
       configCache.setCacheEntry('config/apps.json', appsBefore || []);
       configCache.setCacheEntry('config/features.json', featuresBefore || {});
     }
+  });
+});
+
+describe('the limit of pages a personal app may open (webSearchLimits)', () => {
+  const limit = value =>
+    userAppSettings({ userApps: { capabilities: { webSearchLimits: value } } });
+
+  it('reads the limit, and falls back to the default for anything that is not a number', () => {
+    assert.equal(limit({ maxPageReads: 4 }).capabilities.webSearchLimits.maxPageReads, 4);
+    for (const value of [
+      {},
+      { maxPageReads: 'many' },
+      { maxPageReads: 0 },
+      { maxPageReads: -3 },
+      null
+    ]) {
+      assert.equal(
+        limit(value).capabilities.webSearchLimits.maxPageReads,
+        10,
+        JSON.stringify(value)
+      );
+    }
+  });
+
+  it('never reads more than the schema of an app allows', () => {
+    assert.equal(limit({ maxPageReads: 999 }).capabilities.webSearchLimits.maxPageReads, 50);
+  });
+
+  it('is accepted by the body of the settings route within 1 to 50, and nothing else in it', () => {
+    const parse = value =>
+      userAppSettingsSchema.safeParse({ capabilities: { webSearchLimits: value } });
+    assert.equal(parse({ maxPageReads: 4 }).success, true);
+    assert.equal(parse({}).success, true);
+    for (const value of [
+      { maxPageReads: 0 },
+      { maxPageReads: 51 },
+      { maxPageReads: 1.5 },
+      { max: 3 }
+    ]) {
+      assert.equal(parse(value).success, false, JSON.stringify(value));
+    }
+  });
+
+  it('changes alone when the body names only it, and is a key of the audit entry', () => {
+    const stored = { capabilities: { webSearch: true, skills: true } };
+    const body = { capabilities: { webSearchLimits: { maxPageReads: 3 } } };
+    assert.deepEqual(mergeUserAppSettings(stored, body).capabilities, {
+      webSearch: true,
+      skills: true,
+      webSearchLimits: { maxPageReads: 3 }
+    });
+    assert.deepEqual(changedUserAppSettingKeys(body), ['capabilities.webSearchLimits']);
   });
 });
 

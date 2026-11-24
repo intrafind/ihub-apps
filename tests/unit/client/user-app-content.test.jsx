@@ -246,7 +246,14 @@ describe('the content keys and caps', () => {
       'predefinedValues'
     ]);
     expect(USER_APP_STARTER_PROMPT_KEYS).toEqual(['title', 'message']);
-    expect(USER_APP_CAPABILITY_KEYS).toEqual(['upload', 'webSearch', 'skills', 'integrations']);
+    expect(USER_APP_CAPABILITY_KEYS).toEqual([
+      'upload',
+      'webSearch',
+      'skills',
+      'integrations',
+      'models',
+      'webSearchSettings'
+    ]);
     expect(USER_APP_INTEGRATION_KEYS).toEqual(['id', 'actions']);
   });
 
@@ -299,7 +306,10 @@ describe('the content keys and caps', () => {
         'greetingTitle',
         'greetingSubtitle',
         'submitLabel',
-        'inputRows'
+        'inputRows',
+        'models',
+        'pageReads',
+        'researchGuidance'
       ].sort()
     );
   });
@@ -379,9 +389,11 @@ describe('USER_APP_FIELD_POLICY', () => {
     for (const key of keysOf('content')) expect(USER_APP_CONTENT_KEYS).toContain(key);
   });
 
-  test('capability: the seven keys only the ceiling writes', () => {
+  test('capability: the nine keys only the ceiling writes', () => {
     expect(keysOf('capability').sort()).toEqual(
       [
+        'allowedModels',
+        'disallowModelSelection',
         'preferredModel',
         'upload',
         'websearch',
@@ -417,7 +429,6 @@ describe('USER_APP_FIELD_POLICY', () => {
       'workflows',
       'iassistant',
       'toolChoice',
-      'allowedModels',
       'category',
       'parentId'
     ]) {
@@ -427,9 +438,9 @@ describe('USER_APP_FIELD_POLICY', () => {
 });
 
 describe('the run object', () => {
-  test('USER_APP_RUN_KEYS is the fixed, content and capability keys: 28, each once', () => {
-    expect(USER_APP_RUN_KEYS).toHaveLength(28);
-    expect(new Set(USER_APP_RUN_KEYS).size).toBe(28);
+  test('USER_APP_RUN_KEYS is the fixed, content and capability keys: 30, each once', () => {
+    expect(USER_APP_RUN_KEYS).toHaveLength(30);
+    expect(new Set(USER_APP_RUN_KEYS).size).toBe(30);
     for (const key of USER_APP_RUN_KEYS) {
       expect(['fixed', 'content', 'capability']).toContain(USER_APP_FIELD_POLICY[key]);
     }
@@ -499,8 +510,10 @@ describe('the run object', () => {
       upload: structuredClone(PERSONAL_UPLOAD_ON),
       websearch: { enabled: false },
       toolApproval: { default: 'always' },
-      // A content key now: the ceiling sets it when the author did; the schema adds `false` otherwise.
-      autoStart: false
+      // Content and capability keys now: the ceiling sets them when the author did; the schema adds
+      // `false` otherwise.
+      autoStart: false,
+      disallowModelSelection: false
     };
     // The schema of the app files refuses the personal shape (4.2), so the
     // shape of the object is checked under an ordinary ID.
@@ -554,7 +567,9 @@ describe('pickUserAppContent', () => {
         upload: true,
         webSearch: true,
         skills: true,
-        integrations: [{ id: 'jira', actions: ['searchIssues', 'getIssue'] }]
+        integrations: [{ id: 'jira', actions: ['searchIssues', 'getIssue'] }],
+        // `allowedModels` and `disallowModelSelection` of an app config are the models of a personal app.
+        models: { allowed: ['model-a'], lock: true }
       }
     });
   });

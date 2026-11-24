@@ -226,7 +226,18 @@ export function toAdminApp(record, { effective, id, enabled, category }) {
 
   if (source.preferredModel) app.preferredModel = source.preferredModel;
   if (source.upload?.enabled === true) app.upload = clone(source.upload);
-  if (source.websearch?.enabled === true) app.websearch = { enabled: true };
+  // The models the app may use, as the ceiling cut them: a list only ever narrows what the
+  // people of the company app may use.
+  if (Array.isArray(source.allowedModels) && source.allowedModels.length > 0) {
+    app.allowedModels = [...source.allowedModels];
+  }
+  if (source.disallowModelSelection === true) app.disallowModelSelection = true;
+  if (source.websearch?.enabled === true) {
+    app.websearch = { enabled: true };
+    for (const key of ['maxPageReads', 'researchGuidance']) {
+      if (source.websearch[key] !== undefined) app.websearch[key] = clone(source.websearch[key]);
+    }
+  }
   if (source.skillSettings?.enabled === true) {
     app.skillSettings = { enabled: true };
     app.skills = (source.skills || []).filter(skill => typeof skill === 'string' && skill !== '*');

@@ -114,7 +114,7 @@ jest.mock('react-i18next', () => ({
   useTranslation: () => mockTexts.translation
 }));
 
-const { appRevisionKeys } = require('../../../shared/appRevision.js');
+const { appRevisionKeys, appSettingsKeys } = require('../../../shared/appRevision.js');
 const UserAppEditPage = require('../../../client/src/features/apps/pages/UserAppEditPage').default;
 const {
   PlatformConfigContext
@@ -225,11 +225,17 @@ test('a turn goes to the personal route with the content a personal app has', as
   expect(request.appId).toBe(APP_ID);
   expect(request.language).toBe('en');
   expect(request.signal).toBeInstanceOf(AbortSignal);
-  const allowed = appRevisionKeys('personal');
+  // The content keys and the settings a change may touch, and the model and the switches the
+  // server checks a proposal that adds reach against (design 07, section 2.6).
+  const allowed = [
+    ...appRevisionKeys('personal'),
+    ...appSettingsKeys('personal'),
+    'preferredModel',
+    'capabilities'
+  ];
   expect(Object.keys(request.draft).every(key => allowed.includes(key))).toBe(true);
   expect(request.draft.system).toEqual({ en: 'You write job ads from notes.' });
-  expect(request.draft).not.toHaveProperty('capabilities');
-  expect(request.draft).not.toHaveProperty('preferredModel');
+  expect(request.draft).toHaveProperty('capabilities');
   expect(screen.getByTestId('change-stakes')).toHaveTextContent(
     'You share it with 2 people or groups; they get this change.'
   );

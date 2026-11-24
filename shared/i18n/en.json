@@ -4846,7 +4846,13 @@
           "suggestions": "It could also",
           "webSearch": "search the web",
           "integration": "use {{name}}",
-          "languageLabel": "Language: {{language}}"
+          "languageLabel": "Language: {{language}}",
+          "setting": {
+            "preferredModel": "use the model {{model}}",
+            "models": "only use these models: {{models}}",
+            "modelsLocked": "always use the chosen model, and only these models: {{models}}",
+            "webSearchSettings": "research with at most {{pages}} pages per answer. {{guidance}}"
+          }
         },
         "field": {
           "name": "Name",
@@ -9642,7 +9648,10 @@
         "noInstallations": "No connected system is installed.",
         "noActions": "No functions",
         "unblock": "Switch on again",
-        "invalidMaxApps": "Enter a whole number for the limit of apps per user (0 means no limit)."
+        "invalidMaxApps": "Enter a whole number for the limit of apps per user (0 means no limit).",
+        "pageReads": "Most pages an app may open per answer",
+        "pageReadsHelp": "Applies where web search is allowed: an author may set how many pages the app opens for one answer, up to this number. The platform default is 5.",
+        "invalidPageReads": "Enter a whole number from 1 to 50."
       },
       "groups": {
         "userApps": "Personal apps",
@@ -14244,7 +14253,15 @@
         "integrations": "Connected systems",
         "approvalHelp": "When someone else uses your app, it asks them before every step in a connected system. In your own chats it asks before it changes something.",
         "gone": "{{capability}} is no longer available for your apps. The app runs without it.",
-        "remove": "Remove"
+        "remove": "Remove",
+        "modelsTitle": "Models people may use",
+        "modelsHelp": "Tick the models the app is limited to. Tick none to allow every model a person may use. Someone who may use none of the ticked models cannot chat with the app.",
+        "modelsLock": "Always use the AI model above and hide the model picker",
+        "modelsLockNeedsModel": "Choose an AI model above first.",
+        "pageReads": "Pages the app may open per answer",
+        "pageReadsHelp": "At most {{max}}. Empty uses the default of the installation.",
+        "researchGuidance": "How the app should research",
+        "researchGuidanceHelp": "One or two sentences, added to the instructions while web search is on."
       },
       "conflict": "Someone else changed this app. Reload to see the changes.",
       "readOnly": {
@@ -14267,7 +14284,8 @@
         "model": "The chosen AI model",
         "upload": "File upload",
         "webSearch": "Web search",
-        "skills": "Skills"
+        "skills": "Skills",
+        "models": "The chosen list of AI models"
       },
       "saveFirst": "Save your changes first",
       "instructionsDesc": "Tell the AI what its task is and how it should answer. It reads this before every chat. People you share the app with can read it. (Also called the system prompt.)",
@@ -14275,7 +14293,8 @@
         "model": "the chosen AI model",
         "upload": "file upload",
         "webSearch": "web search",
-        "skills": "skills"
+        "skills": "skills",
+        "models": "the chosen list of AI models"
       },
       "advanced": {
         "title": "Advanced",

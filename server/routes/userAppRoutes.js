@@ -337,6 +337,11 @@ export default function registerUserAppRoutes(app, { llmClient, service: injecte
    *                         upload: { type: boolean }
    *                         webSearch: { type: boolean }
    *                         skills: { type: boolean }
+   *                         webSearchLimits:
+   *                           type: object
+   *                           description: "How far web search may be tuned in an app of the caller"
+   *                           properties:
+   *                             maxPageReads: { type: integer, description: "The most pages the page reader may open for one answer" }
    *                         integrations:
    *                           type: array
    *                           items:

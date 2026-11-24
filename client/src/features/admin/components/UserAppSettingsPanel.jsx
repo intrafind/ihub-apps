@@ -86,6 +86,21 @@ function parseMaxApps(text) {
   return value >= MAX_APPS_RANGE.min && value <= MAX_APPS_RANGE.max ? value : null;
 }
 
+/** The range of the limit of pages a personal app may open for one answer. */
+const PAGE_READS_RANGE = Object.freeze({ min: 1, max: 50 });
+
+/**
+ * The whole number the page limit field holds, or null when it is no number in the range.
+ *
+ * @param {string} text
+ * @returns {number|null}
+ */
+function parsePageReads(text) {
+  if (!/^\d+$/.test(String(text).trim())) return null;
+  const value = Number(text);
+  return value >= PAGE_READS_RANGE.min && value <= PAGE_READS_RANGE.max ? value : null;
+}
+
 /**
  * The keys of a settings block whose value differs from the stored one; a
  * list such as `capabilities.integrations` counts as one value.
@@ -165,6 +180,9 @@ function UserAppSettingsForm({ initial, publishingAvailable }) {
   const [stored, setStored] = useState(initial);
   const [draft, setDraft] = useState(initial);
   const [maxInput, setMaxInput] = useState(() => String(initial.limits?.maxAppsPerUser ?? ''));
+  const [pageReadsInput, setPageReadsInput] = useState(() =>
+    String(initial.capabilities?.webSearchLimits?.maxPageReads ?? '')
+  );
   const [groups, setGroups] = useState(null);
   // The installations with their functions; null until "Choose…" was opened.
   const [installations, setInstallations] = useState(null);
@@ -211,6 +229,7 @@ function UserAppSettingsForm({ initial, publishingAvailable }) {
     };
   }, [hasBlocked]);
 
+  const pageReads = parsePageReads(pageReadsInput);
   const maxApps = parseMaxApps(maxInput);
   const maxChanged = maxApps !== stored.limits?.maxAppsPerUser;
   const changed = key => JSON.stringify(draft[key]) !== JSON.stringify(stored[key]);
@@ -292,6 +311,15 @@ function UserAppSettingsForm({ initial, publishingAvailable }) {
       );
       return false;
     }
+    if (pageReads === null) {
+      setError(
+        t(
+          'admin.userApps.settings.invalidPageReads',
+          'Enter a whole number from 1 to 50 for the pages a personal app may open per answer.'
+        )
+      );
+      return false;
+    }
     setSaving(true);
     setError(null);
     try {
@@ -310,6 +338,7 @@ function UserAppSettingsForm({ initial, publishingAvailable }) {
       setStored(settings);
       setDraft(settings);
       setMaxInput(String(settings.limits?.maxAppsPerUser ?? ''));
+      setPageReadsInput(String(settings.capabilities?.webSearchLimits?.maxPageReads ?? ''));
       setSaved(true);
       return true;
     } catch (err) {
@@ -324,6 +353,7 @@ function UserAppSettingsForm({ initial, publishingAvailable }) {
   const discard = () => {
     setDraft(stored);
     setMaxInput(String(stored.limits?.maxAppsPerUser ?? ''));
+    setPageReadsInput(String(stored.capabilities?.webSearchLimits?.maxPageReads ?? ''));
     setSaved(false);
     setError(null);
   };
@@ -483,6 +513,40 @@ function UserAppSettingsForm({ initial, publishingAvailable }) {
                 label: t(label)
               })
             )}
+          </div>
+          <div className="space-y-1">
+            <label
+              htmlFor="user-app-settings-page-reads"
+              className="block text-sm text-gray-700 dark:text-gray-300"
+            >
+              {t('admin.userApps.settings.pageReads')}
+            </label>
+            <input
+              id="user-app-settings-page-reads"
+              type="text"
+              inputMode="numeric"
+              value={pageReadsInput}
+              onChange={event => {
+                setPageReadsInput(event.target.value);
+                const next = parsePageReads(event.target.value);
+                if (next !== null) setCapability({ webSearchLimits: { maxPageReads: next } });
+                else setSaved(false);
+              }}
+              aria-invalid={pageReads === null || undefined}
+              aria-describedby="user-app-settings-page-reads-help"
+              className={`${INPUT_CLASS} max-w-[12rem] aria-[invalid=true]:border-red-500`}
+            />
+            <p
+              id="user-app-settings-page-reads-help"
+              className="text-xs text-gray-600 dark:text-gray-400"
+            >
+              {pageReads === null && (
+                <span className="block text-red-700 dark:text-red-300">
+                  {t('admin.userApps.settings.invalidPageReads')}
+                </span>
+              )}
+              {t('admin.userApps.settings.pageReadsHelp')}
+            </p>
           </div>
           <p className="flex flex-wrap items-baseline justify-between gap-2 text-sm text-gray-700 dark:text-gray-300">
             <span>

@@ -168,6 +168,23 @@ function capabilitiesFor(capabilities, full, bindings) {
     );
 }
 
+/** The settings of `capabilities` the app object of a run does not carry as the author wrote them. */
+const AUTHORED_CAPABILITY_KEYS = Object.freeze(['models', 'webSearchSettings']);
+
+/**
+ * `{ capabilities: { models, webSearchSettings } }` as stored, or undefined
+ * when the author set neither. For the callers who may edit the app.
+ */
+function authoredSettings(content) {
+  const stored = content?.capabilities;
+  if (!stored || typeof stored !== 'object') return undefined;
+  const capabilities = {};
+  for (const key of AUTHORED_CAPABILITY_KEYS) {
+    if (stored[key] !== undefined) capabilities[key] = structuredClone(stored[key]);
+  }
+  return Object.keys(capabilities).length > 0 ? { capabilities } : undefined;
+}
+
 /**
  * A personal app as `GET /api/apps/{appId}`, the list with `scope` and every
  * write route answer it: the app object of the ceiling plus who owns it, what
@@ -231,7 +248,13 @@ export function userAppView(
     updatedAt: record.updatedAt || null,
     updatedBy: person(record.updatedBy)
   };
-  if (full) view.members = (record.members || []).map(memberView);
+  if (full) {
+    view.members = (record.members || []).map(memberView);
+    // What the author stored where the app object of a run has less: the ceiling cuts
+    // the models to what this caller may use, so the editor cannot rebuild the list from it.
+    const authored = authoredSettings(record.content);
+    if (authored) view.authored = authored;
+  }
   // The receiver of an offer may already be a member; the offer reaches them all the same.
   if (
     role === 'owner' ||

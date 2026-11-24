@@ -539,6 +539,107 @@ describe('the settings of the registry (change.settings)', () => {
   });
 });
 
+describe('the settings that add reach (confirm items)', () => {
+  const OPEN = { capabilities: { modelChoice: true, webSearch: false } };
+  const turn = (settings, { draft = PERSONAL_DRAFT(), policy = OPEN, ...rest } = {}) => {
+    llm.answer = change({ settings }, rest.answer);
+    return revise({
+      draft,
+      language: 'en',
+      conversation: ask('Use the big model'),
+      personal: { settings: policy }
+    });
+  };
+
+  it('are offered only behind the switch of the administrator, with the models listed', async () => {
+    await turn({ preferredModel: 'big-model' });
+    const system = systemMessageOf(llm.calls[0]);
+    assert.match(system, /- "preferredModel" \(confirm\)/);
+    assert.match(system, /- "models" \(confirm\)/);
+    assert.match(system, /<<<AVAILABLE_MODELS\n- big-model \(Big model\)\nAVAILABLE_MODELS>>>/);
+    // The research settings need web search, which is off here.
+    assert.equal(system.includes('"webSearchSettings"'), false);
+
+    llm.calls = [];
+    await turn(
+      { preferredModel: 'big-model' },
+      { policy: { capabilities: { modelChoice: false } } }
+    );
+    const closed = systemMessageOf(llm.calls[0]);
+    assert.equal(closed.includes('"preferredModel"'), false);
+    assert.equal(closed.includes('AVAILABLE_MODELS'), false);
+  });
+
+  it('come back as suggestions, never in the patch, and alone make a change', async () => {
+    const draft = { ...PERSONAL_DRAFT(), preferredModel: undefined };
+    const result = await turn({ preferredModel: 'big-model' }, { draft });
+    assert.equal(result.reply, 'change');
+    assert.deepEqual(result.patch, {});
+    assert.deepEqual(result.changed, []);
+    assert.deepEqual(result.suggestions.settings, [{ key: 'preferredModel', value: 'big-model' }]);
+  });
+
+  it('leave out a model the caller may not use, or that does not exist', async () => {
+    const draft = { ...PERSONAL_DRAFT(), preferredModel: undefined };
+    const result = await turn({ preferredModel: 'made-up-model' }, { draft });
+    assert.equal(result.reply, 'message');
+    assert.ok(result.warnings.some(warning => warning.code === 'NO_CHANGE'));
+  });
+
+  it('leave out a setting the app has already', async () => {
+    const result = await turn({ preferredModel: 'big-model' });
+    assert.equal(result.reply, 'message');
+  });
+
+  it('take a list of models, and a lock only when the app has a preferred model', async () => {
+    const withPreferred = await turn({ models: { allowed: ['big-model'], lock: true } });
+    assert.deepEqual(withPreferred.suggestions.settings, [
+      { key: 'models', value: { allowed: ['big-model'], lock: true } }
+    ]);
+    const without = await turn(
+      { models: { allowed: ['big-model'], lock: true } },
+      { draft: { ...PERSONAL_DRAFT(), preferredModel: undefined } }
+    );
+    assert.equal(without.reply, 'message');
+  });
+
+  it('refuse a value the schema of its key refuses', async () => {
+    const result = await turn({ models: { allowed: ['../x'] }, preferredModel: 'x'.repeat(300) });
+    assert.equal(result.reply, 'message');
+    assert.deepEqual(
+      result.warnings
+        .filter(warning => warning.code === 'KEY_IGNORED')
+        .map(warning => warning.field)
+        .sort(),
+      ['models', 'preferredModel']
+    );
+  });
+
+  it('are not offered for an admin app, which sets its model in the form', async () => {
+    llm.answer = change({ settings: { preferredModel: 'big-model' } });
+    const result = await revise();
+    assert.equal(systemMessageOf(llm.calls[0]).includes('"preferredModel"'), false);
+    assert.equal(result.reply, 'message');
+    assert.deepEqual(result.suggestions.settings, []);
+  });
+
+  it('show the model what the app has set now', async () => {
+    const draft = {
+      ...PERSONAL_DRAFT(),
+      capabilities: { ...PERSONAL_DRAFT().capabilities, models: { allowed: ['big-model'] } }
+    };
+    llm.answer = change({});
+    await revise({
+      draft,
+      language: 'en',
+      personal: { settings: OPEN }
+    });
+    const user = userMessageOf(llm.calls[0]);
+    assert.match(user, /"preferredModel": "big-model"/);
+    assert.match(user, /"models": \{\s+"allowed": \[\s+"big-model"/);
+  });
+});
+
 // --- Hostile and sloppy answers --------------------------------------------
 
 describe('what a change may hold', () => {

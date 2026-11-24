@@ -114,6 +114,13 @@ export function formFromApp(app) {
         return { id: installationId, actions: Array.isArray(actions) ? [...actions] : [] };
       })
   };
+  // What the author stored where the app object of a run has less (the models are cut to
+  // what this caller may use): the answer's `authored` block, when the caller may edit.
+  const authored = source.authored?.capabilities;
+  if (isPlainObject(authored?.models)) form.capabilities.models = structuredClone(authored.models);
+  if (isPlainObject(authored?.webSearchSettings)) {
+    form.capabilities.webSearchSettings = structuredClone(authored.webSearchSettings);
+  }
   return form;
 }
 
@@ -201,6 +208,46 @@ function lookPatch(key, saved, current) {
   return mergeDiff(before, after);
 }
 
+/**
+ * One of the capability objects as the server would store it, or `{}` when it
+ * says nothing: the models (each ID once, a lock only when it is on) and the
+ * settings of web search (a whole number of pages, a guidance that is not blank).
+ */
+function cleanCapabilityObject(key, value) {
+  if (key === 'models') {
+    const allowed = [
+      ...new Set(
+        (Array.isArray(value?.allowed) ? value.allowed : []).filter(
+          id => typeof id === 'string' && id !== ''
+        )
+      )
+    ];
+    return {
+      ...(allowed.length > 0 ? { allowed } : {}),
+      ...(value?.lock === true ? { lock: true } : {})
+    };
+  }
+  const clean = {};
+  const pages = Number(value?.maxPageReads);
+  if (value?.maxPageReads !== undefined && value?.maxPageReads !== '' && Number.isInteger(pages)) {
+    clean.maxPageReads = pages;
+  }
+  if (typeof value?.researchGuidance === 'string' && value.researchGuidance.trim()) {
+    clean.researchGuidance = value.researchGuidance.trim();
+  }
+  return clean;
+}
+
+/** The patch of one capability object between two form states; `undefined` when it did not change. */
+function capabilityObjectPatch(key, saved, current) {
+  const before = cleanCapabilityObject(key, saved?.capabilities?.[key]);
+  const after = cleanCapabilityObject(key, current?.capabilities?.[key]);
+  if (isUnset(after)) return isUnset(before) ? undefined : null;
+  // Lists are replaced as a whole, objects merge key by key.
+  const diff = mergeDiff(before, after);
+  return diff;
+}
+
 /** A localized text as a merge patch: changed languages, and `null` for removed ones. */
 function textPatch(before, after, optional) {
   if (optional && !hasText(after)) return null;
@@ -273,6 +320,10 @@ export function patchFor(saved, current) {
       .filter(binding => binding.actions.length > 0)
       .map(binding => ({ id: binding.id, actions: [...binding.actions] }));
   }
+  for (const key of ['models', 'webSearchSettings']) {
+    const change = capabilityObjectPatch(key, saved, current);
+    if (change !== undefined) capabilities[key] = change;
+  }
   if (Object.keys(capabilities).length > 0) patch.capabilities = capabilities;
   return Object.keys(patch).length > 0 ? patch : null;
 }
@@ -284,7 +335,7 @@ export function patchFor(saved, current) {
  * the form read-only for that editor.
  *
  * @param {Object} app - The answer of the server.
- * @returns {Array<{id: string, kind: 'model'|'upload'|'webSearch'|'skills'|'integration',
+ * @returns {Array<{id: string, kind: 'model'|'models'|'upload'|'webSearch'|'skills'|'integration',
  *   installationId: string|null, name: Object|string|null, reason: string|null}>}
  */
 export function withheldCapabilities(app) {
@@ -313,6 +364,10 @@ export function withheldCapabilities(app) {
  */
 export function withoutCapability(form, capability) {
   if (capability.kind === 'model') return { ...form, preferredModel: null };
+  if (capability.kind === 'models') {
+    const { models: _removed, ...rest } = form.capabilities;
+    return { ...form, capabilities: rest };
+  }
   if (capability.kind === 'integration') {
     return {
       ...form,
@@ -336,6 +391,8 @@ export function withoutCapability(form, capability) {
  */
 export function stillAsksFor(form, capability) {
   if (capability.kind === 'model') return form.preferredModel === WITHHELD_MODEL;
+  if (capability.kind === 'models')
+    return !isUnset(cleanCapabilityObject('models', form.capabilities.models));
   if (capability.kind === 'integration') {
     return form.capabilities.integrations.some(binding => binding.id === capability.installationId);
   }

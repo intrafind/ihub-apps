@@ -5346,7 +5346,13 @@
           "suggestions": "Sie könnte außerdem",
           "webSearch": "im Web suchen",
           "integration": "{{name}} verwenden",
-          "languageLabel": "Sprache: {{language}}"
+          "languageLabel": "Sprache: {{language}}",
+          "setting": {
+            "preferredModel": "das Modell {{model}} verwenden",
+            "models": "nur diese Modelle verwenden: {{models}}",
+            "modelsLocked": "immer das gewählte Modell verwenden, und nur diese Modelle: {{models}}",
+            "webSearchSettings": "mit höchstens {{pages}} Seiten pro Antwort recherchieren. {{guidance}}"
+          }
         },
         "field": {
           "name": "Name",
@@ -10142,7 +10148,10 @@
         "noInstallations": "Es ist kein angebundenes System installiert.",
         "noActions": "Keine Funktionen",
         "unblock": "Wieder einschalten",
-        "invalidMaxApps": "Geben Sie eine ganze Zahl für das Limit an Apps pro Benutzer ein (0 bedeutet kein Limit)."
+        "invalidMaxApps": "Geben Sie eine ganze Zahl für das Limit an Apps pro Benutzer ein (0 bedeutet kein Limit).",
+        "pageReads": "Höchstzahl der Seiten, die eine App pro Antwort öffnen darf",
+        "pageReadsHelp": "Gilt, wo die Websuche erlaubt ist: Autorinnen und Autoren können festlegen, wie viele Seiten die App für eine Antwort öffnet, höchstens bis zu dieser Zahl. Der Standard der Plattform ist 5.",
+        "invalidPageReads": "Geben Sie eine ganze Zahl von 1 bis 50 ein."
       },
       "groups": {
         "userApps": "Persönliche Apps",
@@ -14243,7 +14252,15 @@
         "integrations": "Angebundene Systeme",
         "approvalHelp": "Wenn jemand anderes Ihre App nutzt, fragt sie diese Person vor jedem Schritt in einem angebundenen System. In Ihren eigenen Chats fragt sie, bevor sie etwas ändert.",
         "gone": "{{capability}} steht für Ihre Apps nicht mehr zur Verfügung. Die App läuft ohne.",
-        "remove": "Entfernen"
+        "remove": "Entfernen",
+        "modelsTitle": "Modelle, die genutzt werden dürfen",
+        "modelsHelp": "Haken Sie die Modelle an, auf die die App beschränkt ist. Ohne Haken sind alle Modelle erlaubt, die eine Person nutzen darf. Wer keines der angehakten Modelle nutzen darf, kann nicht mit der App chatten.",
+        "modelsLock": "Immer das KI-Modell oben nutzen und die Modellauswahl ausblenden",
+        "modelsLockNeedsModel": "Wählen Sie zuerst oben ein KI-Modell.",
+        "pageReads": "Seiten, die die App pro Antwort öffnen darf",
+        "pageReadsHelp": "Höchstens {{max}}. Leer nutzt den Standard der Installation.",
+        "researchGuidance": "Wie die App recherchieren soll",
+        "researchGuidanceHelp": "Ein bis zwei Sätze, die den Anweisungen hinzugefügt werden, solange die Websuche an ist."
       },
       "conflict": "Jemand anderes hat diese App geändert. Laden Sie neu, um die Änderungen zu sehen.",
       "readOnly": {
@@ -14266,7 +14283,8 @@
         "model": "Das gewählte KI-Modell",
         "upload": "Datei-Upload",
         "webSearch": "Websuche",
-        "skills": "Skills"
+        "skills": "Skills",
+        "models": "Die gewählte Liste der KI-Modelle"
       },
       "saveFirst": "Speichern Sie zuerst Ihre Änderungen",
       "instructionsDesc": "Sagen Sie der KI, was ihre Aufgabe ist und wie sie antworten soll. Sie liest das vor jedem Chat. Personen, mit denen Sie die App teilen, können es lesen. (Auch System-Prompt genannt.)",
@@ -14274,7 +14292,8 @@
         "model": "das gewählte KI-Modell",
         "upload": "den Datei-Upload",
         "webSearch": "die Websuche",
-        "skills": "Skills"
+        "skills": "Skills",
+        "models": "die gewählte Liste der KI-Modelle"
       },
       "advanced": {
         "title": "Erweitert",

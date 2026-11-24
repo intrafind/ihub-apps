@@ -37,13 +37,23 @@ import {
   baseLanguage,
   installationsFor,
   integrationsBlock,
+  modelsBlock,
+  modelsFor,
   parseGeneratedAnswer,
   pickDraftModel,
   sanitizeGeneratedApp,
   searchFor
 } from './appGenerator.js';
 import { buildRevisionMessages } from './appGeneratorBrief.js';
-import { isUnsetSetting, readSettings, settingsToPropose } from './appSettingsProposal.js';
+import {
+  isUnsetSetting,
+  readSettings,
+  settingOf,
+  settingsToPropose
+} from './appSettingsProposal.js';
+import { checkCapabilitiesForSave } from './userApps/ceiling.js';
+import { userAppCatalog } from './userApps/userAppResolution.js';
+import { userAppField } from '../../shared/userAppFields.js';
 import { newAppDefaults } from '../../shared/appDefaults.js';
 import {
   REVISE_CHOICES_MAX,
@@ -809,7 +819,7 @@ function changeOf({
  * @returns {{ keys: string[], allowed: string[], mayPropose: boolean, input: object,
  *   source: object, current: object }}
  */
-function readContent({ draft, fields, language, target }) {
+function readContent({ draft, fields, language, target, personal, user }) {
   // 1. Keys: the target's content keys, narrowed by `fields`.
   const keys = appRevisionKeys(target);
   const narrowed = Array.isArray(fields) && fields.length > 0;
@@ -823,10 +833,15 @@ function readContent({ draft, fields, language, target }) {
 
   // The settings of the registry: offered unless the request names other `fields`. The
   // model sees the ones the app has set, so it changes them and does not guess.
-  const offered = settingsToPropose({ target, fields: narrowed ? fields : undefined });
+  const offered = settingsToPropose({
+    target,
+    fields: narrowed ? fields : undefined,
+    personal: personal ? { settings: personal.settings, searchAvailable: searchFor(user) } : null
+  });
   const settingsCurrent = {};
   for (const { key } of offered) {
-    if (!isUnsetSetting(input[key])) settingsCurrent[key] = visibleDeep(input[key]);
+    const value = settingOf(input, key);
+    if (!isUnsetSetting(value)) settingsCurrent[key] = visibleDeep(value);
   }
   const current = contentForModel(source, keys, language);
   return {
@@ -871,9 +886,11 @@ async function callModel({
   const installed = mayPropose
     ? await installationsFor(user, language, personal ? { settings: personal.settings } : null)
     : [];
+  const namesModels = offered.some(({ key }) => key === 'preferredModel' || key === 'models');
   const { messages } = buildRevisionMessages({
     content: forModel,
     settings: offered,
+    modelsBlock: namesModels ? modelsBlock(modelsFor(user, language)) : '',
     earlier: turns.slice(0, -1),
     latest: turns.at(-1)?.text ?? '',
     language,
@@ -899,7 +916,10 @@ async function callModel({
     signal,
     telemetry: { kind: 'utility', purpose: 'app-revise', user }
   });
-  return { result, mayAsk, categories, installed };
+  // What the ceiling needs to decide whether the caller may have a setting that adds reach.
+  const needsCatalog = personal && offered.some(({ proposal }) => proposal === 'confirm');
+  const catalog = needsCatalog ? await userAppCatalog({ owner: user, runner: user }) : null;
+  return { result, mayAsk, categories, installed, catalog };
 }
 
 /** An `OTHER_LANGUAGES_UNCHANGED` warning per changed text key of an app with other languages. */
@@ -929,6 +949,39 @@ function questionReply(answer, text, mayAsk) {
   if (mayAsk && asked.text)
     return { ...unchangedParts(), reply: 'question', text, question: asked };
   return { ...unchangedParts(), reply: 'message', text: text || asked.text };
+}
+
+/** The capability the ceiling names for a setting that adds reach (`ceiling.js`). */
+const CAPABILITY_OF_SETTING = Object.freeze({
+  preferredModel: 'model',
+  models: 'models',
+  webSearchSettings: 'webSearch'
+});
+
+/**
+ * Whether the caller may have a setting that adds reach, as the ceiling of
+ * personal apps would decide it on a save: the draft with the setting set must
+ * pass `checkCapabilitiesForSave` for the capability the setting belongs to.
+ * The caller stands in for the owner; the save by the real owner is the
+ * authority. A setting without a capability is not restricted here.
+ */
+function mayHaveSetting({ key, value, draft, personal, user, call }) {
+  const capability = CAPABILITY_OF_SETTING[key];
+  if (!capability || !call.catalog) return true;
+  const base = isPlainObject(draft) ? draft : {};
+  // How the app researches means something only while web search is on.
+  if (key === 'webSearchSettings' && base.capabilities?.webSearch !== true) return false;
+  const merged =
+    userAppField(key)?.store === 'capabilities'
+      ? { ...base, capabilities: { ...(base.capabilities || {}), [key]: value } }
+      : { ...base, [key]: value };
+  const denied = checkCapabilitiesForSave(merged, {
+    actor: user,
+    owner: user,
+    settings: personal.settings,
+    catalog: call.catalog
+  });
+  return !denied.some(entry => entry.capability === capability);
 }
 
 /** Steps 7 to 10 for a change: the patch, checked against the schema, or a message. */
@@ -963,7 +1016,10 @@ function changeReply({ answer, text, content, call, user, personal, language, la
     {
       target: personal ? 'personal' : 'admin',
       offered: content.offered,
-      current: content.settingsCurrent
+      current: content.settingsCurrent,
+      allow: personal
+        ? (key, value) => mayHaveSetting({ key, value, draft: input, personal, user, call })
+        : undefined
     }
   );
   if (
@@ -1071,7 +1127,7 @@ export async function reviseApp({
   const lang = baseLanguage(language);
 
   // 1. and 2. Keys and current content.
-  const content = readContent({ draft, fields, language, target });
+  const content = readContent({ draft, fields, language, target, personal, user });
 
   // 3. Model.
   const model = pickDraftModel(user);

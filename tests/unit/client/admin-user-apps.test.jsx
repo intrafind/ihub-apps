@@ -220,7 +220,8 @@ function settings(overrides = {}) {
       upload: true,
       webSearch: false,
       skills: false,
-      integrations: []
+      integrations: [],
+      webSearchLimits: { maxPageReads: 10 }
     },
     publishing: { adminEnables: 'withTools' },
     blockedOwners: [],
@@ -309,7 +310,16 @@ beforeEach(() => {
     return all;
   });
   mockApi.fetchUserAppSettings.mockResolvedValue(settings());
-  mockApi.saveUserAppSettings.mockImplementation(async body => settings(body));
+  // The server merges a body key by key inside each part and answers the whole block.
+  mockApi.saveUserAppSettings.mockImplementation(async body => {
+    const base = settings();
+    const merged = { ...base };
+    for (const part of ['limits', 'sharing', 'capabilities', 'publishing']) {
+      if (body[part]) merged[part] = { ...base[part], ...body[part] };
+    }
+    if (body.blockedOwners) merged.blockedOwners = body.blockedOwners;
+    return merged;
+  });
   mockApi.makeAdminApiCall.mockResolvedValue({ data: { users: {} } });
   mockIntegrations.fetchInstalledIntegrations.mockResolvedValue({ items: [] });
   mockIntegrations.fetchInstalledIntegration.mockResolvedValue({ actions: [] });
@@ -1073,6 +1083,31 @@ describe('the settings panel', () => {
     const { container } = renderPanel();
     await waitFor(() => expect(mockApi.fetchUserAppSettings).toHaveBeenCalled());
     await waitFor(() => expect(container.querySelector('details')).toBeNull());
+  });
+});
+
+describe('the limit of pages a personal app may open', () => {
+  const field = () =>
+    screen.getByRole('textbox', { name: text('admin.userApps.settings.pageReads') });
+
+  test('shows the limit, saves a change of it alone, and refuses a number outside 1 to 50', async () => {
+    renderPanel({ publishingAvailable: true });
+    await screen.findByText(text('admin.userApps.settings.shareWith'));
+    expect(field()).toHaveValue('10');
+    fireEvent.change(field(), { target: { value: '4' } });
+    await act(async () => {
+      fireEvent.click(saveButton());
+    });
+    expect(mockApi.saveUserAppSettings).toHaveBeenCalledWith({
+      capabilities: { webSearchLimits: { maxPageReads: 4 } }
+    });
+
+    mockApi.saveUserAppSettings.mockClear();
+    fireEvent.change(field(), { target: { value: '99' } });
+    expect(field()).toHaveAttribute('aria-invalid', 'true');
+    fireEvent.change(field(), { target: { value: 'many' } });
+    expect(field()).toHaveAttribute('aria-invalid', 'true');
+    expect(mockApi.saveUserAppSettings).not.toHaveBeenCalled();
   });
 });
 

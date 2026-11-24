@@ -30,6 +30,7 @@ import {
 } from '../../../../../../shared/appRevision.js';
 import { APP_GENERATOR_WARNINGS } from '../../../../../../shared/appGenerator.js';
 import { pickUserAppContent } from '../../../../../../shared/userAppContent.js';
+import { userAppField } from '../../../../../../shared/userAppFields.js';
 
 /** The suggestions under the builder's first message; each is sent as the author's message. */
 export const STARTER_CHIP_KEYS = Object.freeze([
@@ -173,6 +174,15 @@ export function draftOf(form, target) {
   for (const key of appSettingsKeys(target)) {
     if (!isUnsetSetting(looks[key])) draft[key] = looks[key];
   }
+  // A personal app also sends its model and its switches. The server checks a proposal
+  // that adds reach (a model, a list of models, how web search works) against them; a
+  // change of them by hand is not a change of the content (see `contentChangedSince`).
+  if (target === 'personal') {
+    if (typeof form.preferredModel === 'string' && !form.preferredModel.startsWith(':')) {
+      draft.preferredModel = form.preferredModel;
+    }
+    if (isPlainObject(form.capabilities)) draft.capabilities = form.capabilities;
+  }
   return draft;
 }
 
@@ -187,7 +197,13 @@ export function draftOf(form, target) {
  * @returns {boolean}
  */
 export function contentChangedSince(form, baseSnapshot, target) {
-  return !sameValue(draftOf(form, target), baseSnapshot || {});
+  const withoutContext = draft =>
+    Object.fromEntries(
+      Object.entries(isPlainObject(draft) ? draft : {}).filter(
+        ([key]) => key !== 'preferredModel' && key !== 'capabilities'
+      )
+    );
+  return !sameValue(withoutContext(draftOf(form, target)), withoutContext(baseSnapshot));
 }
 
 /**
@@ -219,8 +235,10 @@ export function unsavedOutsideChange(form, saved, changeKeys) {
  *
  * @param {'admin'|'personal'} target
  * @param {object|null} form
- * @param {{ websearch?: boolean, integrations?: Array<{ id: string, label?: string, actions?: string[] }> }|null} suggestions
- * @returns {{ webSearch: boolean, integrations: Array<{ id: string, label: string, actions: string[] }> }}
+ * @param {{ websearch?: boolean, integrations?: Array<{ id: string, label?: string, actions?: string[] }>,
+ *   settings?: Array<{ key: string, value: unknown }> }|null} suggestions
+ * @returns {{ webSearch: boolean, integrations: Array<{ id: string, label: string, actions: string[] }>,
+ *   settings: Array<{ key: string, value: unknown }> }}
  */
 export function offeredSuggestions(target, form, suggestions) {
   const source = isPlainObject(suggestions) ? suggestions : {};
@@ -246,7 +264,49 @@ export function offeredSuggestions(target, form, suggestions) {
         ? system.actions.filter(action => typeof action === 'string')
         : []
     }));
-  return { webSearch: source.websearch === true && !webSearchOn, integrations };
+  // The settings that add reach: only those the form does not have yet, one value each.
+  const settings = (Array.isArray(source.settings) ? source.settings : [])
+    .filter(
+      entry => isPlainObject(entry) && typeof entry.key === 'string' && userAppField(entry.key)
+    )
+    .filter(entry => !sameValue(settingOfForm(form, entry.key), entry.value));
+  return { webSearch: source.websearch === true && !webSearchOn, integrations, settings };
+}
+
+/** The value of a setting in the form: inside `capabilities` for one that lives there. */
+function settingOfForm(form, key) {
+  if (!isPlainObject(form)) return undefined;
+  return userAppField(key)?.store === 'capabilities' ? form.capabilities?.[key] : form[key];
+}
+
+/**
+ * The sentence of a setting that adds reach, as the change card offers it next
+ * to its checkbox: what the app would do, with the value in plain words.
+ *
+ * @param {{ key: string, value: unknown }} setting
+ * @param {(key: string, values?: object) => string} t
+ * @returns {string}
+ */
+export function settingSentence({ key, value }, t) {
+  const values = isPlainObject(value) ? value : {};
+  switch (key) {
+    case 'preferredModel':
+      return t('admin.apps.conversation.change.setting.preferredModel', { model: String(value) });
+    case 'models':
+      return t(
+        values.lock === true
+          ? 'admin.apps.conversation.change.setting.modelsLocked'
+          : 'admin.apps.conversation.change.setting.models',
+        { models: (Array.isArray(values.allowed) ? values.allowed : []).join(', ') }
+      );
+    case 'webSearchSettings':
+      return t('admin.apps.conversation.change.setting.webSearchSettings', {
+        pages: Number.isInteger(values.maxPageReads) ? values.maxPageReads : '–',
+        guidance: typeof values.researchGuidance === 'string' ? values.researchGuidance : ''
+      });
+    default:
+      return key;
+  }
 }
 
 /**
@@ -257,20 +317,24 @@ export function offeredSuggestions(target, form, suggestions) {
  *
  * @param {'admin'|'personal'} target
  * @param {object} form
- * @param {{ webSearch: boolean, integrations: object[] }} offered - {@link offeredSuggestions}.
- * @param {{ webSearch?: boolean, integrationIds?: string[] }} ticked
+ * @param {{ webSearch: boolean, integrations: object[], settings?: object[] }} offered - {@link offeredSuggestions}.
+ * @param {{ webSearch?: boolean, integrationIds?: string[], settingKeys?: string[] }} ticked
  * @returns {object} Possibly empty.
  */
 export function suggestionChanges(target, form, offered, ticked) {
   const wantSearch = ticked?.webSearch === true && offered.webSearch;
   const wanted = new Set(Array.isArray(ticked?.integrationIds) ? ticked.integrationIds : []);
   const systems = offered.integrations.filter(system => wanted.has(system.id));
-  if (!wantSearch && systems.length === 0) return {};
+  const pickedKeys = new Set(Array.isArray(ticked?.settingKeys) ? ticked.settingKeys : []);
+  const settings = (Array.isArray(offered.settings) ? offered.settings : []).filter(entry =>
+    pickedKeys.has(entry.key)
+  );
+  if (!wantSearch && systems.length === 0 && settings.length === 0) return {};
 
   if (target === 'personal') {
     const capabilities = isPlainObject(form.capabilities) ? form.capabilities : {};
     const current = Array.isArray(capabilities.integrations) ? capabilities.integrations : [];
-    return {
+    const changes = {
       capabilities: {
         ...capabilities,
         ...(wantSearch ? { webSearch: true } : {}),
@@ -280,6 +344,12 @@ export function suggestionChanges(target, form, offered, ticked) {
         ]
       }
     };
+    // A setting lives inside `capabilities` or at the top, as the registry says.
+    for (const { key, value } of settings) {
+      if (userAppField(key)?.store === 'capabilities') changes.capabilities[key] = value;
+      else changes[key] = value;
+    }
+    return changes;
   }
 
   const changes = {};

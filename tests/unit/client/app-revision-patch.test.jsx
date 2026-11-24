@@ -429,6 +429,40 @@ describe('answers and suggestions', () => {
     ]);
   });
 
+  test('ticked settings that add reach go to the top or into capabilities, as the registry says', () => {
+    const form = {
+      ...FORM,
+      capabilities: { upload: true, webSearch: true, skills: false, integrations: [] }
+    };
+    const suggestions = {
+      websearch: false,
+      integrations: [],
+      settings: [
+        { key: 'preferredModel', value: 'gpt-4o' },
+        { key: 'models', value: { allowed: ['gpt-4o'], lock: true } },
+        { key: 'webSearchSettings', value: { maxPageReads: 3 } }
+      ]
+    };
+    const offered = offeredSuggestions('personal', form, suggestions);
+    expect(offered.settings.map(entry => entry.key)).toEqual([
+      'preferredModel',
+      'models',
+      'webSearchSettings'
+    ]);
+    const changes = suggestionChanges('personal', form, offered, {
+      settingKeys: ['preferredModel', 'models']
+    });
+    expect(changes.preferredModel).toBe('gpt-4o');
+    expect(changes.capabilities.models).toEqual({ allowed: ['gpt-4o'], lock: true });
+    expect(changes.capabilities).not.toHaveProperty('webSearchSettings');
+    // The rest of `capabilities` stays as the form has it.
+    expect(changes.capabilities.upload).toBe(true);
+    expect(suggestionChanges('personal', form, offered, { settingKeys: [] })).toEqual({});
+    // A setting the form already has is not offered again.
+    const same = offeredSuggestions('personal', { ...form, preferredModel: 'gpt-4o' }, suggestions);
+    expect(same.settings.map(entry => entry.key)).not.toContain('preferredModel');
+  });
+
   test('applying a setting, and putting it back, works on the form like a content key', () => {
     const form = { ...FORM, autoStart: true };
     const patch = { autoStart: null, greeting: { en: { title: 'Hi', subtitle: 'there' } } };

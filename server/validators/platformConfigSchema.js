@@ -834,7 +834,12 @@ export const platformConfigSchema = z
                   })
                   .strict()
               )
-              .prefault([])
+              .prefault([]),
+            // The most pages the page reader may open for one answer of a personal app.
+            webSearchLimits: z
+              .object({ maxPageReads: z.number().int().prefault(10) })
+              .passthrough()
+              .prefault({})
           })
           .passthrough()
           .prefault({}),

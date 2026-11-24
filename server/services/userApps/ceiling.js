@@ -42,6 +42,7 @@ import { canUserAccessResource } from '../../utils/authorization.js';
 import { mayUseIntegration } from '../integrations/integrationAccess.js';
 import { placeholdersIn } from '../../../shared/appPlaceholders.js';
 import {
+  NO_MODEL_AVAILABLE_ID,
   PERSONAL_UPLOAD_OFF,
   PERSONAL_UPLOAD_ON,
   USER_APP_GREETING_KEYS,
@@ -56,7 +57,13 @@ import {
 import { isOwnerSnapshotStale } from './userAppAccess.js';
 
 /** The capability IDs that are not a bound installation, in the order they are reported. */
-export const USER_APP_CAPABILITY_IDS = Object.freeze(['model', 'upload', 'webSearch', 'skills']);
+export const USER_APP_CAPABILITY_IDS = Object.freeze([
+  'model',
+  'models',
+  'upload',
+  'webSearch',
+  'skills'
+]);
 
 /** The prefix of the capability ID of one bound installation. */
 export const INTEGRATION_CAPABILITY_PREFIX = 'integration:';
@@ -148,9 +155,10 @@ function decide({ installation, ownerState, owner, runner }) {
 /**
  * Every capability of a content object, decided for one owner and one runner.
  *
- * @returns {{model: Object, upload: Object, webSearch: Object, skills: Object,
+ * @returns {{model: Object, models: Object, upload: Object, webSearch: Object, skills: Object,
  *   bindings: Array<Object>}} Each entry is `{ requested, reason }` (`reason`
- *   null when granted); `skills` adds `ids`, a binding adds `id` and `actions`.
+ *   null when granted); `skills` adds `ids`, `models` adds `ids`, `lock` and
+ *   `refuse`, a binding adds `id` and `actions`.
  */
 function evaluate(content, { runner, owner, settings, catalog, ownerState, strictActions }) {
   const allowed = settings?.capabilities || {};
@@ -177,6 +185,61 @@ function evaluate(content, { runner, owner, settings, catalog, ownerState, stric
             runner: canUserAccessResource(runner, 'models', modelId)
           })
   };
+
+  // Which models the app may use, and whether the choice is locked. It only ever narrows:
+  // the list is cut to the models the owner and the person the check is made for may both
+  // use. When the app restricts its models and none is left, the app does not run for this
+  // person (`refuse`): dropping the restriction would give them a model the author excluded.
+  const modelsAsked = isPlainObject(requested.models) ? requested.models : {};
+  const wantedModels = [
+    ...new Set(
+      (Array.isArray(modelsAsked.allowed) ? modelsAsked.allowed : []).filter(
+        id => typeof id === 'string' && id !== '' && id !== NO_MODEL_AVAILABLE_ID
+      )
+    )
+  ];
+  const lockModel = modelsAsked.lock === true;
+  const usableModel = (id, who) => {
+    const entry = (catalog?.models || []).find(known => sameId(known?.id, id));
+    return (
+      Boolean(entry) &&
+      entry.enabled !== false &&
+      (entry.modelType || 'chat') === 'chat' &&
+      canUserAccessResource(who, 'models', id)
+    );
+  };
+  const models = {
+    requested: wantedModels.length > 0 || lockModel,
+    ids: [],
+    lock: lockModel,
+    refuse: false,
+    reason: CAPABILITY_REASONS.notRequested
+  };
+  if (models.requested) {
+    models.reason = decide({
+      installation: allowed.modelChoice === true,
+      ownerState,
+      owner: true,
+      runner: true
+    });
+    if (!models.reason) {
+      models.ids = wantedModels.filter(id => usableModel(id, owner) && usableModel(id, runner));
+      const noneLeft = wantedModels.length > 0 && models.ids.length === 0;
+      // A locked app runs on its preferred model, which both must be able to use and which
+      // the list, if there is one, must name.
+      const lockBroken =
+        lockModel &&
+        (Boolean(model.reason) || (wantedModels.length > 0 && !wantedModels.includes(model.id)));
+      if (noneLeft || lockBroken) {
+        models.refuse = true;
+        const ownerCan = wantedModels.some(id => usableModel(id, owner));
+        models.reason =
+          (noneLeft && ownerCan) || (lockBroken && model.reason === CAPABILITY_REASONS.youMayNot)
+            ? CAPABILITY_REASONS.youMayNot
+            : CAPABILITY_REASONS.ownerMayNot;
+      }
+    }
+  }
 
   // File upload: the installation's switch. The owner's state still counts:
   // an app whose owner is gone or stale runs as plain chat.
@@ -257,7 +320,7 @@ function evaluate(content, { runner, owner, settings, catalog, ownerState, stric
     };
   });
 
-  return { model, upload, webSearch, skills, bindings };
+  return { model, models, upload, webSearch, skills, bindings };
 }
 
 /** One entry of the `capabilities` list of {@link effectiveUserApp}. */
@@ -371,6 +434,26 @@ export function isRunnerOwner(record, runner) {
 }
 
 /**
+ * What the author set about how the app researches on the web, cut to what the
+ * administrator allows: the pages the page reader may open for one answer, and a
+ * sentence of guidance. A value that is not of the right kind is left out.
+ */
+function webSearchTuning(value, settings) {
+  if (!isPlainObject(value)) return {};
+  const tuning = {};
+  const limit = settings?.capabilities?.webSearchLimits?.maxPageReads;
+  if (Number.isInteger(value.maxPageReads) && value.maxPageReads >= 1) {
+    tuning.maxPageReads = Number.isInteger(limit)
+      ? Math.min(value.maxPageReads, limit)
+      : value.maxPageReads;
+  }
+  if (typeof value.researchGuidance === 'string' && value.researchGuidance.trim() !== '') {
+    tuning.researchGuidance = value.researchGuidance.slice(0, USER_APP_LIMITS.researchGuidance);
+  }
+  return tuning;
+}
+
+/**
  * The app a chat request runs, with what the ceiling grants this runner.
  *
  * @param {Object} record - Stored personal app.
@@ -434,11 +517,26 @@ export function effectiveUserApp(record, { runner, owner, settings, catalog, now
   applyLooks(app, content);
 
   // Capabilities: written here, never copied from the record.
-  if (!decided.model.reason) app.preferredModel = decided.model.id;
+  // The models of the app: a restriction that leaves no model stops the chat (the one entry
+  // that no model has, see `NO_MODEL_AVAILABLE_ID`); a list narrows what the chat may pick.
+  if (decided.models.refuse) app.allowedModels = [NO_MODEL_AVAILABLE_ID];
+  else if (!decided.models.reason) {
+    if (decided.models.ids.length > 0) app.allowedModels = [...decided.models.ids];
+    if (decided.models.lock) app.disallowModelSelection = true;
+  }
+  const preferredAllowed =
+    !app.allowedModels || app.allowedModels.some(id => sameId(id, decided.model.id));
+  if (!decided.model.reason && preferredAllowed) app.preferredModel = decided.model.id;
   app.upload = structuredClone(decided.upload.reason ? PERSONAL_UPLOAD_OFF : PERSONAL_UPLOAD_ON);
   app.websearch = decided.webSearch.reason
     ? { enabled: false }
-    : { enabled: true, provider: 'auto', enabledByDefault: false, useNativeSearch: false };
+    : {
+        enabled: true,
+        provider: 'auto',
+        enabledByDefault: false,
+        useNativeSearch: false,
+        ...webSearchTuning(content.capabilities?.webSearchSettings, settings)
+      };
   if (!decided.skills.reason) {
     app.skillSettings = { enabled: true, allowPersonal: true };
     app.skills = [...decided.skills.ids];
@@ -465,6 +563,7 @@ export function effectiveUserApp(record, { runner, owner, settings, catalog, now
     app,
     capabilities: [
       capabilityEntry('model', decided.model),
+      capabilityEntry('models', decided.models),
       capabilityEntry('upload', decided.upload),
       capabilityEntry('webSearch', decided.webSearch),
       capabilityEntry('skills', decided.skills),
@@ -519,6 +618,7 @@ export function checkCapabilitiesForSave(content, { actor, owner, settings, cata
     if (entry.requested && entry.reason) denied.push({ capability, reason: entry.reason });
   };
   note('model', decided.model);
+  note('models', decided.models);
   note('upload', decided.upload);
   note('webSearch', decided.webSearch);
   note('skills', decided.skills);
@@ -551,6 +651,10 @@ export function removesCapabilitiesOnly(previous, next) {
   const is = after.capabilities || {};
   for (const flag of ['upload', 'webSearch', 'skills']) {
     if (is[flag] === true && was[flag] !== true) return false;
+  }
+  // The choice of models and the settings of web search may stay or go, not change.
+  for (const key of ['models', 'webSearchSettings']) {
+    if (is[key] !== undefined && !same(was[key], is[key])) return false;
   }
   const wasBound = new Map(requestedBindings(before).map(binding => [binding.id, binding.actions]));
   for (const binding of requestedBindings(after)) {

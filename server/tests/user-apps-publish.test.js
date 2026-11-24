@@ -709,6 +709,46 @@ describe('the start state and the projection, for every kind of tool', () => {
     assert.notDeepEqual(withoutInput.inputMode?.rows, 7);
   });
 
+  it('the models of the app and how it researches are written as the ceiling built them', () => {
+    const result = effective(
+      {
+        preferredModel: 'gpt-4o',
+        allowedModels: ['gpt-4o', 'gpt-4o-mini'],
+        disallowModelSelection: true,
+        websearch: {
+          enabled: true,
+          provider: 'auto',
+          useNativeSearch: false,
+          maxPageReads: 3,
+          researchGuidance: 'Check two sources.'
+        }
+      },
+      [granted('webSearch'), granted('models')]
+    );
+    const app = toAdminApp(record, { effective: result, id: 'recherche', enabled: false });
+    assert.deepEqual(app.allowedModels, ['gpt-4o', 'gpt-4o-mini']);
+    assert.equal(app.disallowModelSelection, true);
+    assert.equal(app.preferredModel, 'gpt-4o');
+    // Only what the author set about the research, not the engine settings of a personal app.
+    assert.deepEqual(app.websearch, {
+      enabled: true,
+      maxPageReads: 3,
+      researchGuidance: 'Check two sources.'
+    });
+    assert.equal(appConfigSchema.safeParse(app).success, true);
+  });
+
+  it('an app without a model list gets none, and stays open to every model', () => {
+    const app = toAdminApp(record, {
+      effective: effective({ websearch: { enabled: true } }, [granted('webSearch')]),
+      id: 'recherche',
+      enabled: false
+    });
+    assert.equal(Object.hasOwn(app, 'allowedModels'), false);
+    assert.equal(Object.hasOwn(app, 'disallowModelSelection'), false);
+    assert.deepEqual(app.websearch, { enabled: true });
+  });
+
   it('skills are written as the explicit list of granted IDs, never as a wildcard', () => {
     const result = effective(
       { skillSettings: { enabled: true, allowPersonal: true }, skills: ['brand-voice', '*'] },

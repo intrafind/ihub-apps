@@ -92,13 +92,36 @@ export const USER_APP_START_FORM_KEYS = Object.freeze(['enabled', 'submitLabel']
 /** The keys of the input panel a personal app may set. */
 export const USER_APP_VARIABLES_PANEL_KEYS = Object.freeze(['pinned']);
 
-/** The keys of `capabilities`: three switches and the list of bound installations. */
+/**
+ * The keys of `capabilities`: three switches, the list of bound installations,
+ * the choice of models and the settings of web search.
+ */
 export const USER_APP_CAPABILITY_KEYS = Object.freeze([
   'upload',
   'webSearch',
   'skills',
-  'integrations'
+  'integrations',
+  'models',
+  'webSearchSettings'
 ]);
+
+/** The keys of `capabilities.models`: the models the app may use, and whether the choice is locked. */
+export const USER_APP_MODELS_KEYS = Object.freeze(['allowed', 'lock']);
+
+/** The keys of `capabilities.webSearchSettings`. */
+export const USER_APP_WEB_SEARCH_SETTINGS_KEYS = Object.freeze([
+  'maxPageReads',
+  'researchGuidance'
+]);
+
+/**
+ * The one entry the ceiling writes to `allowedModels` when an app restricts its
+ * models and the owner or the person chatting may use none of them. No model
+ * has this ID, so the chat does not start (`noCompatibleModels` of
+ * `RequestBuilder`); dropping the restriction instead would give the person a
+ * model the author excluded.
+ */
+export const NO_MODEL_AVAILABLE_ID = ':no-model-available';
 
 /** The keys of one entry of `capabilities.integrations`. `actions` is required and not empty. */
 export const USER_APP_INTEGRATION_KEYS = Object.freeze(['id', 'actions']);
@@ -146,7 +169,13 @@ export const USER_APP_LIMITS = Object.freeze({
   /** The label of the send button of the start form. */
   submitLabel: 60,
   /** The most rows the input line may have. */
-  inputRows: 20
+  inputRows: 20,
+  /** Models an app may list in `capabilities.models.allowed`. */
+  models: 10,
+  /** The most pages the page reader may open for one answer. */
+  pageReads: 50,
+  /** The research guidance of web search. */
+  researchGuidance: 1000
 });
 
 /** The values of `origin`: how the app was started. `chat` is added with the chat-based builder. */
@@ -202,8 +231,6 @@ export const USER_APP_FIELD_POLICY = Object.freeze({
   imageGeneration: 'never',
   aiDisclosure: 'never',
   usageGuide: 'never',
-  allowedModels: 'never',
-  disallowModelSelection: 'never',
   ephemeral: 'never',
   documentTemplate: 'never',
   allowUserTemplateUploads: 'never',
@@ -242,7 +269,6 @@ export const USER_APP_RUN_KEYS = Object.freeze([
  * values and no other key outside {@link USER_APP_RUN_KEYS}.
  */
 export const USER_APP_SCHEMA_DEFAULTS = Object.freeze({
-  disallowModelSelection: false,
   ephemeral: false,
   allowInheritance: false
 });
@@ -385,6 +411,35 @@ function pickIntegrations(value) {
 }
 
 /**
+ * `capabilities.models` from either form: the personal object `{ allowed, lock }`,
+ * or an app config (`allowedModels`, `disallowModelSelection`). Only strings
+ * that can be a model ID and a boolean `lock` are kept.
+ */
+function pickModels(value) {
+  if (!isPlainObject(value)) return undefined;
+  const list = Array.isArray(value.allowed) ? value.allowed : value.allowedModels;
+  const lock = typeof value.lock === 'boolean' ? value.lock : value.disallowModelSelection;
+  const allowed = Array.isArray(list)
+    ? [...new Set(list.filter(id => typeof id === 'string' && id !== '' && id !== '*'))]
+    : [];
+  const models = {};
+  if (allowed.length > 0) models.allowed = allowed;
+  if (lock === true) models.lock = true;
+  return Object.keys(models).length > 0 ? models : undefined;
+}
+
+/** `capabilities.webSearchSettings` from the personal object or from `websearch` of an app config. */
+function pickWebSearchSettings(value) {
+  if (!isPlainObject(value)) return undefined;
+  const settings = {};
+  if (Number.isInteger(value.maxPageReads)) settings.maxPageReads = value.maxPageReads;
+  if (typeof value.researchGuidance === 'string' && value.researchGuidance.trim() !== '') {
+    settings.researchGuidance = value.researchGuidance;
+  }
+  return Object.keys(settings).length > 0 ? settings : undefined;
+}
+
+/**
  * The `capabilities` object of a personal app. A draft that carries
  * `capabilities` already (a personal body, the editor's state) is read from
  * there, key by key; what it does not say is read from the keys of an app
@@ -395,7 +450,7 @@ function pickCapabilities(draft) {
   const own = isPlainObject(draft.capabilities) ? draft.capabilities : {};
   const flag = (key, fromConfig) =>
     typeof own[key] === 'boolean' ? own[key] : fromConfig?.enabled === true;
-  return {
+  const capabilities = {
     upload: flag('upload', draft.upload),
     webSearch: flag('webSearch', draft.websearch),
     skills: flag('skills', draft.skillSettings),
@@ -403,6 +458,13 @@ function pickCapabilities(draft) {
       Object.hasOwn(own, 'integrations') ? own.integrations : draft.integrations
     )
   };
+  const models = pickModels(Object.hasOwn(own, 'models') ? own.models : draft);
+  if (models) capabilities.models = models;
+  const search = pickWebSearchSettings(
+    Object.hasOwn(own, 'webSearchSettings') ? own.webSearchSettings : draft.websearch
+  );
+  if (search) capabilities.webSearchSettings = search;
+  return capabilities;
 }
 
 /**

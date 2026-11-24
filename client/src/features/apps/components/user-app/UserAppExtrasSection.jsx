@@ -12,7 +12,10 @@ import {
   LABEL_CLASS,
   SECONDARY_BUTTON_CLASS
 } from '../../../admin/components/formStyles';
+import { USER_APP_LIMITS } from '../../../../../../shared/userAppContent.js';
 import { WITHHELD_MODEL, stillAsksFor } from './userAppForm';
+
+const isPlainObject = value => Boolean(value) && typeof value === 'object' && !Array.isArray(value);
 
 /** The names of the actions an installation offers personal apps, as strings. */
 const actionNames = system =>
@@ -28,9 +31,10 @@ const actionNames = system =>
  * @param {(checked: boolean) => void} props.onChange
  * @param {string} props.label
  * @param {string} [props.help]
+ * @param {boolean} [props.disabled=false]
  * @returns {JSX.Element}
  */
-function Switch({ checked, onChange, label, help }) {
+function Switch({ checked, onChange, label, help, disabled = false }) {
   const id = useId();
   return (
     <div>
@@ -41,6 +45,7 @@ function Switch({ checked, onChange, label, help }) {
           checked={checked}
           onChange={event => onChange(event.target.checked)}
           aria-describedby={help ? `${id}-help` : undefined}
+          disabled={disabled}
           className={CHECKBOX_CLASS}
         />
         <label htmlFor={id} className="ml-2 block text-sm text-gray-900 dark:text-gray-100">
@@ -72,7 +77,8 @@ function Switch({ checked, onChange, label, help }) {
  * @param {(form: object) => void} props.onChange - Receives the changed form state.
  * @param {{modelChoice?: boolean, upload?: boolean, webSearch?: boolean, skills?: boolean,
  *   integrations?: Array<{id: string, label?: string, actions?: Array<string|{name: string,
- *   description?: string}>}>}|null} props.allowed - What may be offered; nothing without it.
+ *   description?: string}>}>, webSearchLimits?: {maxPageReads?: number}}|null} props.allowed -
+ *   What may be offered; nothing without it.
  * @param {Array<{id: string, name?: object|string}>} [props.models] - The models the caller
  *   may choose.
  * @param {Array<{id: string, kind: string, installationId: string|null}>} [props.withheld] -
@@ -94,6 +100,8 @@ function UserAppExtrasSection({
 }) {
   const { t } = useTranslation();
   const modelId = useId();
+  const pagesId = useId();
+  const guidanceId = useId();
   const may = allowed || {};
   const capabilities = form.capabilities;
   const setFlag = (flag, value) =>
@@ -142,11 +150,49 @@ function UserAppExtrasSection({
       : models;
 
   const showModel = may.modelChoice === true && !isGone('model');
+  // The list of models goes with the choice of model, and the way to research with web search.
+  const showModels = may.modelChoice === true && !isGone('models');
+  const showResearch = may.webSearch === true && capabilities.webSearch === true;
+  const modelsChoice = isPlainObject(capabilities.models) ? capabilities.models : {};
+  const allowedModels = Array.isArray(modelsChoice.allowed) ? modelsChoice.allowed : [];
+  const listedModels = [
+    ...models,
+    ...allowedModels
+      .filter(id => !models.some(model => model.id === id))
+      .map(id => ({ id, name: id }))
+  ];
+  const search = isPlainObject(capabilities.webSearchSettings)
+    ? capabilities.webSearchSettings
+    : {};
+  const maxPageReads = Number(may.webSearchLimits?.maxPageReads) || USER_APP_LIMITS.pageReads;
+
+  /** Sets one of the two objects of `capabilities`; an object without a value is removed. */
+  const setCapabilityObject = (key, value) => {
+    const next = { ...capabilities };
+    const empty = Object.values(value).every(
+      entry =>
+        entry === undefined ||
+        entry === '' ||
+        entry === false ||
+        (Array.isArray(entry) && entry.length === 0)
+    );
+    if (empty) delete next[key];
+    else next[key] = value;
+    onChange({ ...form, capabilities: next });
+  };
+  const toggleModel = (id, checked) =>
+    setCapabilityObject('models', {
+      ...modelsChoice,
+      allowed: checked
+        ? [...allowedModels.filter(other => other !== id), id]
+        : allowedModels.filter(other => other !== id)
+    });
   const showUpload = may.upload === true && !isGone('upload');
   const showWebSearch = may.webSearch === true && !isGone('webSearch');
   const showSkills = may.skills === true && !isGone('skills');
   const nothing =
     !showModel &&
+    !showModels &&
     !showUpload &&
     !showWebSearch &&
     !showSkills &&
@@ -197,6 +243,30 @@ function UserAppExtrasSection({
         </div>
       )}
 
+      {showModels && (
+        <fieldset className="space-y-2" data-testid="user-app-models">
+          <legend className={LABEL_CLASS}>{t('userApps.edit.extras.modelsTitle')}</legend>
+          <p className={HELP_CLASS}>{t('userApps.edit.extras.modelsHelp')}</p>
+          <div className="space-y-1.5">
+            {listedModels.map(model => (
+              <Switch
+                key={model.id}
+                checked={allowedModels.includes(model.id)}
+                onChange={checked => toggleModel(model.id, checked)}
+                label={getLocalizedContent(model.name, language) || model.id}
+              />
+            ))}
+          </div>
+          <Switch
+            checked={modelsChoice.lock === true}
+            onChange={lock => setCapabilityObject('models', { ...modelsChoice, lock })}
+            label={t('userApps.edit.extras.modelsLock')}
+            help={chosenModel ? undefined : t('userApps.edit.extras.modelsLockNeedsModel')}
+            disabled={!chosenModel && modelsChoice.lock !== true}
+          />
+        </fieldset>
+      )}
+
       {showUpload && (
         <Switch
           checked={capabilities.upload === true}
@@ -211,6 +281,55 @@ function UserAppExtrasSection({
           label={t('userApps.edit.extras.webSearch')}
           help={t('userApps.edit.extras.webSearchHelp')}
         />
+      )}
+      {showResearch && (
+        <div className="space-y-3" data-testid="user-app-research">
+          <div>
+            <label htmlFor={pagesId} className={LABEL_CLASS}>
+              {t('userApps.edit.extras.pageReads')}
+            </label>
+            <input
+              id={pagesId}
+              type="number"
+              min={1}
+              max={maxPageReads}
+              value={search.maxPageReads ?? ''}
+              onChange={event =>
+                setCapabilityObject('webSearchSettings', {
+                  ...search,
+                  maxPageReads: event.target.value
+                })
+              }
+              aria-describedby={`${pagesId}-help`}
+              className={INPUT_CLASS}
+            />
+            <p id={`${pagesId}-help`} className={HELP_CLASS}>
+              {t('userApps.edit.extras.pageReadsHelp', { max: maxPageReads })}
+            </p>
+          </div>
+          <div>
+            <label htmlFor={guidanceId} className={LABEL_CLASS}>
+              {t('userApps.edit.extras.researchGuidance')}
+            </label>
+            <textarea
+              id={guidanceId}
+              rows={3}
+              maxLength={USER_APP_LIMITS.researchGuidance}
+              value={search.researchGuidance ?? ''}
+              onChange={event =>
+                setCapabilityObject('webSearchSettings', {
+                  ...search,
+                  researchGuidance: event.target.value
+                })
+              }
+              aria-describedby={`${guidanceId}-help`}
+              className={INPUT_CLASS}
+            />
+            <p id={`${guidanceId}-help`} className={HELP_CLASS}>
+              {t('userApps.edit.extras.researchGuidanceHelp')}
+            </p>
+          </div>
+        </div>
       )}
       {showSkills && (
         <Switch

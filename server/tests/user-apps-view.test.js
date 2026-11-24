@@ -300,6 +300,41 @@ describe('what a person with "Can use" is told', () => {
   });
 });
 
+describe('what the author stored beyond the app object of a run', () => {
+  const withSettings = record({
+    content: {
+      ...content,
+      capabilities: {
+        ...content.capabilities,
+        models: { allowed: ['gpt-4o', 'gpt-4o-mini'], lock: true },
+        webSearchSettings: { maxPageReads: 3 }
+      }
+    }
+  });
+
+  it('is told to the roles that may edit the app, as stored, and to nobody else', () => {
+    for (const role of ['owner', 'editor', 'offered', 'admin']) {
+      assert.deepEqual(
+        viewFor(role, withSettings).authored,
+        {
+          capabilities: {
+            models: { allowed: ['gpt-4o', 'gpt-4o-mini'], lock: true },
+            webSearchSettings: { maxPageReads: 3 }
+          }
+        },
+        role
+      );
+    }
+    assert.equal(Object.hasOwn(viewFor('user', withSettings), 'authored'), false);
+  });
+
+  it('is left out when the author set nothing of it', () => {
+    for (const role of ['owner', 'editor', 'offered', 'admin']) {
+      assert.equal(Object.hasOwn(viewFor(role), 'authored'), false, role);
+    }
+  });
+});
+
 describe('what owner, "Can edit", the receiver and a full admin are told', () => {
   it('the member list, what was requested and every reason', () => {
     for (const role of ['owner', 'editor', 'offered', 'admin']) {

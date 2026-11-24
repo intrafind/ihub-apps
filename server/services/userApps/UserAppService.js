@@ -148,6 +148,10 @@ export function requestedCapabilityIds(content) {
   const capabilities = content?.capabilities || {};
   const ids = [];
   if (content?.preferredModel) ids.push('model');
+  const models = capabilities.models;
+  if ((Array.isArray(models?.allowed) && models.allowed.length > 0) || models?.lock === true) {
+    ids.push('models');
+  }
   for (const flag of ['upload', 'webSearch', 'skills']) {
     if (capabilities[flag] === true) ids.push(flag);
   }
@@ -161,6 +165,7 @@ export function requestedCapabilityIds(content) {
 function withoutCapability(content, capability) {
   const next = { ...content, capabilities: { ...content.capabilities } };
   if (capability === 'model') delete next.preferredModel;
+  else if (capability === 'models') delete next.capabilities.models;
   else if (capability.startsWith(INTEGRATION_CAPABILITY_PREFIX)) {
     const id = capability.slice(INTEGRATION_CAPABILITY_PREFIX.length);
     next.capabilities.integrations = (content.capabilities?.integrations || []).filter(
@@ -681,7 +686,8 @@ export class UserAppService {
    *   canPublish: boolean, maxApps: number, used: number, generator: boolean,
    *   generatorEnabled: boolean, capabilities: {modelChoice: boolean, upload: boolean, webSearch: boolean, skills: boolean,
    *   integrations: Array<{id: string, label: string,
-   *   actions: Array<{name: string, description: string}>}>}}>}
+   *   actions: Array<{name: string, description: string}>}>,
+   *   webSearchLimits: {maxPageReads: number}}}>}
    */
   async configFor(user, { language = 'en', publishAvailable = false } = {}) {
     const settings = currentUserAppSettings();
@@ -699,7 +705,8 @@ export class UserAppService {
       upload: false,
       webSearch: false,
       skills: false,
-      integrations: []
+      integrations: [],
+      webSearchLimits: { maxPageReads: 0 }
     };
     return {
       enabled,
@@ -718,7 +725,8 @@ export class UserAppService {
             upload: settings.capabilities.upload,
             webSearch: settings.capabilities.webSearch && this._searchFor(user),
             skills: settings.capabilities.skills && isFeatureEnabled('skills', features),
-            integrations: await this._bindableInstallations(user, settings, features, language)
+            integrations: await this._bindableInstallations(user, settings, features, language),
+            webSearchLimits: { ...settings.capabilities.webSearchLimits }
           }
         : off
     };

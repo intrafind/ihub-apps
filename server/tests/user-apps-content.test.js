@@ -270,6 +270,88 @@ describe('how the chat looks and starts', () => {
   });
 });
 
+describe('the models and the web search settings of an app', () => {
+  const caps = extra => content({ capabilities: { upload: true, ...extra } });
+  const parse = extra => userAppContentSchema.safeParse(caps(extra));
+
+  it('keeps a list of models, each once, and a lock', () => {
+    const parsed = userAppContentSchema.parse(
+      content({
+        preferredModel: 'gpt-4o',
+        capabilities: { models: { allowed: ['gpt-4o', 'gpt-4o', 'gpt-4o-mini'], lock: true } }
+      })
+    );
+    assert.deepEqual(parsed.capabilities.models, {
+      allowed: ['gpt-4o', 'gpt-4o-mini'],
+      lock: true
+    });
+  });
+
+  it('stores nothing for an empty choice, and removes it with null', () => {
+    for (const models of [{}, { allowed: [] }, { lock: false }, null]) {
+      const parsed = userAppContentSchema.parse(caps({ models }));
+      assert.equal(Object.hasOwn(parsed.capabilities, 'models'), false, JSON.stringify(models));
+    }
+    const stored = userAppContentSchema.parse(
+      caps({ models: { allowed: ['gpt-4o'] }, webSearchSettings: { maxPageReads: 3 } })
+    );
+    const merged = mergeUserAppContent(stored, {
+      capabilities: { models: null, webSearchSettings: null }
+    });
+    assert.equal(Object.hasOwn(merged.capabilities, 'models'), false);
+    assert.equal(Object.hasOwn(merged.capabilities, 'webSearchSettings'), false);
+  });
+
+  it('refuses a list that is too long, an unknown model ID and an unknown key', () => {
+    const many = Array.from({ length: USER_APP_LIMITS.models + 1 }, (_, i) => `model-${i}`);
+    assert.equal(parse({ models: { allowed: many } }).success, false);
+    for (const id of ['', '../x', 'a b', ':no-model-available']) {
+      assert.equal(parse({ models: { allowed: [id] } }).success, false, id);
+    }
+    assert.equal(parse({ models: { allowed: ['gpt-4o'], extra: 1 } }).success, false);
+  });
+
+  it('needs a preferred model for a lock, and the list to name the preferred model', () => {
+    assert.equal(parse({ models: { lock: true } }).success, false);
+    assert.equal(
+      userAppContentSchema.safeParse(
+        content({ preferredModel: 'b', capabilities: { models: { allowed: ['a'] } } })
+      ).success,
+      false
+    );
+    assert.equal(
+      userAppContentSchema.safeParse(
+        content({ preferredModel: 'a', capabilities: { models: { allowed: ['a'], lock: true } } })
+      ).success,
+      true
+    );
+  });
+
+  it('keeps the settings of web search, cleaned and within their limits', () => {
+    const parsed = userAppContentSchema.parse(
+      caps({ webSearchSettings: { maxPageReads: 4, researchGuidance: 'Check\u200B two sources.' } })
+    );
+    assert.deepEqual(parsed.capabilities.webSearchSettings, {
+      maxPageReads: 4,
+      researchGuidance: 'Check two sources.'
+    });
+    for (const webSearchSettings of [
+      { maxPageReads: 0 },
+      { maxPageReads: USER_APP_LIMITS.pageReads + 1 },
+      { maxPageReads: 1.5 },
+      { researchGuidance: 'x'.repeat(USER_APP_LIMITS.researchGuidance + 1) },
+      { maxSearches: 3 }
+    ]) {
+      assert.equal(parse({ webSearchSettings }).success, false, JSON.stringify(webSearchSettings));
+    }
+    // A guidance of spaces is no guidance.
+    const blank = userAppContentSchema.parse(
+      caps({ webSearchSettings: { researchGuidance: '  ' } })
+    );
+    assert.equal(Object.hasOwn(blank.capabilities, 'webSearchSettings'), false);
+  });
+});
+
 describe('every cap holds', () => {
   it('accepts 5 languages and refuses 6, for every localized key', () => {
     for (const key of ['name', 'description', 'system', 'prompt', 'messagePlaceholder']) {

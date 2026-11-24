@@ -544,6 +544,97 @@ describe('what the app may use', () => {
     );
   });
 
+  test('limits the app to ticked models; the lock needs a chosen model', async () => {
+    mockUserApps.config = { ...CONFIG, capabilities: { ...ALLOWED, modelChoice: true } };
+    mockApi.fetchModels.mockResolvedValue([
+      { id: 'gemini-flash', name: { en: 'Gemini Flash' } },
+      { id: 'gpt-4o', name: { en: 'GPT-4o' } }
+    ]);
+    await renderEditor();
+    const models = within(extras().getByTestId('user-app-models'));
+    // No model chosen: the lock cannot be switched on.
+    expect(models.getByRole('checkbox', { name: EDIT.extras.modelsLock })).toBeDisabled();
+    expect(models.getByText(EDIT.extras.modelsLockNeedsModel)).toBeInTheDocument();
+
+    await act(async () => {
+      fireEvent.click(models.getByRole('checkbox', { name: 'Gemini Flash' }));
+    });
+    mockApi.updateUserApp.mockResolvedValue(userApp({ revision: 8 }));
+    await click(saveButton());
+    expect(mockApi.updateUserApp).toHaveBeenCalledWith(
+      APP_ID,
+      { capabilities: { models: { allowed: ['gemini-flash'] } } },
+      { revision: 7 }
+    );
+  });
+
+  test('shows the list the author stored, not the one cut for this person, and removes it with null', async () => {
+    mockUserApps.config = { ...CONFIG, capabilities: { ...ALLOWED, modelChoice: true } };
+    mockApi.fetchModels.mockResolvedValue([
+      { id: 'gemini-flash', name: { en: 'Gemini Flash' } },
+      { id: 'gpt-4o', name: { en: 'GPT-4o' } }
+    ]);
+    mockApi.fetchUserApp.mockResolvedValue(
+      userApp({
+        // What this caller may use: one model. What the author stored: two, and a lock.
+        allowedModels: ['gpt-4o'],
+        preferredModel: 'gpt-4o',
+        authored: { capabilities: { models: { allowed: ['gpt-4o', 'gemini-flash'], lock: true } } },
+        capabilities: [
+          { id: 'model', requested: true, granted: true },
+          { id: 'models', requested: true, granted: true },
+          { id: 'upload', requested: true, granted: true }
+        ]
+      })
+    );
+    await renderEditor();
+    const models = within(extras().getByTestId('user-app-models'));
+    expect(models.getByRole('checkbox', { name: 'Gemini Flash' })).toBeChecked();
+    expect(models.getByRole('checkbox', { name: 'GPT-4o' })).toBeChecked();
+    expect(models.getByRole('checkbox', { name: EDIT.extras.modelsLock })).toBeChecked();
+
+    await act(async () => {
+      fireEvent.click(models.getByRole('checkbox', { name: 'Gemini Flash' }));
+      fireEvent.click(models.getByRole('checkbox', { name: 'GPT-4o' }));
+      fireEvent.click(models.getByRole('checkbox', { name: EDIT.extras.modelsLock }));
+    });
+    mockApi.updateUserApp.mockResolvedValue(userApp({ revision: 8 }));
+    await click(saveButton());
+    expect(mockApi.updateUserApp).toHaveBeenCalledWith(
+      APP_ID,
+      { capabilities: { models: null } },
+      { revision: 7 }
+    );
+  });
+
+  test('offers the page limit and the guidance only while web search is on', async () => {
+    await renderEditor();
+    expect(extras().queryByTestId('user-app-research')).not.toBeInTheDocument();
+    await act(async () => {
+      fireEvent.click(extras().getByRole('checkbox', { name: EDIT.extras.webSearch }));
+    });
+    const research = within(extras().getByTestId('user-app-research'));
+    expect(
+      research.getByText(en.userApps.edit.extras.pageReadsHelp.replace('{{max}}', '10'))
+    ).toBeInTheDocument();
+    await act(async () => {
+      fireEvent.change(research.getByRole('spinbutton'), { target: { value: '4' } });
+      fireEvent.change(research.getByRole('textbox'), { target: { value: 'Check two sources.' } });
+    });
+    mockApi.updateUserApp.mockResolvedValue(userApp({ revision: 8 }));
+    await click(saveButton());
+    expect(mockApi.updateUserApp).toHaveBeenCalledWith(
+      APP_ID,
+      {
+        capabilities: {
+          webSearch: true,
+          webSearchSettings: { maxPageReads: 4, researchGuidance: 'Check two sources.' }
+        }
+      },
+      { revision: 7 }
+    );
+  });
+
   test('a stored capability that is gone stays visible with "Remove"', async () => {
     mockUserApps.config = { ...CONFIG, capabilities: { ...ALLOWED, webSearch: false } };
     mockApi.fetchUserApp.mockResolvedValue(

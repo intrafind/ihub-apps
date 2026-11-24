@@ -338,6 +338,8 @@ export function revisionOutputRules({
  * @param {string} [options.integrationsBlock=''] - The catalogue of installed systems.
  * @param {Array<{ key: string, hint: string, proposal: string }>} [options.settings] - The
  *   settings of the registry the turn may propose; see {@link revisionOutputRules}.
+ * @param {string} [options.modelsBlock=''] - The catalogue of the models the caller may use,
+ *   read only where a setting names models.
  * @returns {{ messages: Array<{ role: string, content: string }> }}
  */
 export function buildRevisionMessages({
@@ -350,12 +352,16 @@ export function buildRevisionMessages({
   mayAsk = true,
   mayPropose = true,
   integrationsBlock = '',
-  settings = []
+  settings = [],
+  modelsBlock = ''
 }) {
   const catalogue = mayPropose ? integrationsBlock.trim() : '';
+  // The models are listed only where a setting of this turn names a model.
+  const namesModels = settings.some(({ key }) => key === 'preferredModel' || key === 'models');
   const system = [
     REVISE_BRIEF,
     catalogue,
+    namesModels ? modelsBlock.trim() : '',
     revisionOutputRules({
       language,
       keys,

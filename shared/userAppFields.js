@@ -55,6 +55,7 @@
 export const USER_APP_FIELD_TARGETS = Object.freeze(['admin', 'personal']);
 
 const BOTH = Object.freeze(['admin', 'personal']);
+const PERSONAL = Object.freeze(['personal']);
 const NONE = Object.freeze([]);
 
 function describe(descriptor) {
@@ -224,7 +225,10 @@ export const USER_APP_FIELDS = Object.freeze([
     store: 'content',
     verdict: 'capability',
     appKeys: ['preferredModel'],
-    gate: 'modelChoice'
+    gate: 'modelChoice',
+    propose: PERSONAL,
+    proposal: 'confirm',
+    hint: 'The id of the AI model the app uses unless the person picks another one, from the list of models above. A string.'
   }),
   // The container of the switches below; it has no app-schema key of its own.
   describe({ key: 'capabilities', store: 'content', verdict: 'capability' }),
@@ -241,6 +245,25 @@ export const USER_APP_FIELDS = Object.freeze([
     verdict: 'capability',
     appKeys: ['websearch'],
     gate: 'webSearch'
+  }),
+  describe({
+    key: 'models',
+    store: 'capabilities',
+    verdict: 'capability',
+    appKeys: ['allowedModels', 'disallowModelSelection'],
+    gate: 'modelChoice',
+    propose: PERSONAL,
+    proposal: 'confirm',
+    hint: 'Which models the app may use: { "allowed": [model ids from the list above], "lock": true | false }. "lock": true uses the preferred model and hides the model picker. Only ever narrows what a person may use.'
+  }),
+  describe({
+    key: 'webSearchSettings',
+    store: 'capabilities',
+    verdict: 'capability',
+    gate: 'webSearch',
+    propose: PERSONAL,
+    proposal: 'confirm',
+    hint: 'How the app researches on the web, only when web search is on: { "maxPageReads": 1 to 50, "researchGuidance": "a sentence on how to research" }.'
   }),
   describe({
     key: 'skills',

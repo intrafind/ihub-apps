@@ -212,7 +212,8 @@ describe('GET /api/apps/_config', () => {
         // Allowed by the settings, but no search engine is installed.
         webSearch: false,
         skills: false,
-        integrations: []
+        integrations: [],
+        webSearchLimits: { maxPageReads: 10 }
       }
     });
   });

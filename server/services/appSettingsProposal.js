@@ -28,7 +28,7 @@
  */
 import { appSettingsKeys } from '../../shared/appRevision.js';
 import { userAppField } from '../../shared/userAppFields.js';
-import { userAppFieldSchemas } from '../validators/userAppSchema.js';
+import { userAppCapabilitySchemas, userAppFieldSchemas } from '../validators/userAppSchema.js';
 
 function isPlainObject(value) {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
@@ -58,19 +58,54 @@ function sameValue(a, b) {
 }
 
 /**
+ * The schema of the value of one setting: the entry of `capabilities` for a
+ * setting that lives there, else the entry of the content key.
+ */
+function schemaOf(key) {
+  return userAppField(key)?.store === 'capabilities'
+    ? userAppCapabilitySchemas[key]
+    : userAppFieldSchemas[key];
+}
+
+/**
+ * The value of a setting in an app as the editor holds it: inside `capabilities`
+ * for a setting that lives there, else at the top.
+ *
+ * @param {Object} app
+ * @param {string} key
+ * @returns {unknown}
+ */
+export function settingOf(app, key) {
+  if (!isPlainObject(app)) return undefined;
+  return userAppField(key)?.store === 'capabilities' ? app.capabilities?.[key] : app[key];
+}
+
+/**
  * The settings the builder may propose in this turn, with the line the model
  * reads about each.
+ *
+ * A setting behind an administrator switch (`gate`) is offered for a personal
+ * app only while that switch is on; web search settings also need a search
+ * engine the caller may use.
  *
  * @param {Object} options
  * @param {'admin'|'personal'} options.target
  * @param {readonly string[]} [options.fields] - The request's `fields`; when it names
  *   keys, only those settings are offered.
+ * @param {{ settings?: Object, searchAvailable?: boolean }|null} [options.personal] - For a
+ *   personal app: the effective `platform.userApps` settings and whether the caller has web search.
  * @returns {Array<{ key: string, hint: string, proposal: 'direct'|'confirm' }>}
  */
-export function settingsToPropose({ target, fields } = {}) {
+export function settingsToPropose({ target, fields, personal = null } = {}) {
   const narrowed = Array.isArray(fields) && fields.length > 0;
   return appSettingsKeys(target)
     .filter(key => !narrowed || fields.includes(key))
+    .filter(key => {
+      const { gate } = userAppField(key);
+      if (!gate || !personal) return true;
+      if (personal.settings?.capabilities?.[gate] !== true) return false;
+      return gate !== 'webSearch' || personal.searchAvailable === true;
+    })
     .map(key => {
       const { hint, proposal } = userAppField(key);
       return { key, hint, proposal };
@@ -94,6 +129,9 @@ function adminValue(key, parsed) {
  * @param {'admin'|'personal'} options.target
  * @param {Array<{ key: string }>} options.offered - {@link settingsToPropose} for this turn.
  * @param {Object} options.current - The app's own values of the keys, hidden characters removed.
+ * @param {(key: string, value: unknown) => boolean} [options.allow] - Whether the caller may have
+ *   a `confirm` setting with this value; the ceiling of personal apps answers it. A setting it
+ *   refuses is left out without a word, like a suggestion the caller may not use.
  * @returns {{ patch: Object, changed: string[], suggestions: Array<{ key: string, value: unknown }>,
  *   warnings: Array<{ code: string, field: string }> }}
  *
@@ -101,13 +139,13 @@ function adminValue(key, parsed) {
  * readSettings({ autoStart: true }, { target: 'personal', offered, current: {} });
  * // → { patch: { autoStart: true }, changed: ['autoStart'], suggestions: [], warnings: [] }
  */
-export function readSettings(raw, { target, offered, current }) {
+export function readSettings(raw, { target, offered, current, allow }) {
   const result = { patch: {}, changed: [], suggestions: [], warnings: [] };
   if (!isPlainObject(raw)) return result;
   const known = new Map(offered.map(entry => [entry.key, entry]));
   for (const [key, value] of Object.entries(raw)) {
     const entry = known.get(key);
-    const schema = userAppFieldSchemas[key];
+    const schema = entry ? schemaOf(key) : undefined;
     if (!entry || !schema) {
       result.warnings.push({
         code: 'KEY_IGNORED',
@@ -122,8 +160,10 @@ export function readSettings(raw, { target, offered, current }) {
     }
     const checked = target === 'personal' ? (parsed.data ?? null) : adminValue(key, parsed.data);
     if (sameValue(checked, current?.[key])) continue;
-    if (entry.proposal === 'confirm') result.suggestions.push({ key, value: checked });
-    else {
+    if (entry.proposal === 'confirm') {
+      if (isUnsetSetting(checked) || allow?.(key, checked) === false) continue;
+      result.suggestions.push({ key, value: checked });
+    } else {
       result.patch[key] = checked;
       result.changed.push(key);
     }

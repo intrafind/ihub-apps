@@ -113,6 +113,7 @@ const ALLOWED = {
   upload: true,
   webSearch: true,
   skills: false,
+  webSearchLimits: { maxPageReads: 10 },
   integrations: [
     {
       id: 'jira-main',

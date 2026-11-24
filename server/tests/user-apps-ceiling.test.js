@@ -36,8 +36,10 @@ import {
   removesCapabilitiesOnly
 } from '../services/userApps/ceiling.js';
 import { userAppSettings } from '../services/userApps/userAppSettings.js';
+import { filterModelsForApp } from '../services/chat/RequestBuilder.js';
 import { appConfigSchema } from '../validators/appConfigSchema.js';
 import {
+  NO_MODEL_AVAILABLE_ID,
   PERSONAL_UPLOAD_OFF,
   PERSONAL_UPLOAD_ON,
   USER_APP_RUN_KEYS,
@@ -142,7 +144,9 @@ function recordWith(content = {}, fields = {}) {
         upload: true,
         webSearch: true,
         skills: true,
-        integrations: [{ id: INSTALLATION, actions: ['search'] }]
+        integrations: [{ id: INSTALLATION, actions: ['search'] }],
+        models: { allowed: [MODEL], lock: true },
+        webSearchSettings: { maxPageReads: 3, researchGuidance: 'Check two sources.' }
       },
       ...content
     },
@@ -292,6 +296,8 @@ describe('the run object', () => {
         iassistant: { baseUrl: 'https://evil.example' },
         // `html` is not an output format a personal app may choose.
         preferredOutputFormat: 'html',
+        // The keys of the app schema beside the real settings of `capabilities`: not read.
+        disallowModelSelection: false,
         customResponseRenderer: 'evil',
         rendererConfig: { script: 'x' },
         outputSchema: { type: 'object' },
@@ -335,6 +341,9 @@ describe('the run object', () => {
       USER_APP_RUN_KEYS.filter(key => key !== 'preferredOutputFormat').sort()
     );
     assert.equal(app.preferredOutputFormat, undefined);
+    // `allowedModels: ['*']` beside the real keys is not read; the list is the author's own.
+    assert.deepEqual(app.allowedModels, [MODEL]);
+    assert.equal(app.disallowModelSelection, true);
     // The row count of 99 is dropped; the type is a valid one and stays.
     assert.equal(app.inputMode.rows, personalAppBase(APP_ID).inputMode.rows);
     assert.equal(app.type, 'chat');
@@ -418,9 +427,10 @@ describe('what the app object gets (6.3, last column)', () => {
       now: NOW
     }).app;
 
-  it('preferred model: the ID, and never allowedModels', () => {
+  it("preferred model: the ID; the models are the author's own list, cut to what both may use", () => {
     assert.equal(granted().preferredModel, MODEL);
-    assert.equal(granted().allowedModels, undefined);
+    assert.deepEqual(granted().allowedModels, [MODEL]);
+    assert.equal(granted().disallowModelSelection, true);
   });
 
   it('upload: one of the two fixed objects', () => {
@@ -440,7 +450,9 @@ describe('what the app object gets (6.3, last column)', () => {
       enabled: true,
       provider: 'auto',
       enabledByDefault: false,
-      useNativeSearch: false
+      useNativeSearch: false,
+      maxPageReads: 3,
+      researchGuidance: 'Check two sources.'
     });
     // Whoever chats: native search is off whenever web search is granted.
     for (const runner of [ANNA, BEN]) {
@@ -780,6 +792,211 @@ describe('the preferred model', () => {
   });
 });
 
+describe('the models of an app (design 07, section 2.2)', () => {
+  const MODELS = [
+    { id: 'model-a', enabled: true, modelType: 'chat' },
+    { id: 'model-b', enabled: true, modelType: 'chat' },
+    { id: 'model-c', enabled: true, modelType: 'chat' },
+    { id: 'model-off', enabled: false, modelType: 'chat' }
+  ];
+  const asking = (models, extra = {}) =>
+    recordWith({
+      preferredModel: undefined,
+      capabilities: { upload: false, webSearch: false, skills: false, integrations: [], models },
+      ...extra
+    });
+  const run = (record, { runner = BEN, owner = ANNA, settings = settingsWith() } = {}) =>
+    effectiveUserApp(record, {
+      runner,
+      owner,
+      settings,
+      catalog: catalogWith({ models: MODELS }),
+      now: NOW
+    });
+  const entry = (result, id) => result.capabilities.find(capability => capability.id === id);
+
+  it('narrows the chat to the list, cut to the models the owner and the runner both may use', () => {
+    const result = run(
+      asking({ allowed: ['model-a', 'model-b', 'model-c', 'model-off', 'nope'] }),
+      {
+        owner: principal('anna', { models: ['model-a', 'model-b'] }),
+        runner: principal('ben', { models: ['model-b', 'model-c'] })
+      }
+    );
+    assert.deepEqual(result.app.allowedModels, ['model-b']);
+    assert.equal(result.app.disallowModelSelection, undefined);
+    assert.deepEqual(entry(result, 'models'), { id: 'models', requested: true, granted: true });
+  });
+
+  it('stops the chat when none is left for the runner, and says it is the runner', () => {
+    const result = run(asking({ allowed: ['model-a'] }), {
+      owner: principal('anna'),
+      runner: principal('ben', { models: ['model-b'] })
+    });
+    // No model has this ID, so `RequestBuilder` answers `noCompatibleModels`: the restriction is
+    // not dropped, because that would give the runner a model the author excluded.
+    assert.deepEqual(result.app.allowedModels, [NO_MODEL_AVAILABLE_ID]);
+    assert.deepEqual(entry(result, 'models'), {
+      id: 'models',
+      requested: true,
+      granted: false,
+      reason: CAPABILITY_REASONS.youMayNot
+    });
+  });
+
+  it('stops the chat when the owner may use none of them, and says it is the owner', () => {
+    const result = run(asking({ allowed: ['model-a'] }), {
+      owner: principal('anna', { models: ['model-b'] }),
+      runner: BEN
+    });
+    assert.deepEqual(result.app.allowedModels, [NO_MODEL_AVAILABLE_ID]);
+    assert.equal(entry(result, 'models').reason, CAPABILITY_REASONS.ownerMayNot);
+  });
+
+  it('locks the choice to the preferred model, which the list names', () => {
+    const result = run(
+      asking({ allowed: ['model-a', 'model-b'], lock: true }, { preferredModel: 'model-b' })
+    );
+    assert.equal(result.app.preferredModel, 'model-b');
+    assert.equal(result.app.disallowModelSelection, true);
+    assert.deepEqual(result.app.allowedModels, ['model-a', 'model-b']);
+  });
+
+  it('stops the chat when a locked model is one the runner may not use', () => {
+    const result = run(asking({ lock: true }, { preferredModel: 'model-a' }), {
+      owner: ANNA,
+      runner: principal('ben', { models: ['model-b'] })
+    });
+    assert.deepEqual(result.app.allowedModels, [NO_MODEL_AVAILABLE_ID]);
+    assert.equal(result.app.disallowModelSelection, undefined);
+    assert.equal(entry(result, 'models').reason, CAPABILITY_REASONS.youMayNot);
+  });
+
+  it('stops the chat when the lock has no preferred model, or one outside the list', () => {
+    assert.deepEqual(run(asking({ lock: true })).app.allowedModels, [NO_MODEL_AVAILABLE_ID]);
+    const outside = run(
+      asking({ allowed: ['model-a'], lock: true }, { preferredModel: 'model-b' })
+    );
+    assert.deepEqual(outside.app.allowedModels, [NO_MODEL_AVAILABLE_ID]);
+  });
+
+  it('leaves the chat of the app no model to pick, as the request builder reads allowedModels', () => {
+    const models = [
+      { id: 'model-a', modelType: 'chat' },
+      { id: 'model-b', modelType: 'chat' }
+    ];
+    const narrowed = run(asking({ allowed: ['model-a', 'model-b'] }), {
+      owner: ANNA,
+      runner: principal('ben', { models: ['model-b'] })
+    }).app;
+    // The list is cut to the models both may use; the request builder cuts it again to the
+    // models of the person chatting.
+    assert.deepEqual(
+      filterModelsForApp(models, narrowed).map(model => model.id),
+      ['model-b']
+    );
+    const refused = run(asking({ allowed: ['model-a'] }), {
+      owner: ANNA,
+      runner: principal('ben', { models: ['model-b'] })
+    }).app;
+    assert.deepEqual(filterModelsForApp(models, refused), []);
+    // An app without a restriction leaves every model.
+    assert.equal(filterModelsForApp(models, run(asking(undefined)).app).length, 2);
+  });
+
+  it('leaves the preferred model out when the list does not name it', () => {
+    const result = run(asking({ allowed: ['model-a'] }, { preferredModel: 'model-b' }));
+    assert.deepEqual(result.app.allowedModels, ['model-a']);
+    assert.equal(result.app.preferredModel, undefined);
+  });
+
+  it('has no effect while the installation does not allow a choice of model', () => {
+    const result = run(
+      asking({ allowed: ['model-a'], lock: true }, { preferredModel: 'model-a' }),
+      {
+        settings: settingsWith({ modelChoice: false })
+      }
+    );
+    for (const key of ['allowedModels', 'disallowModelSelection', 'preferredModel']) {
+      assert.equal(result.app[key], undefined, key);
+    }
+    assert.equal(entry(result, 'models').reason, CAPABILITY_REASONS.offOnInstallation);
+  });
+
+  it('has no effect on an app that does not ask for it', () => {
+    const result = run(asking(undefined));
+    assert.equal(result.app.allowedModels, undefined);
+    assert.equal(entry(result, 'models').reason, CAPABILITY_REASONS.notRequested);
+  });
+
+  it('is refused on a save for a person who may use none of the models', () => {
+    const content = asking({ allowed: ['model-a'] }).content;
+    const context = {
+      actor: principal('carol', { models: ['model-b'] }),
+      owner: ANNA,
+      settings: settingsWith(),
+      catalog: catalogWith({ models: MODELS })
+    };
+    assert.deepEqual(checkCapabilitiesForSave(content, context), [
+      { capability: 'models', reason: CAPABILITY_REASONS.youMayNot }
+    ]);
+    assert.deepEqual(
+      checkCapabilitiesForSave(content, { ...context, actor: principal('carol') }),
+      []
+    );
+  });
+
+  it('may stay or go in a save by an editor, but not change', () => {
+    const before = asking({ allowed: ['model-a'] }).content;
+    const without = { ...before, capabilities: { ...before.capabilities, models: undefined } };
+    assert.equal(removesCapabilitiesOnly(before, without), true);
+    assert.equal(removesCapabilitiesOnly(before, before), true);
+    const changed = {
+      ...before,
+      capabilities: { ...before.capabilities, models: { allowed: ['model-a', 'model-b'] } }
+    };
+    assert.equal(removesCapabilitiesOnly(before, changed), false);
+  });
+});
+
+describe('how an app researches on the web (design 07, section 2.2)', () => {
+  const run = (settings, search) =>
+    effectiveUserApp(
+      recordWith({
+        capabilities: {
+          upload: false,
+          webSearch: true,
+          skills: false,
+          integrations: [],
+          webSearchSettings: search
+        }
+      }),
+      { runner: BEN, owner: ANNA, settings, catalog: catalogWith(), now: NOW }
+    ).app;
+
+  it('sets the pages the page reader may open and the guidance, cut to the limit', () => {
+    const app = run(settingsWith({ webSearchLimits: { maxPageReads: 4 } }), {
+      maxPageReads: 9,
+      researchGuidance: 'Check two sources.'
+    });
+    assert.equal(app.websearch.maxPageReads, 4);
+    assert.equal(app.websearch.researchGuidance, 'Check two sources.');
+    assert.equal(app.websearch.useNativeSearch, false);
+  });
+
+  it('keeps a smaller value and leaves out what is not of the right kind', () => {
+    assert.equal(run(settingsWith(), { maxPageReads: 2 }).websearch.maxPageReads, 2);
+    const junk = run(settingsWith(), { maxPageReads: '9', researchGuidance: '   ' }).websearch;
+    assert.equal(Object.hasOwn(junk, 'maxPageReads'), false);
+    assert.equal(Object.hasOwn(junk, 'researchGuidance'), false);
+  });
+
+  it('has no effect while web search is off', () => {
+    const app = run(settingsWith({ webSearch: false }), { maxPageReads: 2 });
+    assert.deepEqual(app.websearch, { enabled: false });
+  });
+});
+
 describe('the owner snapshot (6.2)', () => {
   const oidcRecord = ageDays =>
     recordWith(
@@ -914,7 +1131,7 @@ describe('checkCapabilitiesForSave', () => {
     });
     assert.deepEqual(
       denied,
-      ['model', 'upload', 'webSearch', 'skills', JIRA].map(capability => ({
+      ['model', 'models', 'upload', 'webSearch', 'skills', JIRA].map(capability => ({
         capability,
         reason: CAPABILITY_REASONS.offOnInstallation
       }))
@@ -943,6 +1160,7 @@ describe('checkCapabilitiesForSave', () => {
     });
     assert.deepEqual(denied, [
       { capability: 'model', reason: CAPABILITY_REASONS.youMayNot },
+      { capability: 'models', reason: CAPABILITY_REASONS.youMayNot },
       { capability: 'webSearch', reason: CAPABILITY_REASONS.youMayNot },
       { capability: JIRA, reason: CAPABILITY_REASONS.youMayNot }
     ]);
@@ -961,6 +1179,7 @@ describe('checkCapabilitiesForSave', () => {
       [
         CAPABILITY_REASONS.ownerMayNot,
         CAPABILITY_REASONS.ownerMayNot,
+        CAPABILITY_REASONS.ownerMayNot,
         CAPABILITY_REASONS.ownerMayNot
       ]
     );
@@ -970,7 +1189,7 @@ describe('checkCapabilitiesForSave', () => {
     const denied = checkCapabilitiesForSave(content, { ...context, actor: BEN, owner: null });
     assert.deepEqual(
       denied.map(entry => entry.capability),
-      ['model', 'upload', 'webSearch', 'skills', JIRA]
+      ['model', 'models', 'upload', 'webSearch', 'skills', JIRA]
     );
     assert.ok(denied.every(entry => entry.reason === CAPABILITY_REASONS.ownerInactive));
   });
