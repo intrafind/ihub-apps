@@ -349,7 +349,7 @@ describe('the run object', () => {
     assert.equal(app.type, 'chat');
     assert.equal(app.enabled, true);
     assert.equal(app.sendChatHistory, true);
-    assert.deepEqual(app.toolApproval, { default: 'always' });
+    assert.deepEqual(app.toolApproval, { default: 'always', exemptInternalReads: true });
     assert.deepEqual(app.features, { projects: false, userProjects: false });
     assert.deepEqual(app.upload, PERSONAL_UPLOAD_ON);
     assert.deepEqual(app.variables, [{ name: 'role', label: { en: 'Role' }, type: 'string' }]);
@@ -569,14 +569,14 @@ describe('approval (6.3)', () => {
 
   it('the owner: writes ask, and a tool can be allowed for the chat', () => {
     const { app, approval } = effectiveUserApp(recordWith(), { ...context, runner: ANNA });
-    assert.deepEqual(app.toolApproval, { default: 'writes' });
+    assert.deepEqual(app.toolApproval, { default: 'writes', exemptInternalReads: true });
     assert.deepEqual(approval, { mode: 'writes', chatGrants: true });
   });
 
   it('the owner runs content an editor saved under the owner settings: nobody confirms it', () => {
     const edited = recordWith({}, { updatedBy: { id: 'carol', name: 'Carol' } });
     const { app, approval } = effectiveUserApp(edited, { ...context, runner: ANNA });
-    assert.deepEqual(app.toolApproval, { default: 'writes' });
+    assert.deepEqual(app.toolApproval, { default: 'writes', exemptInternalReads: true });
     assert.deepEqual(approval, { mode: 'writes', chatGrants: true });
     // A field an earlier build stored at the accept of an offer is ignored.
     const handedOver = recordWith(
@@ -598,7 +598,11 @@ describe('approval (6.3)', () => {
     const admin = { ...principal('root'), isAdmin: true };
     for (const runner of [BEN, editor, admin]) {
       const { app, approval } = effectiveUserApp(recordWith(), { ...context, runner });
-      assert.deepEqual(app.toolApproval, { default: 'always' }, runner.id);
+      assert.deepEqual(
+        app.toolApproval,
+        { default: 'always', exemptInternalReads: true },
+        runner.id
+      );
       assert.deepEqual(approval, { mode: 'always', chatGrants: false }, runner.id);
     }
   });

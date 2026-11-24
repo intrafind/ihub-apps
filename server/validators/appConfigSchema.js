@@ -661,7 +661,13 @@ const baseAppConfigSchema = z.object({
   toolApproval: z
     .object({
       default: z.enum(APPROVAL_MODES).optional(),
-      tools: z.record(z.string().min(1).max(200), z.enum(APPROVAL_MODES)).optional()
+      tools: z.record(z.string().min(1).max(200), z.enum(APPROVAL_MODES)).optional(),
+      // `true`: the app's own `default` does not apply to the tools iHub ships that only
+      // read and keep the data inside iHub (the project knowledge tools). Nothing an admin set
+      // is loosened by it, and a mode for one tool in `tools` still applies. Personal apps
+      // set it for every chat (`services/userApps/ceiling.js`), so that a shared app that
+      // answers from a project does not ask before every search.
+      exemptInternalReads: z.boolean().optional()
     })
     .optional(),
   workflows: z.array(z.string()).optional(),

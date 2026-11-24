@@ -557,7 +557,14 @@ export function effectiveUserApp(record, { runner, owner, settings, catalog, now
   // owner does not confirm an editor's change (design 6.3). Everyone else is
   // asked before every tool call, reads included, and cannot grant a tool
   // for the chat.
-  app.toolApproval = { default: runnerIsOwner ? 'writes' : 'always' };
+  // The one exception: the tools iHub ships that only read and keep the data inside iHub (the
+  // project knowledge tools) do not ask. A shared app that answers from a project would
+  // otherwise show a card for every search. Web search, the page reader and every connected
+  // system keep asking (`utils/toolApproval.js`, `isExemptInternalRead`).
+  app.toolApproval = {
+    default: runnerIsOwner ? 'writes' : 'always',
+    exemptInternalReads: true
+  };
 
   return {
     app,
