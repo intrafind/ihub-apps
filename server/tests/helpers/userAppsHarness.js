@@ -162,6 +162,8 @@ export const USER_APP_SETTINGS = {
     modelChoice: true,
     upload: true,
     webSearch: true,
+    webSearchLimits: { maxPageReads: 10 },
+    projects: false,
     skills: false,
     integrations: []
   },

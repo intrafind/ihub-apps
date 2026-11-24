@@ -698,6 +698,8 @@ describe('the settings of personal apps', () => {
         modelChoice: true,
         upload: true,
         webSearch: false,
+        webSearchLimits: { maxPageReads: 10 },
+        projects: false,
         skills: false,
         integrations: []
       },
