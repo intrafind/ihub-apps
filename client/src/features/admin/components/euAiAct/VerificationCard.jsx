@@ -60,23 +60,53 @@ function describeRow(row, t) {
   }
   if (row.id === 'watermark') {
     switch (row.state) {
-      case 'detected':
+      case 'detected': {
+        const values = {
+          keyId: row.keyId || '-',
+          p: row.pValue ?? '-',
+          n: row.scoredTokens ?? '-'
+        };
         return {
           word: t('admin.euAiAct.verify.detected', 'Detected'),
-          text: t(
-            'admin.euAiAct.verify.wmDetected',
-            'Watermark detected. Technique: iHub text watermark. Key ID: {{keyId}}. p-value {{p}}, {{n}} tokens scored.',
-            { keyId: row.keyId || '-', p: row.pValue ?? '-', n: row.scoredTokens ?? '-' }
-          )
+          text:
+            row.source === 'gateway'
+              ? t(
+                  'admin.euAiAct.verify.wmDetectedGateway',
+                  'Watermark detected by the iFinder Model Gateway. Key file: {{keyId}}. p-value {{p}}, {{n}} tokens scored. The gateway checks with all detectors configured there, so the text comes from one of their models, not necessarily through this installation.',
+                  values
+                )
+              : row.source === 'model'
+                ? t(
+                    'admin.euAiAct.verify.wmDetectedModel',
+                    'Watermark detected by the model image. Key file: {{keyId}}. p-value {{p}}, {{n}} tokens scored.',
+                    values
+                  )
+                : t(
+                    'admin.euAiAct.verify.wmDetected',
+                    'Watermark detected. Technique: iHub text watermark. Key ID: {{keyId}}. p-value {{p}}, {{n}} tokens scored.',
+                    values
+                  )
         };
+      }
       case 'not_detected':
         return {
           word: t('admin.euAiAct.verify.notDetected', 'Not detected'),
-          text: t(
-            'admin.euAiAct.verify.wmNotDetected',
-            'No watermark detected with the {{k}} keys held by this installation. This does not show that the text is not AI-generated: it may be edited, come from another model or have been generated without a watermark.',
-            { k: row.keysChecked ?? '-' }
-          )
+          text:
+            row.source === 'gateway'
+              ? t(
+                  'admin.euAiAct.verify.wmNotDetectedGateway',
+                  'No watermark detected by the detectors of the iFinder Model Gateway. This does not show that the text is not AI-generated: it may be edited, come from another model or have been generated without a watermark.'
+                )
+              : row.source === 'model'
+                ? t(
+                    'admin.euAiAct.verify.wmNotDetectedModel',
+                    'No watermark detected by the model images. This does not show that the text is not AI-generated: it may be edited, come from another model or have been generated without a watermark.'
+                  )
+                : t(
+                    'admin.euAiAct.verify.wmNotDetected',
+                    'No watermark detected with the {{k}} keys held by this installation. This does not show that the text is not AI-generated: it may be edited, come from another model or have been generated without a watermark.',
+                    { k: row.keysChecked ?? '-' }
+                  )
         };
       case 'too_short':
         return {
@@ -272,7 +302,7 @@ export default function VerificationCard({ maxFileBytes = DEFAULT_MAX_FILE_BYTES
   return (
     <EuAiActCard
       id="verification"
-      title={t('admin.euAiAct.verify.title', 'Verification')}
+      title={t('admin.euAiAct.verify.title', 'Check an output')}
       description={t(
         'admin.euAiAct.verify.description',
         'Check whether a text, image or audio file came from this installation and which marks it carries. The content is hashed and not stored.'

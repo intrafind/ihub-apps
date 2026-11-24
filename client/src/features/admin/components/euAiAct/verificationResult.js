@@ -40,8 +40,16 @@ export function summarizeVerification(result) {
         id: 'watermark',
         status: map[watermark.status] || 'info',
         state: watermark.status,
+        // Who decided: the Model Gateway (over all detectors configured there), the
+        // model images, or detector services with iHub's keys.
+        source: watermark.gateway
+          ? 'gateway'
+          : watermark.keyId || watermark.keysChecked > 0
+            ? 'ihub'
+            : 'model',
         // A model image or a Model Gateway names the key by its file name.
         keyId: watermark.keyId || watermark.keyLabel || null,
+        checksMade: watermark.checksMade ?? null,
         pValue: watermark.pValue ?? null,
         scoredTokens: watermark.scoredTokens ?? null,
         keysChecked: watermark.keysChecked ?? null,

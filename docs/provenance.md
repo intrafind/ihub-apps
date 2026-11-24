@@ -155,7 +155,7 @@ prompt, name, email, chat or run ID.**
 
 - **Only in the stored record.** The provenance object in a chat message, an API response, an MCP or A2A
   result never carries `user`. `POST /api/eu-ai-act/provenance/_verify` returns it to admins only (the
-  verification card on the EU AI Act page shows it); any other caller gets the record without it.
+  card *Check an output* on the EU AI Act page shows it); any other caller gets the record without it.
 - **Applies from the moment it is saved.** Records already stored keep what they had.
 - **Kept when a user is deleted**, like the rest of the record, until the retention period ends. With
   `pseudonymous` or `identified` the records hold personal data for that time: cover them in your data

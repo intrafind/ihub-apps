@@ -9,10 +9,30 @@ import {
 } from '../../../../../../shared/provenanceSettings.js';
 
 /**
- * Pure helpers of the provenance settings card: stored block <-> form strings,
- * validation (the bounds are the server's: `shared/provenanceSettings.js`),
+ * Pure helpers of the forms that edit `platform.provenance`: stored block <-> form
+ * strings, validation (the bounds are the server's: `shared/provenanceSettings.js`),
  * the body to save and the consequences worth a confirmation.
+ *
+ * The block is edited in three places, each saving only its own fields (the server
+ * merges a partial block into the stored one):
+ * - `provenance`: records and checking outputs (card "Provenance settings");
+ * - `gateway`: the iFinder Model Gateway (card "Text watermark", detectors);
+ * - `thresholds`: how iHub decides on a watermark (card "Text watermark").
  */
+
+/** The form fields each section owns. */
+export const SECTION_FIELDS = Object.freeze({
+  provenance: [
+    'retentionDays',
+    'storeRecords',
+    'recordUser',
+    'verifyAccess',
+    'maxVerifyBytes',
+    'readC2pa'
+  ],
+  gateway: ['gatewayUrl', 'gatewayCredentialRef'],
+  thresholds: ['alpha', 'minScoredTokens', 'detectorTimeoutMs']
+});
 
 /** Flat form field of a server error path (`media.maxVerifyBytes` -> `maxVerifyBytes`). */
 export const SERVER_FIELD = {
@@ -86,13 +106,18 @@ export function toValues(form) {
   };
 }
 
-/** @returns {Object<string, string>} Problem code per form field (see `numericProblem`); empty when valid */
-export function validateForm(form) {
+/**
+ * @param {Object} form
+ * @param {string} section - Only problems of this section's fields count
+ * @returns {Object<string, string>} Problem code per form field (see `numericProblem`); empty when valid
+ */
+export function validateForm(form, section) {
   const values = toValues(form);
   const problems = validateProvenanceValues(values);
   const url = String(form.gatewayUrl || '').trim();
   if (url && !isHttpUrl(url)) problems.gatewayUrl = 'url';
-  return problems;
+  const owned = SECTION_FIELDS[section];
+  return Object.fromEntries(Object.entries(problems).filter(([field]) => owned.includes(field)));
 }
 
 function isHttpUrl(value) {
@@ -106,32 +131,46 @@ function isHttpUrl(value) {
 const optionalText = value => String(value || '').trim() || null;
 
 /**
- * The `provenance` body to save: only what the form owns, as a partial block the
- * server merges into the stored one. `null` on a watermark tunable means "default".
+ * The `provenance` body to save: only what the section owns, as a partial block
+ * the server merges into the stored one. `null` on a watermark field means
+ * "default" (a tunable) or "none" (the gateway).
+ *
+ * @param {Object} form
+ * @param {string} section - A key of {@link SECTION_FIELDS}
  */
-export function buildBody(form) {
+export function buildBody(form, section) {
   const v = toValues(form);
+  if (section === 'gateway') {
+    return {
+      watermark: {
+        gatewayUrl: optionalText(form.gatewayUrl),
+        // A credential without a gateway means nothing.
+        gatewayCredentialRef: optionalText(form.gatewayUrl)
+          ? optionalText(form.gatewayCredentialRef)
+          : null
+      }
+    };
+  }
+  if (section === 'thresholds') {
+    return {
+      watermark: {
+        alpha: v.alpha,
+        minScoredTokens: v.minScoredTokens,
+        detectorTimeoutMs: v.detectorTimeoutMs
+      }
+    };
+  }
   return {
     retentionDays: v.retentionDays,
     storeRecords: form.storeRecords,
     recordUser: form.recordUser,
     verify: { access: v.verifyAccess },
-    media: { maxVerifyBytes: v.maxVerifyBytes, readC2pa: form.readC2pa },
-    watermark: {
-      alpha: v.alpha,
-      minScoredTokens: v.minScoredTokens,
-      detectorTimeoutMs: v.detectorTimeoutMs,
-      gatewayUrl: optionalText(form.gatewayUrl),
-      // A credential without a gateway means nothing.
-      gatewayCredentialRef: optionalText(form.gatewayUrl)
-        ? optionalText(form.gatewayCredentialRef)
-        : null
-    }
+    media: { maxVerifyBytes: v.maxVerifyBytes, readC2pa: form.readC2pa }
   };
 }
 
-export function isDirty(form, saved) {
-  return JSON.stringify(buildBody(form)) !== JSON.stringify(buildBody(saved));
+export function isDirty(form, saved, section) {
+  return JSON.stringify(buildBody(form, section)) !== JSON.stringify(buildBody(saved, section));
 }
 
 /**

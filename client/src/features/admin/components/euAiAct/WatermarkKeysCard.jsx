@@ -20,7 +20,10 @@ import DetectorRows from './DetectorRows';
 import EuAiActCard from './EuAiActCard';
 import { AddKeyDialog, BUTTON_PRIMARY, BUTTON_SECONDARY, KeyShownDialog } from './KeyDialogs';
 import PausedNote from './PausedNote';
+import { ProvenanceSettingsForm } from './ProvenanceSettingsCard';
 import { useEuAiActEnabled } from './EuAiActStateNote';
+
+const SECTION_TITLE = 'text-base font-semibold text-gray-900 dark:text-gray-100';
 
 function formatDate(value) {
   const date = value ? new Date(value) : null;
@@ -28,8 +31,10 @@ function formatDate(value) {
 }
 
 /**
- * Card 3: the watermark keys (list, generate, add, reveal, delete retired) and
- * the detector of each model marked "iHub" with its test and self-test.
+ * Card 3, "Text watermark": the watermark keys (list, generate, add, reveal,
+ * delete retired; only for models whose key iHub holds), the detector of each
+ * model marked "iHub" with its test and self-test, the iFinder Model Gateway that
+ * decides on the route of those detectors, and the thresholds iHub decides with.
  *
  * Keys come back as decimal strings and live only in the open dialog's state.
  */
@@ -196,8 +201,8 @@ export default function WatermarkKeysCard({ statusModels, onChanged }) {
   );
   const closeShown = useCallback(() => setShown(null), []);
 
-  const headerActions = (
-    <>
+  const keyActions = (
+    <div className="flex flex-wrap gap-2">
       <button type="button" onClick={startGenerate} disabled={busy} className={BUTTON_PRIMARY}>
         <Icon name="key" size="sm" />
         {t('admin.euAiAct.keys.generate', 'Generate key')}
@@ -205,18 +210,21 @@ export default function WatermarkKeysCard({ statusModels, onChanged }) {
       <button type="button" onClick={() => setAddOpen(true)} className={BUTTON_SECONDARY}>
         {t('admin.euAiAct.keys.add', 'Add own key…')}
       </button>
-    </>
+    </div>
   );
+  const detectorsChanged = () => {
+    void load();
+    onChanged?.();
+  };
 
   return (
     <EuAiActCard
-      id="watermark-keys"
-      title={t('admin.euAiAct.keys.title', 'Watermark keys')}
+      id="text-watermark"
+      title={t('admin.euAiAct.keys.title', 'Text watermark')}
       description={t(
         'admin.euAiAct.keys.description',
-        'Keys for the iHub text watermark of vLLM models. Exactly one key is active; retired keys are used for detection only. Showing a key is recorded in the audit log.'
+        'The iHub text watermark of vLLM models: the keys iHub holds, the detectors that recognise the watermark, and how strict the decision is.'
       )}
-      actions={headerActions}
     >
       {error && !keys ? (
         <AdminLoadError
@@ -227,6 +235,18 @@ export default function WatermarkKeysCard({ statusModels, onChanged }) {
         />
       ) : (
         <div className="space-y-6">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div className="min-w-0">
+              <h3 className={SECTION_TITLE}>{t('admin.euAiAct.keys.keysTitle', 'Keys')}</h3>
+              <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
+                {t(
+                  'admin.euAiAct.keys.keysIntro',
+                  'Only for models whose watermark key iHub holds. Exactly one key is active; retired keys are used for detection only. Showing a key is recorded in the audit log.'
+                )}
+              </p>
+            </div>
+            {keyActions}
+          </div>
           {keys && keys.length === 0 ? (
             <p className="text-sm text-gray-700 dark:text-gray-300">
               {t(
@@ -385,11 +405,31 @@ export default function WatermarkKeysCard({ statusModels, onChanged }) {
             </div>
           )}
           <div className="border-t border-gray-200 dark:border-gray-700 pt-4">
-            <h3 className="text-base font-semibold text-gray-900 dark:text-gray-100 mb-3">
+            <h3 className={`${SECTION_TITLE} mb-3`}>
               {t('admin.euAiAct.detector.title', 'Detectors and self-test')}
             </h3>
             {!euAiActEnabled && <PausedNote />}
-            <DetectorRows detectors={detectors} statusModels={statusModels} onChanged={onChanged} />
+            {/* Indented with a rule, so the separators between detectors read as one level below
+                the separators between the card's sections. */}
+            <div className="ml-1 space-y-6 border-l-2 border-gray-200 dark:border-gray-700 pl-4">
+              <ProvenanceSettingsForm section="gateway" onSaved={detectorsChanged} />
+              <DetectorRows
+                detectors={detectors}
+                statusModels={statusModels}
+                onChanged={onChanged}
+              />
+            </div>
+          </div>
+          <div className="border-t border-gray-200 dark:border-gray-700 pt-4">
+            <h3 className={`${SECTION_TITLE} mb-3`}>
+              {t('admin.euAiAct.settings.detection', 'Detection thresholds')}
+            </h3>
+            <ProvenanceSettingsForm
+              section="thresholds"
+              hideLegend
+              onSaved={onChanged}
+              gatewayActive={detectors.some(detector => detector.detectorApi === 'gateway')}
+            />
           </div>
         </div>
       )}

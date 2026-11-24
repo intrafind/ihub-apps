@@ -150,7 +150,7 @@ function DetectorRow({ detector, modelStatus, onChanged }) {
         (last.at ? ` (${new Date(last.at).toLocaleDateString()})` : '');
 
   return (
-    <li className="border-t border-gray-200 dark:border-gray-700 pt-4 first:border-t-0 first:pt-0">
+    <li className="border-t border-dashed border-gray-200 dark:border-gray-700 pt-4 first:border-t-0 first:pt-0">
       <h4 className="text-sm font-semibold text-gray-900 dark:text-gray-100">{modelId}</h4>
       <dl className="mt-2 grid grid-cols-1 sm:grid-cols-[10rem_1fr] gap-x-4 gap-y-1 text-sm">
         <dt className="text-gray-600 dark:text-gray-400">
@@ -158,7 +158,10 @@ function DetectorRow({ detector, modelStatus, onChanged }) {
         </dt>
         <dd className="text-gray-900 dark:text-gray-100">
           {detector.detectorApi === 'gateway'
-            ? t('admin.euAiAct.detector.apiGateway', 'iFinder Model Gateway')
+            ? t(
+                'admin.euAiAct.detector.apiGateway',
+                'iFinder Model Gateway (all detectors configured there)'
+              )
             : detector.detectorApi === 'model'
               ? t('admin.euAiAct.detector.apiModel', 'Model image (holds the keys)')
               : t('admin.euAiAct.detector.apiIhub', 'Detector service (keys from iHub)')}

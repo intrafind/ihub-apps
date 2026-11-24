@@ -139,7 +139,7 @@ its own, neither for generating nor for detecting:
   The `_verify` answer names the key file (`watermark.keyLabel`), the algorithm and the number of
   checks (`watermark.checksMade`).
 - **Through an iFinder Model Gateway.** Where iFinder runs alongside iHub, set the gateway's
-  detection endpoint in **Admin → EU AI Act → Settings → iFinder Model Gateway**
+  detection endpoint in **Admin → EU AI Act → Text watermark → Detectors and self-test**
   (`provenance.watermark.gatewayUrl`, with `gatewayCredentialRef`: a `bearer` credential, or an
   `oauth2` client whose token iHub fetches with client credentials). Detection of all models with
   `keyHolder: "model"` then goes there, once per text, and iHub takes the gateway's verdict
@@ -147,6 +147,11 @@ its own, neither for generating nor for detecting:
   carries `watermark.gateway` (`verdict`, `alpha`, `textSha256`, `detectedAt`, `gatewayVersion`).
   On this path the gateway decides with its own thresholds (by default alpha 0.01 and 50 scored
   tokens); iHub's `alpha` and `minScoredTokens` do not apply, `detectorTimeoutMs` does.
+  The gateway checks with **all** detectors in its own configuration
+  (`intrafind.modelgateway.watermark-detection.detectors`), including those of models iHub does
+  not use, and asks none that are only registered in iHub. A *detected* therefore means "from a
+  model the gateway knows", not necessarily "through this iHub"; the output record answers the
+  latter. A model missing from the gateway's configuration shows up as a failed self-test.
 - **Self-test.** It generates as usual and passes with `watermark_found` (and the key file in
   `matchedKeyLabel`) when the image or the gateway finds the watermark.
 

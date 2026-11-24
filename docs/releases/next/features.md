@@ -63,8 +63,12 @@ detection endpoint of the image, or through an iFinder Model Gateway where one r
   detection endpoint is found next to the model URL and called with the model's API key.
 - iHub decides from the image's results with the rule of the Model Gateway, but with its own
   thresholds, which are stricter by default. Through a gateway, the gateway's thresholds apply.
-  **Verify** names the key file that matched.
-- **Admin → EU AI Act → Settings** takes the detection endpoint of an iFinder Model Gateway. With
-  it set, detection goes there instead of to each image; its credential can be a token or an
-  OAuth2 client.
+  **Check an output** names the key file that matched.
+- **Admin → EU AI Act → Text watermark** takes the detection endpoint of an iFinder Model
+  Gateway, above the detectors. With it set, detection goes there instead of to each image; its
+  credential can be a token or an OAuth2 client.
 - The detector credential of a model can now also be an OAuth2 client (client credentials).
+- The EU AI Act page keeps everything about the text watermark in one card, **Text watermark**
+  (formerly **Watermark keys**): the keys, the detectors with the gateway, and the detection
+  thresholds, which moved there from **Provenance settings**. The card **Verification** is now
+  called **Check an output**.

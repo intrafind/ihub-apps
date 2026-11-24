@@ -48,7 +48,7 @@ const fixModelSync = modelId => ({
 // The AI notice and the acknowledgement settings are cards of the EU AI Act page.
 const FIX_NOTICE = { href: '/admin/eu-ai-act#ai-notice', labelKey: `${FIX}.openAdvanced` };
 const FIX_ACK = { href: '/admin/eu-ai-act#ai-acknowledgement', labelKey: `${FIX}.openAdvanced` };
-const FIX_KEYS = { href: '/admin/eu-ai-act#watermark-keys', labelKey: `${FIX}.openKeys` };
+const FIX_KEYS = { href: '/admin/eu-ai-act#text-watermark', labelKey: `${FIX}.openKeys` };
 
 /** The marking of a model for one kind, normalised. */
 export function markingOf(model, kind) {
@@ -290,7 +290,7 @@ export function modelChecks(
 
   const detectorId = 'model.watermark.detector';
   const stId = 'model.watermark.selftest';
-  const stFix = { href: '/admin/eu-ai-act#watermark-keys', labelKey: `${FIX}.runSelfTest` };
+  const stFix = { href: '/admin/eu-ai-act#text-watermark', labelKey: `${FIX}.runSelfTest` };
   const stBase = { ...base, fix: stFix, params };
   const selfTestFailed = () =>
     check(

@@ -8739,7 +8739,7 @@
         "headlineMatch": "Match found: see details.",
         "headlineNone": "No match found. This is not proof that the content is not AI-generated.",
         "headlineInconclusive": "No conclusion possible.",
-        "title": "Verification",
+        "title": "Check an output",
         "description": "Check whether a text, image or audio file came from this installation and which marks it carries. The content is hashed and not stored.",
         "kind": "What do you want to check?",
         "modeText": "Text",
@@ -8758,7 +8758,11 @@
         "c2paSignedAt": "Signed on {{when}}.",
         "recordTitle": "Provenance record",
         "recordsTitle": "Provenance records ({{count}}, newest first)",
-        "recordHelp": "What this installation stored when it produced the output. It holds a hash, never the content; it names a user only when \"Who a record names\" is set."
+        "recordHelp": "What this installation stored when it produced the output. It holds a hash, never the content; it names a user only when \"Who a record names\" is set.",
+        "wmDetectedGateway": "Watermark detected by the iFinder Model Gateway. Key file: {{keyId}}. p-value {{p}}, {{n}} tokens scored. The gateway checks with all detectors configured there, so the text comes from one of their models, not necessarily through this installation.",
+        "wmDetectedModel": "Watermark detected by the model image. Key file: {{keyId}}. p-value {{p}}, {{n}} tokens scored.",
+        "wmNotDetectedGateway": "No watermark detected by the detectors of the iFinder Model Gateway. This does not show that the text is not AI-generated: it may be edited, come from another model or have been generated without a watermark.",
+        "wmNotDetectedModel": "No watermark detected by the model images. This does not show that the text is not AI-generated: it may be edited, come from another model or have been generated without a watermark."
       },
       "selfTest": {
         "keysMatch": "Passed: the detector recognised the active key {{keyId}} ({{n}} tokens scored).",
@@ -8799,7 +8803,7 @@
         "title": "Detectors and self-test",
         "credentialNone": "None",
         "api": "Detector",
-        "apiGateway": "iFinder Model Gateway",
+        "apiGateway": "iFinder Model Gateway (all detectors configured there)",
         "apiModel": "Model image (holds the keys)",
         "apiIhub": "Detector service (keys from iHub)",
         "credentialModel": "The model's API key"
@@ -8831,8 +8835,8 @@
         "deleted": "Key {{id}} deleted.",
         "generate": "Generate key",
         "add": "Add own key…",
-        "title": "Watermark keys",
-        "description": "Keys for the iHub text watermark of vLLM models. Exactly one key is active; retired keys are used for detection only. Showing a key is recorded in the audit log.",
+        "title": "Text watermark",
+        "description": "The iHub text watermark of vLLM models: the keys iHub holds, the detectors that recognise the watermark, and how strict the decision is.",
         "loadError": "Could not load the keys",
         "empty": "No watermark key yet. Keys are only needed for models marked \"iHub watermark\".",
         "tableRegion": "Watermark keys table",
@@ -8884,7 +8888,9 @@
         "activated": "Key {{id}} is now active. {{old}} is retired.",
         "activatedNext": "Next: update the --watermark-config of your vLLM server to key {{id}}, then run the self-test. Until then the self-test shows a mismatch.",
         "activateNotFound": "Key {{id}} no longer exists. The list was refreshed.",
-        "showOption": "Show key and vLLM option"
+        "showOption": "Show key and vLLM option",
+        "keysTitle": "Keys",
+        "keysIntro": "Only for models whose watermark key iHub holds. Exactly one key is active; retired keys are used for detection only. Showing a key is recorded in the audit log."
       },
       "summary": {
         "failing": "{{count}} failing",
@@ -8958,7 +8964,7 @@
       },
       "settings": {
         "title": "Provenance settings",
-        "description": "How long output records are kept, who may check an output, and how strict the watermark detector is. Changes apply immediately; no restart is needed. Every save is written to the audit log.",
+        "description": "How long output records are kept and who may check an output. Changes apply immediately; no restart is needed. Every save is written to the audit log.",
         "loadError": "Could not load the settings",
         "records": "Output records",
         "storeRecords": "Keep a record of every output",
@@ -8977,8 +8983,9 @@
         "maxVerifyHelp": "Applies to image and audio uploads on the check form. Larger files are refused.",
         "readC2pa": "Read C2PA marks of images",
         "readC2paHelp": "Reads the provider mark (C2PA manifest) of generated and uploaded images. Default: on.",
-        "detection": "Text watermark detection",
-        "detectionIntro": "Leave a field empty to use its default. The defaults suit most installations; change them only for a reason.",
+        "detection": "Detection thresholds",
+        "detectionIntro": "How iHub decides whether a text carries the watermark, for models whose key iHub holds and for model images iHub asks itself. Where an iFinder Model Gateway decides, it uses its own thresholds; only the time limit applies there too. Leave a field empty to use its default.",
+        "detectionGatewayNote": "An iFinder Model Gateway is set. For models whose key the model image holds, the gateway decides, so the false-positive limit and the shortest text do not apply to them.",
         "alpha": "False-positive limit",
         "alphaHelp": "The chance that a text is wrongly called \"consistent with our watermark\". Smaller is stricter. Between 0 and 1, for example 0.0001.",
         "minTokens": "Shortest text that can be judged",
@@ -9016,7 +9023,7 @@
         "recordUserIdentified": "Identified (user id)",
         "recordUserIdentifiedHelp": "The user id, never the name or email. The records then hold personal data: cover them in your data protection documentation.",
         "gateway": "iFinder Model Gateway",
-        "gatewayIntro": "Only for models whose watermark key the model image holds (iFinder vLLM image). With a Model Gateway set, their watermark is detected there, with one verdict for all its detectors; without one, iHub asks each model image itself.",
+        "gatewayIntro": "Only for models whose watermark key the model image holds (iFinder vLLM image). With a gateway set, iHub sends each text there once, and the gateway checks it with all detectors configured in the gateway, including those of models iHub does not use. Which detectors these are is set in the gateway, not here. Without a gateway, iHub asks the image of each such model itself.",
         "gatewayUrl": "Detection endpoint",
         "gatewayUrlHelp": "The address of …/v1/gateway/detections/text. Leave empty to ask each model image itself.",
         "gatewayCredential": "Gateway credential",

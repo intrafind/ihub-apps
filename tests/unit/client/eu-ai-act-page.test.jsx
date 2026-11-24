@@ -44,6 +44,7 @@ const mockAdminCall = jest.fn();
 jest.mock('../../../client/src/api/adminApi', () => ({
   __esModule: true,
   makeAdminApiCall: (...a) => mockAdminCall(...a),
+  listCredentials: () => Promise.resolve([]),
   getAdminApiErrorMessage: err => err?.response?.data?.detail || err?.message || 'error'
 }));
 
@@ -79,6 +80,8 @@ const renderInRouter = ui => render(<MemoryRouter>{ui}</MemoryRouter>);
 
 beforeEach(() => {
   jest.clearAllMocks();
+  // The settings forms of the watermark card read the platform block.
+  mockAdminCall.mockResolvedValue({ data: { provenance: {} } });
   mockApi.fetchWatermarkDetectors.mockResolvedValue({ items: [] });
   mockApi.fetchWatermarkKeys.mockResolvedValue({
     items: [
@@ -113,7 +116,7 @@ describe('ConfigCheckCard', () => {
         messageKey: 'k.b',
         message: 'No active key for {{model}}.',
         params: { model: 'Llama' },
-        fix: { href: '/admin/eu-ai-act#watermark-keys', labelKey: 'admin.euAiAct.fix.openKeys' }
+        fix: { href: '/admin/eu-ai-act#text-watermark', labelKey: 'admin.euAiAct.fix.openKeys' }
       },
       {
         id: 'model.marking.text',
@@ -140,7 +143,7 @@ describe('ConfigCheckCard', () => {
     );
     expect(screen.getByRole('link', { name: /Open: No active key/ })).toHaveAttribute(
       'href',
-      '/admin/eu-ai-act#watermark-keys'
+      '/admin/eu-ai-act#text-watermark'
     );
     expect(screen.getByText(/not "legally compliant"/)).toBeInTheDocument();
     expect(screen.getByText('1 failing')).toBeInTheDocument();
@@ -182,6 +185,37 @@ describe('ConfigCheckCard', () => {
 });
 
 describe('WatermarkKeysCard', () => {
+  test('is the "Text watermark" card: keys, detectors with the gateway, thresholds', async () => {
+    renderInRouter(<WatermarkKeysCard statusModels={[]} />);
+    expect(screen.getByRole('heading', { level: 2, name: 'Text watermark' })).toBeInTheDocument();
+    for (const name of ['Keys', 'Detectors and self-test', 'Detection thresholds']) {
+      expect(screen.getByRole('heading', { level: 3, name })).toBeInTheDocument();
+    }
+    expect(await screen.findByLabelText(/Detection endpoint/)).toBeInTheDocument();
+    expect(screen.getByLabelText(/False-positive limit/)).toBeInTheDocument();
+    // Saving is the page's save bar, not a button per section.
+    expect(screen.queryByRole('button', { name: /^Save/ })).not.toBeInTheDocument();
+    // Without a gateway the thresholds need no note on what the gateway ignores.
+    expect(screen.queryByText(/An iFinder Model Gateway is set/)).not.toBeInTheDocument();
+  });
+
+  test('with a gateway set, the thresholds say which of their fields it ignores', async () => {
+    mockApi.fetchWatermarkDetectors.mockResolvedValue({
+      items: [
+        {
+          modelId: 'vl',
+          detectorApi: 'gateway',
+          detectorUrl: 'https://gateway.example/v1/gateway/detections/text',
+          urlPolicyOk: true
+        }
+      ]
+    });
+    renderInRouter(<WatermarkKeysCard statusModels={[]} />);
+    expect(await screen.findByRole('note')).toHaveTextContent(
+      'the false-positive limit and the shortest text do not apply to them'
+    );
+  });
+
   test('lists keys without any key value; the active key has no Delete', async () => {
     const { container } = renderInRouter(<WatermarkKeysCard statusModels={[]} />);
     await screen.findByText('wm-2026-2');
@@ -532,6 +566,63 @@ describe('VerificationCard', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Check' }));
     expect(await screen.findByText('Match found: see details.')).toBeInTheDocument();
     expect(screen.getByText(/Key ID: wm-2026-1/)).toBeInTheDocument();
+  });
+
+  test('text: a gateway verdict says the gateway checked with all its detectors', async () => {
+    const gateway = { verdict: 'DETECTED', alpha: 0.01, gatewayVersion: '6.10.0' };
+    mockApi.verifyText.mockResolvedValueOnce({
+      found: false,
+      watermark: {
+        status: 'detected',
+        keyLabel: 'spike',
+        pValue: 2e-9,
+        scoredTokens: 330,
+        checksMade: 2,
+        gateway
+      }
+    });
+    render(<VerificationCard />);
+    fireEvent.change(screen.getByLabelText('Text to check'), { target: { value: 'some text' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Check' }));
+    expect(await screen.findByText(/detected by the iFinder Model Gateway/)).toBeInTheDocument();
+    expect(screen.getByText(/Key file: spike/)).toBeInTheDocument();
+    expect(screen.getByText(/not necessarily through this installation/)).toBeInTheDocument();
+
+    mockApi.verifyText.mockResolvedValueOnce({
+      found: false,
+      watermark: {
+        status: 'not_detected',
+        checksMade: 2,
+        gateway: { ...gateway, verdict: 'NOT_DETECTED' }
+      }
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Check' }));
+    expect(
+      await screen.findByText(/No watermark detected by the detectors of the iFinder Model Gateway/)
+    ).toBeInTheDocument();
+  });
+
+  test('text: a model image names the key file, not a key of this installation', async () => {
+    mockApi.verifyText.mockResolvedValueOnce({
+      found: false,
+      watermark: { status: 'not_detected', checksMade: 2 }
+    });
+    render(<VerificationCard />);
+    fireEvent.change(screen.getByLabelText('Text to check'), { target: { value: 'some text' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Check' }));
+    expect(
+      await screen.findByText(/No watermark detected by the model images/)
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/keys held by this installation/)).not.toBeInTheDocument();
+
+    mockApi.verifyText.mockResolvedValueOnce({
+      found: false,
+      watermark: { status: 'detected', keyLabel: 'spike', pValue: 6e-5, scoredTokens: 330 }
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Check' }));
+    expect(
+      await screen.findByText(/detected by the model image\. Key file: spike/)
+    ).toBeInTheDocument();
   });
 
   test('text: a found record is "Found" with the model and date', async () => {
