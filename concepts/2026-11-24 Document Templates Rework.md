@@ -6,6 +6,11 @@ Admin documentation today: [`docs/document-templates.md`](../docs/document-templ
 
 Status: draft, decided in conversation, not implemented.
 
+Related issues: [#3605](https://github.com/intrafind/ihub-apps/issues/3605) (create a template
+automatically from uploaded brand documents, see "Relation to #3605") and
+[#3745](https://github.com/intrafind/ihub-apps/issues/3745) (admin UI rework for customization,
+which lists the empty-colour-looks-black defect as CU-B20).
+
 ## Why
 
 A document template today has two places that describe the same design: the settings of the admin
@@ -96,7 +101,11 @@ they are needed, in this order:
 3. The theme of the Word template.
 4. The neutral built-in default.
 
-The PowerPoint theme comes first because its accent colours are ordered for charts. Theme colours
+The PowerPoint theme comes first because its accent colours are ordered for charts. A theme only
+provides primary, accent and palette colours when it has at least one colourful accent; a theme
+whose accents are all grey is skipped for them, so the Word theme is tried next, and the neutral
+default is used only when neither has one. The text colour (`dk1`) is always available from a
+theme. Theme colours
 are read from the theme part of the package (`dk1`, `dk2`, `lt1`, `lt2`, `accent1` to `accent6`);
 system colours such as `windowText` use their stored hex value (`lastClr`).
 
@@ -109,9 +118,10 @@ system colours such as `windowText` use their stored hex value (`lastClr`).
   file.
 - **Fonts** are the theme's heading and body font names. They are read-only.
 
-The admin page has a button "Take colours from this file" that copies the resolved primary, accent
-and text colour into the three fields, and offers it when a PowerPoint or Word file is uploaded. It
-never overwrites a value without being asked. Because resolution falls back to the files, a template
+The admin page has a button "Take colours from this file". It reads the theme of the chosen
+PowerPoint or Word file itself, ignoring the template's own overrides, and copies that file's primary,
+accent and text colour into the three fields. It offers this when a PowerPoint or Word file is
+uploaded. It never overwrites a value without being asked. Because resolution falls back to the files, a template
 with just an upload already has a brand, so the button is a convenience, not a step the admin has
 to do.
 
@@ -161,14 +171,20 @@ Detection and declaration:
 - The admin page lists the fields and lets the admin set a label, a description, "required", a list
   of allowed values and a default. A declared field that the file no longer has is shown with a
   warning.
-- Names must not equal a built-in. At most 20 fields per template.
+- Names must not equal a built-in. At most 50 fields per template. A Word file with more distinct
+  placeholders is refused on upload, with a message that lists the names, so no placeholder is
+  silently left undeclared. The migration declares up to 50 and writes the remaining names to the
+  migration log; those stay in the file as plain text.
 
 How the model sees them:
 
 - The tool description of `create_docx` names the fields of the default or pinned template: name,
   label, whether it is required, allowed values. It has a generic `fields` object argument for the
   values.
-- For another template, chosen with the `template` argument, the list comes back in the error below.
+- Every enabled template's fields are listed in the `template` argument's description, not only the
+  default's, so the model learns the fields of a chosen template before it creates the file, also
+  when all of them are optional. The missing-fields error below is a second line of defence, not the
+  way fields are discovered.
 - Values derived without asking: author (signed-in user), date, year and company. The model never
   has to ask for them.
 
@@ -245,7 +261,8 @@ black after a colour was picked. That bug is reproduced first (Playwright) and f
 - Remove the keys that go: `brand.headingFont`, `bodyFont`, `fontSize`, `logo`, `document`, `fonts`,
   `pdf`, `pptx.layouts`, `pptx.slots`, `pptx.footer`, `pptx.slideNumbers`, `pptx.aspectRatio`.
 - Delete the files they named: logo, fonts and both letterhead PDFs.
-- Declare the placeholders found in the Word template as fields, so nothing prints its braces.
+- Declare the placeholders found in the Word template as fields (at most 50, see Custom fields), so
+  nothing prints its braces.
 - Keep brand colours and company name. A template that had no Office file stays valid and now has the
   neutral design in its colours.
 
@@ -254,6 +271,27 @@ startup and is forward-only. The ids `professional` and `minimal` stop being res
 
 The release note under `docs/releases/next/` says what admins lose and what to do: put the logo and
 the letterhead into the Word and PowerPoint templates, and check the PDF look.
+
+## Relation to #3605
+
+[#3605](https://github.com/intrafind/ihub-apps/issues/3605) is open and not built. It asks for a
+template to be created automatically from uploaded brand documents: a deterministic read of theme
+colours and fonts, logo, page size, margins and header and footer text, plus an optional AI step
+that reads a brand guideline and flags where it disagrees with the files. The admin confirms before
+anything is saved.
+
+This rework changes the ground under it:
+
+- **The deterministic half is already part of this concept.** Resolving colours, palette and fonts
+  from the themes and the "Take colours from this file" button do what #3605 slice 1 describes for
+  those values.
+- **Most of the extraction targets disappear.** Logo, margins, header and footer text, page size and
+  font files are no longer template settings, so there is nothing to propose for them.
+- **What remains for #3605:** company name, the three colours, the declared fields, and the optional
+  AI step that reconciles a guideline with the themes. Its `_propose` and `_accept` API and its
+  review interface need to be rewritten against the smaller schema.
+
+Proposal: implement this rework first, then reduce #3605 to that remainder and update its text.
 
 ## Not in this rework
 
@@ -271,7 +309,8 @@ the letterhead into the Word and PowerPoint templates, and check the PDF look.
 - **The model guesses values instead of asking.** Mitigation: the error says to ask, names the
   allowed values, and a test covers a model that retries without asking.
 - **Odd themes**: greys only, or fewer than six accents. Mitigation: palette shorter than six is
-  fine; a theme with no colourful accent falls back to the neutral primary.
+  fine; a theme with no colourful accent is skipped, so the next theme in the resolution order
+  provides the colours, and the neutral primary is used only when neither theme has one.
 
 ## To verify before relying on it
 
