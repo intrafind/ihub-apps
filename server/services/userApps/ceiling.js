@@ -255,7 +255,16 @@ function evaluate(content, { runner, owner, settings, catalog, ownerState, stric
       runner: true
     });
     if (!models.reason) {
-      models.ids = wantedModels.filter(id => usableModel(id, owner) && usableModel(id, runner));
+      // The chat compares IDs exactly, so each entry is written as the model is configured.
+      const canonical = id =>
+        (catalog?.models || []).find(known => sameId(known?.id, id))?.id ?? id;
+      models.ids = [
+        ...new Set(
+          wantedModels
+            .filter(id => usableModel(id, owner) && usableModel(id, runner))
+            .map(canonical)
+        )
+      ];
       const noneLeft = wantedModels.length > 0 && models.ids.length === 0;
       // A locked app runs on its preferred model, which both must be able to use and which
       // the list, if there is one, must name.

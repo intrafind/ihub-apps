@@ -361,7 +361,7 @@ async function effectiveFor(record, { runner, settings }) {
   const owner = isRunnerOwner(record, runner)
     ? runner
     : lookupUserAppOwner(record, { settings }).principal;
-  const catalog = await userAppCatalog({ owner, runner });
+  const catalog = await userAppCatalog({ owner, runner, content: record.content });
   return effectiveUserApp(record, { runner, owner, settings, catalog, now: Date.now() });
 }
 

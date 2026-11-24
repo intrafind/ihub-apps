@@ -36,6 +36,8 @@ import installedIntegrationService from '../services/integrations/InstalledInteg
 import { reviseApp } from '../services/appRevision.js';
 import { resolveProjectScope } from '../services/knowledge/ProjectScope.js';
 import { effectiveUserApp } from '../services/userApps/ceiling.js';
+import { takeOverPreview } from '../services/userApps/publishUserApp.js';
+import { userAppCatalog } from '../services/userApps/userAppResolution.js';
 import { projectAccessFor, linkedProjectIdsOf } from '../services/userApps/userAppProjects.js';
 import { userAppSettings } from '../services/userApps/userAppSettings.js';
 
@@ -247,6 +249,40 @@ describe('who may use a linked project', () => {
       ['a', 'b']
     );
     assert.deepEqual(linkedProjectIdsOf({}), []);
+  });
+});
+
+describe('the catalog a publication is computed from', () => {
+  it('holds the access to the projects the app links, for the owner and the admin', async () => {
+    const catalog = await userAppCatalog({
+      owner: ANNA,
+      runner: ANNA,
+      content: record(['faq']).content
+    });
+    assert.deepEqual(Object.keys(catalog.projects), ['faq']);
+    // Without the content of the app the lookup has nothing to look up.
+    const empty = await userAppCatalog({ owner: ANNA, runner: ANNA });
+    assert.deepEqual(Object.keys(empty.projects), []);
+  });
+
+  it('keeps a link both may use in the preview of a take-over, and drops one that is gone', async () => {
+    const preview = await takeOverPreview(record(['faq', 'no-such-project']), {
+      admin: ANNA,
+      settings
+    });
+    const byId = Object.fromEntries(
+      [...preview.capabilities, ...preview.dropped].map(entry => [entry.id, entry])
+    );
+    assert.ok(byId['project:faq'], JSON.stringify(preview));
+    assert.equal(
+      preview.dropped.some(entry => entry.id === 'project:faq'),
+      false,
+      'a project both may use is not dropped'
+    );
+    assert.ok(
+      preview.dropped.some(entry => entry.id === 'project:no-such-project'),
+      'a project that does not exist is dropped'
+    );
   });
 });
 

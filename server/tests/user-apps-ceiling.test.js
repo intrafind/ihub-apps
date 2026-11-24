@@ -878,6 +878,11 @@ describe('the models of an app (design 07, section 2.2)', () => {
     assert.deepEqual(result.app.allowedModels, ['model-b']);
   });
 
+  it('writes the models of a list as they are configured, once each', () => {
+    const result = run(asking({ allowed: ['MODEL-B', 'model-b', 'Model-A'] }));
+    assert.deepEqual(result.app.allowedModels, ['model-b', 'model-a']);
+  });
+
   it('names the preferred model of a lock in any letter case', () => {
     const result = run(asking({ allowed: ['MODEL-B'], lock: true }, { preferredModel: 'model-b' }));
     assert.equal(result.app.preferredModel, 'model-b');
