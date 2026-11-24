@@ -87,6 +87,9 @@ function parseMaxApps(text) {
   return value >= MAX_APPS_RANGE.min && value <= MAX_APPS_RANGE.max ? value : null;
 }
 
+/** What the panel shows when the settings it was given carry no limit: the default of the server. */
+const DEFAULT_PAGE_READS = 10;
+
 /** The range of the limit of pages a personal app may open for one answer. */
 const PAGE_READS_RANGE = Object.freeze({ min: 1, max: 50 });
 
@@ -182,7 +185,7 @@ function UserAppSettingsForm({ initial, publishingAvailable }) {
   const [draft, setDraft] = useState(initial);
   const [maxInput, setMaxInput] = useState(() => String(initial.limits?.maxAppsPerUser ?? ''));
   const [pageReadsInput, setPageReadsInput] = useState(() =>
-    String(initial.capabilities?.webSearchLimits?.maxPageReads ?? '')
+    String(initial.capabilities?.webSearchLimits?.maxPageReads ?? DEFAULT_PAGE_READS)
   );
   const [groups, setGroups] = useState(null);
   // The installations with their functions; null until "Choose…" was opened.
@@ -339,7 +342,9 @@ function UserAppSettingsForm({ initial, publishingAvailable }) {
       setStored(settings);
       setDraft(settings);
       setMaxInput(String(settings.limits?.maxAppsPerUser ?? ''));
-      setPageReadsInput(String(settings.capabilities?.webSearchLimits?.maxPageReads ?? ''));
+      setPageReadsInput(
+        String(settings.capabilities?.webSearchLimits?.maxPageReads ?? DEFAULT_PAGE_READS)
+      );
       setSaved(true);
       return true;
     } catch (err) {
@@ -354,7 +359,9 @@ function UserAppSettingsForm({ initial, publishingAvailable }) {
   const discard = () => {
     setDraft(stored);
     setMaxInput(String(stored.limits?.maxAppsPerUser ?? ''));
-    setPageReadsInput(String(stored.capabilities?.webSearchLimits?.maxPageReads ?? ''));
+    setPageReadsInput(
+      String(stored.capabilities?.webSearchLimits?.maxPageReads ?? DEFAULT_PAGE_READS)
+    );
     setSaved(false);
     setError(null);
   };

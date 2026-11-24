@@ -2,8 +2,9 @@
 
 **Date:** 2026-11-24 · **Builds on:** [02-personal-apps.md](02-personal-apps.md),
 [03-chat-based-app-builder.md](03-chat-based-app-builder.md),
-[04-chat-builder-implementation-plan.md](04-chat-builder-implementation-plan.md) · **Status:** design,
-not reviewed yet
+[04-chat-builder-implementation-plan.md](04-chat-builder-implementation-plan.md) · **Status:**
+implemented in the slices S0, S1, S2, K1 and K2. Section 9 says where the build differs from this
+design.
 
 ## Summary
 
@@ -400,3 +401,65 @@ concept documents 02 and 03, and `docs/projects.md`.
   effect.
 - How `publishUserApp.js` maps keys; I read only its header.
 - Nothing was run: no tests, no server.
+
+## 9. As built: where the code differs from this design
+
+Written after the implementation. Sections 1 to 8 are left as they were designed.
+
+**Two claims of section 2.2 were wrong, found by reading the code before building.**
+
+- `thinking` and `imageGeneration` of an app are defaults for the chat controls
+  (`useAppSettings`, the image aspect ratio and quality), not something that costs more or reaches
+  further: a person can switch thinking on in the chat whenever the model supports it. They are
+  not capabilities, so they got no admin switch and are **not built**. If wanted, they belong with
+  the settings that change how the chat looks, without a gate.
+- `maxSearches` of `websearch` caps the searches a model provider runs itself (`max_uses`).
+  A personal app never uses native search, so the setting would do nothing. Web search settings
+  are `maxPageReads` and `researchGuidance` only.
+
+**Not built:** `skillIds` (choosing skills by list), `usageGuide`, `documentTemplate`. The cut line
+of section 6 named `skillIds` first.
+
+**Built differently:**
+
+| Design                                              | Built                                                                                                                                      |
+| --------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| Switches `thinking`, `imageGeneration`, `webSearchLimits.maxSearches` | One new number, `capabilities.webSearchLimits.maxPageReads`, and the switch `capabilities.projects`. Models stay under `modelChoice`.        |
+| The registry derives the form                       | It derives the key lists, the verdicts and the revision keys. The Zod schemas, the ceiling, the editor form and the publish copy are hand-written, each with its own tests. The drift test checks the registry against the schema, the content picker and the verdicts. |
+| A restricted model list that leaves nothing drops the restriction | The ceiling writes the entry `:no-model-available` to `allowedModels`. `RequestBuilder` already answers `noCompatibleModels` when no model is left, so the chat does not start. |
+| The approval exception for "tools shipped with iHub, declared internal and read-only" | `toolApproval.exemptInternalReads` (set for every personal app) leaves the app's own blanket mode out for a tool that is `_shipped`, declares `sideEffect: read` and `dataFlow: internal`. `readShippedToolDefinitions` sets `_shipped`. |
+| The builder reads the preferred model and the switches | The draft now carries `preferredModel` and `capabilities` so the server can check a proposal. They are left out of the test for a stale proposal. |
+| The editor rebuilds its form from the run object    | The view for owners, editors, the receiver of an offer and admins adds `authored`: the model list and the web search settings as stored, because the ceiling cuts the list for each caller. |
+| Migration only if `userAppSettings()` does not fill defaults | The reader does fill them. V263 still seeds `webSearchLimits.maxPageReads` and `projects`, so they show in `platform.json`, and `server/defaults/config/platform.json` has them. |
+
+**Consequences that the design did not say:**
+
+- Declaring the knowledge tools read-only and internal also changes **company apps**. Where the
+  platform asks for internal tools "unless the call only reads", a knowledge search no longer asks
+  (before, its side effect was `unknown`). With "always ask" it still does. The release note says so.
+- A linked project is looked up per app (`projectAccessFor`), not in the catalog a list shares per
+  owner; a list of personal apps therefore costs one lookup per linked project.
+- The builder proposes only the user projects a person owns or is a member of. The admin projects a
+  person reaches through apps are not listed in its catalogue; the editor offers them (it uses
+  `GET /api/projects`).
+- `projects` is a `capability` key now, so the run object has `projects` and `features` changed:
+  `{ projects: true, userProjects: false }` when a link is granted, `{ projects: false, userProjects:
+  false }` otherwise. The picker for attaching a project stays off because of `userProjects: false`.
+- The tests that said "a personal app never carries `capabilities` or `preferredModel` into a
+  draft", "`suggestions` has two members" and "`allowedModels` is never written" were updated: they
+  pinned decisions that this document reverses.
+
+**Verified by tests:** the ceiling for every new key (a matrix per case), the save check, the
+publish copy, the schema limits and merge-patch removal, the editor form and its controls, the
+builder's settings channel (including hostile and refused values), the card and its unticked items,
+the approval exception and its boundaries, the migration, and the project rules against real
+projects (a member, a non-member, an owner who lost the project, an admin project that is and is not
+reachable, user projects off, container and attachments ignored, instructions and writes off).
+
+**Not verified:**
+
+- No browser run: the Playwright suites (`tests/e2e`, the accessibility run, the subpath run) were
+  not started. The new editor controls were exercised in jest with the real texts only.
+- The builder was tested against a stub model, not a live one; whether a model proposes sensible
+  settings from the catalogue is the evaluation of 03 section 8, which was not run.
+- `gitleaks` is not installed in this environment, so the pre-commit secret scan did not run.

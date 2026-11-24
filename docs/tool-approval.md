@@ -68,6 +68,16 @@ can only tighten them, never loosen them (a looser app value is ignored and logg
 | 3 | New or changed action    | `installed[].approval.newOrChanged` (default `always`) while the action is new or changed since the last review (see below) | Admin |
 | 4 | App override             | App → `toolApproval.tools[<tool id or installation id>]`, else `toolApproval.default`. **Admin → Apps → Edit → Tools** | App author |
 
+**The app's own blanket mode has one exception.** An app can set `toolApproval.exemptInternalReads:
+true`. Its `toolApproval.default` then does not apply to a tool that iHub ships itself, that
+declares `sideEffect: read` and that keeps its data inside iHub (`dataFlow: internal`). Today these
+are the project knowledge tools (`knowledge_search`, `knowledge_read`, `knowledge_list`). The
+exception loosens only the app's own default: layers 1 to 3 and a mode the app names for that very
+tool still apply, and an integration, an MCP or A2A tool, a tool an admin wrote, web search and
+the page reader are never exempt. [Personal apps](personal-apps.md#what-a-shared-app-asks-first)
+set it for every chat, so a shared app that answers from a project does not ask before every
+search.
+
 Because the strictest mode wins, an action can be made stricter than its installation default but
 not looser. To have one action that never asks on an installation that otherwise asks on writes,
 set the installation default to `never` and the stricter actions to `writes` or `always`.

@@ -36,7 +36,8 @@ section for administrators starts at [Switching personal apps on](#switching-per
 
 - **A shared app asks the person chatting before every tool call.** When someone uses an app they
   do not own, every web search, every page the app opens and every step in a connected system
-  shows an approval card, one call at a time. The button **Approve & allow for this chat** is not
+  shows an approval card, one call at a time. The one exception is the project knowledge tools,
+  see [What a shared app asks first](#what-a-shared-app-asks-first). The button **Approve & allow for this chat** is not
   offered there. An app that a team uses every day should therefore be
   [published](#publishing-as-a-company-app): as a company app it follows the approval settings
   of the installation.
@@ -46,9 +47,11 @@ section for administrators starts at [Switching personal apps on](#switching-per
   knows the groups from the owner's last visit; it takes them over again when the owner next
   opens the apps page, an app or a chat, and stops trusting them after 30 days without such a
   visit. **When someone leaves, deactivate the iHub account.** That takes effect at once.
-- **A personal app cannot use a document collection.** It links no project, and the person
-  chatting cannot attach one in its chat. It works with text that is pasted and with files a
-  user attaches. The page **New app** says so before the author types.
+- **A personal app gives nobody access to a document collection.** It can link projects when an
+  administrator allows it, but a person gets documents from a project only if they may use that
+  project themselves, and the person chatting cannot attach one in its chat. Without a project it
+  works with text that is pasted and with files a user attaches. The page **New app** says so
+  before the author types.
 
 ## Who can build one
 
@@ -124,13 +127,14 @@ describes them. The differences for a personal app:
 
 ![The editor of a personal app with its state, Share, the test chat and the form](assets/screenshots/personal-app-editor.png)
 
-The editor of a personal app is a page of its own, at `/apps/<id>/edit`. It has three groups:
+The editor of a personal app is a page of its own, at `/apps/<id>/edit`. It has four groups:
 
 | Group                         | Contains                                                                                                                              |
 | ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
 | **Basics**                    | Name, short description, icon and color.                                                                                              |
 | **Instructions and inputs**   | The instructions, input fields and conversation starters.                                                                             |
-| **What the app may use**      | **AI model**, **Users can attach files**, **Web search**, **Skills** and **Connected systems**, as far as the installation allows them. |
+| **What the app may use**      | **AI model**, the **models people may use**, **Users can attach files**, **Web search** with its settings, **Projects**, **Skills** and **Connected systems**, as far as the installation allows them. |
+| **Advanced**                  | How the chat looks and starts. It is closed until you open it. See [Advanced](#advanced).                                              |
 
 - The header shows who can see the app: **Only you**, "Shared with 3 people" (groups are
   counted apart: "Shared with 2 people, 1 group"), **Shared with everyone**, **Now with the
@@ -152,7 +156,8 @@ The editor of a personal app is a page of its own, at `/apps/<id>/edit`. It has 
   They are shown to the owner and to people who may change the app, also when they may not create
   personal apps themselves. A change applied in the
   conversation reaches everyone you share the app with; the card says how many people that is.
-  The builder never changes what the app may use.
+  The builder can also suggest what the app may use; see
+  [The builder and the settings](#the-builder-and-the-settings).
 
 ### What a personal app can contain
 
@@ -166,9 +171,9 @@ The editor of a personal app is a page of its own, at `/apps/<id>/edit`. It has 
 | People and groups it is shared with    | 100 entries                                                           |
 
 Everything else an app configuration can hold is not available: website and link apps, HTML
-answers, custom answer views, structured output, linked projects, workflows, other apps as
-tools, a welcome message, fixed model lists and a start form. A personal app cannot store these
-settings, so they cannot run. An administrator can add them after the app was
+answers, custom answer views, structured output, workflows, other apps as tools and the
+settings that decide who may use an app. A personal app cannot store these settings, so they
+cannot run. An administrator can add them after the app was
 [published](#publishing-as-a-company-app).
 
 Invisible characters, such as zero-width and text-direction marks, are removed from every text
@@ -197,6 +202,60 @@ missing.
 
 When a capability the app uses is no longer available to you, the editor says, for example, "Web
 search is no longer available for your apps. The app runs without it." and offers **Remove**.
+
+**Which models people may use.** Under the model, tick the models the app is limited to. Tick
+none to allow every model a person may use. **Always use the AI model above and hide the model
+picker** locks the choice; it needs a preferred model. The list only narrows: it is cut to the
+models that both the owner and the person chatting may use. If none is left, the chat does not
+start and says that no model is available for the app. iHub does not drop the limit and use
+another model, because the author excluded it. The same switch of the administrator, **A chosen
+AI model**, allows both.
+
+**How the app researches.** With web search on, you can set how many pages the app opens for
+one answer and add a sentence or two of guidance on how to research. The number is cut to the
+limit an administrator set (**Most pages an app may open per answer**, 10 by default).
+
+**Projects.** With **Projects** allowed, tick up to three projects the app answers from. The
+project's own knowledge mode applies. The rule is that an app never gives anyone access to a
+project:
+
+- A project is used in a chat only if the owner **and** the person chatting may each use it in
+  their own right: as owner, member, through a project shared with everyone, or, for an admin
+  project, because they may reach it themselves. Someone who is not a member gets nothing from
+  it and is not told what it holds. If the owner loses the project, nobody gets it any more.
+- The app brings the projects it links and nothing else. A chat of it does not run inside a
+  project and attaches none, and the instructions of a linked project are not added to the
+  prompt: write how to use the knowledge into the instructions of the app. An app never writes
+  into a project.
+- Sharing the app does not share the project. The editor says so next to the list; share the
+  project with the same people as well.
+- An administrator-run switch, **Projects**, allows linking at all. The projects feature must be
+  on, and a project of a person also needs **user projects**.
+
+### Advanced
+
+The group **Advanced** is closed until you open it. It sets how the chat looks and starts, and
+nothing in it gives the app a tool or more data:
+
+| Setting                          | Meaning                                                                                                   |
+| -------------------------------- | --------------------------------------------------------------------------------------------------------- |
+| **Greeting**                     | Title and subtitle on the empty chat, per language. A language needs both.                                |
+| **Input type**, **Rows**         | A single line or a taller input field.                                                                    |
+| **Answer format**                | Formatted text or plain text.                                                                             |
+| **Start chats with a form**      | A new chat opens with the input fields as a form; the button label can be set per language.               |
+| **Keep the input fields open**   | Whether the input fields stay beside the chat.                                                            |
+| **Auto-start conversation**      | The app sends the first message itself. When someone else opens your app, that first answer counts against their own usage limit. |
+
+### The builder and the settings
+
+The conversation builder (and **Improve with AI**) can propose these settings. A setting that
+only changes how the chat looks and starts is part of the change you apply. A setting that adds
+cost, data or access is a separate unticked item on the card, in plain words: a preferred model,
+a list of models, how web search researches, linked projects. You tick the ones you want.
+
+The builder only proposes: it leaves out what the installation does not allow and what you may
+not use, and applying a change saves it through the same checks as the form. It cannot share,
+publish, hand over or delete an app, and it cannot change who may use it.
 
 ## Sharing
 
@@ -249,6 +308,10 @@ an app you do not own differently:
 - Web search and connected systems are off in a new chat until you switch them on.
 - Every tool call asks you first, reads included, with the tool and its arguments on the card.
   Approving a call applies to that one call. **Approve & allow for this chat** is not offered.
+  The one exception is the project knowledge tools of the projects the app links: they only
+  read, they keep the data inside iHub, and iHub ships them itself, so a shared app that answers
+  from a project does not show a card for every search. Web search, the page reader and every
+  connected system still ask.
 - In the owner's own chats the app asks before it changes something, and the owner can allow a
   tool for the rest of the chat. A stricter approval setting of the installation still applies.
   This holds whoever saved the current instructions: the owner does not confirm changes, so a
@@ -270,7 +333,7 @@ dialog lists what the company app will be able to do and says whether it is visi
 | The app uses                                         | The dialog says                                                                                              | The company app starts |
 | ---------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ | ---------------------- |
 | No web search, no skills, no connected system        | "The app becomes a company app. Everyone who may use the company's apps sees it right away."                 | **Published**          |
-| Web search, skills or a connected system             | "The app becomes a company app. Because it uses web search, an administrator checks it and switches it on."  | **Not published**      |
+| Web search, skills, a connected system or a project of the company | "The app becomes a company app. Because it uses web search, an administrator checks it and switches it on."  | **Not published**      |
 | Anything, and the administrator chose to check every published app | "The app becomes a company app. An administrator checks it and switches it on."                | **Not published**      |
 
 What a publish does:
@@ -281,6 +344,13 @@ What a publish does:
 - The company app gets only what the owner may use at that moment. Connected systems are written
   with their functions named, skills as a list of skill IDs. What is not taken over is listed in
   the dialog under "Not taken over", with the reason.
+- The look of the chat (greeting, input type, answer format, start form, input panel and
+  auto-start), the list of models and the settings of web search go with it.
+- **Projects of the company** are linked in the company app. Everyone who may use the app then
+  gets their documents, so an app that links a project starts **Not published** for an
+  administrator to check. **A project of a person** is not taken over: it stays theirs, and the
+  dialog lists it under "Not taken over". Ask an administrator for a project of the company
+  instead.
 - **The owner cannot take it back.** From then on administrators manage the app, and the former
   owner has no special right on it. The personal app becomes read-only and shows **Now with the
   administrators**.
@@ -381,7 +451,9 @@ restart.
       "upload": true,
       "webSearch": false,
       "skills": false,
-      "integrations": []
+      "projects": false,
+      "integrations": [],
+      "webSearchLimits": { "maxPageReads": 10 }
     },
     "publishing": { "adminEnables": "withTools" },
     "blockedOwners": []
@@ -399,10 +471,12 @@ restart.
 | `limits.maxAppsPerUser`          | **Apps per person**                                                            | `20`        | Personal apps one person may own; 0 means no limit. Published apps count until their owner deletes them. Lowering the limit removes nothing.        |
 | `limits.maxOpenOffersPerUser`    | (file or API)                                                                  | `5`         | Open offers to a new owner that one person may have.                                                                                                |
 | `limits.ownerSnapshotMaxAgeDays` | (file or API)                                                                  | `30`        | Days after which the stored groups of an owner from an identity provider are no longer trusted; 0 never distrusts them.                              |
-| `capabilities.modelChoice`       | **A chosen AI model**                                                          | `true`      | An owner may name a preferred model.                                                                                                                |
+| `capabilities.modelChoice`       | **A chosen AI model**                                                          | `true`      | An owner may name a preferred model, limit the app to a list of models and lock the choice.                                                         |
 | `capabilities.upload`            | **Files**                                                                      | `true`      | Personal apps may take files from users.                                                                                                            |
 | `capabilities.webSearch`         | **Web search**                                                                 | `false`     | Personal apps may use web search.                                                                                                                   |
 | `capabilities.skills`            | **Skills**                                                                     | `false`     | Personal apps may use skills.                                                                                                                       |
+| `capabilities.projects`          | **Projects**                                                                   | `false`     | Personal apps may link up to three projects. The projects feature must be on; a project of a person also needs the feature user projects.            |
+| `capabilities.webSearchLimits.maxPageReads` | **Most pages an app may open per answer**                           | `10`        | The most pages a personal app may open for one answer, from 1 to 50. An author sets the number in the app, up to this limit.                        |
 | `capabilities.integrations`      | **Connected systems**, **Choose…**                                             | `[]`        | The connected systems personal apps may use, each with the functions you tick. A function you do not tick cannot be used. The system installation `ihub` cannot be allowed. |
 | `blockedOwners`                  | **People whose apps are switched off**                                         | `[]`        | User IDs. The apps of these people stop for everyone, they cannot create new ones, and they cannot change, share or delete the ones they own.     |
 
@@ -514,7 +588,9 @@ With the feature on, in addition:
 
 ## Not available yet
 
-- Knowledge: a personal app cannot link a project, and no project can be attached in its chat.
+- Knowledge: no project can be attached in the chat of a personal app, and the owner cannot attach
+  their own project in their own chat. The builder proposes projects of a person, not the admin
+  projects a person reaches through apps; pick those in the editor.
 - Scheduled tasks, workflows, apps as tools, the inference API, MCP and A2A do not see personal
   apps.
 - Owners cannot restore an earlier version.
