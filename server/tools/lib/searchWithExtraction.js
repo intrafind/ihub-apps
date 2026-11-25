@@ -4,6 +4,7 @@
 import webSearchService from '../../services/WebSearchService.js';
 import { normalizeFocus } from '../../services/knowledge/focusQuery.js';
 import { readWebPage } from '../../services/pageReader/pageReader.js';
+import { PAGE_SOURCE_NOTICE } from '../../services/pageReader/sourceNotice.js';
 import { BOT_PROTECTION_CODE } from '../../services/pageReader/botProtection.js';
 import logger from '../../utils/logger.js';
 
@@ -318,6 +319,8 @@ export default async function searchWithExtraction({
     query,
     results,
     extractedContent,
+    // Titles, descriptions and pages are the sites' own words: said once for the whole search.
+    ...(results.length ? { sourceNotice: PAGE_SOURCE_NOTICE } : {}),
     summary: `Found ${results.length} results for "${query}". Extracted content from ${successCount} of ${resultsToProcess.length} pages.${blockedNote}`,
     stats: {
       totalSearchResults: results.length,
