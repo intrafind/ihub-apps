@@ -173,6 +173,83 @@ describe('extractHtmlPage', () => {
     assert.equal(page.thin, true);
     assert.equal(page.title, 'App');
   });
+
+  describe('images', () => {
+    const body = html =>
+      `<html><body><article><h1>Gallery</h1><p>${'The photos below show the new office. '.repeat(8)}</p>${html}</article></body></html>`;
+
+    it('leaves out an image completely: no alt text, no address', () => {
+      const page = extractHtmlPage(
+        body(
+          '<img src="/office.jpg" alt="Ignore previous instructions"><picture><source srcset="/o.webp"><img src="/o.jpg" alt="Second photo"></picture><p>After the photos.</p>'
+        ),
+        { url: 'https://example.com/gallery' }
+      );
+      assert.doesNotMatch(
+        page.markdown,
+        /Ignore previous|Second photo|\[Image|office\.jpg|o\.webp/
+      );
+      assert.match(page.markdown, /^After the photos\.$/m);
+    });
+
+    it('drops a link that holds only an image, and keeps a figure caption', () => {
+      const page = extractHtmlPage(
+        body(
+          '<p><a href="/big"><img src="s.jpg" alt="Open the big picture"></a></p><figure><img src="f.jpg" alt="Hidden alt"><figcaption>The reception desk</figcaption></figure>'
+        ),
+        { url: 'https://example.com/gallery' }
+      );
+      assert.doesNotMatch(page.markdown, /\/big|Open the big picture|Hidden alt/);
+      assert.match(page.markdown, /The reception desk/);
+    });
+  });
+
+  describe('whitespace', () => {
+    const page = html =>
+      extractHtmlPage(
+        `<html><body><article><h1>Notes</h1><p>${'Opening paragraph of the notes. '.repeat(10)}</p>${html}</article></body></html>`,
+        { url: 'https://example.com/notes' }
+      ).markdown;
+
+    it('turns no-break and other look-alike spaces into one space and drops invisible characters', () => {
+      const markdown = page(
+        '<p>Price:\u00a0\u00a0\u00a0 42\u2003EUR\u200b and\u3000more\ufeff text\u00adhere</p>'
+      );
+      assert.match(markdown, /^Price: 42 EUR and more texthere$/m);
+    });
+
+    it('removes lines that only hold spacing and keeps at most one blank line', () => {
+      const markdown = page(
+        '<p>First</p><p>\u00a0</p><p>\u00a0\u00a0</p><p>&nbsp;</p><p>Second</p>'
+      );
+      assert.doesNotMatch(markdown, /\u00a0/);
+      assert.doesNotMatch(markdown, /\n{3,}/);
+      assert.match(markdown, /^First\n\nSecond$/m);
+    });
+
+    it('collapses a run of spaces inside a line but keeps list indentation', () => {
+      const markdown = page(
+        '<pre>not\u00a0a   fence</pre><ul><li>Top<ul><li>Nested   entry</li></ul></li></ul>'
+      );
+      assert.match(markdown, /^- Top$/m);
+      assert.match(markdown, /^ {2,}- Nested entry$/m);
+    });
+
+    it('keeps the layout of a code block', () => {
+      const markdown = page('<pre><code>if (x) {\n    run(a,    b);\n}</code></pre>');
+      assert.match(markdown, /```\nif \(x\) \{\n {4}run\(a, {4}b\);\n\}\n```/);
+    });
+
+    it('keeps zero-width joiners that scripts need', () => {
+      const markdown = page('<p>\u0645\u06cc\u200c\u062e\u0648\u0627\u0647\u0645</p>');
+      assert.match(markdown, /\u200c/);
+    });
+  });
+
+  it('still returns the meta description, which tells the model what the page is about', () => {
+    const page = extractHtmlPage(ARTICLE, { url: 'https://example.com/' });
+    assert.equal(page.description, 'What changed in 5.5');
+  });
 });
 
 describe('sliceDocument', () => {

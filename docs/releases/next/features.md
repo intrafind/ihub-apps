@@ -52,3 +52,19 @@ for the models you added from that region.
   use an application inference profile or a custom model that the listing does not name.
 - A region on the provider that is not an AWS region stops the sync with a message instead of
   reading another region.
+
+## Web Pages and HTML Files: Images Are Left Out, Whitespace Is Trimmed
+
+When the model reads a web page (**Read page** in web search) or an HTML file in a project, it now
+gets the text of the page and nothing the page only shows as a picture, and spends less of its
+context on blank space.
+
+- Images are left out completely, with their alt text. Before, the alt text was passed on as
+  `[Image: …]`, although nobody sees it on the page. A caption under a picture stays, and a link
+  that holds only an image is dropped.
+- No-break and other look-alike spaces become a normal space, a run of spaces inside a line
+  becomes one, invisible characters (zero-width space, soft hyphen) are removed, and pages that
+  space their layout with empty paragraphs no longer leave stacks of blank lines.
+- The layout of code blocks and the indentation of nested lists stay as they are.
+- The description in the page's `<meta name="description">` is still passed on next to the text,
+  because it says what the page is about.

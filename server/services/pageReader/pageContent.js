@@ -179,8 +179,10 @@ function linkDestination(href) {
 
 /**
  * Turndown with the rules the reader needs: ATX headings, fenced code, GFM
- * tables, and no images (an image URL is noise to a model; its alt text is
- * kept).
+ * tables, and no images at all: neither the URL nor the alt text reaches the
+ * model (a URL is noise, and alt text is text nobody sees on the page, which
+ * makes it a place to hide instructions). A caption in a `<figcaption>` is
+ * ordinary text and stays.
  * @returns {TurndownService}
  */
 export function createMarkdownConverter() {
@@ -194,13 +196,8 @@ export function createMarkdownConverter() {
 
   service.remove(['script', 'style', 'noscript', 'iframe', 'svg', 'canvas', 'form', 'button']);
 
-  service.addRule('image', {
-    filter: 'img',
-    replacement: (_content, node) => {
-      const alt = (node.getAttribute('alt') || '').replaceAll(/\s+/g, ' ').trim();
-      return alt ? `[Image: ${alt}]` : '';
-    }
-  });
+  // Rules, not `remove`: Turndown's own image rule is an ordinary rule and wins over it.
+  service.addRule('image', { filter: ['img', 'picture'], replacement: () => '' });
 
   // Links keep their text and target, not their tooltip. A link inside the
   // page (`#section`) is only its text — heading anchors, "back to top" — and a
@@ -274,15 +271,61 @@ export function createMarkdownConverter() {
 
 const converter = createMarkdownConverter();
 
+/** Spaces that look like one but are not ASCII: no-break, en/em, thin, ideographic. */
+const UNICODE_SPACES = /[\u00A0\u1680\u2000-\u200A\u202F\u205F\u3000]/g;
+
+/** Characters that render as nothing: soft hyphen, zero-width space, word joiner, BOM. */
+const INVISIBLE = /[\u00AD\u200B\u2060\uFEFF]/g;
+
+const FENCE = /^ {0,3}(`{3,}|~{3,})/;
+
 /**
- * Tidy converted Markdown: no trailing spaces, at most one blank line in a row.
+ * Tidy converted Markdown so a page does not spend the model's budget on
+ * whitespace: look-alike spaces become one space and invisible characters
+ * go, a run of spaces inside a line becomes one, no trailing spaces, at most
+ * one blank line in a row. Indentation (nested lists) is kept, and so is
+ * everything inside a fenced code block except trailing spaces and blank-line
+ * runs.
+ *
+ * Zero-width joiners (U+200C, U+200D) stay: scripts such as Persian and
+ * Devanagari need them.
+ *
  * @param {string} markdown
  * @returns {string}
  */
 export function normalizeMarkdown(markdown) {
-  return String(markdown || '')
+  let fence = null;
+  const lines = String(markdown || '')
     .replaceAll(/\r\n?/g, '\n')
-    .replaceAll(/[ \t]+$/gm, '')
+    .split('\n')
+    .map(line => {
+      const marker = FENCE.exec(line)?.[1];
+      let inCode = fence !== null;
+      if (marker) {
+        if (fence === null) {
+          fence = marker;
+          inCode = true;
+        } else if (
+          marker[0] === fence[0] &&
+          marker.length >= fence.length &&
+          /^\s*$/.test(line.replace(FENCE, ''))
+        ) {
+          fence = null;
+        }
+      }
+      if (inCode) return line.replace(/[ \t]+$/, '');
+      return (
+        line
+          // Turndown indents with ASCII spaces: a Unicode space at the start is page noise.
+          .replace(new RegExp(`^(?:${UNICODE_SPACES.source})+`), '')
+          .replaceAll(UNICODE_SPACES, ' ')
+          .replaceAll(INVISIBLE, '')
+          .replaceAll(/(\S)[ \t]{2,}(?=\S)/g, '$1 ')
+          .replace(/[ \t]+$/, '')
+      );
+    });
+  return lines
+    .join('\n')
     .replaceAll(/\n{3,}/g, '\n\n')
     .trim();
 }
@@ -327,17 +370,14 @@ function textLength(markdown) {
 }
 
 /**
- * Point every link and image of `element` at its absolute URL (the DOM
- * resolves them against the page's URL), so the Markdown carries links the
- * model can open. Readability does this for its own output.
+ * Point every link of `element` at its absolute URL (the DOM resolves them
+ * against the page's URL), so the Markdown carries links the model can open.
+ * Readability does this for its own output.
  * @param {Element} element - mutated
  */
 function absolutizeLinks(element) {
   for (const link of element.querySelectorAll('a[href]')) {
     if (link.href) link.setAttribute('href', link.href);
-  }
-  for (const image of element.querySelectorAll('img[src]')) {
-    if (image.src) image.setAttribute('src', image.src);
   }
 }
 
