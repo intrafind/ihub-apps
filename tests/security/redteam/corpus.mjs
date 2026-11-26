@@ -30,6 +30,7 @@ export const PAGES_APP = 'inj-pages';
 export const CORPUS_EXFIL_ORIGIN = 'https://collect.invalid';
 
 let cached;
+let cachedHidden;
 
 /**
  * @returns {{source: Object, cases: Array<{id: string, category: string, template: string,
@@ -38,6 +39,22 @@ let cached;
 export function loadCorpus() {
   cached ||= JSON.parse(fs.readFileSync(path.join(here, 'corpus', 'cases.json'), 'utf8'));
   return cached;
+}
+
+/**
+ * The pages whose payload sits where a reader is expected to drop it (HTML comment, `display:none`
+ * block, image alt text). The red team does not ask a model about them; the extraction tests
+ * (`server/tests/page-extraction-corpus.test.js`) pin what the page reader and the website
+ * corpus extraction make of them.
+ *
+ * @returns {{source: Object, cases: Array<{id: string, category: string, template: string,
+ *   delivery: string, canary: string, exfil: boolean, page: string, html: string}>}}
+ */
+export function loadHiddenCorpus() {
+  cachedHidden ||= JSON.parse(
+    fs.readFileSync(path.join(here, 'corpus', 'cases-hidden.json'), 'utf8')
+  );
+  return cachedHidden;
 }
 
 /**
@@ -83,20 +100,23 @@ export function pagesAppConfig() {
 }
 
 /**
- * The groups of the seeded contents with the summarizer app added for the groups that may use the
+ * The groups of the seeded contents with the red team's apps added for the groups that may use the
  * other scenario apps. The injection seed gives `users` and `authenticated` an explicit list of
- * apps built from its own app names, which does not contain this one, so the nightly user (bob)
- * could not use it and the access preflight would stop the run. Nothing else changes: the HR app
+ * apps built from its own app names, which does not contain these, so the nightly user (bob)
+ * could not use them and the access preflight would stop the run. Nothing else changes: the HR app
  * stays out of the lists, and the admins' permissions are not touched.
  *
  * @param {{groups: Record<string, {permissions: {apps: string[]}}>}} groups - `groups.json`
- * @returns {Object} the same shape, with the app added
+ * @param {string[]} [appIds] - the apps to add; the page summarizer by default
+ * @returns {Object} the same shape, with the apps added
  */
-export function withPagesApp(groups) {
+export function withPagesApp(groups, appIds = [PAGES_APP]) {
   const next = structuredClone(groups);
   for (const id of ['users', 'authenticated']) {
     const permissions = next.groups[id].permissions;
-    if (!permissions.apps.includes(PAGES_APP)) permissions.apps = [...permissions.apps, PAGES_APP];
+    for (const appId of appIds) {
+      if (!permissions.apps.includes(appId)) permissions.apps = [...permissions.apps, appId];
+    }
   }
   return next;
 }

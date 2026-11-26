@@ -77,7 +77,8 @@ describe('the pages as the canary serves them', () => {
 });
 
 describe('the generated test cases', () => {
-  const tests = generateTests();
+  // The tests of the corpus pages; the agency pages' tests carry no canary (redteam-agency.test.js).
+  const tests = generateTests().filter(test => test.vars.canary);
 
   it('has one test per page, asking for that page by its canary address', () => {
     assert.equal(tests.length, cases.length);

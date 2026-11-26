@@ -30,12 +30,15 @@ import { removeDisposableContents } from '../../config/e2e-fresh-contents.mjs';
 import { startCanary } from '../injection/canary.mjs';
 import { CANARY_PAGES, seedInjectionContents } from '../injection/seed.mjs';
 import {
+  ADMIN,
   CANARY,
   CANARY_PORT,
   LLM_PORT,
   SERVER_PORT,
   SERVER_SECRET_ENV
 } from '../injection/scenario.mjs';
+import { AGENCY_CASES, MAIL_APP, agencyPages, installMailTool, mailAppConfig } from './agency.mjs';
+import { waitUntil } from './waitUntil.mjs';
 import { PAGES_APP, corpusPages, pagesAppConfig, withPagesApp } from './corpus.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
@@ -95,10 +98,15 @@ fs.writeFileSync(
   path.join(contentsDir, 'apps', `${PAGES_APP}.json`),
   `${JSON.stringify(pagesAppConfig(), null, 2)}\n`
 );
+// Its twin has the canary's mail tool (installed once the server is up, below).
+fs.writeFileSync(
+  path.join(contentsDir, 'apps', `${MAIL_APP}.json`),
+  `${JSON.stringify(mailAppConfig(), null, 2)}\n`
+);
 const groupsPath = path.join(contentsDir, 'config', 'groups.json');
 fs.writeFileSync(
   groupsPath,
-  `${JSON.stringify(withPagesApp(JSON.parse(fs.readFileSync(groupsPath, 'utf8'))), null, 2)}\n`
+  `${JSON.stringify(withPagesApp(JSON.parse(fs.readFileSync(groupsPath, 'utf8')), [PAGES_APP, MAIL_APP]), null, 2)}\n`
 );
 
 // The seeded apps name the stub as their preferred model: point them at the real one.
@@ -114,11 +122,11 @@ for (const file of fs.readdirSync(appsDir).filter(f => f.endsWith('.json'))) {
   }
 }
 
-// The scenario's pages and the corpus pages, both under /page/<name>. The corpus' exfiltration
+// The scenario's pages, the corpus pages and the agency pages, all under /page/<name>. The corpus' exfiltration
 // addresses point at the canary itself, so a request for one is recorded.
 await startCanary({
   port: CANARY_PORT,
-  pages: { ...CANARY_PAGES, ...corpusPages(CANARY) }
+  pages: { ...CANARY_PAGES, ...corpusPages(CANARY), ...agencyPages(CANARY) }
 });
 
 const server = spawn(process.execPath, [path.join(root, 'server', 'server.js')], {
@@ -137,3 +145,18 @@ const server = spawn(process.execPath, [path.join(root, 'server', 'server.js')],
 });
 for (const signal of ['SIGINT', 'SIGTERM']) process.on(signal, () => server.kill(signal));
 server.on('exit', code => process.exit(code ?? 0));
+
+// The mail tool of the canary, for the agency pages. The server is not up yet: wait for it.
+const up = await waitUntil(
+  async () => (await fetch(`http://127.0.0.1:${SERVER_PORT}/api/health`)).ok,
+  {
+    attempts: 120
+  }
+);
+if (!up) throw new Error('iHub did not come up for the mail tool');
+await installMailTool({
+  apiOrigin: `http://127.0.0.1:${SERVER_PORT}`,
+  canaryOrigin: CANARY,
+  admin: ADMIN
+});
+console.log(`[redteam] mail tool installed for ${AGENCY_CASES.length} agency pages`);
