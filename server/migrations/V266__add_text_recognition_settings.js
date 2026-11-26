@@ -8,7 +8,7 @@
  * opt-in `platform.uploads.recognizeText`. The engine is the model and no
  * model is set, so nothing changes until an administrator picks one.
  */
-export const version = '265';
+export const version = '266';
 export const description = 'add_text_recognition_settings';
 
 export async function precondition(ctx) {

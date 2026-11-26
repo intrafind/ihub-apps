@@ -160,7 +160,7 @@ reading them again. Set it in **Admin → Chat history → Uploaded files → Te
   service, test it, and pick it as the engine. Other OCR services can be connected as integrations
   of type `ocr`.
 
-**Before upgrading:** nothing to do. Migration V265 adds the settings with the model engine and no
+**Before upgrading:** nothing to do. Migration V266 adds the settings with the model engine and no
 model set, so nothing is read until an administrator picks one.
 
 ## MCP Gateway: Skills, Long Runs as Tasks and Approval Through the Client
