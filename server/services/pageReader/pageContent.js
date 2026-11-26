@@ -277,13 +277,60 @@ const UNICODE_SPACES = /[\u00A0\u1680\u2000-\u200A\u202F\u205F\u3000]/g;
 /** Characters that render as nothing: soft hyphen, zero-width space, word joiner, BOM. */
 const INVISIBLE = /[\u00AD\u200B\u2060\uFEFF]/g;
 
+const FENCE_MARKER = /^(`{3,}|~{3,})/;
+const LEADING_UNICODE_SPACES = new RegExp(`^(?:${UNICODE_SPACES.source})+`);
+
+const isBlank = char => char === ' ' || char === '\t';
+const isDigit = char => char >= '0' && char <= '9';
+
 /**
- * A fence line: Turndown writes fenced code only, so any line that starts with three backticks or
- * tildes after its container prefix (blockquote markers `>`, list markers `-` `*` `+` `1.`, and
- * indentation) opens or closes a code block, however deeply the block is nested. A list item that
- * starts with a code block has its opening fence right after the marker (`- ```).
+ * Where the content of a line starts, after its container prefix: blockquote
+ * markers (`>`), list markers (`-` `*` `+` `1.` `1)`) and indentation. Scanned
+ * by hand: a regular expression for nested, repeated prefixes backtracks.
+ * @param {string} line
+ * @returns {number}
  */
-const FENCE = /^(?:[ \t]*(?:>|(?:[-*+]|\d{1,9}[.)])(?=[ \t])))*[ \t]*(`{3,}|~{3,})/;
+function contentStart(line) {
+  let at = 0;
+  for (;;) {
+    let next = at;
+    while (isBlank(line[next])) next++;
+    const char = line[next];
+    if (char === '>' || char === '-' || char === '*' || char === '+') {
+      at = next + 1;
+      continue;
+    }
+    let digitsEnd = next;
+    while (isDigit(line[digitsEnd])) digitsEnd++;
+    if (digitsEnd > next && (line[digitsEnd] === '.' || line[digitsEnd] === ')')) {
+      at = digitsEnd + 1;
+      continue;
+    }
+    return next;
+  }
+}
+
+/**
+ * The fence a line opens or closes, or `null`: Turndown writes fenced code
+ * only, so a line that starts with three backticks or tildes after its
+ * container prefix is a fence, however deeply the block is nested. A list item
+ * that starts with a code block has its opening fence right after the marker
+ * (`- ```).
+ * @param {string} line
+ * @returns {{marker: string, rest: string}|null}
+ */
+function fenceOf(line) {
+  const content = line.slice(contentStart(line));
+  const marker = FENCE_MARKER.exec(content)?.[1];
+  return marker ? { marker, rest: content.slice(marker.length) } : null;
+}
+
+/** A line without its trailing spaces and tabs (linear, unlike `/[ \t]+$/`). */
+function trimTrailingBlanks(line) {
+  let end = line.length;
+  while (end > 0 && isBlank(line[end - 1])) end--;
+  return line.slice(0, end);
+}
 
 /**
  * Tidy converted Markdown so a page does not spend the model's budget on
@@ -305,29 +352,28 @@ export function normalizeMarkdown(markdown) {
     .replaceAll(/\r\n?/g, '\n')
     .split('\n')
     .map(line => {
-      const marker = FENCE.exec(line)?.[1];
+      const found = fenceOf(line);
       let inCode = fence !== null;
-      if (marker) {
+      if (found) {
         if (fence === null) {
-          fence = marker;
+          fence = found.marker;
           inCode = true;
         } else if (
-          marker[0] === fence[0] &&
-          marker.length >= fence.length &&
-          /^\s*$/.test(line.replace(FENCE, ''))
+          found.marker.startsWith(fence[0]) &&
+          found.marker.length >= fence.length &&
+          found.rest.trim() === ''
         ) {
           fence = null;
         }
       }
-      if (inCode) return line.replace(/[ \t]+$/, '');
-      return (
+      if (inCode) return trimTrailingBlanks(line);
+      return trimTrailingBlanks(
         line
           // Turndown indents with ASCII spaces: a Unicode space at the start is page noise.
-          .replace(new RegExp(`^(?:${UNICODE_SPACES.source})+`), '')
+          .replace(LEADING_UNICODE_SPACES, '')
           .replaceAll(UNICODE_SPACES, ' ')
           .replaceAll(INVISIBLE, '')
           .replaceAll(/(\S)[ \t]{2,}(?=\S)/g, '$1 ')
-          .replace(/[ \t]+$/, '')
       );
     });
   return lines
