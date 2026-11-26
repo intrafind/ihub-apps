@@ -313,6 +313,12 @@ export const CHAT_ERROR_CODES = Object.freeze({
   SOURCE_UNAVAILABLE: 400,
   SOURCE_INVALID: 400,
   SOURCE_FAILED: 502,
+  /** Text recognition (#3986): no usable OCR model is set. */
+  OCR_UNAVAILABLE: 400,
+  /** Text recognition: the OCR model refused the request or failed on every page. */
+  OCR_FAILED: 502,
+  /** Text recognition: the OCR model found no text. */
+  OCR_NO_TEXT: 400,
   /** No evidence record was kept for this answer or run (#3687). */
   EVIDENCE_NOT_RECORDED: 404,
   /** The journal of a finished run was deleted after its grace period; its evidence record remains. */

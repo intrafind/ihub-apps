@@ -30,6 +30,9 @@ import { getProjectService } from '../services/projects/ProjectService.js';
 import { readOriginal, readText } from '../services/projects/ItemTextStore.js';
 import { serializeItem } from '../services/projects/projectView.js';
 import { evictItemText } from '../services/knowledge/ItemTextService.js';
+import { ingestChatFile } from '../services/chatFiles/ChatFileService.js';
+import { chatFilePolicy } from '../services/chatFiles/chatFilePolicy.js';
+import { getChatFileRepository } from '../services/chatFiles/ChatFileRepository.js';
 import {
   chatRecognizesText,
   declaredRecognizableImageType,
@@ -312,5 +315,59 @@ describe('projects: text recognition at upload', () => {
     assert.equal(item.status, 'ready', JSON.stringify(item.error));
     assert.equal(calls.length, 0);
     assert.equal(item.text.recognized, undefined);
+  });
+});
+
+describe('chats: text recognition is opt-in', () => {
+  let chatCounter = 0;
+  async function attach(buffer, name, mimeType, appConfig = null) {
+    chatCounter += 1;
+    const scope = { type: 'chat', id: `ocr-chat-${chatCounter}` };
+    const store = getChatFileRepository();
+    const file = await ingestChatFile({
+      scope,
+      ownerId: ADMIN.id,
+      name,
+      mimeType,
+      buffer,
+      appConfig,
+      policy: chatFilePolicy(appConfig),
+      store
+    });
+    return { file, stored: await store.getText(scope, file.id) };
+  }
+
+  it('off (the default): an image is refused and a scanned PDF goes as page images', async () => {
+    await assert.rejects(
+      attach(png(), 'photo.png', 'image/png'),
+      error => error.code === 'UNSUPPORTED_TYPE'
+    );
+    const { stored } = await attach(await pdfOf([null]), 'scan.pdf', 'application/pdf');
+    assert.equal(stored.text, '');
+    assert.equal(stored.pageImages.length, 1);
+    assert.equal(calls.length, 0);
+  });
+
+  it('on: an image and a scanned PDF are read once, and no page images are kept', async () => {
+    setPlatform({ ocr: { modelId: 'ocr-vision' }, uploads: { recognizeText: true } });
+    const image = await attach(png(), 'photo.png', 'image/png');
+    assert.match(image.stored.text, /invoice from ACME/);
+    assert.equal(image.file.meta.recognized.modelId, 'ocr-vision');
+    assert.equal(image.stored.pageImages, undefined);
+
+    const pdf = await attach(await pdfOf([TEXT_PAGE, null]), 'mixed.pdf', 'application/pdf');
+    assert.match(pdf.stored.text, /real text layer/);
+    assert.match(pdf.stored.text, /\[Page 2\]\nRecognized text/);
+    assert.equal(pdf.stored.pageImages, undefined);
+    assert.equal(pdf.file.meta.recognized.pages, 1);
+    assert.equal(calls.length, 2);
+  });
+
+  it('an app can switch it on or off for its own chats', async () => {
+    setPlatform({ ocr: { modelId: 'ocr-vision' }, uploads: { recognizeText: false } });
+    const app = { id: 'scanner', uploads: { recognizeText: true } };
+    const { stored } = await attach(await pdfOf([null]), 'app-scan.pdf', 'application/pdf', app);
+    assert.match(stored.text, /Recognized text/);
+    assert.equal(stored.pageImages, undefined);
   });
 });
