@@ -29,6 +29,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { promisify } from 'node:util';
 import zlib from 'node:zlib';
+import { constants as BUFFER_CONSTANTS } from 'node:buffer';
 import JSZip from 'jszip';
 import { acceptedTypeOf, sniffBytes } from './extractText.js';
 import { ProjectError } from './projectErrors.js';
@@ -43,6 +44,9 @@ export const MAX_ARCHIVE_ENTRIES = 2000;
 const MAX_NAME_CHARS = 300;
 
 const inflateRaw = promisify(zlib.inflateRaw);
+
+/** Largest buffer Node allocates; the ceiling of an unlimited inflate. */
+const MAX_BUFFER_LENGTH = BUFFER_CONSTANTS.MAX_LENGTH;
 
 const DEFLATE = '\u0008\u0000';
 const STORE = '\u0000\u0000';
@@ -91,13 +95,30 @@ async function inflateEntry(entry, maxBytes) {
       `${entry.name} uses a compression method that cannot be read`
     );
   }
-  if (magic === STORE) return raw.length > maxBytes ? null : Buffer.from(raw);
-  try {
-    return await inflateRaw(raw, { maxOutputLength: Math.max(1, maxBytes) });
-  } catch (error) {
-    if (error?.code === 'ERR_BUFFER_TOO_LARGE') return null;
-    throw new ProjectError('UNSUPPORTED_TYPE', `${entry.name} is damaged`);
+  let out;
+  if (magic === STORE) {
+    if (raw.length > maxBytes) return null;
+    out = Buffer.from(raw);
+  } else {
+    // A limit that is switched off (`Infinity`) is no `maxOutputLength`: Node
+    // takes a finite length only, up to its largest buffer.
+    const ceiling = Number.isFinite(maxBytes)
+      ? Math.max(1, Math.min(maxBytes, MAX_BUFFER_LENGTH))
+      : MAX_BUFFER_LENGTH;
+    try {
+      out = await inflateRaw(raw, { maxOutputLength: ceiling });
+    } catch (error) {
+      if (error?.code === 'ERR_BUFFER_TOO_LARGE') return null;
+      throw new ProjectError('UNSUPPORTED_TYPE', `${entry.name} is damaged`);
+    }
   }
+  // The archive is read without JSZip's checksum pass (it would inflate every
+  // entry, unbounded); each entry is checked here, after its bounded inflate.
+  const expected = data.crc32;
+  if (typeof expected === 'number' && zlib.crc32(out) >>> 0 !== expected >>> 0) {
+    throw new ProjectError('UNSUPPORTED_TYPE', `${entry.name} is damaged (checksum mismatch)`);
+  }
+  return out;
 }
 
 /**
@@ -110,7 +131,11 @@ async function inflateEntry(entry, maxBytes) {
  * @param {number} limits.maxFiles - Files to hand over at most (the room left in the project).
  * @param {number} limits.maxFileBytes - Largest file, unpacked.
  * @param {number} limits.maxTotalBytes - All files together, unpacked (the room left).
- * @param {(file: {name: string, fileName: string, bytes: Buffer}) => Promise<void>} onFile
+ * @param {(file: {name: string, fileName: string, bytes: Buffer}) => Promise<boolean>} onFile -
+ *   Resolves whether the file was taken: only taken files count against
+ *   `maxFiles` and `maxTotalBytes`. All inflating together is bounded on its
+ *   own (twice the room plus one file), so refused entries cannot make the
+ *   work unbounded.
  * @returns {Promise<{skipped: Array<{name: string, code: string, message: string}>}>}
  * @throws {ProjectError} `UNSUPPORTED_TYPE` for an archive that cannot be read
  *   (damaged, encrypted, too many entries).
@@ -137,6 +162,10 @@ export async function unpackZip(bytes, { maxFiles, maxFileBytes, maxTotalBytes }
   const skipped = [];
   let handed = 0;
   let total = 0;
+  let inflated = 0;
+  const workBudget = Number.isFinite(maxTotalBytes)
+    ? Math.max(0, maxTotalBytes) * 2 + (Number.isFinite(maxFileBytes) ? maxFileBytes : 0)
+    : Infinity;
   const skip = (name, code, message) => skipped.push({ name, code, message });
   for (const entry of entries) {
     if (entry.dir || isNoise(entry.name)) continue;
@@ -155,7 +184,15 @@ export async function unpackZip(bytes, { maxFiles, maxFileBytes, maxTotalBytes }
       skip(name, 'UNSUPPORTED_TYPE', 'Projects do not take files of this type');
       continue;
     }
-    const room = Math.min(maxFileBytes, Math.max(0, maxTotalBytes - total));
+    if (inflated >= workBudget) {
+      skip(
+        name,
+        'QUOTA_PROJECT_BYTES',
+        'The archive expands to more than the project has room for'
+      );
+      continue;
+    }
+    const room = Math.min(maxFileBytes, Math.max(0, maxTotalBytes - total), workBudget - inflated);
     let data;
     try {
       data = await inflateEntry(entry, room);
@@ -173,9 +210,11 @@ export async function unpackZip(bytes, { maxFiles, maxFileBytes, maxTotalBytes }
       );
       continue;
     }
-    total += data.length;
-    handed += 1;
-    await onFile({ name, fileName, bytes: data });
+    inflated += data.length;
+    if (await onFile({ name, fileName, bytes: data })) {
+      total += data.length;
+      handed += 1;
+    }
   }
   return { skipped };
 }
@@ -247,7 +286,19 @@ export async function importFile(
     ...(archive ? { archive: String(file.name || 'archive.zip').slice(0, MAX_NAME_CHARS) } : {})
   };
 
+  // An unexpected failure (storage full, the store down) stops an archive's
+  // import; what was added stays added and is reported, so a retry does not
+  // add it twice.
+  let stopped = null;
   const add = async candidate => {
+    if (stopped) {
+      skipped.push({
+        name: candidate.name,
+        code: 'IMPORT_STOPPED',
+        message: `Not imported: the import stopped at an earlier error (${stopped})`
+      });
+      return false;
+    }
     try {
       // The type and the bytes are checked here as for an upload; `addItem`
       // and the pipeline check them again.
@@ -283,9 +334,19 @@ export async function importFile(
         throw error;
       }
       items.push(item);
+      return true;
     } catch (error) {
-      if (!archive || !PER_FILE_CODES.has(error?.code)) throw error;
-      skipped.push({ name: candidate.name, code: error.code, message: error.message });
+      if (!archive) throw error;
+      if (!PER_FILE_CODES.has(error?.code)) {
+        if (items.length === 0) throw error;
+        stopped = error?.message || 'unknown error';
+      }
+      skipped.push({
+        name: candidate.name,
+        code: error?.code || 'IMPORT_FAILED',
+        message: error?.message || 'The file could not be imported'
+      });
+      return false;
     }
   };
 

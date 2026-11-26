@@ -32,7 +32,7 @@ import { bootstrapProjects, shutdownProjects } from '../services/projects/bootst
 import { getProjectRepository } from '../services/projects/ProjectRepository.js';
 import { readOriginal, readText } from '../services/projects/ItemTextStore.js';
 import { evictItemText } from '../services/knowledge/ItemTextService.js';
-import { isZipArchive } from '../services/projects/itemImport.js';
+import { isZipArchive, unpackZip } from '../services/projects/itemImport.js';
 import { fetchSourceFile, ingestFromSource } from '../services/chatFiles/fileSources.js';
 import { chatFilePolicy } from '../services/chatFiles/chatFilePolicy.js';
 import { getChatFileRepository } from '../services/chatFiles/ChatFileRepository.js';
@@ -505,6 +505,61 @@ describe('POST /api/projects/:projectId/items/_import', () => {
     assert.equal(res.body.skipped[0].code, 'QUOTA_FILES');
   });
 
+  it('does not spend the last document slot on an entry it refuses', async () => {
+    setLimits({ maxFiles: 1 });
+    const project = await createProject(ADA);
+    const chatId = await seedChat(ADA);
+    const archive = await zipOf({
+      // Sorted first: a picture under a text name, refused by its bytes.
+      'a-bad.txt': Buffer.from('89504e470d0a1a0a0000000d49484452', 'hex'),
+      'b-good.txt': 'the good one\n'
+    });
+    const artifact = await seedArtifact(chatId, {
+      kind: 'archive',
+      mimeType: 'application/zip',
+      name: 'one-slot.zip',
+      bytes: archive
+    });
+    const res = await importArtifact(ADA, project.id, { chatId, artifactId: artifact.id });
+    assert.equal(res.statusCode, 202, JSON.stringify(res.body));
+    assert.deepEqual(
+      res.body.items.map(item => item.name),
+      ['b-good.txt']
+    );
+    assert.deepEqual(
+      res.body.skipped.map(entry => [entry.name, entry.code]),
+      [['a-bad.txt', 'UNSUPPORTED_TYPE']]
+    );
+  });
+
+  it('skips an entry whose bytes do not match its checksum', async () => {
+    const project = await createProject(ADA);
+    const chatId = await seedChat(ADA);
+    const archive = await zipOf({ 'intact.md': '# intact\n', 'tampered.md': '# original text\n' });
+    // Uncompressed entries (STORE) keep their text verbatim in the archive.
+    const stored = await new JSZip()
+      .file('intact.md', '# intact\n')
+      .file('tampered.md', '# original text\n')
+      .generateAsync({ type: 'nodebuffer', compression: 'STORE' });
+    const at = stored.indexOf(Buffer.from('original'));
+    assert.ok(at > 0 && archive.length > 0);
+    stored.write('ORIGINAL', at, 'latin1');
+    const artifact = await seedArtifact(chatId, {
+      kind: 'archive',
+      mimeType: 'application/zip',
+      name: 'tampered.zip',
+      bytes: stored
+    });
+    const res = await importArtifact(ADA, project.id, { chatId, artifactId: artifact.id });
+    assert.equal(res.statusCode, 202, JSON.stringify(res.body));
+    assert.deepEqual(
+      res.body.items.map(item => item.name),
+      ['intact.md']
+    );
+    assert.equal(res.body.skipped[0].name, 'tampered.md');
+    assert.match(res.body.skipped[0].message, /checksum/);
+  });
+
   it('refuses a request that names no file and no artifact', async () => {
     const project = await createProject(ADA);
     const res = await drive(route.importItems, {
@@ -713,5 +768,25 @@ describe('Use in app: copying into a chat as a file', () => {
       }),
       error => error.code === 'SOURCE_GONE' && error.status === 404
     );
+  });
+});
+
+describe('unpackZip', () => {
+  it('unpacks with every limit switched off', async () => {
+    const bytes = await zipOf({ 'a.md': '# a\n', 'b.txt': 'b' });
+    const seen = [];
+    const { skipped } = await unpackZip(
+      bytes,
+      { maxFiles: Infinity, maxFileBytes: Infinity, maxTotalBytes: Infinity },
+      async file => {
+        seen.push([file.name, file.bytes.toString('utf8')]);
+        return true;
+      }
+    );
+    assert.deepEqual(skipped, []);
+    assert.deepEqual(seen.sort(), [
+      ['a.md', '# a\n'],
+      ['b.txt', 'b']
+    ]);
   });
 });

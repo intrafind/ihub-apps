@@ -375,6 +375,10 @@ function AppChat({
   // A file "Use in app…" handed to this chat (`startChatHandoff`'s `attachment`), waiting
   // to be copied into it (`useSourceFileAttachment`). `key` tells two hand-overs apart.
   const [pendingSourceAttachment, setPendingSourceAttachment] = useState(null);
+  // The chat a handed-over file opened: it waits for the user's own message, so
+  // the app's auto-start does not send one first (the pending state above is
+  // cleared once the copy is made; this stays for the chat).
+  const sourceStartedChatRef = useRef(null);
   const auth = useOptionalAuth();
   // A short link belongs to the signed-in user who creates it.
   const signedOut = auth ? auth.isAuthenticated !== true : false;
@@ -652,6 +656,7 @@ function AppChat({
       fileUploadHandler.setSelectedFile(handoff.files);
     }
     if (handoff.attachment?.source) {
+      sourceStartedChatRef.current = chatId;
       setPendingSourceAttachment({ key: Date.now(), attachment: handoff.attachment });
     }
     const settings = handoff.settings;
@@ -1525,9 +1530,11 @@ function AppChat({
     fileUploadHandler,
     addSystemMessage,
     serverFiles: { enabled: chatFileUploads.enabled, ephemeral },
-    onDone: () => {
+    onDone: ({ attached } = {}) => {
       // A temporary chat the file was copied out of goes once the copy is made.
-      const leftTemporary = pendingSourceAttachment?.deleteAfter;
+      // A failed copy keeps it, so nothing is lost while the copy can be tried
+      // again; the retention sweep removes it later.
+      const leftTemporary = attached ? pendingSourceAttachment?.deleteAfter : null;
       if (leftTemporary) {
         deleteChat(leftTemporary).catch(() => {
           // Gone already: the retention sweep is the backstop.
@@ -1572,6 +1579,9 @@ function AppChat({
       // server no longer accepts would refuse it, and it is not retried.
       !integrationScopesLoading &&
       !autoStartTriggered.current && // Haven't triggered yet
+      // A chat opened with a handed-over file ("Use in app") waits for the user.
+      !pendingSourceAttachment &&
+      sourceStartedChatRef.current !== chatId &&
       selectedModel && // Model is selected
       app.variables; // Variables are initialized
 
@@ -1683,7 +1693,9 @@ function AppChat({
     integrationScopes,
     integrationScopesLoading,
     sendChatMessage,
-    getLocalizedContent
+    getLocalizedContent,
+    chatId,
+    pendingSourceAttachment
   ]);
 
   // Determine which integrations this app uses
@@ -2082,7 +2094,7 @@ function AppChat({
       // A temporary chat is deleted when it is left, but the copy still reads
       // the file out of it: it goes once the copy is made (`onDone` above).
       const leftTemporary = leavingTemporaryChatRef.current ? chatId : null;
-      startNewChat({ keepTemporary: true });
+      sourceStartedChatRef.current = startNewChat({ keepTemporary: true });
       setPendingSourceAttachment({
         key: Date.now(),
         attachment,

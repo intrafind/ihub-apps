@@ -13131,7 +13131,8 @@
       "ifinderWritePartial": "iFinder meldete einen Fehler, nachdem ein Teil der Änderung durchgelaufen war: {{done}} erledigt, {{not}} nicht. Laden Sie die Collection neu und versuchen Sie es erneut.",
       "ifinderWriteNone": "iFinder meldete einen Fehler, es wurde nichts geändert. Versuchen Sie es gleich noch einmal.",
       "ifinderWriteUnknown": "iFinder hat nicht geantwortet, es ist daher nicht bekannt, ob die Änderung durchgelaufen ist. Laden Sie die Collection neu, um es zu sehen.",
-      "kindNotAllowed": "Eine Smart Collection aus iFinder enthält nur iFinder-Dokumente."
+      "kindNotAllowed": "Eine Smart Collection aus iFinder enthält nur iFinder-Dokumente.",
+      "downloadNotSaved": "Die Datei ist angekommen, aber der Browser hat sie nicht gespeichert. Bitte versuchen Sie es erneut."
     },
     "form": {
       "description": "Beschreibung",
@@ -13555,10 +13556,11 @@
       "audience": {
         "everyone": "Alle angemeldeten Personen",
         "catalog": "Alle angemeldeten Personen (im Katalog veröffentlicht)",
-        "members_one": "{{count}} Mitglied",
-        "members_other": "{{count}} Mitglieder",
+        "members_one": "Geteilt mit {{count}} Person oder Gruppe",
+        "members_other": "Geteilt mit {{count}} Personen oder Gruppen",
         "private": "Nur Sie"
-      }
+      },
+      "doneTitle": "In das Projekt kopiert"
     }
   },
   "integrationScopes": {

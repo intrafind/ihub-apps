@@ -47,7 +47,7 @@ describe('fileTypeOf', () => {
 });
 
 describe('appUploadAccepts', () => {
-  it('takes a document type only where file upload is switched on explicitly', () => {
+  it('takes a document type where the composer offers local upload and documents are not off', () => {
     const md = { mimeType: 'text/markdown', name: 'a.md' };
     expect(appUploadAccepts(docs, md)).toBe(true);
     expect(appUploadAccepts(fileDefault, md)).toBe(false);
@@ -74,6 +74,12 @@ describe('appUploadAccepts', () => {
     expect(appUploadAccepts(anyText, { mimeType: 'application/pdf' })).toBe(false);
   });
 
+  it('takes nothing from an empty format list, as the composer does', () => {
+    const none = { id: 'none', upload: { fileUpload: { enabled: true, supportedFormats: [] } } };
+    expect(appUploadAccepts(none, { mimeType: 'application/pdf' })).toBe(false);
+    expect(appUploadAccepts(none, { mimeType: 'text/markdown' })).toBe(false);
+  });
+
   it('judges pictures by the image upload, not the file upload', () => {
     expect(appUploadAccepts(vision, { mimeType: 'image/png' })).toBe(true);
     expect(appUploadAccepts(docs, { mimeType: 'image/png' })).toBe(false);
@@ -91,11 +97,15 @@ describe('appsAcceptingFile', () => {
 
   it('lists the chat apps that take the type, in the given order', () => {
     const apps = [vision, docs, pdfOnly, uploadsOff, anyText];
+    // `vision` switches images on and leaves documents unset: its composer takes
+    // them, so the picker does too.
     expect(appsAcceptingFile(apps, { mimeType: 'text/markdown' }).map(app => app.id)).toEqual([
+      'vision',
       'docs',
       'any-text'
     ]);
     expect(appsAcceptingFile(apps, { mimeType: 'application/pdf' }).map(app => app.id)).toEqual([
+      'vision',
       'docs',
       'pdf-only'
     ]);
@@ -184,10 +194,12 @@ describe('project documents', () => {
   });
 
   it('offers only documents whose text is there and that are not "Not for AI"', () => {
-    expect(canUseProjectItemInApp({ status: 'ready' })).toBe(true);
-    expect(canUseProjectItemInApp({ status: 'stale' })).toBe(true);
-    expect(canUseProjectItemInApp({ status: 'pending' })).toBe(false);
-    expect(canUseProjectItemInApp({ status: 'failed' })).toBe(false);
+    expect(canUseProjectItemInApp({ storage: 'text', status: 'ready' })).toBe(true);
+    expect(canUseProjectItemInApp({ storage: 'text', status: 'stale' })).toBe(true);
+    expect(canUseProjectItemInApp({ storage: 'text', status: 'pending' })).toBe(false);
+    expect(canUseProjectItemInApp({ storage: 'text', status: 'failed' })).toBe(false);
+    // A link has no stored file to hand over.
+    expect(canUseProjectItemInApp({ storage: 'link', status: 'ready' })).toBe(false);
     expect(canUseProjectItemInApp({ status: 'ready', excludedFromAi: true })).toBe(false);
   });
 });

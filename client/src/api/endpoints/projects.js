@@ -187,7 +187,15 @@ export const importProjectItems = async (projectId, { source, file, pinned = fal
       })
     );
   } else {
-    data = await call(() => apiClient.post(path, { source, ...(pinned ? { pinned: true } : {}) }));
+    data = await call(() =>
+      apiClient.post(
+        path,
+        { source, ...(pinned ? { pinned: true } : {}) },
+        // A generated ZIP is unpacked on the server too: no request timeout,
+        // or a slow import reports failure for documents already added.
+        { timeout: 0 }
+      )
+    );
   }
   return {
     items: Array.isArray(data?.items) ? data.items : [],

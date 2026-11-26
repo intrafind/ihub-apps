@@ -95,10 +95,10 @@ describe('useSourceFileAttachment', () => {
       serverStored: true,
       fileName: 'report.md'
     });
-    expect(uploader.setAttachmentProcessing).toHaveBeenLastCalledWith(
-      'source-file-attachment',
-      false
-    );
+    // One registration per run: released by the run that took it.
+    const [busyId] = uploader.setAttachmentProcessing.mock.calls[0];
+    expect(busyId).toMatch(/^source-file-attachment:/);
+    expect(uploader.setAttachmentProcessing).toHaveBeenLastCalledWith(busyId, false);
   });
 
   it('says why the server refused the copy', async () => {

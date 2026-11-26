@@ -135,8 +135,9 @@ export function projectItemAttachment(projectId, item) {
 }
 
 /**
- * Whether a project document may be offered to "Use in app": its text is
- * there (ready, or stale with its last snapshot) and it is not marked
+ * Whether a project document may be offered to "Use in app": a stored document
+ * (not a link) whose text is there (ready, or stale with its last snapshot) and
+ * that is not marked
  * "Not for AI" — the server refuses those (`SOURCE_FORBIDDEN`), so they are
  * not offered at all.
  *
@@ -144,7 +145,14 @@ export function projectItemAttachment(projectId, item) {
  * @returns {boolean}
  */
 export function canUseProjectItemInApp(item) {
-  return Boolean(item) && USABLE_ITEM_STATUSES.has(item.status) && item.excludedFromAi !== true;
+  return (
+    Boolean(item) &&
+    // A link (an iHub page, an iFinder document, a document of another project)
+    // has no stored file to hand over; the server refuses it.
+    item.storage === 'text' &&
+    USABLE_ITEM_STATUSES.has(item.status) &&
+    item.excludedFromAi !== true
+  );
 }
 
 /**
