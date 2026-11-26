@@ -390,6 +390,66 @@ function metaContent(document, selectors) {
   return '';
 }
 
+// `text` without its CSS comments, scanned by index, not by a pattern that could backtrack.
+function withoutCssComments(text) {
+  let result = '';
+  let at = 0;
+  for (;;) {
+    const start = text.indexOf('/*', at);
+    if (start === -1) return result + text.slice(at);
+    result += text.slice(at, start);
+    const end = text.indexOf('*/', start + 2);
+    if (end === -1) return result;
+    at = end + 2;
+  }
+}
+
+/**
+ * Whether the markup of an element hides it: the `hidden` attribute, or an inline `display: none`
+ * or `visibility: hidden`. The inline style is read here, not by the DOM's style parser, which
+ * does not know an upper-case property name (`DISPLAY:none` reads as empty) although a browser
+ * hides the text just the same. Spacing, case, `!important` and comments do not matter.
+ *
+ * @param {Element} element
+ * @returns {boolean}
+ */
+function hidesItself(element) {
+  if (element.hasAttribute('hidden')) return true;
+  const style = element.getAttribute('style');
+  if (!style) return false;
+  return withoutCssComments(style)
+    .split(';')
+    .some(declaration => {
+      const colon = declaration.indexOf(':');
+      if (colon === -1) return false;
+      const name = declaration.slice(0, colon).trim().toLowerCase();
+      const value = declaration
+        .slice(colon + 1)
+        .replace(/!\s*important/i, '')
+        .trim()
+        .toLowerCase();
+      return (
+        (name === 'display' && value === 'none') ||
+        (name === 'visibility' && (value === 'hidden' || value === 'collapse'))
+      );
+    });
+}
+
+/**
+ * Removes what the page itself hides, before anything reads the text. Readability would drop an
+ * inline `display: none` on an article page, but only when the style parser understands it, and
+ * the selector fallback does not look at all. The DOM here applies no stylesheet, so only what the
+ * markup says counts; text hidden by a class, a stylesheet, or by size, position, opacity or colour
+ * cannot be told from visible text this way.
+ *
+ * @param {Document} document - mutated
+ */
+function dropHiddenElements(document) {
+  for (const element of document.querySelectorAll('[hidden], [style]')) {
+    if (hidesItself(element)) element.remove();
+  }
+}
+
 /**
  * The page reader's selector rules: strip chrome, then take the first known
  * content container, or `body` with more removed.
@@ -531,6 +591,9 @@ export function extractHtmlPage(html, { url, maxChars = MAX_DOCUMENT_CHARS } = {
   ]);
   const metaSiteName = metaContent(document, ['meta[property="og:site_name"]']);
   const language = document.documentElement?.getAttribute('lang') || '';
+
+  // Before Readability and before the selector fallback read a word of it.
+  dropHiddenElements(document);
 
   let article = null;
   try {

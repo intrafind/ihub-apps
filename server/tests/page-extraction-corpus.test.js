@@ -37,6 +37,9 @@ const cases = [...loadCorpus().cases, ...loadHiddenCorpus().cases];
  *
  * - `meta-description` is returned on purpose (it says what a page is about), and marked as the
  *   page's own words by the `sourceNotice` of the result.
+ * - `display-none` is closed on every kind of page, those Readability reads as an article and
+ *   those the selector fallback reads (the corpus page "Malicious tool result" is one): see "hidden
+ *   text on a page with and without an article" below.
  * - `white-text` is open and cannot be closed by reading the DOM: the extraction applies no CSS
  *   layout, so text that is only invisible by its colour or size looks like any other text.
  */
@@ -48,16 +51,6 @@ const READER = {
   'display-none': null,
   'image-alt': null
 };
-
-/**
- * KNOWN GAP. A page of which Readability finds no article (a short page, a listing, a landing page)
- * is read by the selector fallback, and that keeps text hidden by an inline `display:none`, the
- * `hidden` attribute or `visibility:hidden`; on an article page they are dropped. In the corpus the
- * page "Malicious tool result", whose body is one short `<pre>`, is such a page. When the fallback
- * drops hidden text, remove the template from this set, and flip the expectations in "hidden text
- * on a page with and without an article" below.
- */
-const READER_KEEPS_DISPLAY_NONE = new Set(['Malicious tool result']);
 
 /**
  * Whether the payload is in the text of the website corpus extraction. It keeps what a retrieval
@@ -86,10 +79,7 @@ function carries(text, canary) {
   );
 }
 
-const expectedInReader = c =>
-  c.delivery === 'display-none' && READER_KEEPS_DISPLAY_NONE.has(c.template)
-    ? 'markdown'
-    : READER[c.delivery];
+const expectedInReader = c => READER[c.delivery];
 
 const urlOf = c => `https://intranet.example/notes/${c.page}`;
 
@@ -136,30 +126,62 @@ describe('the website corpus extraction (corpus sizer)', () => {
 });
 
 describe('hidden text on a page with and without an article', () => {
-  const hidden =
-    '<div style="display:none">HIDDEN-STYLE</div><div hidden>HIDDEN-ATTRIBUTE</div>' +
-    '<span style="visibility:hidden">HIDDEN-VISIBILITY</span><p aria-hidden="true">HIDDEN-ARIA</p>';
+  // Every way the markup hides an element that a browser honours without a stylesheet: the hidden
+  // attribute and an inline display or visibility, in any case, spacing and with !important or a
+  // comment. The upper-case spellings once passed on an article page: the DOM's style parser
+  // does not know an upper-case property name, so Readability took the element for visible.
+  const hiddenKinds = [
+    ['display:none', '<div style="display:none">HIDDEN-1</div>'],
+    ['an upper-case property name', '<div style="DISPLAY:none">HIDDEN-2</div>'],
+    ['upper-case, spaced and !important', '<div style="Display : None !IMPORTANT">HIDDEN-3</div>'],
+    ['a comment in the value', '<div style="display:/* x */none">HIDDEN-4</div>'],
+    ['the hidden attribute', '<div hidden>HIDDEN-5</div>'],
+    ['visibility:hidden in capitals', '<span style="VISIBILITY : HIDDEN">HIDDEN-6</span>'],
+    ['visibility:collapse', '<span style="visibility:collapse">HIDDEN-7</span>'],
+    ['among other declarations', '<p style="color:red;DISPLAY:none;margin:0">HIDDEN-8</p>'],
+    ['a hidden parent', '<div style="display:none"><p>HIDDEN-9 <a href="/x">link</a></p></div>'],
+    ['aria-hidden', '<p aria-hidden="true">HIDDEN-10</p>']
+  ];
+  const visibleKinds = [
+    '<p style="display:block">VISIBLE-1</p>',
+    '<p style="visibility:visible">VISIBLE-2</p>',
+    '<p hidden-note="x">VISIBLE-3</p>',
+    '<p style="content:\'display:none\'">VISIBLE-4</p>',
+    '<p style="display">VISIBLE-5</p>'
+  ];
+
+  const sentences = 'The regional team reviewed the quarter and agreed on the next steps. ';
+  const pages = {
+    'an article page (Readability)': {
+      extractor: 'readability',
+      wrap: body =>
+        `<html><body><article><h1>Quarterly review</h1><p>${sentences.repeat(12)}</p>${body}<p>${sentences.repeat(4)}</p></article></body></html>`
+    },
+    'a page without an article (selector fallback)': {
+      extractor: 'selectors',
+      wrap: body =>
+        `<html><body><nav>Menu</nav><div class="content"><h2>Products</h2><ul><li>One</li><li>Two</li></ul>${body}</div></body></html>`
+    }
+  };
   const read = html => extractHtmlPage(html, { url: 'https://intranet.example/page' });
 
-  it('drops all four kinds on an article page, which Readability reads', () => {
-    const sentences = 'The regional team reviewed the quarter and agreed on the next steps. ';
-    const page = read(
-      `<html><body><article><h1>Quarterly review</h1><p>${sentences.repeat(12)}</p>${hidden}<p>${sentences.repeat(4)}</p></article></body></html>`
-    );
-    assert.equal(page.extractor, 'readability');
-    assert.doesNotMatch(page.markdown, /HIDDEN-/);
-  });
+  for (const [kind, { extractor, wrap }] of Object.entries(pages)) {
+    describe(kind, () => {
+      for (const [name, html] of hiddenKinds) {
+        it(`drops ${name}`, () => {
+          const page = read(wrap(html));
+          assert.equal(page.extractor, extractor);
+          assert.doesNotMatch(page.markdown, /HIDDEN-\d/);
+        });
+      }
 
-  it('on a page without an article, the selector fallback drops aria-hidden text but KEEPS the other three (known gap)', () => {
-    const page = read(
-      `<html><body><nav>Menu</nav><div class="content"><h2>Products</h2><ul><li>One</li><li>Two</li></ul>${hidden}</div></body></html>`
-    );
-    assert.equal(page.extractor, 'selectors');
-    assert.doesNotMatch(page.markdown, /HIDDEN-ARIA/);
-    // KNOWN GAP: when the fallback learns to drop these, change the three matches to
-    // doesNotMatch and remove 'Malicious tool result' from READER_KEEPS_DISPLAY_NONE.
-    assert.match(page.markdown, /HIDDEN-STYLE/);
-    assert.match(page.markdown, /HIDDEN-ATTRIBUTE/);
-    assert.match(page.markdown, /HIDDEN-VISIBILITY/);
-  });
+      it('keeps text whose style does not hide it', () => {
+        const page = read(wrap(visibleKinds.join('')));
+        assert.equal(page.extractor, extractor);
+        for (let n = 1; n <= visibleKinds.length; n++) {
+          assert.match(page.markdown, new RegExp(`VISIBLE-${n}`));
+        }
+      });
+    });
+  }
 });
