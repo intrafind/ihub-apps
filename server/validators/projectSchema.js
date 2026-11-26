@@ -144,6 +144,33 @@ export const itemProvenanceSchema = z
   })
   .passthrough();
 
+/**
+ * The stored original file of an upload (kept when `platform.uploads.storageMode`
+ * is `original_and_text`). Encrypted like the text; the wrapped key never leaves
+ * the server. `bytes` is the stored size, `size` the file's own.
+ */
+export const itemOriginalSchema = z
+  .object({
+    blobKey: z.string().min(1).max(200),
+    bytes: z.number().int().nonnegative(),
+    size: z.number().int().nonnegative(),
+    contentType: z.string().max(200),
+    name: z.string().max(300),
+    sha256: z.string().max(64),
+    format: z.string().max(64),
+    segmentBytes: z.number().int().positive().optional(),
+    key: z
+      .object({
+        provider: z.string().max(64),
+        keyId: z.string().max(128),
+        wrapped: z.string().max(4096)
+      })
+      .strict(),
+    tenant: z.string().max(100).optional(),
+    storedAt: z.string()
+  })
+  .strict();
+
 /** The stored text block of a `storage: 'text'` item. The wrapped key never leaves the server. */
 export const itemTextSchema = z
   .object({
@@ -196,6 +223,7 @@ export const projectItemSchema = z
       .nullable()
       .optional(),
     text: itemTextSchema.nullable().optional(),
+    originalFile: itemOriginalSchema.optional(),
     cache: z.object({ ttlSeconds: z.number().int().positive() }).strict().optional(),
     /** The item's own refresh TTL (#3536); absent takes the project's. */
     refreshTtl: zRefreshTtl.optional(),

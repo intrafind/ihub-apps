@@ -12,6 +12,7 @@ import {
   localizedText
 } from '../utils/projectItems';
 import { refreshSummary, takesRefreshTtl } from '../utils/refreshTtl';
+import { canUseProjectItemInApp } from '../../chat/utils/useInApp';
 import ItemEstimate from './ItemEstimate';
 import ItemProvenance from './ItemProvenance';
 import ProjectItemStatus from './ProjectItemStatus';
@@ -91,6 +92,11 @@ function AiAccessBadge({ item }) {
  *   for a link item, what it points at (the kinds of `EDITABLE_ITEM_KINDS`).
  * @param {(item: Object) => void} [props.onRemove]
  * @param {(item: Object) => void} [props.onTransfer] - Move or copy into another project.
+ * @param {(item: Object) => void} [props.onUseInApp] - "Use in app…": a new chat of another app
+ *   with a copy of the document attached. Offered on a read-only list too (it changes nothing
+ *   here), and only for documents whose text is there and that are not "Not for AI".
+ * @param {(item: Object) => void} [props.onDownloadOriginal] - Download the original file of a
+ *   document that kept one (`item.hasOriginal`); offered on a read-only list too.
  * @param {Set<string>} [props.selectedIds] - With `onSelectionChange`, a checkbox column
  *   selects items for a bulk action the page offers.
  * @param {(ids: Set<string>) => void} [props.onSelectionChange]
@@ -110,6 +116,8 @@ function ProjectItemsTable({
   onEdit,
   onRemove,
   onTransfer,
+  onUseInApp,
+  onDownloadOriginal,
   selectedIds,
   onSelectionChange,
   estimates
@@ -241,6 +249,22 @@ function ProjectItemsTable({
       disabled: item => busyItemId === item.id,
       onClick: item => onDocumentAction(id, item)
     })),
+    {
+      id: 'useInApp',
+      label: t('projects.items.actions.useInApp', 'Use in app…'),
+      icon: 'chat-bubble-left-right',
+      hidden: item => typeof onUseInApp !== 'function' || !canUseProjectItemInApp(item),
+      disabled: item => busyItemId === item.id,
+      onClick: item => onUseInApp(item)
+    },
+    {
+      id: 'downloadOriginal',
+      label: t('projects.items.actions.downloadOriginal', 'Download original'),
+      icon: 'download',
+      hidden: item => typeof onDownloadOriginal !== 'function' || item.hasOriginal !== true,
+      busy: item => busyItemId === item.id,
+      onClick: item => onDownloadOriginal(item)
+    },
     {
       id: 'retry',
       label: t('projects.items.actions.retry', 'Retry'),

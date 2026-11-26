@@ -33,12 +33,39 @@ const NOT_EDITING = { draft: null, loading: false, saving: false, error: null };
  * @param {(text: string) => Promise<Object|undefined>} [props.onSave] - Stores the
  *   new text; rejects with the error to show. Without it the dialog is read-only.
  * @param {(error: Error) => string} props.errorMessage
+ * @param {(item: Object) => Promise<void>|void} [props.onDownloadOriginal] - Adds "Download
+ *   original" to the header of a document that kept its original file (`item.hasOriginal`).
+ *   The button is disabled until the promise settles.
+ * @param {string|null} [props.downloadError] - Why the last download failed; shown in the
+ *   dialog after a download started here (the page's own alert sits under the dialog).
  * @returns {JSX.Element|null}
  */
-function ProjectItemTextDialog({ projectId, item, onClose, fetchText, onSave, errorMessage }) {
+function ProjectItemTextDialog({
+  projectId,
+  item,
+  onClose,
+  fetchText,
+  onSave,
+  errorMessage,
+  onDownloadOriginal,
+  downloadError = null
+}) {
   const { t } = useTranslation();
   const [state, setState] = useState(EMPTY_STATE);
   const [editing, setEditing] = useState(NOT_EDITING);
+  // A download started from this dialog: its error shows here, and the button
+  // waits for it (no parallel downloads).
+  const [download, setDownload] = useState({ itemId: null, busy: false });
+  const downloadOriginalHere = async () => {
+    setDownload({ itemId: item.id, busy: true });
+    try {
+      await onDownloadOriginal(item);
+    } finally {
+      setDownload({ itemId: item.id, busy: false });
+    }
+  };
+  const showDownloadError =
+    Boolean(downloadError) && download.itemId === item?.id && !download.busy;
 
   useEffect(() => {
     if (!item) return undefined;
@@ -107,11 +134,24 @@ function ProjectItemTextDialog({ projectId, item, onClose, fetchText, onSave, er
         >
           {t('projects.preview.title', 'Text of "{{name}}"', { name: item?.name ?? '' })}
         </h3>
+        {typeof onDownloadOriginal === 'function' && item?.hasOriginal === true && (
+          <button
+            type="button"
+            onClick={() => void downloadOriginalHere()}
+            disabled={download.busy}
+            aria-busy={download.busy}
+            className="ml-auto inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium text-gray-700 dark:text-gray-200 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 disabled:opacity-60 disabled:cursor-wait"
+            data-testid="project-item-download-original"
+          >
+            <Icon name="download" size="sm" />
+            {t('projects.items.actions.downloadOriginal', 'Download original')}
+          </button>
+        )}
         {editable && !isEditing && !state.loading && !state.error && (
           <button
             type="button"
             onClick={() => void startEditing()}
-            className="ml-auto inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium text-gray-700 dark:text-gray-200 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600"
+            className={`${item?.hasOriginal === true && onDownloadOriginal ? '' : 'ml-auto '}inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium text-gray-700 dark:text-gray-200 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600`}
           >
             <Icon name="pencil" size="sm" />
             {t('projects.preview.edit', 'Edit text')}
@@ -121,12 +161,22 @@ function ProjectItemTextDialog({ projectId, item, onClose, fetchText, onSave, er
           type="button"
           onClick={onClose}
           aria-label={t('common.close', 'Close')}
-          className={`${editable && !isEditing && !state.loading && !state.error ? '' : 'ml-auto '}text-gray-500 hover:text-gray-600 dark:hover:text-gray-200`}
+          className={`${
+            (editable && !isEditing && !state.loading && !state.error) ||
+            (item?.hasOriginal === true && typeof onDownloadOriginal === 'function')
+              ? ''
+              : 'ml-auto '
+          }text-gray-500 hover:text-gray-600 dark:hover:text-gray-200`}
         >
           <Icon name="x" className="h-5 w-5" />
         </button>
       </div>
       <div className="p-6 overflow-y-auto">
+        {showDownloadError && (
+          <p role="alert" className="mb-3 text-sm text-red-600 dark:text-red-400">
+            {downloadError}
+          </p>
+        )}
         {(state.loading || editing.loading) && (
           <p className="text-sm text-gray-500 dark:text-gray-400">
             {t('common.loading', 'Loading...')}

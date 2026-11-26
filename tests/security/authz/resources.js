@@ -617,7 +617,12 @@ export const RESOURCES = [
       },
       { route: 'GET /api/projects/:projectId/items/:itemId' },
       { route: 'PATCH /api/projects/:projectId/items/:itemId', data: { name: 'pwned.txt' } },
+      {
+        route: 'POST /api/projects/:projectId/items/_import',
+        multipart: { file: textFile('pwned.txt', 'pwned') }
+      },
       { route: 'GET /api/projects/:projectId/items/:itemId/text' },
+      { route: 'GET /api/projects/:projectId/items/:itemId/original' },
       { route: 'PUT /api/projects/:projectId/items/:itemId/text', data: { text: 'pwned' } },
       { route: 'POST /api/projects/:projectId/items/:itemId/_refresh', data: {} },
       { route: 'DELETE /api/projects/:projectId/items/:itemId' },

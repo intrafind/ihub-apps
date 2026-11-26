@@ -856,7 +856,7 @@
           "serverTextOnly": "Only the text (the server extracts it and discards the file)",
           "clientTextOnly": "Only the text, extracted in the browser (files never leave the device)"
         },
-        "storageModeHelp": "An app can override this in its settings. Word, PowerPoint, Excel and PDF files can only be used as templates or filled in while the original is kept.",
+        "storageModeHelp": "Also applies to files uploaded to projects. An app can override this for its chats, not for projects. Word, PowerPoint, Excel and PDF files can only be used as templates or filled in while the original is kept.",
         "originalRetentionDays": "Keep original files (days)",
         "originalRetentionDaysHelp": "After this many days only the text of a chat file stays, until the chat itself is deleted. Files attached to scheduled tasks are kept as long as the task exists. 0 keeps originals as long as the chat.",
         "evict": "Make room by removing the oldest originals",
@@ -10448,7 +10448,11 @@
       "sheets": "{{count}} sheets",
       "open": "Open",
       "share": "Share",
-      "shareNamed": "Share {{name}}"
+      "shareNamed": "Share {{name}}",
+      "moreNamed": "More actions for {{name}}",
+      "more": "More actions",
+      "useInApp": "Use in app…",
+      "copyToProject": "Copy to project…"
     },
     "readAloud": "Read aloud",
     "readAloudLoading": "Loading audio… click to cancel",
@@ -13052,7 +13056,8 @@
       "linkFromAppsDetail": "Comes with one of your apps",
       "nothingToAdd": "This kind of item is not available here.",
       "ifinderProfile": "Search in",
-      "crawlOtherHosts": "Include files on other websites"
+      "crawlOtherHosts": "Include files on other websites",
+      "archiveHint": "A ZIP archive is unpacked: each supported file in it becomes a document."
     },
     "chatBar": {
       "inProject": "In project: {{name}}",
@@ -13155,7 +13160,9 @@
         "transfer": "Move or copy to…",
         "openInIFinder": "Open in iFinder",
         "edit": "Edit",
-        "schedule": "Refresh schedule"
+        "schedule": "Refresh schedule",
+        "downloadOriginal": "Download original",
+        "useInApp": "Use in app…"
       },
       "add": "Add documents",
       "columns": {
@@ -13288,7 +13295,10 @@
       "pickedFrom": "Picked from {{site}}",
       "snapshot": "text taken {{date}}",
       "uploaded": "Uploaded",
-      "linkedFrom": "Linked from {{project}}"
+      "linkedFrom": "Linked from {{project}}",
+      "fromArchive": "From {{archive}}",
+      "fromChat": "From a chat",
+      "fromShare": "From a shared file"
     },
     "roles": {
       "admin": "From an app",
@@ -13520,6 +13530,36 @@
       "refreshingNotice_other": "Refreshing {{count}} outdated documents. Answers use the stored text until they are done.",
       "outdatedNotice_one": "{{count}} document is outdated. It is refreshed the next time the project is used in a chat or a search; answers use the stored text until then.",
       "outdatedNotice_other": "{{count}} documents are outdated. They are refreshed the next time the project is used in a chat or a search; answers use the stored text until then."
+    },
+    "import": {
+      "title": "Copy to project",
+      "subtitle": "A copy of “{{name}}” is added to the project as a document. It stays there when this chat is deleted.",
+      "loading": "Loading your projects…",
+      "noProjects": "You have no project you can add documents to. Ask the owner of a project to make you an editor.",
+      "choose": "Project",
+      "newProject": "New project",
+      "newProjectName": "Name of the new project",
+      "newProjectHint": "It stays private until you share it.",
+      "nameRequired": "Enter a name for the new project.",
+      "nameTooLong": "The name is too long.",
+      "whoSees": "Who sees it: {{audience}}",
+      "skippedEntry": "{{name}}: {{reason}}",
+      "copying": "Copying…",
+      "submit": "Copy",
+      "addedTo_one": "{{count}} document added to {{project}}.",
+      "addedTo_other": "{{count}} documents added to {{project}}.",
+      "added_one": "{{count}} document added.",
+      "added_other": "{{count}} documents added.",
+      "skipped_one": "{{count}} skipped:",
+      "skipped_other": "{{count}} skipped:",
+      "openProject": "Open project",
+      "audience": {
+        "everyone": "Everyone signed in",
+        "catalog": "Everyone signed in (published in the catalog)",
+        "members_one": "{{count}} member",
+        "members_other": "{{count}} members",
+        "private": "Only you"
+      }
     }
   },
   "integrationScopes": {
@@ -13628,7 +13668,9 @@
     "pageNotFound": "This file could not be found.",
     "promptRequest": "The artifact wants to ask in the chat:",
     "promptSend": "Send",
-    "promptBusy": "An answer is still being written. Send once it is done."
+    "promptBusy": "An answer is still being written. Send once it is done.",
+    "useInApp": "Use in app…",
+    "copyToProject": "Copy to project…"
   },
   "chatFiles": {
     "deleted": "{{name}} deleted.",
@@ -14446,6 +14488,21 @@
       "userApps": "You may not create personal apps.",
       "share": "You may not share personal apps.",
       "ownerMayNotShare": "The owner of this app may not share it, so it cannot be shared."
+    }
+  },
+  "useInApp": {
+    "title": "Use in app",
+    "subtitle": "A new chat of the app you pick starts with a copy of “{{name}}” attached.",
+    "search": "Search apps",
+    "loading": "Loading apps…",
+    "loadFailed": "The apps could not be loaded. Please try again.",
+    "noApps": "None of your apps accepts this kind of file.",
+    "noMatch": "No app matches your search.",
+    "attach": {
+      "modelCannot": "The file could not be attached: the selected model cannot take this kind of file.",
+      "noServerFiles": "The document could not be attached: this installation does not keep chat files.",
+      "refused": "The file could not be attached: {{detail}}",
+      "failed": "The file could not be attached. Please try again."
     }
   }
 }

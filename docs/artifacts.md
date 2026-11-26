@@ -527,6 +527,23 @@ An artifact goes when its scope goes, and when whatever named it goes:
 There is no age-based sweep of the namespace itself; artifacts are reclaimed
 through their scope.
 
+### Keeping a file beyond its chat
+
+Because an artifact lives and dies with its chat, a file someone wants to keep
+or reuse is **copied** out of it, never linked:
+
+- **Copy to project** stores it in a project as an upload
+  (`POST /api/projects/:projectId/items/_import` with a `chat-artifact`
+  source); a ZIP archive is unpacked. See
+  [Projects → Copying a generated file into a project](projects.md#copying-a-generated-file-into-a-project).
+- **Use in app** attaches it as a file to a new chat of another app
+  (`POST /api/chats/:chatId/files` with a `chat-artifact` source). See
+  [Chat files → Files copied from iHub](chat-files.md#files-copied-from-ihub-use-in-app).
+
+Both read the artifact with the caller's own access to its chat (or to a share
+that names it, `services/artifacts/artifactAccess.js`), and both survive the
+chat's deletion.
+
 ## Reading a chat's artifacts in a later turn
 
 The transcript keeps only an artifact's descriptor, so its content never goes back to the model

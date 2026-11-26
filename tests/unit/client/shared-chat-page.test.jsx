@@ -75,6 +75,18 @@ jest.mock('../../../client/src/shared/components/LoadingSpinner', () => ({
   default: () => <span>spinner</span>
 }));
 
+// "Use in app" / "Copy to project" have their own suites; here the page only has to
+// render the dialogs the hook hands it, in every branch that offers the actions.
+jest.mock('../../../client/src/features/chat/hooks/useArtifactReuse', () => ({
+  __esModule: true,
+  default: () => ({
+    onUseInApp: () => {},
+    onCopyToProject: () => {},
+    menuItems: () => [],
+    elements: <div data-testid="artifact-reuse-elements" />
+  })
+}));
+
 const SharedChatPage = require('../../../client/src/features/chat/pages/SharedChatPage').default;
 
 const shareBody = {
@@ -236,4 +248,12 @@ test('?embed=1 shows the artifact without any toolbar', async () => {
   mount('/share/shr_one?embed=1');
   await waitFor(() => expect(screen.getByTestId('artifact-preview')).toHaveTextContent('art1'));
   expect(screen.queryByTestId('artifact-viewer-toolbar')).not.toBeInTheDocument();
+});
+
+test('a shared chat renders the reuse dialogs its cards and pane open', async () => {
+  auth.isAuthenticated = true;
+  auth.isLoading = false;
+  mount();
+  await waitFor(() => expect(screen.getByText('Up and to the right.')).toBeInTheDocument());
+  expect(screen.getByTestId('artifact-reuse-elements')).toBeInTheDocument();
 });

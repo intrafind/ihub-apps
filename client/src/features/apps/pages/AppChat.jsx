@@ -69,6 +69,8 @@ import useChatFilePreUpload from '../../chat/hooks/useChatFilePreUpload';
 import ChatFilesContext from '../../chat/contexts/ChatFilesContext';
 import { attachStoredFileToMail, mailAttachState } from '../../chat/utils/attachToMail';
 import { consumePendingChatStart } from '../../chat/startChatHandoff';
+import useSourceFileAttachment from '../hooks/useSourceFileAttachment';
+import useArtifactReuse from '../../chat/hooks/useArtifactReuse';
 import useMagicPrompt from '../../../shared/hooks/useMagicPrompt';
 import { useConnectResume } from '../../integrations/connect/useConnectResume';
 import useNextcloudEmbedAttachments from '../../nextcloud-embed/hooks/useNextcloudEmbedAttachments';
@@ -370,6 +372,9 @@ function AppChat({
   // durable chat.
   const [showShare, setShowShare] = useState(false);
   const [sharingArtifact, setSharingArtifact] = useState(null);
+  // A file "Use in app…" handed to this chat (`startChatHandoff`'s `attachment`), waiting
+  // to be copied into it (`useSourceFileAttachment`). `key` tells two hand-overs apart.
+  const [pendingSourceAttachment, setPendingSourceAttachment] = useState(null);
   const auth = useOptionalAuth();
   // A short link belongs to the signed-in user who creates it.
   const signedOut = auth ? auth.isAuthenticated !== true : false;
@@ -646,6 +651,9 @@ function AppChat({
     if (handoff.files) {
       fileUploadHandler.setSelectedFile(handoff.files);
     }
+    if (handoff.attachment?.source) {
+      setPendingSourceAttachment({ key: Date.now(), attachment: handoff.attachment });
+    }
     const settings = handoff.settings;
     if (!settings) return;
     if (Array.isArray(settings.enabledTools)) setEnabledTools(settings.enabledTools);
@@ -780,24 +788,30 @@ function AppChat({
    *
    * @returns {string} The new chat id.
    */
-  const startNewChat = useCallback(() => {
-    if (leavingTemporaryChatRef.current) {
-      deleteChat(chatId).catch(() => {
-        // Gone already, or never stored: the retention sweep is the backstop.
-      });
-    }
-    const nextChatId = embedded ? mintChatId() : resetChatId(appId);
-    // Minted here, so the store has never heard of it: skip the hydration
-    // round trip that could only 404.
-    mintedChatIdsRef.current.add(nextChatId);
-    // Leaving `/c/:chatId` below re-resolves the chat; this is the one it
-    // has to land on.
-    if (!embedded) freshChatRef.current = { appId, id: nextChatId };
-    setChatId(nextChatId);
-    // `?project=` started the chat being left; the new one is not in it.
-    if (routeChatId || projectParam) navigate(`/apps/${appId}`, { replace: true });
-    return nextChatId;
-  }, [appId, navigate, routeChatId, embedded, chatId, projectParam]);
+  // `options.keepTemporary`: the caller deletes the temporary chat being left
+  // itself, later ("Use in app" in this same app still copies a file out of it).
+  // Called as an event handler too, so only a plain `true` counts.
+  const startNewChat = useCallback(
+    options => {
+      if (leavingTemporaryChatRef.current && options?.keepTemporary !== true) {
+        deleteChat(chatId).catch(() => {
+          // Gone already, or never stored: the retention sweep is the backstop.
+        });
+      }
+      const nextChatId = embedded ? mintChatId() : resetChatId(appId);
+      // Minted here, so the store has never heard of it: skip the hydration
+      // round trip that could only 404.
+      mintedChatIdsRef.current.add(nextChatId);
+      // Leaving `/c/:chatId` below re-resolves the chat; this is the one it
+      // has to land on.
+      if (!embedded) freshChatRef.current = { appId, id: nextChatId };
+      setChatId(nextChatId);
+      // `?project=` started the chat being left; the new one is not in it.
+      if (routeChatId || projectParam) navigate(`/apps/${appId}`, { replace: true });
+      return nextChatId;
+    },
+    [appId, navigate, routeChatId, embedded, chatId, projectParam]
+  );
   // Whether the chat on screen is a temporary chat the store already holds —
   // the one `startNewChat` deletes on the way out. A ref, synced after each
   // commit further down once both halves are known.
@@ -1494,6 +1508,35 @@ function AppChat({
     }
   });
 
+  // Copy the file "Use in app…" handed over into this new chat and show it in the composer
+  // like a picked cloud file; nothing is sent.
+  useSourceFileAttachment({
+    pending: pendingSourceAttachment,
+    ready: isChatReadyForDocument({
+      app,
+      appId,
+      modelsLoading,
+      settingsInitializedFor,
+      model: currentModelObject
+    }),
+    chatId,
+    app,
+    currentModel: currentModelObject,
+    fileUploadHandler,
+    addSystemMessage,
+    serverFiles: { enabled: chatFileUploads.enabled, ephemeral },
+    onDone: () => {
+      // A temporary chat the file was copied out of goes once the copy is made.
+      const leftTemporary = pendingSourceAttachment?.deleteAfter;
+      if (leftTemporary) {
+        deleteChat(leftTemporary).catch(() => {
+          // Gone already: the retention sweep is the backstop.
+        });
+      }
+      setPendingSourceAttachment(null);
+    }
+  });
+
   // Auto-start conversation if app.autoStart is enabled
   const autoStartTriggered = useRef(false);
 
@@ -2030,6 +2073,30 @@ function AppChat({
     },
     [navigate, embedded, openInNewTab]
   );
+
+  // "Use in app…" and "Copy to project…" on a generated file of this chat. Another app
+  // opens through the handoff; this same app starts a new chat here and attaches the
+  // copy at once. Not from an embedded chat: another app's chat opens through the router.
+  const useFileInThisApp = useCallback(
+    attachment => {
+      // A temporary chat is deleted when it is left, but the copy still reads
+      // the file out of it: it goes once the copy is made (`onDone` above).
+      const leftTemporary = leavingTemporaryChatRef.current ? chatId : null;
+      startNewChat({ keepTemporary: true });
+      setPendingSourceAttachment({
+        key: Date.now(),
+        attachment,
+        ...(leftTemporary ? { deleteAfter: leftTemporary } : {})
+      });
+    },
+    [startNewChat, chatId]
+  );
+  const artifactReuse = useArtifactReuse({
+    owner: chatId ? { chatId } : null,
+    enabled: !embedded,
+    currentAppId: appId,
+    onUseInCurrentApp: useFileInThisApp
+  });
 
   const clearChat = () => {
     if (
@@ -3205,6 +3272,8 @@ function AppChat({
             ? artifact => setSharingArtifact(artifact)
             : null
         }
+        onUseInApp={artifactReuse.onUseInApp}
+        onCopyToProject={artifactReuse.onCopyToProject}
         newTabUrl={artifact =>
           chatId
             ? `/artifacts/${encodeURIComponent(chatId)}/${encodeURIComponent(artifact.id)}`
@@ -3630,6 +3699,7 @@ function AppChat({
               />
             </Suspense>
           )}
+          {artifactReuse.elements}
           {sharingArtifact && (
             <ArtifactShareDialog
               isOpen

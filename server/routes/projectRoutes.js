@@ -42,10 +42,13 @@ import {
   addUploadedItem,
   isMultipart,
   receiveUpload,
+  receiveImport,
+  importItems,
   refreshItem,
   replaceItemText,
   registerProjectPickerRoutes,
-  sendItemText
+  sendItemText,
+  sendItemOriginal
 } from './projectItemRoutes.js';
 import {
   UNSHAREABLE_GROUPS,
@@ -773,6 +776,68 @@ export default function registerProjectRoutes(app) {
     }
   );
 
+  /**
+   * @swagger
+   * /api/projects/{projectId}/items/_import:
+   *   post:
+   *     summary: Import a file or a chat artifact into a project
+   *     description: >-
+   *       Adds a file as an upload: multipart with the file in `file`, or JSON
+   *       `{ "source": { "kind": "chat-artifact", "ref": { "chatId", "artifactId" } } }`
+   *       (or `{ "shareId", "artifactId" }` for a chat shared with the caller) to copy a
+   *       generated file of a chat ("Copy to project"). A ZIP archive becomes one document
+   *       per file it holds. The copy does not depend on the chat. Needs the edit role.
+   *     tags:
+   *       - Projects
+   *     parameters:
+   *       - in: path
+   *         name: projectId
+   *         required: true
+   *         schema: { type: string }
+   *     responses:
+   *       202:
+   *         description: >-
+   *           The documents added (being processed, like an upload) and the files skipped,
+   *           each with a `code` and a `message`.
+   *         content:
+   *           application/json:
+   *             schema:
+   *               type: object
+   *               properties:
+   *                 items: { type: array, items: { type: object } }
+   *                 skipped:
+   *                   type: array
+   *                   items:
+   *                     type: object
+   *                     properties:
+   *                       name: { type: string }
+   *                       code: { type: string }
+   *                       message: { type: string }
+   *       400:
+   *         description: A malformed request
+   *       413:
+   *         description: The file or the project is over a limit (`QUOTA_*`)
+   *       415:
+   *         description: >-
+   *           Nothing could be added: an image or another type projects do not take, or an
+   *           archive without one usable file (`UNSUPPORTED_TYPE`, `details.skipped`)
+   *       404:
+   *         description: No such project, or an artifact the caller cannot read (`NOT_FOUND`)
+   */
+  app.post(
+    route('/:projectId/items/_import'),
+    ...gate,
+    authenticatedOnly,
+    projectAccessRequired('edit'),
+    (req, res, next) => (isMultipart(req) ? receiveImport(req, res, next) : next()),
+    async (req, res) =>
+      importItems(req, res, {
+        project: req.project,
+        authorize: req.projectContext.authorize('edit'),
+        location: `/api/projects/${segment(req.project.id)}/items`
+      })
+  );
+
   app.get(
     route('/:projectId/items/:itemId'),
     ...gate,
@@ -818,6 +883,45 @@ export default function registerProjectRoutes(app) {
     authenticatedOnly,
     projectAccessRequired('use'),
     (req, res) => sendItemText(req, res, { project: req.project })
+  );
+
+  /**
+   * @swagger
+   * /api/projects/{projectId}/items/{itemId}/original:
+   *   get:
+   *     summary: The original file of a project document
+   *     description: >-
+   *       The file as it was uploaded, kept when `platform.uploads.storageMode` is
+   *       `original_and_text` (the default). Inline unless `download=1`. HTML, SVG and XML
+   *       are served sandboxed. `hasOriginal` on the item says whether there is one.
+   *     tags:
+   *       - Projects
+   *     parameters:
+   *       - in: path
+   *         name: projectId
+   *         required: true
+   *         schema: { type: string }
+   *       - in: path
+   *         name: itemId
+   *         required: true
+   *         schema: { type: string }
+   *       - in: query
+   *         name: download
+   *         schema: { type: string, enum: ['1'] }
+   *     responses:
+   *       200:
+   *         description: The file
+   *       404:
+   *         description: No such project or item (`NOT_FOUND`)
+   *       410:
+   *         description: Only the text is stored (`ORIGINAL_DISCARDED`)
+   */
+  app.get(
+    route('/:projectId/items/:itemId/original'),
+    ...gate,
+    authenticatedOnly,
+    projectAccessRequired('use'),
+    (req, res) => sendItemOriginal(req, res, { project: req.project })
   );
 
   // Load every document, count its tokens and say whether the text belongs

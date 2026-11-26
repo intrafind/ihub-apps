@@ -28,6 +28,7 @@ import ChatFilesContext from '../contexts/ChatFilesContext';
 import { useArtifactViewer } from '../contexts/ArtifactViewerContext';
 import { getLocalizedContent } from '../../../utils/localizeContent';
 import { useAuth } from '../../../shared/contexts/AuthContext';
+import useArtifactReuse from '../hooks/useArtifactReuse';
 
 // The tile colour a shared chat falls back to when its app is gone.
 const DEFAULT_APP_COLOR = '#4f46e5';
@@ -204,7 +205,7 @@ function ArtifactRow({ artifact, fetchBlob, onPreview }) {
 export default function SharedChatPage() {
   const { shareId } = useParams();
   const { t, i18n } = useTranslation();
-  const { isAuthenticated, isLoading: authLoading } = useAuth();
+  const { isAuthenticated, isLoading: authLoading, user } = useAuth();
   const [status, setStatus] = useState('loading');
   const [data, setData] = useState(null);
   const [artifacts, setArtifacts] = useState([]);
@@ -331,6 +332,14 @@ export default function SharedChatPage() {
     [artifactSource, uploadedSource, uploadedAccess, title]
   );
 
+  // "Use in app…" and "Copy to project…" of a shared file: a copy through the share
+  // (`{ shareId, artifactId }`), for a signed-in viewer only.
+  const signedIn = isAuthenticated === true && Boolean(user?.id) && user.id !== 'anonymous';
+  const artifactReuse = useArtifactReuse({
+    owner: shareId ? { shareId } : null,
+    enabled: signedIn && status === 'ready'
+  });
+
   // The document title and, for a public link, a robots hint that matches the
   // header the server sends: a public page must not end up in an index.
   useEffect(() => {
@@ -419,7 +428,16 @@ export default function SharedChatPage() {
   }
 
   if (share.target === 'artifact') {
-    return <SharedArtifactView share={share} formatDate={formatDate} />;
+    return (
+      <>
+        <SharedArtifactView
+          share={share}
+          formatDate={formatDate}
+          extraMore={artifactReuse.menuItems(share.artifact || {}, t)}
+        />
+        {artifactReuse.elements}
+      </>
+    );
   }
 
   const color = share.app?.color || DEFAULT_APP_COLOR;
@@ -436,6 +454,8 @@ export default function SharedChatPage() {
       newTabUrl={artifact =>
         `/share/${encodeURIComponent(shareId)}?artifact=${encodeURIComponent(artifact.id)}`
       }
+      onUseInApp={artifactReuse.onUseInApp}
+      onCopyToProject={artifactReuse.onCopyToProject}
     >
       <div className="h-dvh overflow-hidden bg-white dark:bg-gray-900 flex flex-col">
         {share.mode === 'public' && (
@@ -567,6 +587,7 @@ export default function SharedChatPage() {
             )}
           </main>
         </WorkspaceLayout>
+        {artifactReuse.elements}
       </div>
     </ArtifactViewerHost>
   );

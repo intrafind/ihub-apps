@@ -806,6 +806,51 @@ export const uploadAdminProjectItem = async (projectId, { file, name, pinned = f
 };
 
 /**
+ * Upload a ZIP archive into an admin project
+ * (`POST /api/admin/projects/{projectId}/items/_import`, multipart, field `file`):
+ * one item per supported entry, the others listed as skipped.
+ *
+ * @param {string} projectId
+ * @param {{file: File|Blob, pinned?: boolean}} upload
+ * @returns {Promise<{items: Array<Object>, skipped: Array<{name: string, code: string,
+ *   message: string}>}>} The server answers `202`; the items are `pending`.
+ */
+export const importAdminProjectItems = async (projectId, { file, pinned = false }) => {
+  const formData = new FormData();
+  formData.append('pinned', pinned ? 'true' : 'false');
+  formData.append('file', file);
+  const response = await makeAdminApiCall(`${adminProjectPath(projectId)}/items/_import`, {
+    method: 'POST',
+    body: formData,
+    // A large archive must not hit the default request timeout.
+    timeout: 0
+  });
+  const data = response.data || {};
+  return {
+    items: Array.isArray(data.items) ? data.items : [],
+    skipped: Array.isArray(data.skipped) ? data.skipped : []
+  };
+};
+
+/**
+ * The original file of an admin project item that kept one (`item.hasOriginal`).
+ *
+ * @param {string} projectId
+ * @param {string} itemId
+ * @returns {Promise<{blob: Blob, contentDisposition: string|null}>}
+ */
+export const fetchAdminProjectItemOriginal = async (projectId, itemId) => {
+  const response = await makeAdminApiCall(
+    `${adminProjectItemPath(projectId, itemId)}/original?download=1`,
+    { responseType: 'blob' }
+  );
+  return {
+    blob: response.data,
+    contentDisposition: response.headers?.['content-disposition'] || null
+  };
+};
+
+/**
  * Rename an item, change whether it is pinned, or change what a link item
  * (URL, page, iFinder document or search) points at.
  *

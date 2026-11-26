@@ -5,6 +5,12 @@ import { useCallback, useState } from 'react';
 import { usePlatformConfig } from '../contexts/PlatformConfigContext';
 import { modelInputCapabilities } from '../utils/modelInputCapabilities';
 import { storageProvidersBoundBy } from '../../../../shared/storageBindings.js';
+import {
+  DEFAULT_AUDIO_FORMATS,
+  DEFAULT_FILE_FORMATS,
+  DEFAULT_IMAGE_FORMATS,
+  DEFAULT_VIDEO_FORMATS
+} from '../../features/upload/utils/uploadFormats';
 
 /**
  * Whether the uploader takes a kind of file (image, audio, video) now, and whether the model alone
@@ -169,13 +175,7 @@ export function useFileUploadHandler() {
         blockedByModel: image.blockedByModel,
         resizeImages: imageConfig?.resizeImages !== false,
         maxResizeDimension: imageConfig?.maxResizeDimension || 1024,
-        supportedFormats: imageConfig?.supportedFormats || [
-          'image/jpeg',
-          'image/jpg',
-          'image/png',
-          'image/gif',
-          'image/webp'
-        ],
+        supportedFormats: imageConfig?.supportedFormats || [...DEFAULT_IMAGE_FORMATS],
         maxFileSizeMB: imageConfig?.maxFileSizeMB || 10
       },
       // Audio-specific settings
@@ -183,14 +183,7 @@ export function useFileUploadHandler() {
         enabled: audioUploadEnabled,
         blockedByModel: audio.blockedByModel,
         maxFileSizeMB: audioConfig?.maxFileSizeMB || 20,
-        supportedFormats: audioConfig?.supportedFormats || [
-          'audio/mpeg',
-          'audio/mp3',
-          'audio/wav',
-          'audio/flac',
-          'audio/ogg',
-          'audio/mp4'
-        ]
+        supportedFormats: audioConfig?.supportedFormats || [...DEFAULT_AUDIO_FORMATS]
       },
       // Video-specific settings
       videoUpload: {
@@ -198,11 +191,7 @@ export function useFileUploadHandler() {
         blockedByModel: video.blockedByModel,
         extractAudio: videoConfig?.extractAudio !== false,
         maxFileSizeMB: videoConfig?.maxFileSizeMB || 50,
-        supportedFormats: videoConfig?.supportedFormats || [
-          'video/mp4',
-          'video/webm',
-          'video/quicktime'
-        ]
+        supportedFormats: videoConfig?.supportedFormats || [...DEFAULT_VIDEO_FORMATS]
       },
       // File-specific settings
       fileUpload: {
@@ -212,58 +201,23 @@ export function useFileUploadHandler() {
         comments: fileConfig?.comments,
         speakerNotes: fileConfig?.speakerNotes,
         maxFileSizeMB: fileConfig?.maxFileSizeMB || 20,
-        supportedFormats: fileConfig?.supportedFormats || [
-          'text/plain',
-          'text/markdown',
-          'text/csv',
-          'text/vtt',
-          'application/json',
-          'text/html',
-          'text/css',
-          'text/javascript',
-          'application/javascript',
-          'application/pdf'
-        ]
+        supportedFormats: fileConfig?.supportedFormats || [...DEFAULT_FILE_FORMATS]
       },
       // Unified format fields for backward compatibility with components
       resizeImages: imageConfig?.resizeImages !== false,
       maxResizeDimension: imageConfig?.maxResizeDimension || 1024,
       supportedImageFormats: imageUploadEnabled
-        ? imageConfig?.supportedFormats || [
-            'image/jpeg',
-            'image/jpg',
-            'image/png',
-            'image/gif',
-            'image/webp'
-          ]
+        ? imageConfig?.supportedFormats || [...DEFAULT_IMAGE_FORMATS]
         : [],
       supportedAudioFormats: audioUploadEnabled
-        ? audioConfig?.supportedFormats || [
-            'audio/mpeg',
-            'audio/mp3',
-            'audio/wav',
-            'audio/flac',
-            'audio/ogg',
-            'audio/mp4'
-          ]
+        ? audioConfig?.supportedFormats || [...DEFAULT_AUDIO_FORMATS]
         : [],
       supportedVideoFormats: videoUploadEnabled
-        ? videoConfig?.supportedFormats || ['video/mp4', 'video/webm', 'video/quicktime']
+        ? videoConfig?.supportedFormats || [...DEFAULT_VIDEO_FORMATS]
         : [],
       extractAudioFromVideo: videoConfig?.extractAudio !== false,
       supportedFormats: fileUploadEnabled
-        ? fileConfig?.supportedFormats || [
-            'text/plain',
-            'text/markdown',
-            'text/csv',
-            'text/vtt',
-            'application/json',
-            'text/html',
-            'text/css',
-            'text/javascript',
-            'application/javascript',
-            'application/pdf'
-          ]
+        ? fileConfig?.supportedFormats || [...DEFAULT_FILE_FORMATS]
         : [],
       // The storage providers the cloud file picker offers
       cloudStorage

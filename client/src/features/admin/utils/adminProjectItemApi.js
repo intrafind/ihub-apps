@@ -8,6 +8,7 @@ import {
   fetchProjectPickerIFinderProfiles,
   fetchProjectPickerPages,
   getAdminApiErrorMessage,
+  importAdminProjectItems,
   previewProjectPickerUrl,
   searchProjectPickerIFinder,
   uploadAdminProjectItem
@@ -16,10 +17,12 @@ import {
 /**
  * What the shared "Add item" dialog calls for an admin project: the admin
  * item routes and the user picker endpoints. Admin projects get no cloud tab.
+ * A ZIP archive goes to the admin import route, which unpacks it.
  */
 export const ADMIN_ITEM_API = {
   addItem: (...args) => addAdminProjectItem(...args),
   uploadItem: (...args) => uploadAdminProjectItem(...args),
+  importItem: (projectId, upload) => importAdminProjectItems(projectId, upload),
   fetchPages: () => fetchProjectPickerPages(),
   searchIFinder: (query, options) => searchProjectPickerIFinder(query, options),
   fetchIFinderProfiles: () => fetchProjectPickerIFinderProfiles(),
