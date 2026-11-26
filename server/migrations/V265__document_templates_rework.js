@@ -42,7 +42,7 @@ const FONT_FACES = ['normal', 'bold', 'italics', 'bolditalics'];
 
 // Snapshot of the built-in placeholders and the field rules of
 // documentTemplateSchema.js as of V265. Do NOT replace with an import.
-const BUILT_IN_PLACEHOLDERS = [
+const BUILT_IN_PLACEHOLDERS = new Set([
   'content',
   'toc',
   'title',
@@ -53,7 +53,7 @@ const BUILT_IN_PLACEHOLDERS = [
   'company',
   'page',
   'pages'
-];
+]);
 const FIELD_NAME_PATTERN = /^[a-z][a-z0-9_]{0,31}$/;
 const MAX_FIELDS = 50;
 const PLACEHOLDER = /\{\{\s*([a-z][a-z0-9_]{0,31})\s*\}\}/gi;
@@ -193,7 +193,7 @@ export function fieldNamesOfWordTemplate(buffer) {
         const name = match[1].toLowerCase();
         if (
           FIELD_NAME_PATTERN.test(name) &&
-          !BUILT_IN_PLACEHOLDERS.includes(name) &&
+          !BUILT_IN_PLACEHOLDERS.has(name) &&
           !names.includes(name)
         ) {
           names.push(name);
@@ -204,52 +204,64 @@ export function fieldNamesOfWordTemplate(buffer) {
   return names;
 }
 
-export async function up(ctx) {
-  let migrated = 0;
-  for (const id of await ctx.listFiles(DIRECTORY)) {
-    const file = `${DIRECTORY}/${id}/${CONFIG_FILE}`;
-    if (!(await ctx.fileExists(file))) continue;
-    const { template, files, changed } = migrateTemplate(await ctx.readJson(file));
-    let fieldsChanged = false;
-    const word = template.docx?.template;
-    if (typeof word === 'string' && word) {
-      let buffer = null;
-      try {
-        buffer = await fs.readFile(join(ctx.contentsDir, DIRECTORY, id, word));
-      } catch {
-        ctx.warn(`${id}: the Word template ${word} could not be read; no fields were declared`);
-      }
-      if (buffer) {
-        const fields = { ...template.fields };
-        const skipped = [];
-        for (const name of fieldNamesOfWordTemplate(buffer)) {
-          if (Object.hasOwn(fields, name)) continue;
-          if (Object.keys(fields).length >= MAX_FIELDS) skipped.push(name);
-          else {
-            fields[name] = {};
-            fieldsChanged = true;
-          }
-        }
-        if (fieldsChanged) template.fields = fields;
-        if (skipped.length) {
-          ctx.warn(
-            `${id}: ${MAX_FIELDS} fields are declared; these placeholders stay plain text: ${skipped.join(', ')}`
-          );
-        }
-      }
-    }
-    if (changed || fieldsChanged) {
-      await ctx.writeJson(file, template);
-      migrated += 1;
-    }
-    for (const name of files) {
-      try {
-        await ctx.deleteFile(`${DIRECTORY}/${id}/${name}`);
-      } catch {
-        // Already gone: nothing to delete.
-      }
+/**
+ * Declares the placeholders of the template's Word file as fields, up to the
+ * limit; the rest are logged. Returns whether a field was added.
+ */
+async function declareWordFields(ctx, id, template) {
+  const word = template.docx?.template;
+  if (typeof word !== 'string' || !word) return false;
+  let buffer;
+  try {
+    buffer = await fs.readFile(join(ctx.contentsDir, DIRECTORY, id, word));
+  } catch {
+    ctx.warn(`${id}: the Word template ${word} could not be read; no fields were declared`);
+    return false;
+  }
+  const fields = { ...template.fields };
+  const skipped = [];
+  let added = false;
+  for (const name of fieldNamesOfWordTemplate(buffer)) {
+    if (Object.hasOwn(fields, name)) continue;
+    if (Object.keys(fields).length >= MAX_FIELDS) {
+      skipped.push(name);
+    } else {
+      fields[name] = {};
+      added = true;
     }
   }
+  if (added) template.fields = fields;
+  if (skipped.length) {
+    ctx.warn(
+      `${id}: ${MAX_FIELDS} fields are declared; these placeholders stay plain text: ${skipped.join(', ')}`
+    );
+  }
+  return added;
+}
+
+/** Migrates one template; returns 1 when its `template.json` was written. */
+async function migrateOne(ctx, id) {
+  const file = `${DIRECTORY}/${id}/${CONFIG_FILE}`;
+  if (!(await ctx.fileExists(file))) return 0;
+  const { template, files, changed } = migrateTemplate(await ctx.readJson(file));
+  const fieldsChanged = await declareWordFields(ctx, id, template);
+  if (changed || fieldsChanged) await ctx.writeJson(file, template);
+  await Promise.all(
+    files.map(name =>
+      ctx.deleteFile(`${DIRECTORY}/${id}/${name}`).catch(() => {
+        // Already gone: nothing to delete.
+      })
+    )
+  );
+  return changed || fieldsChanged ? 1 : 0;
+}
+
+export async function up(ctx) {
+  const ids = await ctx.listFiles(DIRECTORY);
+  const migrated = (await Promise.all(ids.map(id => migrateOne(ctx, id)))).reduce(
+    (sum, count) => sum + count,
+    0
+  );
   ctx.log(
     migrated
       ? `Moved ${migrated} document template(s) to the Office-file model`

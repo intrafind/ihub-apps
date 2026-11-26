@@ -89,6 +89,8 @@ function sourceText(source, t) {
   }
 }
 
+const HEX = /^#[0-9a-f]{6}$/i;
+
 /**
  * A colour: the picker and the hex field show what is set here, else the
  * colour the template's files give (the "resolved" one), so an empty field is
@@ -96,8 +98,10 @@ function sourceText(source, t) {
  */
 function ColorField({ label, value, resolved, source, onChange, error }) {
   const { t } = useTranslation();
-  const own = /^#[0-9a-f]{6}$/i.test(value || '');
-  const shown = own ? value : /^#[0-9a-f]{6}$/i.test(resolved || '') ? resolved : '#000000';
+  const own = HEX.test(value || '');
+  let shown = '#000000';
+  if (own) shown = value;
+  else if (HEX.test(resolved || '')) shown = resolved;
   return (
     <Field label={label} error={error} help={own ? undefined : sourceText(source || 'default', t)}>
       {id => (

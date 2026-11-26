@@ -205,6 +205,43 @@ function titleSize(masterDoc) {
   return levelSize(descendants(masterDoc.documentElement, 'titleStyle')[0]) || 3200;
 }
 
+/** The slide size of a presentation part, in EMU (16:9 widescreen when it names none). */
+function slideSizeOf(presentation) {
+  const size = firstChild(presentation.documentElement, 'sldSz');
+  return {
+    cx: Number(size?.getAttribute('cx')) || 12192000,
+    cy: Number(size?.getAttribute('cy')) || 6858000
+  };
+}
+
+/**
+ * One layout of a master: its placeholders (with the rectangle and size they
+ * inherit from the master), name and type; null when its part is missing.
+ */
+async function readLayout(zip, { layoutId, rels, master, matchers }) {
+  const relId = layoutId.getAttributeNS(NS_R, 'id') || layoutId.getAttribute('r:id');
+  const rel = rels.find(r => r.id === relId);
+  if (!rel) return null;
+  const layoutPath = resolveTarget(master.path, rel.target);
+  const layoutDoc = await readXmlPart(zip, layoutPath);
+  if (!layoutDoc) return null;
+  const placeholders = placeholdersOf(layoutDoc, matchers).map(ph => {
+    const inherited = masterPlaceholderFor(master, ph);
+    return {
+      ...ph,
+      rect: ph.rect || inherited?.rect || null,
+      size: ph.size || inherited?.size
+    };
+  });
+  return {
+    path: layoutPath,
+    master,
+    name: attr(firstChild(layoutDoc.documentElement, 'cSld'), 'name') || '',
+    type: attr(layoutDoc.documentElement, 'type') || 'cust',
+    placeholders
+  };
+}
+
 /**
  * Open and read a template.
  *
@@ -222,11 +259,7 @@ export async function loadPresentationTemplate(buffer) {
     const rel = presRels.find(r => r.id === id);
     return rel ? resolveTarget(PRESENTATION, rel.target) : null;
   };
-  const size = firstChild(presentation.documentElement, 'sldSz');
-  const slideSize = {
-    cx: Number(size?.getAttribute('cx')) || 12192000,
-    cy: Number(size?.getAttribute('cy')) || 6858000
-  };
+  const slideSize = slideSizeOf(presentation);
   const masters = [];
   const layouts = [];
   const masterIds = descendants(presentation.documentElement, 'sldMasterId');
@@ -247,27 +280,8 @@ export async function loadPresentationTemplate(buffer) {
     };
     masters.push(master);
     for (const layoutId of descendants(doc.documentElement, 'sldLayoutId')) {
-      const relId = layoutId.getAttributeNS(NS_R, 'id') || layoutId.getAttribute('r:id');
-      const rel = rels.find(r => r.id === relId);
-      if (!rel) continue;
-      const layoutPath = resolveTarget(path, rel.target);
-      const layoutDoc = await readXmlPart(zip, layoutPath);
-      if (!layoutDoc) continue;
-      const placeholders = placeholdersOf(layoutDoc, matchers).map(ph => {
-        const inherited = masterPlaceholderFor(master, ph);
-        return {
-          ...ph,
-          rect: ph.rect || inherited?.rect || null,
-          size: ph.size || inherited?.size
-        };
-      });
-      layouts.push({
-        path: layoutPath,
-        master,
-        name: attr(firstChild(layoutDoc.documentElement, 'cSld'), 'name') || '',
-        type: attr(layoutDoc.documentElement, 'type') || 'cust',
-        placeholders
-      });
+      const layout = await readLayout(zip, { layoutId, rels, master, matchers });
+      if (layout) layouts.push(layout);
     }
   }
   if (!layouts.length) throw new Error('The template has no slide layouts.');

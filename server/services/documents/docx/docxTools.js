@@ -162,6 +162,38 @@ function missingFieldsMessage(template, missing, invalid) {
   ].join(' ');
 }
 
+/** The name of the signed-in user, or undefined for an anonymous one. */
+function signedInName(user) {
+  return user?.name && user.id !== 'anonymous' ? user.name : undefined;
+}
+
+/**
+ * The Word file the user uploaded to build on (`templateFileId`), or null.
+ * An app with a fixed corporate template does not use it and says so in `warnings`.
+ */
+async function uploadedWordTemplate(params, warnings) {
+  if (!params.templateFileId) return null;
+  if (params.templateMode && !WORD_TEMPLATE_MODES.includes(params.templateMode)) {
+    throw new DocumentGenerationError(
+      `"templateMode" must be one of: ${WORD_TEMPLATE_MODES.join(', ')}.`,
+      'invalid'
+    );
+  }
+  if (!userTemplateUploadsAllowed(params.appConfig)) {
+    warnings.push(
+      'This app uses a fixed corporate document template, so the uploaded file was not used as a template.'
+    );
+    return null;
+  }
+  const uploaded = await loadUploadedFileOriginal({
+    fileId: params.templateFileId,
+    mimeTypes: [DOCX_FILE_MIME],
+    user: params.user,
+    chatId: params.chatId
+  });
+  return { buffer: uploaded.buffer, mode: params.templateMode || 'auto', name: uploaded.name };
+}
+
 /**
  * `create_docx`: render the document and hand it to the chat.
  *
@@ -176,36 +208,9 @@ export async function runCreateDocx(params) {
     }
     const spec = docxSpecFromToolArgs(params);
     // The author of a document is the person who asked for it, unless told otherwise.
-    if (!spec.author && params.user?.name && params.user.id !== 'anonymous') {
-      spec.author = params.user.name;
-    }
+    if (!spec.author && signedInName(params.user)) spec.author = signedInName(params.user);
     const extraWarnings = [];
-    let templateFile = null;
-    if (params.templateFileId) {
-      if (params.templateMode && !WORD_TEMPLATE_MODES.includes(params.templateMode)) {
-        throw new DocumentGenerationError(
-          `"templateMode" must be one of: ${WORD_TEMPLATE_MODES.join(', ')}.`,
-          'invalid'
-        );
-      }
-      if (userTemplateUploadsAllowed(params.appConfig)) {
-        const uploaded = await loadUploadedFileOriginal({
-          fileId: params.templateFileId,
-          mimeTypes: [DOCX_FILE_MIME],
-          user: params.user,
-          chatId: params.chatId
-        });
-        templateFile = {
-          buffer: uploaded.buffer,
-          mode: params.templateMode || 'auto',
-          name: uploaded.name
-        };
-      } else {
-        extraWarnings.push(
-          'This app uses a fixed corporate document template, so the uploaded file was not used as a template.'
-        );
-      }
-    }
+    const templateFile = await uploadedWordTemplate(params, extraWarnings);
     const {
       buffer,
       warnings: renderWarnings,

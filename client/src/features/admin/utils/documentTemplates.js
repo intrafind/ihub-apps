@@ -205,12 +205,12 @@ function validateFields(fields, t) {
  * @returns {string}
  */
 export function fieldNameFrom(text) {
-  const name = String(text || '')
-    .trim()
+  // Runs of anything but letters and digits become one "_"; none stays at the ends.
+  const parts = String(text || '')
     .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '_')
-    .replace(/^_+|_+$/g, '')
-    .slice(0, 32);
+    .split(/[^a-z0-9]+/)
+    .filter(Boolean);
+  const name = parts.join('_').slice(0, 32).replace(/_$/, '');
   return /^[a-z]/.test(name) ? name : '';
 }
 

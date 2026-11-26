@@ -9,7 +9,7 @@
  * settings of the new model.
  */
 import '@testing-library/jest-dom';
-import { act, fireEvent, render, screen, within } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 
 const mockSave = jest.fn();
@@ -143,9 +143,8 @@ describe('the colours', () => {
     const text = screen.getAllByDisplayValue('#00ff00').find(el => el.type === 'text');
     expect(text).toBeDefined();
 
-    await act(async () => {
-      fireEvent.click(saveButton());
-    });
+    fireEvent.click(saveButton());
+    await waitFor(() => expect(mockSave).toHaveBeenCalled());
     expect(mockSave).toHaveBeenCalledWith(
       'corporate',
       expect.objectContaining({ brand: { primaryColor: '#00ff00' } })
@@ -162,9 +161,9 @@ describe('the colours', () => {
     const button = await screen.findByRole('button', {
       name: 'Take colours from the PowerPoint template'
     });
-    await act(async () => {
-      fireEvent.click(button);
-    });
+    fireEvent.click(button);
+    await waitFor(() => expect(mockReadBrand).toHaveBeenCalled());
+    await screen.findAllByRole('status');
     expect(mockReadBrand).toHaveBeenCalledWith('corporate', 'powerpointTemplate');
     expect(screen.getByLabelText('Primary colour', { selector: 'input[type=color]' })).toHaveValue(
       '#112233'
@@ -195,9 +194,8 @@ describe('the PDF margins', () => {
     fireEvent.change(left, { target: { value: '40' } });
     expect(screen.getByLabelText('Top', { selector: 'input[type=number]' })).toHaveValue(72);
 
-    await act(async () => {
-      fireEvent.click(saveButton());
-    });
+    fireEvent.click(saveButton());
+    await waitFor(() => expect(mockSave).toHaveBeenCalled());
     expect(mockSave).toHaveBeenCalledWith(
       'corporate',
       expect.objectContaining({ pdf: { margins: [40, 72, 57, 57] } })
@@ -211,9 +209,8 @@ describe('the PDF margins', () => {
     renderPage();
     const left = await screen.findByLabelText('Left', { selector: 'input[type=number]' });
     fireEvent.change(left, { target: { value: '5' } });
-    await act(async () => {
-      fireEvent.click(saveButton());
-    });
+    fireEvent.click(saveButton());
+    await screen.findAllByRole('alert');
     expect(mockSave).not.toHaveBeenCalled();
     expect(screen.getAllByRole('alert').some(el => /between 18 and 200/.test(el.textContent))).toBe(
       true
@@ -253,9 +250,8 @@ describe('the fields', () => {
       within(added).getByText(/has no \{\{doc_id\}\} placeholder any more|no \{\{doc_id\}\}/i)
     ).toBeInTheDocument();
 
-    await act(async () => {
-      fireEvent.click(saveButton());
-    });
+    fireEvent.click(saveButton());
+    await waitFor(() => expect(mockSave).toHaveBeenCalled());
     const saved = mockSave.mock.calls[0][1];
     expect(Object.keys(saved.fields)).toEqual(['classification', 'doc_id']);
     expect(saved.fields.doc_id).toEqual({});
@@ -283,9 +279,8 @@ describe('what is saved', () => {
   it('holds only the settings of the new model', async () => {
     renderPage();
     fireEvent.click(await screen.findByLabelText(/^Enabled/));
-    await act(async () => {
-      fireEvent.click(saveButton());
-    });
+    fireEvent.click(saveButton());
+    await waitFor(() => expect(mockSave).toHaveBeenCalled());
     const body = mockSave.mock.calls[0][1];
     expect(Object.keys(body).sort()).toEqual(
       [
