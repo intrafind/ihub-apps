@@ -279,10 +279,11 @@ const INVISIBLE = /[\u00AD\u200B\u2060\uFEFF]/g;
 
 /**
  * A fence line: Turndown writes fenced code only, so any line that starts with three backticks or
- * tildes after its container prefix (blockquote markers `>`, list indentation) opens or closes a
- * code block, however deeply the block is nested.
+ * tildes after its container prefix (blockquote markers `>`, list markers `-` `*` `+` `1.`, and
+ * indentation) opens or closes a code block, however deeply the block is nested. A list item that
+ * starts with a code block has its opening fence right after the marker (`- ```).
  */
-const FENCE = /^[ \t>]*(`{3,}|~{3,})/;
+const FENCE = /^(?:[ \t]*(?:>|(?:[-*+]|\d{1,9}[.)])(?=[ \t])))*[ \t]*(`{3,}|~{3,})/;
 
 /**
  * Tidy converted Markdown so a page does not spend the model's budget on

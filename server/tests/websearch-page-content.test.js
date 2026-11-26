@@ -250,6 +250,20 @@ describe('extractHtmlPage', () => {
       assert.match(nested, /^ {6}more$/m);
     });
 
+    it('keeps the layout of code that starts a list item or sits in a quote in a list', () => {
+      const bullet = page(
+        '<ul><li><pre><code>cmd  --flag   x\n    indented</code></pre></li></ul>'
+      );
+      assert.match(bullet, /^ {2}cmd {2}--flag {3}x$/m);
+      assert.match(bullet, /^ {6}indented$/m);
+      const numbered = page('<ol><li><pre><code>cmd  --flag   x</code></pre></li></ol>');
+      assert.match(numbered, /^ {2}cmd {2}--flag {3}x$/m);
+      const quoted = page(
+        '<ul><li><blockquote><pre><code>a  b</code></pre></blockquote></li></ul>'
+      );
+      assert.match(quoted, /^ {2}> a {2}b$/m);
+    });
+
     it('keeps zero-width joiners that scripts need', () => {
       const markdown = page('<p>\u0645\u06cc\u200c\u062e\u0648\u0627\u0647\u0645</p>');
       assert.match(markdown, /\u200c/);
