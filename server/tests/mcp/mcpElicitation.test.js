@@ -6,8 +6,10 @@ import {
   createElicitationHandler,
   elicitationContent,
   elicitationForm,
+  elicitationUrl,
   runWithElicitationScope
 } from '../../services/mcp/mcpElicitation.js';
+import { buildClientCapabilities } from '../../services/mcp/mcpApps.js';
 import { interactionSchema } from '../../services/loop/contracts/interaction.js';
 import { setEnvelopeDelivery } from '../../services/loop/RunStream.js';
 
@@ -212,7 +214,7 @@ describe('the elicitation handler', () => {
     }
   });
 
-  it('cancels outside any tool call and declines URL mode', async () => {
+  it('cancels outside any tool call', async () => {
     const interactions = fakeInteractions();
     const handler = createElicitationHandler({
       serverId: 'x',
@@ -220,11 +222,139 @@ describe('the elicitation handler', () => {
       getStreamRun: () => ({ runId: parentRunId })
     });
     expect(await handler(REQUEST)).toEqual({ action: 'cancel' });
-    expect(
-      await runWithElicitationScope({ chatId: 'chat-1', user }, () =>
-        handler({ params: { mode: 'url', url: 'https://example.com', message: 'Sign in' } })
-      )
-    ).toEqual({ action: 'decline' });
     expect(interactions.raise).not.toHaveBeenCalled();
+  });
+});
+
+describe('a question sent outside the call (2025-era session stream)', () => {
+  const handlerWith = (interactions, soleCall) =>
+    createElicitationHandler({
+      serverId: 'billing',
+      interactionService: interactions,
+      runLog: { getRunMeta: () => null },
+      getStreamRun: () => ({ runId: parentRunId }),
+      soleCall
+    });
+
+  it('goes to the one call running on the connection', async () => {
+    setEnvelopeDelivery(() => {});
+    const interactions = fakeInteractions();
+    const pending = handlerWith(interactions, () => ({ chatId: 'chat-1', user }))(REQUEST);
+    await new Promise(resolve => setImmediate(resolve));
+    interactions.answer({ skipped: true });
+    expect(await pending).toEqual({ action: 'decline' });
+    expect(interactions.raised.source.chatId).toBe('chat-1');
+    setEnvelopeDelivery(null);
+  });
+
+  it('is cancelled when no single call can be named', async () => {
+    const interactions = fakeInteractions();
+    expect(await handlerWith(interactions, () => null)(REQUEST)).toEqual({ action: 'cancel' });
+    expect(interactions.raise).not.toHaveBeenCalled();
+  });
+});
+
+describe('a page the server asks the person to open (URL mode)', () => {
+  const PAGE = {
+    params: {
+      mode: 'url',
+      message: 'Sign in to Billing to continue.',
+      url: 'https://billing.example.com/connect?state=abc',
+      elicitationId: 'el-1'
+    }
+  };
+
+  let frames;
+  beforeEach(() => {
+    frames = [];
+    setEnvelopeDelivery((streamId, envelope) => frames.push({ streamId, ...envelope }));
+  });
+  afterEach(() => setEnvelopeDelivery(null));
+
+  it('is declared next to form mode', () => {
+    expect(buildClientCapabilities(false, { elicitation: true }).elicitation).toEqual({
+      form: {},
+      url: {}
+    });
+  });
+
+  it('shows only https addresses without credentials', () => {
+    expect(elicitationUrl('https://billing.example.com/connect?x=1')).toBe(
+      'https://billing.example.com/connect?x=1'
+    );
+    for (const unsafe of [
+      'http://billing.example.com/connect',
+      'https://user:secret@billing.example.com/',
+      'javascript:alert(1)',
+      'data:text/html,hi',
+      'not a url',
+      `https://example.com/${'a'.repeat(2100)}`,
+      42
+    ]) {
+      expect(elicitationUrl(unsafe)).toBeNull();
+    }
+  });
+
+  it('puts the page on the card and answers accept, without content, when the person is done', async () => {
+    const interactions = fakeInteractions();
+    const result = await ask({
+      interactions,
+      request: PAGE,
+      answerWith: i => i.answer({ value: 'accept' })
+    });
+    expect(result).toEqual({ action: 'accept' });
+    const raised = interactions.raised;
+    expect(raised.prompt).toMatchObject({ inputType: 'confirm', allowSkip: true });
+    expect(raised.prompt.message).toBe('Sign in to Billing to continue.');
+    expect(raised.source.mcpElicitation).toMatchObject({
+      serverId: 'supabase',
+      mode: 'url',
+      url: 'https://billing.example.com/connect?state=abc'
+    });
+    expect(frames.filter(f => f.runId === raised.runId).map(f => f.type)).toEqual([
+      'run/started',
+      'interaction/raised',
+      'run/paused',
+      'run/resumed',
+      'run/ended'
+    ]);
+  });
+
+  it('declines when the person declines', async () => {
+    const interactions = fakeInteractions();
+    const result = await ask({
+      interactions,
+      request: PAGE,
+      answerWith: i => i.answer({ skipped: true })
+    });
+    expect(result).toEqual({ action: 'decline' });
+  });
+
+  it('declines a page it will not show, without asking', async () => {
+    const interactions = fakeInteractions();
+    const result = await ask({
+      interactions,
+      request: { params: { ...PAGE.params, url: 'http://billing.example.com/connect' } }
+    });
+    expect(result).toEqual({ action: 'decline' });
+    expect(interactions.raise).not.toHaveBeenCalled();
+  });
+
+  it('ends the question when the server reports the person finished there', async () => {
+    const interactions = fakeInteractions();
+    const handler = createElicitationHandler({
+      serverId: 'billing',
+      interactionService: interactions,
+      runLog: { getRunMeta: () => null },
+      getStreamRun: () => ({ runId: parentRunId })
+    });
+    const pending = runWithElicitationScope({ chatId: 'chat-1', user }, () => handler(PAGE));
+    await new Promise(resolve => setImmediate(resolve));
+    expect(handler.complete('someone-else')).toBe(false);
+    expect(handler.complete('el-1')).toBe(true);
+    expect(await pending).toEqual({ action: 'accept' });
+    expect(interactions.cancel).toHaveBeenCalledWith(interactions.raised.id, 'completed');
+    // Once ended, the same notice finds nothing to finish.
+    expect(handler.complete('el-1')).toBe(false);
   });
 });

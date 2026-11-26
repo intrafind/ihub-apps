@@ -63,8 +63,9 @@ const PERMISSION_FEATURES = Object.freeze({
  */
 export function buildClientCapabilities(appsEnabled, { elicitation = false } = {}) {
   return {
-    // Form questions a server asks mid-call (`mcpElicitation.js`).
-    ...(elicitation ? { elicitation: { form: {} } } : {}),
+    // Questions a server asks mid-call, as a form or as a page to open
+    // (`mcpElicitation.js`).
+    ...(elicitation ? { elicitation: { form: {}, url: {} } } : {}),
     ...(appsEnabled
       ? { extensions: { [MCP_UI_EXTENSION]: { mimeTypes: [MCP_APP_MIME_TYPE] } } }
       : {})

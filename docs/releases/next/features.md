@@ -207,6 +207,9 @@ the server, **Decline** tells it no, and the tool call goes on.
 - The answer goes to the server only, not into the conversation. The call's own timeout stands
   still while you answer; an unanswered question is cancelled after 10 minutes or when you stop the
   turn.
+- A server can also send you to a page of its own, for example to sign in or to confirm a payment.
+  The card shows where the link goes; **Open** opens it in a new tab, and **Done** tells the server
+  you are finished there.
 - Where nobody can answer (workflows, scheduled runs, the inference API, the MCP gateway), the
   server is told the question was dismissed, as before.
 - On for every MCP server. Switch it off per server on the installation (**Admin → Integrations →

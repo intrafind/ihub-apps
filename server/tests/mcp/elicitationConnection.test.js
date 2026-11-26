@@ -37,7 +37,7 @@ jest.unstable_mockModule('../../services/loop/InteractionService.js', () => ({
   default: interactions
 }));
 
-const { McpServer, createMcpHandler, inputRequired, inputResponse } =
+const { McpServer, createMcpHandler, inputRequired, inputResponse, UrlElicitationRequiredError } =
   await import('@modelcontextprotocol/server');
 const { NodeStreamableHTTPServerTransport, toNodeHandler } =
   await import('@modelcontextprotocol/node');
@@ -85,8 +85,64 @@ function buildServer() {
       };
     }
   );
+  // A page to open before the account is connected (URL mode).
+  server.registerTool(
+    'connect_account',
+    { description: 'Connect the billing account', inputSchema: z.object({}) },
+    async (_args, ctx) => {
+      const answer = inputResponse(ctx.mcpReq.inputResponses, 'page');
+      if (answer.kind !== 'elicit') {
+        return inputRequired({
+          inputRequests: {
+            page: inputRequired.elicitUrl({
+              message: 'Sign in to Billing',
+              url: 'https://billing.example.com/connect',
+              elicitationId: 'el-connect'
+            })
+          }
+        });
+      }
+      return { content: [{ type: 'text', text: `connected (${answer.action})` }] };
+    }
+  );
+  // Refuses until the person has been to the payment page (-32042).
+  server.registerTool(
+    'pay_invoice',
+    { description: 'Pay the open invoice', inputSchema: z.object({}) },
+    async () => {
+      if (payments.attempts++ === 0) {
+        throw new UrlElicitationRequiredError([
+          {
+            mode: 'url',
+            message: 'Confirm the payment',
+            url: 'https://billing.example.com/pay',
+            elicitationId: 'el-pay'
+          }
+        ]);
+      }
+      return { content: [{ type: 'text', text: 'paid' }] };
+    }
+  );
+  // 2025-era only: asks over the session and reports the page finished.
+  server.registerTool(
+    'sign_in',
+    { description: 'Sign in', inputSchema: z.object({}) },
+    async (_args, ctx) => {
+      const notifyDone = server.server.createElicitationCompletionNotifier('el-sign-in');
+      setTimeout(() => notifyDone().catch(() => {}), 200);
+      const result = await ctx.mcpReq.elicitInput({
+        mode: 'url',
+        message: 'Sign in to Billing',
+        url: 'https://billing.example.com/sign-in',
+        elicitationId: 'el-sign-in'
+      });
+      return { content: [{ type: 'text', text: `signed in (${result.action})` }] };
+    }
+  );
   return server;
 }
+
+const payments = { attempts: 0 };
 
 let httpServer;
 let baseUrl;
@@ -145,6 +201,7 @@ describe.each([
   let frames;
   beforeEach(() => {
     interactions.raised.length = 0;
+    interactions.answers.length = 0;
     frames = [];
     setEnvelopeDelivery((streamId, envelope) => frames.push(envelope));
     bindStreamRun('chat-1', 'chat-parent', new RunStreamEmitter({ streamId: 'chat-1' }));
@@ -189,6 +246,67 @@ describe.each([
     }
   });
 
+  it('sends the person to a page and goes on once they are done there', async () => {
+    interactions.answers.push({ value: 'accept' });
+    const conn = connection(path);
+    try {
+      const result = await conn.callTool(
+        'connect_account',
+        {},
+        { context: { chatId: 'chat-1', user, toolId: 'billing__connect_account' } }
+      );
+      expect(result).toBe('connected (accept)');
+      expect(interactions.raised).toHaveLength(1);
+      expect(interactions.raised[0].source.mcpElicitation).toMatchObject({
+        mode: 'url',
+        url: 'https://billing.example.com/connect'
+      });
+    } finally {
+      await conn.disconnect();
+      unbindStreamRun('chat-1', 'chat-parent');
+    }
+  });
+
+  // `-32042` belongs to the 2025 revisions; 2026-07-28 servers ask with
+  // `inputRequired` instead (the case above).
+  const legacyOnly = path === '/legacy' ? it : it.skip;
+
+  legacyOnly('opens the pages a refused call needs, then calls again', async () => {
+    payments.attempts = 0;
+    interactions.answers.push({ value: 'accept' });
+    const conn = connection(path);
+    try {
+      const result = await conn.callTool(
+        'pay_invoice',
+        {},
+        { context: { chatId: 'chat-1', user } }
+      );
+      expect(result).toBe('paid');
+      expect(payments.attempts).toBe(2);
+      expect(interactions.raised[0].source.mcpElicitation.url).toBe(
+        'https://billing.example.com/pay'
+      );
+    } finally {
+      await conn.disconnect();
+      unbindStreamRun('chat-1', 'chat-parent');
+    }
+  });
+
+  legacyOnly('leaves the refusal as it is when the person declines the page', async () => {
+    payments.attempts = 0;
+    interactions.answers.push({ skipped: true });
+    const conn = connection(path);
+    try {
+      await expect(
+        conn.callTool('pay_invoice', {}, { context: { chatId: 'chat-1', user } })
+      ).rejects.toMatchObject({ code: -32042 });
+      expect(payments.attempts).toBe(1);
+    } finally {
+      await conn.disconnect();
+      unbindStreamRun('chat-1', 'chat-parent');
+    }
+  });
+
   it('tells the server "cancel" when no chat turn can show the question', async () => {
     unbindStreamRun('chat-1', 'chat-parent');
     const conn = connection(path);
@@ -198,6 +316,26 @@ describe.each([
       expect(interactions.raised).toHaveLength(0);
     } finally {
       await conn.disconnect();
+    }
+  });
+});
+
+describe('a 2025-era server that reports the page finished', () => {
+  it('ends the question without waiting for the person', async () => {
+    interactions.raised.length = 0;
+    interactions.answers.length = 0;
+    interactions.cancel.mockClear();
+    setEnvelopeDelivery(() => {});
+    bindStreamRun('chat-1', 'chat-parent', new RunStreamEmitter({ streamId: 'chat-1' }));
+    const conn = connection('/legacy');
+    try {
+      // Nobody answers: the server's notice alone finishes the question.
+      const result = await conn.callTool('sign_in', {}, { context: { chatId: 'chat-1', user } });
+      expect(result).toBe('signed in (accept)');
+      expect(interactions.cancel).toHaveBeenCalledWith(interactions.raised[0].id, 'completed');
+    } finally {
+      await conn.disconnect();
+      unbindStreamRun('chat-1', 'chat-parent');
     }
   });
 });

@@ -158,7 +158,10 @@ export const interactionSourceSchema = z.object({
     .object({
       serverId: z.string().max(200),
       serverName: z.string().max(200).optional(),
-      toolId: z.string().max(400).optional()
+      toolId: z.string().max(400).optional(),
+      /** `url`: the server asks the person to open a page (`url`) and come back. */
+      mode: z.enum(['form', 'url']).optional(),
+      url: z.string().max(2048).optional()
     })
     .optional(),
   /** The scheduled task and run an approval of an unattended run belongs to. */

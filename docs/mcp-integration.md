@@ -113,16 +113,41 @@ asked for; the turn keeps running and the tool call waits.
   MCP gateway, an MCP App view's own call, an anonymous user — iHub answers
   `cancel` at once, and the server goes on as it does when a person dismisses
   the question.
-- URL-mode questions (a link to open) are not declared and are declined.
+- A 2025-era server that sends its question outside the call (on the
+  session's own stream, as `server.elicitInput()` does) still reaches the
+  chat when exactly one call to that server is running; with several running,
+  iHub cannot tell whose question it is and answers `cancel`.
 
 The forms carry what MCP elicitation allows: text (with the formats e-mail,
 URL, date and date-time), numbers, yes/no, a single choice and a multiple
 choice. Other field types are left out of the form.
 
+#### Pages to open (URL mode)
+
+A server can also send the person to a page of its own: to sign in to the
+service, to confirm a payment, to grant access (MCP elicitation, URL mode).
+The card then shows the server's message, the host the link goes to and the
+full address. iHub does not open, fetch or preview the page.
+
+- **Open** opens the page in a new browser tab, without a referrer. Back in
+  the chat, **Done** tells the server the person is finished there
+  (`accept`); **Decline** tells it no.
+- A 2025-era server may report on its own that the page is finished
+  (`notifications/elicitation/complete`); the question then ends without
+  **Done**.
+- A 2025-era server may also refuse a call until the person has opened one or
+  more pages (error `-32042`, URL elicitation required). iHub puts each page
+  to the person and, once they are done with all of them, makes the call
+  again (at most three times). A declined page leaves the server's error as
+  the tool's result.
+- Only `https` addresses without a user name or password in them are shown.
+  A server that sends any other address gets `decline` without the person
+  being asked.
+
 Elicitation is on for every MCP server unless switched off. On the
 installation (**Admin → Integrations → the server**, section **Actions**), the
 switch **Let the server ask chat users questions during a call** turns it off
-for that server: iHub then does not offer elicitation, and a well-behaved
+for that server, forms and pages alike: iHub then does not offer elicitation, and a well-behaved
 server goes on without asking. The choice is stored on the installation as
 `elicitation: { enabled }`; while the switch has never been changed, the
 definition decides (a shipped definition can set

@@ -14542,7 +14542,15 @@
     "invalid": "Check this value",
     "sent": "Answer sent to {{server}}.",
     "declined": "You declined. {{server}} was told no.",
-    "failed": "The answer could not be sent."
+    "failed": "The answer could not be sent.",
+    "pageHost": "Opens {{host}}",
+    "pageNotice": "Check the address before you open it. iHub opens nothing by itself and sends nothing to the page.",
+    "pageOpen": "Open {{host}}",
+    "pageOpenAgain": "Open again",
+    "pageOpened": "Finish on {{host}}, then come back here and click Done.",
+    "pageDone": "Done",
+    "pageSent": "{{server}} was told you are done.",
+    "pageUnsafe": "iHub does not open this address."
   },
   "textRecognition": {
     "recognized": "Text recognized",

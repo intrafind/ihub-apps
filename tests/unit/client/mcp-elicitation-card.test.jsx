@@ -16,7 +16,8 @@ import {
   isMcpElicitationInteraction
 } from '../../../client/src/shared/run/interactionToCheckpoint';
 import McpElicitationCard, {
-  formAnswer
+  formAnswer,
+  pageOf
 } from '../../../client/src/features/chat/components/McpElicitationCard';
 import { answerInteraction } from '../../../client/src/api';
 
@@ -203,5 +204,96 @@ describe('the question card', () => {
         { channel: 'chat' }
       )
     );
+  });
+});
+
+describe('a page to open (URL mode)', () => {
+  const PAGE = {
+    ...INTERACTION,
+    id: 'elicit-2',
+    prompt: {
+      title: 'Billing',
+      message: 'Sign in to Billing to continue.',
+      inputType: 'confirm',
+      options: [{ value: 'accept', label: 'Done' }],
+      allowSkip: true
+    },
+    source: {
+      ...INTERACTION.source,
+      checkpointId: 'elicit-2',
+      mcpElicitation: {
+        serverId: 'billing',
+        serverName: 'Billing',
+        mode: 'url',
+        url: 'https://billing.example.com/connect?state=abc'
+      }
+    }
+  };
+
+  beforeEach(() => answerInteraction.mockClear());
+
+  it('links only to https addresses without credentials', () => {
+    expect(pageOf('https://billing.example.com/x')).toEqual({
+      href: 'https://billing.example.com/x',
+      host: 'billing.example.com'
+    });
+    expect(pageOf('http://billing.example.com/x')).toBeNull();
+    expect(pageOf('https://a:b@billing.example.com/')).toBeNull();
+    expect(pageOf('javascript:alert(1)')).toBeNull();
+    expect(pageOf(undefined)).toBeNull();
+  });
+
+  it('shows where the link goes and opens it in a new tab only when clicked', () => {
+    render(<McpElicitationCard interaction={PAGE} runId="chat-child" />);
+    expect(screen.getByText('Opens billing.example.com')).toBeInTheDocument();
+    expect(screen.getByText('https://billing.example.com/connect?state=abc')).toBeInTheDocument();
+    const link = screen.getByRole('link', { name: 'Open billing.example.com' });
+    expect(link).toHaveAttribute('href', 'https://billing.example.com/connect?state=abc');
+    expect(link).toHaveAttribute('target', '_blank');
+    expect(link).toHaveAttribute('rel', 'noopener noreferrer');
+    // Done comes only after the page was opened.
+    expect(screen.queryByRole('button', { name: 'Done' })).not.toBeInTheDocument();
+  });
+
+  it('answers accept, without data, when the person is done there', async () => {
+    render(<McpElicitationCard interaction={PAGE} runId="chat-child" />);
+    fireEvent.click(screen.getByRole('link', { name: 'Open billing.example.com' }));
+    expect(screen.getByText(/come back here and click Done/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Done' }));
+    await waitFor(() =>
+      expect(answerInteraction).toHaveBeenCalledWith(
+        'chat-child',
+        'elicit-2',
+        { value: 'accept' },
+        { channel: 'chat' }
+      )
+    );
+    expect(await screen.findByRole('status')).toHaveTextContent('Billing was told you are done.');
+  });
+
+  it('declines without opening the page', async () => {
+    render(<McpElicitationCard interaction={PAGE} runId="chat-child" />);
+    fireEvent.click(screen.getByRole('button', { name: 'Decline' }));
+    await waitFor(() =>
+      expect(answerInteraction).toHaveBeenCalledWith(
+        'chat-child',
+        'elicit-2',
+        { skipped: true },
+        { channel: 'chat' }
+      )
+    );
+  });
+
+  it('offers no link to an address it will not open', () => {
+    const unsafe = {
+      ...PAGE,
+      source: {
+        ...PAGE.source,
+        mcpElicitation: { ...PAGE.source.mcpElicitation, url: 'http://billing.example.com' }
+      }
+    };
+    render(<McpElicitationCard interaction={unsafe} runId="chat-child" />);
+    expect(screen.queryByRole('link')).not.toBeInTheDocument();
+    expect(screen.getByText('iHub does not open this address.')).toBeInTheDocument();
   });
 });

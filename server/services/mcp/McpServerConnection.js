@@ -46,6 +46,24 @@ import {
  */
 const MAX_ELICITATION_ROUNDS = 3;
 
+/** JSON-RPC code of "open these pages first" (URL elicitation required). */
+const URL_ELICITATION_REQUIRED = -32042;
+
+/**
+ * The pages a server's `-32042` error asks the person to open before it will
+ * run the call (at most three), or null for any other error.
+ *
+ * @param {*} error
+ * @returns {Object[]|null} URL-mode elicitation params
+ */
+function pagesRequiredBy(error) {
+  if (error?.code !== URL_ELICITATION_REQUIRED) return null;
+  const pages = error.elicitations ?? error.data?.elicitations;
+  if (!Array.isArray(pages)) return null;
+  const valid = pages.filter(page => page && typeof page === 'object').slice(0, 3);
+  return valid.length ? valid : null;
+}
+
 /** How long a fetched MCP App UI resource is reused before re-reading it. */
 const UI_RESOURCE_TTL_MS = 5 * 60 * 1000;
 
@@ -98,6 +116,10 @@ export class McpServerConnection {
     this.catalogOnly = catalogOnly === true;
     this.onToolsListed = typeof onToolsListed === 'function' ? onToolsListed : null;
     this.client = null;
+    /** The `elicitation/create` handler while questions are on (mcpElicitation.js). */
+    this.elicitation = null;
+    /** Scopes of the tool calls running now (a question sent outside one finds it). */
+    this._callsInFlight = new Set();
     this.transport = null;
     this.connected = false;
     this.connecting = null; // shared promise while a connect is in flight
@@ -335,14 +357,21 @@ export class McpServerConnection {
             versionNegotiation: versionNegotiationFor(this.config.transport)
           }
         );
+        this.elicitation = null;
         if (elicitationEnabledFor(this.config)) {
-          this.client.setRequestHandler(
-            'elicitation/create',
-            createElicitationHandler({
-              serverId: this.config.id,
-              serverName: this.config.name || this.config.id
-            })
-          );
+          this.elicitation = createElicitationHandler({
+            serverId: this.config.id,
+            serverName: this.config.name || this.config.id,
+            soleCall: () =>
+              this._callsInFlight.size === 1 ? this._callsInFlight.values().next().value : null
+          });
+          this.client.setRequestHandler('elicitation/create', this.elicitation);
+          // A 2025-era server reports that the person finished on the page of
+          // a URL-mode question; the question then ends without their Done.
+          const elicitation = this.elicitation;
+          this.client.setNotificationHandler('notifications/elicitation/complete', async n => {
+            elicitation.complete(n?.params?.elicitationId);
+          });
         }
         this.transport = await this._buildTransport();
         await this.client.connect(this.transport);
@@ -633,25 +662,53 @@ export class McpServerConnection {
     const sdkTimeout = elicitationEnabledFor(this.config)
       ? timeoutMs + MAX_ELICITATION_ROUNDS * ELICITATION_ANSWER_TIMEOUT_MS
       : timeoutMs;
+    const callScope = {
+      chatId: context.chatId,
+      user: context.user,
+      toolId: context.toolId,
+      signal: controller.signal,
+      onWaitStart: pause,
+      onWaitEnd: resume
+    };
+    this._callsInFlight.add(callScope);
     try {
-      return await runWithElicitationScope(
-        {
-          chatId: context.chatId,
-          user: context.user,
-          toolId: context.toolId,
-          signal: controller.signal,
-          onWaitStart: pause,
-          onWaitEnd: resume
-        },
-        () =>
+      return await runWithElicitationScope(callScope, () =>
+        this._callWithPagesOpened(() =>
           this.client.callTool(
             { name: originalName, arguments: args || {} },
             { signal: controller.signal, timeout: sdkTimeout }
           )
+        )
       );
     } finally {
+      this._callsInFlight.delete(callScope);
       clearTimeout(timer);
       context.signal?.removeEventListener?.('abort', onTurnAbort);
+    }
+  }
+
+  /**
+   * Run a call; when the server refuses it until the person opens a page
+   * (URL elicitation required, `-32042`), put each page to the person as a
+   * URL-mode question and, once they are done on all of them, call again —
+   * at most {@link MAX_ELICITATION_ROUNDS} times. A page they decline, or
+   * nobody to ask, leaves the server's error as it is.
+   *
+   * @param {() => Promise<Object>} call
+   * @returns {Promise<Object>}
+   */
+  async _callWithPagesOpened(call) {
+    for (let round = 0; ; round++) {
+      try {
+        return await call();
+      } catch (error) {
+        const pages = pagesRequiredBy(error);
+        if (!pages || !this.elicitation || round >= MAX_ELICITATION_ROUNDS) throw error;
+        for (const page of pages) {
+          const { action } = await this.elicitation({ params: { ...page, mode: 'url' } });
+          if (action !== 'accept') throw error;
+        }
+      }
     }
   }
 

@@ -1515,6 +1515,14 @@
                           "toolId": {
                             "type": "string",
                             "maxLength": 400
+                          },
+                          "mode": {
+                            "type": "string",
+                            "enum": ["form", "url"]
+                          },
+                          "url": {
+                            "type": "string",
+                            "maxLength": 2048
                           }
                         },
                         "required": ["serverId"],
@@ -2891,6 +2899,14 @@
               "toolId": {
                 "type": "string",
                 "maxLength": 400
+              },
+              "mode": {
+                "type": "string",
+                "enum": ["form", "url"]
+              },
+              "url": {
+                "type": "string",
+                "maxLength": 2048
               }
             },
             "required": ["serverId"],
@@ -4115,6 +4131,14 @@
                   "toolId": {
                     "type": "string",
                     "maxLength": 400
+                  },
+                  "mode": {
+                    "type": "string",
+                    "enum": ["form", "url"]
+                  },
+                  "url": {
+                    "type": "string",
+                    "maxLength": 2048
                   }
                 },
                 "required": ["serverId"],
@@ -6449,6 +6473,14 @@
                           "toolId": {
                             "type": "string",
                             "maxLength": 400
+                          },
+                          "mode": {
+                            "type": "string",
+                            "enum": ["form", "url"]
+                          },
+                          "url": {
+                            "type": "string",
+                            "maxLength": 2048
                           }
                         },
                         "required": ["serverId"],

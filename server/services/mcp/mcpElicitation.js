@@ -30,8 +30,12 @@
  * run, the gateway, the API) or an anonymous user — the answer is `cancel`
  * right away, as the specification has it for a dismissed request.
  *
- * Only form mode is declared: URL mode would send the person to a page the
- * server names, and is refused with `decline` should a server send it anyway.
+ * Both modes are declared. Form mode asks for values in the card. URL mode
+ * shows the page the server names (a sign-in, a payment) with its address;
+ * the person opens it in their own browser and answers Done when finished
+ * there, which answers `accept`. iHub never fetches the page, and shows only
+ * `https` addresses without credentials ({@link elicitationUrl}); any other
+ * is refused with `decline`.
  *
  * @module services/mcp/mcpElicitation
  */
@@ -52,6 +56,7 @@ export const ELICITATION_ANSWER_TIMEOUT_MS = 10 * 60 * 1000;
 /** Most fields a server's form may have; the rest are left out. */
 const MAX_FIELDS = 30;
 const MAX_MESSAGE_LENGTH = 4000;
+const MAX_URL_LENGTH = 2048;
 const STRING_FORMATS = new Set(['email', 'uri', 'date', 'date-time']);
 
 const scope = new AsyncLocalStorage();
@@ -270,7 +275,79 @@ function waitForAnswerOrAbort(interactionService, id, signal) {
 }
 
 /**
+ * Wait for the answer, the turn's stop, or — for a page the person was sent
+ * to — the server's notice that the person finished there.
+ */
+function waitForOutcome(interactionService, id, signal, completion) {
+  const answer = waitForAnswerOrAbort(interactionService, id, signal);
+  if (!completion) return answer;
+  // Settled by the cancel below once the notice wins.
+  answer.catch(() => {});
+  return Promise.race([answer, completion.then(() => ({ completed: true }))]);
+}
+
+/**
+ * The page a URL-mode question sends the person to, when iHub will show it:
+ * `https`, no credentials in the address, at most 2048 characters. iHub never
+ * fetches it; the person's browser opens it when they choose to.
+ *
+ * @param {*} value - The `url` the server sent
+ * @returns {string|null} the normalized address
+ */
+export function elicitationUrl(value) {
+  if (typeof value !== 'string' || value.length > MAX_URL_LENGTH) return null;
+  let url;
+  try {
+    url = new URL(value);
+  } catch {
+    return null;
+  }
+  if (url.protocol !== 'https:' || url.username || url.password) return null;
+  return url.href.length > MAX_URL_LENGTH ? null : url.href;
+}
+
+/** What the card shows and how an answer maps back, per mode. */
+function questionFor(params, serverName) {
+  const message = text(params.message, MAX_MESSAGE_LENGTH);
+  const title = serverName ? { title: serverName.slice(0, 200) } : {};
+  if (params.mode === 'url') {
+    return {
+      mode: 'url',
+      url: elicitationUrl(params.url),
+      prompt: {
+        ...title,
+        message: message || 'The server asks you to open a page.',
+        inputType: 'confirm',
+        options: [{ value: 'accept', label: 'Done' }],
+        allowSkip: true
+      },
+      // The person consented and came back: nothing to send but the action.
+      accepted: () => ({ action: 'accept' })
+    };
+  }
+  const form = elicitationForm(params.requestedSchema);
+  return {
+    mode: 'form',
+    prompt: {
+      ...title,
+      message: message || 'The server needs more information.',
+      inputType: 'form',
+      inputSchema: form,
+      options: [{ value: 'accept', label: 'Submit' }],
+      // Declining is a skip: it needs none of the required fields.
+      allowSkip: true
+    },
+    accepted: answer => ({ action: 'accept', content: elicitationContent(form, answer.data) })
+  };
+}
+
+/**
  * The `elicitation/create` handler of one MCP server's connection.
+ *
+ * Form mode asks for values; URL mode sends the person to a page of the
+ * server's (a sign-in, a payment) and answers `accept` once they say they are
+ * done there — or once a 2025-era server reports the page finished
+ * (`notifications/elicitation/complete`, passed to `handler.complete`).
  *
  * @param {Object} params
  * @param {string} params.serverId - The installation id
@@ -278,121 +355,182 @@ function waitForAnswerOrAbort(interactionService, id, signal) {
  * @param {Object} [params.interactionService]
  * @param {Object} [params.runLog]
  * @param {(chatId: string) => ({runId: string}|null)} [params.getStreamRun]
- * @returns {(request: Object) => Promise<{action: 'accept'|'decline'|'cancel', content?: Object}>}
+ * @param {() => (Object|null)} [params.soleCall] - The scope of the one call
+ *   running on the connection, when exactly one is
+ * @returns {((request: Object) => Promise<{action: 'accept'|'decline'|'cancel', content?: Object}>) & {complete: (elicitationId: string) => boolean}}
  */
 export function createElicitationHandler({
   serverId,
   serverName,
   interactionService = defaultInteractionService,
   runLog = defaultRunLog,
-  getStreamRun = defaultGetStreamRun
+  getStreamRun = defaultGetStreamRun,
+  soleCall = () => null
 }) {
-  return async function handleElicitation(request) {
-    const params = request?.params || {};
-    if (params.mode === 'url') return { action: 'decline' };
+  /** URL-mode questions waiting, by the server's `elicitationId`. */
+  const completions = new Map();
 
-    const call = scope.getStore();
-    const chatId = call?.chatId;
-    const parent = chatId ? getStreamRun(chatId) : null;
-    if (!parent?.runId || !call.user || isAnonymousUser(call.user)) {
-      logger.info('MCP server asked a question nobody can answer here; cancelled', {
-        component: COMPONENT,
-        serverId,
-        chatId: chatId || null
-      });
-      return { action: 'cancel' };
-    }
+  /**
+   * The call a question belongs to: the scope it arrived in, else — for a
+   * 2025-era server that sends it outside the call (on the session's own
+   * stream, as `server.elicitInput()` does) — the one call running on this
+   * connection, if there is exactly one.
+   */
+  function currentCall() {
+    return scope.getStore() || soleCall() || undefined;
+  }
 
-    const form = elicitationForm(params.requestedSchema);
-    const runId = newRunId('chat');
-    const id = `elicit-${randomUUID()}`;
+  /** The call's chat run, when a person in a chat can answer; else null. */
+  function answerableCall() {
+    const call = currentCall();
+    const parent = call?.chatId ? getStreamRun(call.chatId) : null;
+    if (!parent?.runId || !call.user || isAnonymousUser(call.user)) return null;
+    return { call, parent };
+  }
+
+  async function principalOf(call, parent) {
     // Whoever owns the chat run may answer: its ledger principal, else the
     // user's own (the answer endpoint authorizes by it).
     const runMeta = runLog.getRunMeta?.(parent.runId) || null;
-    const principal = runMeta?.principalId
+    return runMeta?.principalId
       ? { id: runMeta.principalId, mode: runMeta.identityMode }
-      : await resolvePrincipal(call.user);
-    const interaction = await interactionService.raise({
+      : resolvePrincipal(call.user);
+  }
+
+  async function raise({ call, parent, question, id, runId }) {
+    const principal = await principalOf(call, parent);
+    const toolId = call.toolId ? { toolId: String(call.toolId).slice(0, 400) } : {};
+    return interactionService.raise({
       id,
       runId,
       kind: 'question',
       origin: 'tool',
-      prompt: {
-        ...(serverName ? { title: serverName.slice(0, 200) } : {}),
-        message: text(params.message, MAX_MESSAGE_LENGTH) || 'The server needs more information.',
-        inputType: 'form',
-        inputSchema: form,
-        options: [{ value: 'accept', label: 'Submit' }],
-        // Declining is a skip: it needs none of the required fields.
-        allowSkip: true
-      },
+      prompt: question.prompt,
       policy: {
         timeoutMs: ELICITATION_ANSWER_TIMEOUT_MS,
         onTimeout: 'fail',
         fallback: 'deny'
       },
       source: {
-        chatId,
+        chatId: call.chatId,
         // A checkpoint of its own child run: answered by its id on the runs
         // endpoint, not by the next chat message as an `ask_user` question.
         checkpointId: id,
         executionId: runId,
-        ...(call.toolId ? { toolId: String(call.toolId).slice(0, 400) } : {}),
+        ...toolId,
         mcpElicitation: {
           serverId: String(serverId).slice(0, 200),
           ...(serverName ? { serverName: serverName.slice(0, 200) } : {}),
-          ...(call.toolId ? { toolId: String(call.toolId).slice(0, 400) } : {})
+          ...toolId,
+          mode: question.mode,
+          ...(question.url ? { url: question.url } : {})
         },
         ...(principal?.id ? { principalId: String(principal.id) } : {}),
         ...(principal?.mode ? { identityMode: principal.mode } : {})
       }
     });
+  }
 
-    const stream = new RunStreamEmitter({ streamId: chatId, runId });
-    stream.emit(SSE_V2_EVENTS.RUN_STARTED, {
-      kind: 'chat',
-      parentRunId: parent.runId,
-      refs: { chatId }
-    });
-    stream.emit(SSE_V2_EVENTS.INTERACTION_RAISED, { interaction });
-    stream.emit(SSE_V2_EVENTS.RUN_PAUSED, { reason: 'interaction', interactionId: id });
-    logger.info('MCP server asked the chat user a question', {
-      component: COMPONENT,
-      serverId,
-      chatId,
-      interactionId: id
-    });
-
-    call.onWaitStart?.();
-    let result;
-    let ended;
+  /** The person's answer (or its absence) as the MCP result. */
+  async function outcome({ call, question, id, completion }) {
     try {
-      const answered = await waitForAnswerOrAbort(interactionService, id, call.signal);
-      const answer = answered?.answer || {};
-      stream.emit(SSE_V2_EVENTS.RUN_RESUMED, { interactionId: id });
-      if (answer.skipped || answer.value !== 'accept') {
-        result = { action: 'decline' };
-      } else {
-        result = { action: 'accept', content: elicitationContent(form, answer.data) };
+      const answered = await waitForOutcome(interactionService, id, call.signal, completion);
+      if (answered?.completed) {
+        await interactionService.cancel(id, 'completed').catch(() => {});
+        return { action: 'accept' };
       }
-      ended = { status: 'completed', finishReason: `elicitation_${result.action}` };
+      const answer = answered?.answer || {};
+      if (answer.skipped || answer.value !== 'accept') return { action: 'decline' };
+      return question.accepted(answer);
     } catch (error) {
       if (error?.code === 'ABORTED') {
         await interactionService.cancel(id, 'aborted').catch(() => {});
       }
-      result = { action: 'cancel' };
-      ended = { status: 'aborted', finishReason: 'elicitation_cancel' };
-    } finally {
-      call.onWaitEnd?.();
+      return { action: 'cancel' };
     }
-    stream.emit(SSE_V2_EVENTS.RUN_ENDED, ended);
-    logger.info('MCP server question answered', {
-      component: COMPONENT,
-      serverId,
-      chatId,
-      interactionId: id,
-      action: result.action
-    });
-    return result;
+  }
+
+  async function handleElicitation(request) {
+    const params = request?.params || {};
+    const context = answerableCall();
+    const question = questionFor(params, serverName);
+    if (!context || (question.mode === 'url' && !question.url)) {
+      logger.info('MCP server asked a question iHub cannot put to anyone here', {
+        component: COMPONENT,
+        serverId,
+        mode: question.mode,
+        reason: context ? 'unsafe_url' : 'no_person',
+        chatId: currentCall()?.chatId || null
+      });
+      // A page iHub will not show is a refusal; nobody to ask is a dismissal.
+      return { action: context ? 'decline' : 'cancel' };
+    }
+
+    const { call, parent } = context;
+    const runId = newRunId('chat');
+    const id = `elicit-${randomUUID()}`;
+    const elicitationId = question.mode === 'url' && text(params.elicitationId, 400);
+    const completion = elicitationId
+      ? new Promise(resolve => completions.set(elicitationId, resolve))
+      : null;
+    try {
+      const interaction = await raise({ call, parent, question, id, runId });
+      const stream = new RunStreamEmitter({ streamId: call.chatId, runId });
+      stream.emit(SSE_V2_EVENTS.RUN_STARTED, {
+        kind: 'chat',
+        parentRunId: parent.runId,
+        refs: { chatId: call.chatId }
+      });
+      stream.emit(SSE_V2_EVENTS.INTERACTION_RAISED, { interaction });
+      stream.emit(SSE_V2_EVENTS.RUN_PAUSED, { reason: 'interaction', interactionId: id });
+      logger.info('MCP server asked the chat user a question', {
+        component: COMPONENT,
+        serverId,
+        chatId: call.chatId,
+        interactionId: id,
+        mode: question.mode,
+        ...(question.url ? { host: new URL(question.url).host } : {})
+      });
+
+      call.onWaitStart?.();
+      let result;
+      try {
+        result = await outcome({ call, question, id, completion });
+      } finally {
+        call.onWaitEnd?.();
+      }
+      if (result.action !== 'cancel') stream.emit(SSE_V2_EVENTS.RUN_RESUMED, { interactionId: id });
+      stream.emit(SSE_V2_EVENTS.RUN_ENDED, {
+        status: result.action === 'cancel' ? 'aborted' : 'completed',
+        finishReason: `elicitation_${result.action}`
+      });
+      logger.info('MCP server question answered', {
+        component: COMPONENT,
+        serverId,
+        chatId: call.chatId,
+        interactionId: id,
+        action: result.action
+      });
+      return result;
+    } finally {
+      if (elicitationId) completions.delete(elicitationId);
+    }
+  }
+
+  /**
+   * The server reports that the person finished on the page of a URL-mode
+   * question (`notifications/elicitation/complete`, 2025-era servers).
+   *
+   * @param {string} elicitationId
+   * @returns {boolean} whether a waiting question was finished
+   */
+  handleElicitation.complete = elicitationId => {
+    const done = typeof elicitationId === 'string' && completions.get(elicitationId);
+    if (!done) return false;
+    completions.delete(elicitationId);
+    done();
+    return true;
   };
+
+  return handleElicitation;
 }

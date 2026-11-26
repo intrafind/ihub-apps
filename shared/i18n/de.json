@@ -14541,7 +14541,15 @@
     "invalid": "Bitte prüfen Sie diesen Wert",
     "sent": "Antwort an {{server}} gesendet.",
     "declined": "Sie haben abgelehnt. {{server}} wurde abgesagt.",
-    "failed": "Die Antwort konnte nicht gesendet werden."
+    "failed": "Die Antwort konnte nicht gesendet werden.",
+    "pageHost": "Öffnet {{host}}",
+    "pageNotice": "Prüfen Sie die Adresse, bevor Sie sie öffnen. iHub öffnet nichts von selbst und sendet nichts an die Seite.",
+    "pageOpen": "{{host}} öffnen",
+    "pageOpenAgain": "Erneut öffnen",
+    "pageOpened": "Schließen Sie den Vorgang auf {{host}} ab, kommen Sie dann hierher zurück und klicken Sie auf Fertig.",
+    "pageDone": "Fertig",
+    "pageSent": "{{server}} wurde mitgeteilt, dass Sie fertig sind.",
+    "pageUnsafe": "iHub öffnet diese Adresse nicht."
   },
   "textRecognition": {
     "recognized": "Text erkannt",
