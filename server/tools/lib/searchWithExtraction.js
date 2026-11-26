@@ -4,6 +4,7 @@
 import webSearchService from '../../services/WebSearchService.js';
 import { normalizeFocus } from '../../services/knowledge/focusQuery.js';
 import { readWebPage } from '../../services/pageReader/pageReader.js';
+import { PAGE_SOURCE_NOTICE } from '../../services/pageReader/sourceNotice.js';
 import { BOT_PROTECTION_CODE } from '../../services/pageReader/botProtection.js';
 import logger from '../../utils/logger.js';
 
@@ -225,7 +226,10 @@ export default async function searchWithExtraction({
       : undefined;
   const extras = {
     ...(filters ? { filters } : {}),
-    ...(note ? { note } : {})
+    ...(note ? { note } : {}),
+    // Titles, descriptions and pages are the sites' own words: said once for the whole search,
+    // with or without content extraction, and not at all when nothing was found.
+    ...(results.length ? { sourceNotice: PAGE_SOURCE_NOTICE } : {})
   };
 
   if (!extractContent) {

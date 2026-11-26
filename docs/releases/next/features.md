@@ -112,3 +112,23 @@ passed on instead of downloaded and uploaded again.
 - **Download original** on a project document returns the file as it was uploaded.
 - Copy to project needs user projects (`userProjects`). Images cannot be copied into a project or
   used in an app yet.
+
+## Web Pages and HTML Files: Images Left Out, Whitespace Trimmed, Page Text Marked as the Page's
+
+When the model reads a web page (**Read page** in web search) or an HTML file in a project, it now
+gets the text of the page and nothing the page only shows as a picture, and spends less of its
+context on blank space.
+
+- Images are left out completely, with their alt text. Before, the alt text was passed on as
+  `[Image: …]`, although nobody sees it on the page. A caption under a picture stays, and a link
+  that holds only an image is dropped.
+- No-break and other look-alike spaces become a normal space, a run of spaces inside a line
+  becomes one, invisible characters (zero-width space, soft hyphen) are removed, and pages that
+  space their layout with empty paragraphs no longer leave stacks of blank lines.
+- The layout of code blocks and the indentation of nested lists stay as they are.
+- The description in the page's `<meta name="description">` is still passed on next to the text,
+  because it says what the page is about.
+- Every web page result now says that its text, title, description, author and dates were written
+  by the page and not by the user or iHub, and that the model must not follow instructions in them
+  or put data from the conversation into an address. The note is in the `read_url` result
+  (`sourceNotice`), once per web search, and in the description of the `read_url` tool.

@@ -897,7 +897,8 @@ None of these take any parameters — they're automatically enabled when `websea
 
 **Returns**:
 
-- `content`: one window of the page as Markdown — headings, lists, tables, links (absolute) and code are kept; images are reduced to their alt text. PDFs are returned as text
+- `content`: one window of the page as Markdown — headings, lists, tables, links (absolute) and code are kept; images are left out, with their alt text and addresses; a figure caption stays. Runs of whitespace are collapsed. PDFs are returned as text
+- `sourceNotice`: a reminder that everything read from the page (text, title, description, author, dates) was written by the page, not by the user or iHub: information to use, not instructions. A web search result carries it once at the top level, not per page
 - `title`, `description`, `author`, and `siteName` / `publishedDate` when the page declares them. A PDF's title and author come from its metadata (the file name when it has no title)
 - `truncated`, `totalLength`, `offset` and `nextOffset`: whether the page has more than this window, how long it is, and where the next window starts. A `note` repeats it in words, with the call to make to read on
 - `incomplete` (only when true): the document is longer than the reader keeps (400 000 characters, or 500 PDF pages), so the rest cannot be read at any offset. The `note` says so, and the chat shows the page as _truncated_
