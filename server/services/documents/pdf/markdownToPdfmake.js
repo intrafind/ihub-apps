@@ -573,11 +573,35 @@ export function comparable(text) {
 }
 
 /**
+ * Whether a heading says the same as the title printed for the document: the
+ * same words, or the title with words added at its start or end ("Quarterly
+ * Report" and "Quarterly Report 2026"), or the other way round.
+ *
+ * @param {string} heading
+ * @param {string} title
+ * @returns {{ same: boolean, extendsTitle: boolean }} `extendsTitle`: the
+ *   heading is the longer one, so it is the more specific wording.
+ */
+export function sameTitle(heading, title) {
+  const h = comparable(heading);
+  const t = comparable(title);
+  if (!h || !t) return { same: false, extendsTitle: false };
+  if (h === t) return { same: true, extendsTitle: false };
+  const [short, long] = h.length < t.length ? [h, t] : [t, h];
+  // A word or two is not enough to call two headings the same.
+  const related = short.length >= 3 && (long.startsWith(`${short} `) || long.endsWith(` ${short}`));
+  return { same: related, extendsTitle: related && long === h };
+}
+
+/**
  * Tidy the top level of a document body for print.
  *
- * - A first heading that only repeats the title printed above it is left
- *   out. Markdown written for the screen (and the models) usually opens with
- *   `# <title>`, which would put the title on the page twice.
+ * - A first heading that only repeats the title printed above it (on the page
+ *   or on the cover page) is left out. Markdown written for the screen (and
+ *   the models) usually opens with `# <title>`, which would put the title on
+ *   the page twice. A heading that extends the title ("… 2026") counts as the
+ *   same title; its wording is kept in `ctx.openingHeading` so that the title
+ *   can be printed with it.
  * - A rule (`---`) at the start or the end, after another rule, or next to a
  *   heading that draws its own rule is left out. Screen Markdown separates
  *   its sections with rules; on paper they double the heading rules.
@@ -590,13 +614,13 @@ export function comparable(text) {
 function tidyBody(tokens, ctx, title) {
   const blocks = tokens.filter(token => token.type !== 'space');
   const first = blocks.find(token => token.type !== 'hr');
-  if (
-    title &&
-    first?.type === 'heading' &&
-    first.depth <= 2 &&
-    comparable(plainText(first.tokens)) === comparable(title)
-  ) {
-    blocks.splice(blocks.indexOf(first), 1);
+  if (title && first?.type === 'heading' && first.depth <= 2) {
+    const text = plainText(first.tokens);
+    const { same, extendsTitle } = sameTitle(text, title);
+    if (same) {
+      blocks.splice(blocks.indexOf(first), 1);
+      ctx.openingHeading = { text: text.trim(), extendsTitle };
+    }
   }
   const ruledHeading = token => token?.type === 'heading' && hasHeadingRule(ctx, token.depth);
   const out = [];
@@ -622,7 +646,7 @@ function tidyBody(tokens, ctx, title) {
  * @param {Object} [options]
  * @param {boolean} [options.body] - The Markdown is the document body (not a
  *   layout block): tidy it for print (see `tidyBody`).
- * @param {string} [options.title] - With `body`: the title printed above it.
+ * @param {string} [options.title] - With `body`: the title printed above it (or on the cover page).
  * @returns {Array<Object>}
  */
 export function markdownToContent(markdown, ctx, { body = false, title } = {}) {

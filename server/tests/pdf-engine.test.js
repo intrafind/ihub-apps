@@ -18,7 +18,7 @@ import { PDFDocument } from 'pdf-lib';
 import { PNG } from 'pngjs';
 import * as pdfjs from 'pdfjs-dist/legacy/build/pdf.mjs';
 
-import { markdownToContent } from '../services/documents/pdf/markdownToPdfmake.js';
+import { markdownToContent, sameTitle } from '../services/documents/pdf/markdownToPdfmake.js';
 import { buildDocument } from '../services/documents/pdf/buildDocument.js';
 import { sanitizeBlocks } from '../services/documents/pdf/sanitizeBlocks.js';
 import { printableRuns } from '../services/documents/pdf/glyphs.js';
@@ -150,6 +150,79 @@ describe('markdown conversion', () => {
       /Overview/,
       'only a heading that opens the body'
     );
+  });
+
+  it('counts a heading as the title when it only adds or drops words at the start or end', () => {
+    const same = (heading, title) => sameTitle(heading, title);
+    assert.deepEqual(same('Quarterly Report', 'quarterly report!'), {
+      same: true,
+      extendsTitle: false
+    });
+    assert.deepEqual(same('Quarterly Report 2026', 'Quarterly Report'), {
+      same: true,
+      extendsTitle: true
+    });
+    assert.deepEqual(same('Acme Quarterly Report', 'Quarterly Report'), {
+      same: true,
+      extendsTitle: true
+    });
+    // The title is the longer, more specific one: the heading goes, the title stays.
+    assert.deepEqual(same('Quarterly Report', 'Quarterly Report 2026'), {
+      same: true,
+      extendsTitle: false
+    });
+    // Words in the middle, other words, and very short texts are not the same title.
+    assert.equal(same('Quarterly Sales Report', 'Quarterly Report').same, false);
+    assert.equal(same('Overview', 'Quarterly Report').same, false);
+    assert.equal(same('Q3 plan', 'Q3').same, false);
+    assert.equal(same('', 'Quarterly Report').same, false);
+  });
+
+  it('leaves out a first heading that extends the title, and keeps its wording once', () => {
+    const body = '# Quarterly Report 2026\n\nText.';
+    const context = ctx();
+    const texts = collectText(
+      markdownToContent(body, context, { body: true, title: 'Quarterly Report' })
+    );
+    assert.doesNotMatch(texts.join('|'), /Quarterly/);
+    assert.deepEqual(context.openingHeading, { text: 'Quarterly Report 2026', extendsTitle: true });
+    // A heading that is not the title is kept and leaves nothing behind.
+    const other = ctx();
+    assert.match(
+      collectText(
+        markdownToContent('# Overview\n\nText.', other, { body: true, title: 'Quarterly Report' })
+      ).join('|'),
+      /Overview/
+    );
+    assert.equal(other.openingHeading, undefined);
+  });
+
+  it('prints the title once on the page, on a cover page and with a longer first heading', async () => {
+    const count = async spec => {
+      const { buffer } = await renderPdfSpec(spec);
+      const pages = await pageLines(buffer);
+      return { pages, times: pages.flat().filter(line => /Quarterly Report/.test(line)).length };
+    };
+    const md = '# Quarterly Report\n\nIntro text.\n\n## Section\n\nMore.';
+    const plain = await count({ title: 'Quarterly Report', markdown: md });
+    assert.equal(plain.times, 1);
+    const cover = await count({ title: 'Quarterly Report', coverPage: true, markdown: md });
+    assert.equal(cover.times, 1, 'the cover page shows it, the body does not repeat it');
+    assert.match(cover.pages[0].join(' '), /Quarterly Report/);
+    assert.doesNotMatch(cover.pages[1].join(' '), /Quarterly Report/);
+    const longer = await count({
+      title: 'Quarterly Report',
+      markdown: '# Quarterly Report 2026\n\nIntro text.'
+    });
+    assert.equal(longer.times, 1);
+    assert.match(longer.pages[0][0], /Quarterly Report 2026/, 'the longer wording is printed');
+    const longerCover = await count({
+      title: 'Quarterly Report',
+      coverPage: true,
+      markdown: '# Quarterly Report 2026\n\nIntro text.'
+    });
+    assert.equal(longerCover.times, 1);
+    assert.match(longerCover.pages[0].join(' '), /Quarterly Report 2026/);
   });
 
   it('leaves out rules that would double a heading rule or end the body', () => {
@@ -347,7 +420,7 @@ describe('rendering', () => {
     assert.doesNotMatch(pdfText(buffer), /\/EmbeddedFile/);
   });
 
-  it('prints the title once when the Markdown opens with it', () => {
+  it('prints the title once when the Markdown opens with it, also with a cover page', () => {
     const { docDefinition } = buildDocument({
       title: 'Spotlight Pages Concept',
       theme: 'professional',
@@ -356,7 +429,7 @@ describe('rendering', () => {
     const titles = collectText(docDefinition.content).filter(t => t === 'Spotlight Pages Concept');
     assert.equal(titles.length, 1);
     assert.equal(docDefinition.content.filter(isRule).length, 0);
-    // With a cover page the title is on its own page; the body keeps its heading.
+    // With a cover page the title is on its own page; the body does not repeat it.
     const withCover = buildDocument({
       title: 'Spotlight Pages Concept',
       coverPage: true,
@@ -365,7 +438,7 @@ describe('rendering', () => {
     assert.equal(
       collectText(withCover.docDefinition.content).filter(t => t === 'Spotlight Pages Concept')
         .length,
-      2
+      1
     );
   });
 

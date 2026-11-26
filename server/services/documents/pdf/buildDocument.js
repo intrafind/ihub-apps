@@ -394,9 +394,14 @@ function brandLogo(spec, setup, ctx) {
   };
 }
 
-function coverPage(spec, theme, setup, logo) {
+/** The title the cover page prints: its own, else the document's. */
+function coverTitleOf(spec) {
   const cover = spec.coverPage && typeof spec.coverPage === 'object' ? spec.coverPage : {};
-  const title = str(cover.title) || str(spec.title) || '';
+  return str(cover.title) || str(spec.title) || '';
+}
+
+function coverPage(spec, theme, setup, logo, title = coverTitleOf(spec)) {
+  const cover = spec.coverPage && typeof spec.coverPage === 'object' ? spec.coverPage : {};
   const subtitle = str(cover.subtitle) || str(spec.subtitle);
   const author = str(cover.author) || str(spec.author);
   const date = str(cover.date) || str(spec.date);
@@ -481,31 +486,33 @@ export function buildDocument(spec, { svgImageCallback } = {}) {
   // The title is printed right above the body (no cover page, no contents).
   const titleOnTop = !hasCover && !tocRequested && str(spec.title) && spec.showTitle !== false;
 
+  // The title the document prints before its body: on the cover page, or above the body.
+  const shownTitle = (hasCover ? coverTitleOf(spec) : titleOnTop && str(spec.title)) || undefined;
+
   const body = [];
   if (typeof spec.markdown === 'string' && spec.markdown.trim()) {
-    body.push(
-      ...markdownToContent(spec.markdown, ctx, {
-        body: true,
-        title: titleOnTop ? str(spec.title) : undefined
-      })
-    );
-  } else if (titleOnTop) {
-    ctx.stripOpeningTitle = str(spec.title);
+    body.push(...markdownToContent(spec.markdown, ctx, { body: true, title: shownTitle }));
+  } else if (shownTitle) {
+    ctx.stripOpeningTitle = shownTitle;
   }
   if (spec.blocks !== undefined) body.push(...sanitizeBlocks(spec.blocks, ctx));
   if (!body.length) {
     throw new Error('The document has no content. Provide markdown and/or blocks.');
   }
 
+  // A first heading that extends the title ("… 2026") was left out of the body:
+  // the title is printed with its wording, which says more.
+  const printedTitle = ctx.openingHeading?.extendsTitle ? ctx.openingHeading.text : shownTitle;
+
   const content = [];
-  if (hasCover) content.push(...coverPage(spec, theme, setup, logo));
+  if (hasCover) content.push(...coverPage(spec, theme, setup, logo, printedTitle));
   if (tocRequested) {
     const tocTitle = str(spec.toc?.title, 200) || labels.contents;
     content.push({ toc: { title: { text: tocTitle, style: 'tocTitle' } } });
     content.push({ text: '', pageBreak: 'after' });
   } else if (titleOnTop) {
     content.push({
-      text: str(spec.title),
+      text: printedTitle,
       style: 'title',
       fontSize: theme.baseFontSize * 2.1,
       margin: [0, 0, 0, 4]

@@ -26,3 +26,16 @@ get the button at all.
 - Someone who may only use a personal app, or an administrator who has no edit right on it,
   sees no button.
 - For an app of the company, nothing changes: administrators land in the admin editor.
+
+## PDFs Print the Title Once
+
+A PDF could show its title twice: on the cover page and again as the first heading of the text, or
+as the title and again as a first heading with a few more words ("Quarterly Report" and "Quarterly
+Report 2026").
+
+- A first heading that repeats the title is left out of the text when the title is on a cover page,
+  as it already was when the title sits above the text.
+- A first heading that only adds or drops words at the start or end of the title counts as the
+  title. When the heading is the longer one, its wording is printed once as the title.
+- A different first heading, and a heading further down, stay.
+
