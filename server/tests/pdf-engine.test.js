@@ -442,6 +442,35 @@ describe('rendering', () => {
     );
   });
 
+  it('keeps the first heading of a document with contents, and prints a title-only document', async () => {
+    const withContents = buildDocument({
+      title: 'Spotlight Pages Concept',
+      coverPage: true,
+      toc: true,
+      markdown: '# Spotlight Pages Concept\n\n## Overview\n\nText.'
+    });
+    // The cover shows the title; the heading stays in the text, so the contents list it.
+    assert.equal(
+      collectText(withContents.docDefinition.content).filter(t => t === 'Spotlight Pages Concept')
+        .length,
+      2
+    );
+    // Only the title's own heading: the cover (or the title on top) carries the document.
+    const titleOnly = await renderPdfSpec({
+      title: 'Quarterly Report',
+      coverPage: true,
+      markdown: '# Quarterly Report'
+    });
+    assert.ok(titleOnly.pages >= 1);
+    assert.equal(
+      (await pageLines(titleOnly.buffer)).flat().filter(line => /Quarterly Report/.test(line))
+        .length,
+      1
+    );
+    // Nothing at all is still an error.
+    assert.throws(() => buildDocument({ title: 'Empty', markdown: '   ' }), /no content/);
+  });
+
   it('keeps a heading with at least two lines of what follows it', async () => {
     // Push a heading down the first page step by step, with a running header,
     // footer and corner watermark on every page: on whichever page the heading

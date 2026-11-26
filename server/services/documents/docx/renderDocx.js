@@ -3,33 +3,11 @@
 
 import { assertWellFormed, openPackage } from '../ooxml/opcPackage.js';
 import { buildDocx, labelsFor } from './buildDocx.js';
-import {
-  inspectWordTemplate,
-  mergeIntoWordTemplate,
-  readWordTemplateLayout
-} from './wordTemplate.js';
+import { mergeIntoWordTemplate, readWordTemplateLayout } from './wordTemplate.js';
 
 /** The year in a date such as `2026-11-26` or `26 November 2026`; this year when there is none. */
 function yearOf(date) {
   return /\b(?:19|20)\d{2}\b/.exec(String(date))?.[0] || String(new Date().getFullYear());
-}
-
-/**
- * The placeholders of an uploaded Word file that are not built in and are
- * still in the finished document: they had no value, so they print as written.
- * (A placeholder in a body that was cleared is gone, and is not reported.)
- *
- * @param {Buffer} template - The uploaded file.
- * @param {Buffer} result - The finished document.
- * @returns {Promise<string[]>} Names, in the order they appear in the file.
- */
-async function unfilledFields(template, result) {
-  const [wanted, left] = await Promise.all([
-    inspectWordTemplate(template),
-    inspectWordTemplate(result)
-  ]);
-  const remaining = new Set(left.customFields);
-  return wanted.customFields.filter(name => remaining.has(name));
 }
 
 /** What the model is told about placeholders of an uploaded file that had no value. */
@@ -45,16 +23,6 @@ function unfilledWarning(names) {
 function mergeModeOf(spec, layout) {
   if (spec.templateMode !== 'auto') return spec.templateMode;
   return layout.placeholders.has('content') ? 'fill_placeholders' : 'styles_only';
-}
-
-/**
- * An uploaded file's own placeholders get their values from `fields`: what is left
- * without a value is reported (nothing for a template of the company).
- */
-async function unfilledWarnings(spec, template, result) {
-  if (!spec.templateMode) return [];
-  const names = await unfilledFields(template, result);
-  return names.length ? [unfilledWarning(names)] : [];
 }
 
 /**
@@ -107,8 +75,12 @@ export async function renderDocx(spec, assets = {}) {
     // is cleared instead of having the new content appended to it.
     const mode = mergeModeOf(spec, layout);
     const date = spec.date || new Date().toISOString().slice(0, 10);
+    let unresolved = [];
     buffer = await mergeIntoWordTemplate(built.buffer, template, {
       mode,
+      onUnresolved: names => {
+        unresolved = names;
+      },
       values: {
         // The template's own fields first: a built-in placeholder wins.
         ...spec.fields,
@@ -130,7 +102,9 @@ export async function renderDocx(spec, assets = {}) {
         language: spec.language
       }
     });
-    warnings = [...warnings, ...(await unfilledWarnings(spec, template, buffer))];
+    // An uploaded file's own placeholders get their values from `fields`; what is left is reported.
+    if (spec.templateMode && unresolved.length)
+      warnings = [...warnings, unfilledWarning(unresolved)];
   } else {
     ({ buffer, warnings } = await buildDocx(spec));
   }

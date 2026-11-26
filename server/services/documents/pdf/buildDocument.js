@@ -489,14 +489,19 @@ export function buildDocument(spec, { svgImageCallback } = {}) {
   // The title the document prints before its body: on the cover page, or above the body.
   const shownTitle = (hasCover ? coverTitleOf(spec) : titleOnTop && str(spec.title)) || undefined;
 
+  // A document with a table of contents keeps its first heading in the text, so that
+  // the contents list it; the title stays on the cover page.
+  const strippedTitle = tocRequested ? undefined : shownTitle;
+
   const body = [];
   if (typeof spec.markdown === 'string' && spec.markdown.trim()) {
-    body.push(...markdownToContent(spec.markdown, ctx, { body: true, title: shownTitle }));
-  } else if (shownTitle) {
-    ctx.stripOpeningTitle = shownTitle;
+    body.push(...markdownToContent(spec.markdown, ctx, { body: true, title: strippedTitle }));
+  } else if (strippedTitle) {
+    ctx.stripOpeningTitle = strippedTitle;
   }
   if (spec.blocks !== undefined) body.push(...sanitizeBlocks(spec.blocks, ctx));
-  if (!body.length) {
+  // A body that is only the title's own heading is a document: the title is printed from it.
+  if (!body.length && !ctx.openingHeading) {
     throw new Error('The document has no content. Provide markdown and/or blocks.');
   }
 

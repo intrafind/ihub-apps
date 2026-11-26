@@ -270,6 +270,41 @@ describe('create_docx with templateFileId', () => {
     );
   });
 
+  it('does not report a placeholder the content merely mentions', async () => {
+    clearHeldGeneratedFiles();
+    const { buffer: uploaded } = await buildDocx({
+      title: 'Old',
+      markdown: 'Client: {{client}}. Gone: {{project}}.'
+    });
+    const file = await store('mentions.docx', DOCX, uploaded);
+    // The new Markdown talks about "{{client}}" and "{{project}}" itself.
+    const base = {
+      filename: 'mentions',
+      title: 'Mentions',
+      markdown: 'Use {{client}} and {{project}} in your templates.',
+      templateFileId: file.id,
+      user,
+      chatId
+    };
+    // styles_only drops the old body: nothing of the template is left to report.
+    const cleared = await runCreateDocx(base);
+    assert.equal(cleared.success, true, cleared.error);
+    assert.equal(
+      (cleared.warnings || []).some(w => /not built in/.test(w)),
+      false
+    );
+    // append keeps the old body: {{client}} has its value, {{project}} has none and is reported alone.
+    const appended = await runCreateDocx({
+      ...base,
+      templateMode: 'append',
+      fields: { client: 'ACME' }
+    });
+    assert.equal(appended.success, true, appended.error);
+    const warning = appended.warnings.find(w => /not built in/.test(w));
+    assert.match(warning, /\{\{project\}\}/);
+    assert.doesNotMatch(warning, /\{\{client\}\}/);
+  });
+
   it('does not report a placeholder that sat in an old body that was cleared', async () => {
     clearHeldGeneratedFiles();
     const { buffer: uploaded } = await buildDocx({
