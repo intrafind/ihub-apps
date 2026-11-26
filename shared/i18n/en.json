@@ -12404,7 +12404,8 @@
       "shared": "Shared with me",
       "skills": "Skills",
       "mySkills": "My skills",
-      "sharedSkills": "Shared skills"
+      "sharedSkills": "Shared skills",
+      "serverSkills": "Skills of connected servers"
     },
     "history": {
       "current": "current",

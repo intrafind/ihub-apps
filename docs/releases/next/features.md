@@ -228,6 +228,7 @@ chat.
   use the integration.
 - **Approve** checks every file of the skill. If the server later changes the skill, it shows as
   **Changed on the server** and is not used until you approve it again.
+- You can also start one yourself: the `/` picker lists it under **Skills of connected servers**.
 - A server skill never replaces an iHub skill of the same name, and it grants no tools.
 
 Details: [MCP Integration](../../mcp-integration.md#skills-from-the-server).

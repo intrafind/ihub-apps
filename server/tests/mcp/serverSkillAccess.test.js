@@ -25,6 +25,7 @@ const skillAccess = await import('../../services/skillAccess.js');
 const { runTool } = await import('../../services/tools/runTool.js');
 const { setServerSkillDepsForTests, clearServerSkillCache } =
   await import('../../services/mcp/mcpSkills.js');
+const { default: registerSkillRoutes } = await import('../../routes/skillRoutes.js');
 
 const sha = text => `sha256:${createHash('sha256').update(text).digest('hex')}`;
 const FILES = {
@@ -58,6 +59,17 @@ const instance = {
   skills: { approved: { deploy: { ...ENTRY, approvedAt: '2026-11-26T00:00:00.000Z' } } }
 };
 
+const serverDeps = {
+  manager: {
+    hasServer: id => id === 'billing',
+    withUserConnection: (_id, _user, operation) => operation(conn)
+  },
+  installations: { get: id => (id === 'billing' ? instance : null) },
+  // The app binds the installation when it names it.
+  boundInstanceIds: app => (app?.integrations?.billing ? ['billing'] : []),
+  userMayUse: (_instance, user) => user.id !== 'stranger'
+};
+
 const original = {};
 const stubs = {
   getSkills: () => ({ data: [], etag: 'test' }),
@@ -72,16 +84,7 @@ before(() => {
     original[key] = configCache[key];
     configCache[key] = fn;
   }
-  setServerSkillDepsForTests({
-    manager: {
-      hasServer: id => id === 'billing',
-      withUserConnection: (_id, _user, operation) => operation(conn)
-    },
-    installations: { get: id => (id === 'billing' ? instance : null) },
-    // The app binds the installation when it names it.
-    boundInstanceIds: app => (app?.integrations?.billing ? ['billing'] : []),
-    userMayUse: (_instance, user) => user.id !== 'stranger'
-  });
+  setServerSkillDepsForTests(serverDeps);
 });
 
 after(() => {
@@ -139,8 +142,134 @@ describe('a server skill an admin approved', () => {
     }
   });
 
-  test('is never picked by /name: that still means an iHub skill', async () => {
-    const resolved = await skillAccess.resolveSkillsForTurn({ text: '/deploy now', app, user });
-    assert.deepEqual(resolved, []);
+  test('is started with /<installation>:<name>, or /<name> when nothing else has the name', async () => {
+    assert.deepEqual(skillAccess.skillTokensIn('Run /billing:deploy now, then /deploy: done'), [
+      'billing:deploy',
+      'deploy'
+    ]);
+    for (const text of ['/billing:deploy now', 'please /deploy']) {
+      const resolved = await skillAccess.resolveSkillsForTurn({ text, app, user });
+      assert.deepEqual(
+        resolved.map(entry => [entry.name, entry.origin]),
+        [['billing:deploy', 'message']],
+        text
+      );
+    }
+  });
+
+  test('gives way to an iHub skill of the same name; a name two servers share picks neither', async () => {
+    const getSkills = configCache.getSkills;
+    const getSkillsForApp = configCache.getSkillsForApp;
+    const global = [{ name: 'deploy', description: 'Our own deploy skill' }];
+    configCache.getSkills = () => ({ data: global, etag: 'g' });
+    configCache.getSkillsForApp = async () => global;
+    try {
+      const resolved = await skillAccess.resolveSkillsForTurn({
+        text: '/deploy',
+        app: { ...app, skills: ['deploy'] },
+        user
+      });
+      assert.deepEqual(
+        resolved.map(entry => entry.name),
+        ['deploy']
+      );
+    } finally {
+      configCache.getSkills = getSkills;
+      configCache.getSkillsForApp = getSkillsForApp;
+    }
+
+    const second = {
+      ...instance,
+      id: 'billing-eu',
+      label: 'Billing EU'
+    };
+    setServerSkillDepsForTests({
+      ...serverDeps,
+      installations: { get: id => ({ billing: instance, 'billing-eu': second })[id] || null },
+      boundInstanceIds: () => ['billing', 'billing-eu'],
+      manager: { ...serverDeps.manager, hasServer: () => true }
+    });
+    try {
+      assert.deepEqual(await skillAccess.resolveSkillsForTurn({ text: '/deploy', app, user }), []);
+      const byId = await skillAccess.resolveSkillsForTurn({
+        text: '/billing-eu:deploy',
+        app,
+        user
+      });
+      assert.deepEqual(
+        byId.map(entry => entry.name),
+        ['billing-eu:deploy']
+      );
+    } finally {
+      setServerSkillDepsForTests(serverDeps);
+    }
+  });
+});
+
+describe('the / picker', () => {
+  /** The handlers `registerSkillRoutes` registers for a path. */
+  function pickerHandlers() {
+    const routes = [];
+    registerSkillRoutes({
+      get: (routePath, ...handlers) => routes.push({ routePath, handlers }),
+      post: () => {},
+      put: () => {},
+      delete: () => {},
+      use: () => {}
+    });
+    return routes.find(route => route.routePath.endsWith('/api/skills')).handlers;
+  }
+
+  async function list(query) {
+    const res = {
+      headers: {},
+      body: null,
+      status() {
+        return res;
+      },
+      setHeader(name, value) {
+        res.headers[name.toLowerCase()] = value;
+      },
+      json(value) {
+        res.body = value;
+      }
+    };
+    const req = { query, params: {}, headers: {}, user: { ...user } };
+    for (const handler of pickerHandlers()) {
+      let advanced = false;
+      await handler(req, res, error => {
+        if (error) throw error;
+        advanced = true;
+      });
+      if (!advanced) break;
+    }
+    return res;
+  }
+
+  test("lists the app's server skills, by id, with the server's name", async () => {
+    const getSkillsForUser = configCache.getSkillsForUser;
+    const getAppForUserById = configCache.getAppForUserById;
+    configCache.getSkillsForUser = async () => ({ data: [], etag: 'x' });
+    configCache.getAppForUserById = async (_user, _platform, id) => (id === 'ops' ? app : null);
+    try {
+      const withApp = await list({ appId: 'ops' });
+      assert.deepEqual(withApp.body, [
+        {
+          id: 'billing:deploy',
+          name: 'deploy',
+          displayName: 'deploy',
+          description: 'Deploy safely',
+          scope: 'server',
+          server: { id: 'billing', name: 'Billing' }
+        }
+      ]);
+      assert.equal(withApp.headers['cache-control'], 'private, no-store');
+      // Without an app, or with one the user may not open, there are none.
+      assert.deepEqual((await list({})).body, []);
+      assert.deepEqual((await list({ appId: 'secret' })).body, []);
+    } finally {
+      configCache.getSkillsForUser = getSkillsForUser;
+      configCache.getAppForUserById = getAppForUserById;
+    }
   });
 });

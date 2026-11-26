@@ -190,7 +190,12 @@ files the server does not list).
   name in front of the description, and loads it with `activate_skill` and its
   files with `read_skill_resource`. It is offered in apps that turn skills on
   (`skillSettings.enabled`) and bind the installation, to users the
-  installation is granted to. `/name` does not pick it, and agents do not get it.
+  installation is granted to. Agents do not get it.
+- **Started by the user** like any skill: the `/` picker lists the app's server
+  skills under **Skills of connected servers**, with the server's name, and
+  writes `/<installation>:<name>` into the message. Typed by hand, the bare
+  `/<name>` works too when no skill of the user's own, shared or global has that
+  name and only one server offers it; otherwise the id decides.
 - **It grants nothing.** `allowed-tools` in a server skill's frontmatter is
   ignored; the skill can only use the tools the chat offers anyway.
 - **Per-user servers** (`oauth-user`): the tab lists the skills through the

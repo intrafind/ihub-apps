@@ -32,10 +32,14 @@ There are two kinds:
   in one message; at most `skillSettings.maxActiveSkills` (default 3) are loaded. Typing `/` at
   the start of a word opens a picker that lists the skills next to the prompts; picking a skill
   inserts its `/name` and you keep typing. When your own skill, a skill shared with you and a
-  global skill have the same name, your own is used, then the shared one.
+  global skill have the same name, your own is used, then the shared one. A skill an MCP server
+  ships is listed under **Skills of connected servers** and inserted as
+  `/<installation>:<name>`; its bare `/name` picks it only when no other skill has that name
+  and one server alone offers it.
 - **Scheduled tasks and the API** work the same way: put `/skill-name` in a scheduled task's
   instructions, or in a message sent to the chat API, and the skill is loaded for that run. The
-  chat API also accepts `requestedSkills`, a list of global skill names or user skill ids.
+  chat API also accepts `requestedSkills`, a list of global skill names, user skill ids or
+  server skill ids (`<installation>:<name>`).
 
 A skill that shaped an answer shows once, in the answer's activity block (never as a chip above it):
 as the first segment of the collapsed line and as a row in the list, always with why it is there:

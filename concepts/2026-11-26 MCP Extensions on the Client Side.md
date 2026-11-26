@@ -101,8 +101,9 @@ in memory by digest. An activation also compares the server's current listing
 copy would cover is refused too. Per-user servers needed no special case: the
 admin lists through their own connection, a user reads through theirs, and a
 user whose server serves something else than was approved does not get the
-skill. Not done: `/name` does not pick a server skill (only its id does), and
-the `/` picker does not list them.
+skill. A user starts one with `/<installation>:<name>`, which the `/` picker
+inserts (`GET /api/skills?appId=` lists the app's server skills), or with the
+bare `/<name>` when nothing else has that name. Agents do not get server skills.
 
 The original plan follows.
 

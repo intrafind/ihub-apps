@@ -12403,7 +12403,8 @@
       "shared": "Mit mir geteilt",
       "skills": "Skills",
       "mySkills": "Meine Skills",
-      "sharedSkills": "Geteilte Skills"
+      "sharedSkills": "Geteilte Skills",
+      "serverSkills": "Skills verbundener Server"
     },
     "history": {
       "current": "aktuell",

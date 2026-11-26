@@ -488,10 +488,13 @@ export function maxActiveSkillsFor(app) {
  * punctuation or the end of the text — how a skill is invoked in a prompt,
  * the same in chat, in a scheduled task's instructions and through the API.
  */
-const SKILL_TOKEN = /(?:^|\s)\/([a-z0-9](?:[a-z0-9-]{0,62}[a-z0-9])?)(?=$|[\s.,;:!?)\]])/g;
+const SKILL_TOKEN =
+  /(?:^|\s)\/(?:([A-Za-z0-9_.-]{1,64}):)?([a-z0-9](?:[a-z0-9-]{0,62}[a-z0-9])?)(?=$|[\s.,;:!?)\]])/g;
 
 /**
- * The skill names a text invokes with `/name`, unique, in order.
+ * The skill names a text invokes with `/name`, unique, in order. A skill an
+ * MCP server ships may also be named by its id, `/<installation>:<name>`,
+ * which is returned whole.
  *
  * @param {unknown} text
  * @returns {string[]}
@@ -500,7 +503,9 @@ export function skillTokensIn(text) {
   if (typeof text !== 'string' || !text.includes('/')) return [];
   const names = [];
   for (const match of text.matchAll(SKILL_TOKEN)) {
-    if (!match[1].includes('--') && !names.includes(match[1])) names.push(match[1]);
+    if (match[2].includes('--')) continue;
+    const token = match[1] ? `${match[1]}:${match[2]}` : match[2];
+    if (!names.includes(token)) names.push(token);
   }
   return names;
 }
@@ -650,15 +655,24 @@ export async function resolveSkillsForTurn({ requested = [], text = '', earlier 
   )) {
     if (!personalByName.has(skill.name)) personalByName.set(skill.name, skill);
   }
-  // Server skills are named by their id only: `/name` never picks one.
+  // A server skill goes by its id (`/billing:deploy`). By its bare name only
+  // when no skill of the user's own, shared or global has that name and one
+  // server alone offers it: a name two servers share picks neither.
   const server = await getUsableServerSkills({ app, user });
   const serverById = new Map(server.map(skill => [skill.id, skill]));
+  const serverByName = new Map();
+  for (const skill of server) {
+    serverByName.set(skill.name, serverByName.has(skill.name) ? null : skill);
+  }
   const byId = id => {
     if (isUserSkillId(id)) return personalById.get(id);
     if (isServerSkillId(id)) return serverById.get(id);
     return globalByName.get(id);
   };
-  const byName = name => personalByName.get(name) || globalByName.get(name);
+  const byName = name => {
+    if (isServerSkillId(name)) return serverById.get(name);
+    return personalByName.get(name) || globalByName.get(name) || serverByName.get(name);
+  };
 
   const asEntry = (skill, origin) =>
     isUserSkillId(skill.id) || isServerSkillId(skill.id)

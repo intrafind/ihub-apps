@@ -22,6 +22,7 @@ import { emitToolProgress } from '../loop/RunStream.js';
 import { isFeatureEnabled } from '../../featureRegistry.js';
 import { isValidId } from '../../utils/pathSecurity.js';
 import { runToolScript } from './toolScriptRunner.js';
+import { isServerSkillId } from '../mcp/mcpSkills.js';
 import logger from '../../utils/logger.js';
 import { isKnowledgeTool, runKnowledgeTool } from '../knowledge/knowledgeTools.js';
 import { isChatContextTool } from '../chat/chatContextToolIds.js';
@@ -118,7 +119,9 @@ export async function runTool(toolId, params = {}, options = {}) {
         component: 'ToolLoader',
         skillName
       });
-      return `Skill '${skillName}' can only be started by the user, by writing /${skill.displayName} in a message.`;
+      // A server skill is started by its id, which no other skill shares.
+      const token = isServerSkillId(skill.name) ? skill.name : skill.displayName;
+      return `Skill '${skillName}' can only be started by the user, by writing /${token} in a message.`;
     }
     logger.info('Activating skill', { component: 'ToolLoader', skillName });
     // The turn's record of loaded skills, for the tools whose skill carries
