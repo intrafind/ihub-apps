@@ -31,12 +31,7 @@ const KIND_TO_CHECKPOINT_TYPE = Object.freeze({
  * @returns {boolean}
  */
 export function isCheckpointInteraction(interaction) {
-  return !!(
-    interaction &&
-    interaction.source &&
-    interaction.source.checkpointId &&
-    !isMcpElicitationInteraction(interaction)
-  );
+  return !!(interaction?.source?.checkpointId && !isMcpElicitationInteraction(interaction));
 }
 
 /**
@@ -77,8 +72,7 @@ export function isClarificationInteraction(interaction) {
  */
 export function isToolApprovalInteraction(interaction) {
   return !!(
-    interaction &&
-    interaction.kind === 'approval' &&
+    interaction?.kind === 'approval' &&
     interaction.origin === 'tool' &&
     interaction.source?.chatId &&
     !isCheckpointInteraction(interaction)

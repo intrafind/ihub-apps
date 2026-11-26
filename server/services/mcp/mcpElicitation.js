@@ -100,6 +100,72 @@ function enumChoices(node) {
   return null;
 }
 
+/** The keys of `node` among `keys` that hold a finite number. */
+function finiteKeys(node, keys) {
+  return Object.fromEntries(
+    keys.filter(key => finite(node[key]) !== undefined).map(key => [key, node[key]])
+  );
+}
+
+/** `{ default }` when `node.default` passes `valid`, else nothing. */
+function defaultOf(node, valid) {
+  return valid(node.default) ? { default: node.default } : {};
+}
+
+const isString = value => typeof value === 'string';
+
+function stringField(node, common) {
+  const choices = enumChoices(node);
+  if (choices) {
+    return {
+      type: 'string',
+      ...common,
+      oneOf: choices.map(c => ({ const: c.value, title: c.label })),
+      ...defaultOf(node, isString)
+    };
+  }
+  return {
+    type: 'string',
+    ...common,
+    ...(STRING_FORMATS.has(node.format) ? { format: node.format } : {}),
+    ...finiteKeys(node, ['minLength', 'maxLength']),
+    ...defaultOf(node, isString)
+  };
+}
+
+function numberField(node, common) {
+  return {
+    type: node.type,
+    ...common,
+    ...finiteKeys(node, ['minimum', 'maximum']),
+    ...defaultOf(node, value => finite(value) !== undefined)
+  };
+}
+
+function booleanField(node, common) {
+  return { type: 'boolean', ...common, ...defaultOf(node, value => typeof value === 'boolean') };
+}
+
+function arrayField(node, common) {
+  const choices = node.items && typeof node.items === 'object' ? enumChoices(node.items) : null;
+  if (!choices) return null;
+  return {
+    type: 'array',
+    ...common,
+    items: { type: 'string', oneOf: choices.map(c => ({ const: c.value, title: c.label })) },
+    ...finiteKeys(node, ['minItems', 'maxItems']),
+    ...(Array.isArray(node.default) ? { default: node.default.filter(isString) } : {})
+  };
+}
+
+const FIELD_BUILDERS = {
+  string: stringField,
+  number: numberField,
+  integer: numberField,
+  boolean: booleanField,
+  array: arrayField
+};
+
 /**
  * One field of the form, reduced to what MCP elicitation allows (a flat
  * object of primitives: text, number, integer, boolean, a single choice, a
@@ -109,61 +175,11 @@ function enumChoices(node) {
  * @returns {Object|null}
  */
 function formField(node) {
-  if (!node || typeof node !== 'object') return null;
-  const common = {
-    ...(text(node.title, 200) ? { title: text(node.title, 200) } : {}),
-    ...(text(node.description, 1000) ? { description: text(node.description, 1000) } : {})
-  };
-  if (node.type === 'string') {
-    const choices = enumChoices(node);
-    if (choices) {
-      return {
-        type: 'string',
-        ...common,
-        oneOf: choices.map(c => ({ const: c.value, title: c.label })),
-        ...(typeof node.default === 'string' ? { default: node.default } : {})
-      };
-    }
-    return {
-      type: 'string',
-      ...common,
-      ...(STRING_FORMATS.has(node.format) ? { format: node.format } : {}),
-      ...(finite(node.minLength) !== undefined ? { minLength: node.minLength } : {}),
-      ...(finite(node.maxLength) !== undefined ? { maxLength: node.maxLength } : {}),
-      ...(typeof node.default === 'string' ? { default: node.default } : {})
-    };
-  }
-  if (node.type === 'number' || node.type === 'integer') {
-    return {
-      type: node.type,
-      ...common,
-      ...(finite(node.minimum) !== undefined ? { minimum: node.minimum } : {}),
-      ...(finite(node.maximum) !== undefined ? { maximum: node.maximum } : {}),
-      ...(finite(node.default) !== undefined ? { default: node.default } : {})
-    };
-  }
-  if (node.type === 'boolean') {
-    return {
-      type: 'boolean',
-      ...common,
-      ...(typeof node.default === 'boolean' ? { default: node.default } : {})
-    };
-  }
-  if (node.type === 'array' && node.items && typeof node.items === 'object') {
-    const choices = enumChoices(node.items);
-    if (!choices) return null;
-    return {
-      type: 'array',
-      ...common,
-      items: { type: 'string', oneOf: choices.map(c => ({ const: c.value, title: c.label })) },
-      ...(finite(node.minItems) !== undefined ? { minItems: node.minItems } : {}),
-      ...(finite(node.maxItems) !== undefined ? { maxItems: node.maxItems } : {}),
-      ...(Array.isArray(node.default)
-        ? { default: node.default.filter(v => typeof v === 'string') }
-        : {})
-    };
-  }
-  return null;
+  if (!node || typeof node !== 'object' || !Object.hasOwn(FIELD_BUILDERS, node.type)) return null;
+  const title = text(node.title, 200);
+  const description = text(node.description, 1000);
+  const common = { ...(title ? { title } : {}), ...(description ? { description } : {}) };
+  return FIELD_BUILDERS[node.type](node, common);
 }
 
 /**
@@ -202,19 +218,22 @@ export function elicitationContent(form, data) {
   for (const [name, field] of Object.entries(form.properties)) {
     const value = values[name];
     if (value === undefined || value === null || value === '') continue;
-    if (field.type === 'number' || field.type === 'integer') {
-      const number = typeof value === 'number' ? value : Number(value);
-      if (!Number.isFinite(number)) continue;
-      content[name] = field.type === 'integer' ? Math.trunc(number) : number;
-    } else if (field.type === 'boolean') {
-      content[name] = value === true || value === 'true';
-    } else if (field.type === 'array') {
-      if (Array.isArray(value)) content[name] = value.filter(v => typeof v === 'string');
-    } else {
-      content[name] = String(value);
-    }
+    const typed = typedValue(field.type, value);
+    if (typed !== undefined) content[name] = typed;
   }
   return content;
+}
+
+/** A submitted value as the type its field names; `undefined` drops it. */
+function typedValue(type, value) {
+  if (type === 'number' || type === 'integer') {
+    const number = typeof value === 'number' ? value : Number(value);
+    if (!Number.isFinite(number)) return undefined;
+    return type === 'integer' ? Math.trunc(number) : number;
+  }
+  if (type === 'boolean') return value === true || value === 'true';
+  if (type === 'array') return Array.isArray(value) ? value.filter(isString) : undefined;
+  return String(value);
 }
 
 /** Wait for the answer, or for the turn to stop. */

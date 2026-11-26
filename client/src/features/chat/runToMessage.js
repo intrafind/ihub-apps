@@ -290,6 +290,15 @@ export function projectRunToMessage(run, options = {}) {
   return { content, loading, extras };
 }
 
+/** Carry a child run's workflow state (and server questions) onto the message. */
+function mergeChildExtras(extras, child) {
+  for (const key of ['workflowStep', 'workflowCheckpoint', 'mcpElicitation']) {
+    if (child[key] !== undefined) extras[key] = child[key];
+  }
+  if (child.workflowResult) extras.workflowResult = child.workflowResult;
+  if (child.outputFormat && !extras.outputFormat) extras.outputFormat = child.outputFormat;
+}
+
 /**
  * Project a message that spans a chat run and the workflow runs a tool launched
  * inside it (child runs: `parentRunId === run.runId`). The answer text,
@@ -310,11 +319,7 @@ export function projectMessageRuns(run, childRuns = [], options = {}) {
   for (const child of childRuns) {
     const c = projectRunToMessage(child, options).extras;
     if (c.workflowSteps?.length) steps = [...steps, ...c.workflowSteps];
-    if (c.workflowStep !== undefined) extras.workflowStep = c.workflowStep;
-    if (c.workflowCheckpoint !== undefined) extras.workflowCheckpoint = c.workflowCheckpoint;
-    if (c.mcpElicitation !== undefined) extras.mcpElicitation = c.mcpElicitation;
-    if (c.workflowResult) extras.workflowResult = c.workflowResult;
-    if (c.outputFormat && !extras.outputFormat) extras.outputFormat = c.outputFormat;
+    mergeChildExtras(extras, c);
   }
   if (steps.length) extras.workflowSteps = steps;
   return { ...base, extras };

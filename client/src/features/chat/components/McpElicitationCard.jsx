@@ -27,6 +27,40 @@ export function initialValues(schema) {
   return values;
 }
 
+function isEmpty(value) {
+  return (
+    value === undefined || value === null || value === '' || (Array.isArray(value) && !value.length)
+  );
+}
+
+function outOfRange(number, field) {
+  return (
+    (field.minimum !== undefined && number < field.minimum) ||
+    (field.maximum !== undefined && number > field.maximum)
+  );
+}
+
+function outOfLength(text, field) {
+  return (
+    (field.minLength !== undefined && text.length < field.minLength) ||
+    (field.maxLength !== undefined && text.length > field.maxLength)
+  );
+}
+
+/** A filled-in value as its schema type, or `undefined` when it does not fit. */
+function typedValue(field, value) {
+  if (field.type === 'number' || field.type === 'integer') {
+    const number = Number(value);
+    if (!Number.isFinite(number) || outOfRange(number, field)) return undefined;
+    if (field.type === 'integer' && !Number.isInteger(number)) return undefined;
+    return number;
+  }
+  if (field.type === 'boolean') return value === true;
+  if (field.type === 'array') return value;
+  const text = String(value);
+  return outOfLength(text, field) ? undefined : text;
+}
+
 /**
  * The answer's data and the fields that still need something, each value as
  * its schema type.
@@ -42,125 +76,120 @@ export function formAnswer(schema, values) {
   const required = new Set(schema?.required || []);
   for (const [name, field] of Object.entries(schema?.properties || {})) {
     const value = values[name];
-    const empty =
-      value === undefined ||
-      value === null ||
-      value === '' ||
-      (Array.isArray(value) && !value.length);
-    if (empty) {
-      if (required.has(name) && field.type !== 'boolean') missing.push(name);
-      if (field.type === 'boolean') data[name] = false;
-      continue;
-    }
-    if (field.type === 'number' || field.type === 'integer') {
-      const number = Number(value);
-      if (
-        !Number.isFinite(number) ||
-        (field.type === 'integer' && !Number.isInteger(number)) ||
-        (field.minimum !== undefined && number < field.minimum) ||
-        (field.maximum !== undefined && number > field.maximum)
-      ) {
-        invalid.push(name);
-        continue;
-      }
-      data[name] = number;
-    } else if (field.type === 'boolean') {
+    if (field.type === 'boolean') {
+      // An unticked box is an answer: false.
       data[name] = value === true;
-    } else if (field.type === 'array') {
-      data[name] = value;
+    } else if (isEmpty(value)) {
+      if (required.has(name)) missing.push(name);
     } else {
-      const text = String(value);
-      if (
-        (field.minLength !== undefined && text.length < field.minLength) ||
-        (field.maxLength !== undefined && text.length > field.maxLength)
-      ) {
-        invalid.push(name);
-        continue;
-      }
-      data[name] = text;
+      const typed = typedValue(field, value);
+      if (typed === undefined) invalid.push(name);
+      else data[name] = typed;
     }
   }
   return { data, missing, invalid };
 }
 
-/** One form field, as its schema type asks. */
-function Field({ name, field, value, onChange, disabled, required, problem }) {
-  const { t } = useTranslation();
-  const id = useId();
-  const hintId = `${id}-hint`;
-  const label = field.title || name;
-  const describedBy = field.description || problem ? hintId : undefined;
+const CHECKBOX_CLASS =
+  'h-4 w-4 rounded-sm border-gray-300 text-blue-700 focus-visible:ring-2 focus-visible:ring-blue-500';
 
-  if (field.type === 'boolean') {
-    return (
-      <div className="flex items-start gap-2">
-        <input
-          id={id}
-          type="checkbox"
-          checked={value === true}
-          disabled={disabled}
-          aria-describedby={describedBy}
-          onChange={e => onChange(e.target.checked)}
-          className="mt-0.5 h-4 w-4 rounded-sm border-gray-300 text-blue-700 focus-visible:ring-2 focus-visible:ring-blue-500"
-        />
-        <label htmlFor={id} className="text-sm">
-          {label}
-          {field.description && (
-            <span id={hintId} className="block text-xs text-gray-600 dark:text-gray-400">
-              {field.description}
-            </span>
-          )}
-        </label>
-      </div>
-    );
-  }
-
-  if (field.type === 'array') {
-    const chosen = Array.isArray(value) ? value : [];
-    return (
-      <fieldset aria-describedby={describedBy}>
-        <legend className="text-sm font-medium">
-          {label}
-          {required && <span aria-hidden="true"> *</span>}
-        </legend>
-        <div className="mt-1 flex flex-col gap-1">
-          {(field.items?.oneOf || []).map(choice => (
-            <label key={choice.const} className="flex items-center gap-2 text-sm">
-              <input
-                type="checkbox"
-                checked={chosen.includes(choice.const)}
-                disabled={disabled}
-                onChange={e =>
-                  onChange(
-                    e.target.checked
-                      ? [...chosen, choice.const]
-                      : chosen.filter(v => v !== choice.const)
-                  )
-                }
-                className="h-4 w-4 rounded-sm border-gray-300 text-blue-700 focus-visible:ring-2 focus-visible:ring-blue-500"
-              />
-              {choice.title || choice.const}
-            </label>
-          ))}
-        </div>
-        <FieldHint id={hintId} description={field.description} problem={problem} />
-      </fieldset>
-    );
-  }
-
-  let control;
-  if (field.type === 'string' && Array.isArray(field.oneOf)) {
-    control = (
-      <select
+function BooleanField({ id, hintId, label, field, value, onChange, disabled, describedBy }) {
+  return (
+    <div className="flex items-start gap-2">
+      <input
         id={id}
-        value={value ?? ''}
+        type="checkbox"
+        checked={value === true}
         disabled={disabled}
-        required={required}
         aria-describedby={describedBy}
-        aria-invalid={problem ? true : undefined}
-        onChange={e => onChange(e.target.value)}
-        className={INPUT_CLASS}
-      >
+        onChange={e => onChange(e.target.checked)}
+        className={`mt-0.5 ${CHECKBOX_CLASS}`}
+      />
+      <label htmlFor={id} className="text-sm">
+        {label}
+        {field.description && (
+          <span id={hintId} className="block text-xs text-gray-600 dark:text-gray-400">
+            {field.description}
+          </span>
+        )}
+      </label>
+    </div>
+  );
+}
+
+function MultipleChoiceField({
+  hintId,
+  label,
+  field,
+  value,
+  onChange,
+  disabled,
+  required,
+  problem,
+  describedBy
+}) {
+  const chosen = Array.isArray(value) ? value : [];
+  const toggle = (choice, checked) =>
+    onChange(checked ? [...chosen, choice] : chosen.filter(v => v !== choice));
+  return (
+    <fieldset aria-describedby={describedBy}>
+      <legend className="text-sm font-medium">
+        {label}
+        {required && <span aria-hidden="true"> *</span>}
+      </legend>
+      <div className="mt-1 flex flex-col gap-1">
+        {(field.items?.oneOf || []).map(choice => (
+          <label key={choice.const} className="flex items-center gap-2 text-sm">
+            <input
+              type="checkbox"
+              checked={chosen.includes(choice.const)}
+              disabled={disabled}
+              onChange={e => toggle(choice.const, e.target.checked)}
+              className={CHECKBOX_CLASS}
+            />
+            {choice.title || choice.const}
+          </label>
+        ))}
+      </div>
+      <FieldHint id={hintId} description={field.description} problem={problem} />
+    </fieldset>
+  );
+}
+
+/** The input attributes that bound a value: step, min, max, or maxLength. */
+function inputLimits(field, isNumber) {
+  if (!isNumber) return field.maxLength === undefined ? {} : { maxLength: field.maxLength };
+  return {
+    step: field.type === 'integer' ? 1 : 'any',
+    ...(field.minimum === undefined ? {} : { min: field.minimum }),
+    ...(field.maximum === undefined ? {} : { max: field.maximum })
+  };
+}
+
+function SingleValueControl({
+  id,
+  field,
+  value,
+  onChange,
+  disabled,
+  required,
+  problem,
+  describedBy
+}) {
+  const { t } = useTranslation();
+  const common = {
+    id,
+    value: value ?? '',
+    disabled,
+    required,
+    'aria-describedby': describedBy,
+    'aria-invalid': problem ? true : undefined,
+    onChange: e => onChange(e.target.value),
+    className: INPUT_CLASS
+  };
+  if (field.type === 'string' && Array.isArray(field.oneOf)) {
+    return (
+      <select {...common}>
         <option value="">{t('mcpElicitation.choose', 'Choose…')}</option>
         {field.oneOf.map(choice => (
           <option key={choice.const} value={choice.const}>
@@ -169,39 +198,34 @@ function Field({ name, field, value, onChange, disabled, required, problem }) {
         ))}
       </select>
     );
-  } else {
-    const isNumber = field.type === 'number' || field.type === 'integer';
-    control = (
-      <input
-        id={id}
-        type={isNumber ? 'number' : STRING_INPUT_TYPES[field.format] || 'text'}
-        value={value ?? ''}
-        disabled={disabled}
-        required={required}
-        aria-describedby={describedBy}
-        aria-invalid={problem ? true : undefined}
-        {...(isNumber
-          ? {
-              step: field.type === 'integer' ? 1 : 'any',
-              ...(field.minimum !== undefined ? { min: field.minimum } : {}),
-              ...(field.maximum !== undefined ? { max: field.maximum } : {})
-            }
-          : field.maxLength !== undefined
-            ? { maxLength: field.maxLength }
-            : {})}
-        onChange={e => onChange(e.target.value)}
-        className={INPUT_CLASS}
-      />
-    );
   }
+  const isNumber = field.type === 'number' || field.type === 'integer';
+  const type = isNumber ? 'number' : STRING_INPUT_TYPES[field.format] || 'text';
+  return <input type={type} {...common} {...inputLimits(field, isNumber)} />;
+}
+
+/** One form field, as its schema type asks. */
+function Field({ name, field, ...rest }) {
+  const id = useId();
+  const hintId = `${id}-hint`;
+  const props = {
+    ...rest,
+    id,
+    hintId,
+    field,
+    label: field.title || name,
+    describedBy: field.description || rest.problem ? hintId : undefined
+  };
+  if (field.type === 'boolean') return <BooleanField {...props} />;
+  if (field.type === 'array') return <MultipleChoiceField {...props} />;
   return (
     <div>
       <label htmlFor={id} className="mb-1 block text-sm font-medium">
-        {label}
-        {required && <span aria-hidden="true"> *</span>}
+        {props.label}
+        {props.required && <span aria-hidden="true"> *</span>}
       </label>
-      {control}
-      <FieldHint id={hintId} description={field.description} problem={problem} />
+      <SingleValueControl {...props} />
+      <FieldHint id={hintId} description={field.description} problem={props.problem} />
     </div>
   );
 }
@@ -247,13 +271,13 @@ export default function McpElicitationCard({ interaction, runId }) {
 
   if (!interaction || answered) {
     return answered ? (
-      <p className="mt-2 text-sm text-gray-600 dark:text-gray-400" role="status">
+      <output className="mt-2 block text-sm text-gray-600 dark:text-gray-400">
         {answered === 'accept'
           ? t('mcpElicitation.sent', 'Answer sent to {{server}}.', { server: serverName })
           : t('mcpElicitation.declined', 'You declined. {{server}} was told no.', {
               server: serverName
             })}
-      </p>
+      </output>
     ) : null;
   }
 
