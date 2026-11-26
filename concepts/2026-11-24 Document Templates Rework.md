@@ -33,8 +33,8 @@ settings only matter for PDF, Excel and templates without a file. That leads to 
 ## Goal
 
 The company's design lives in **its Office files**. The template page holds only what a file cannot:
-a name, the company name, the brand colours (read from the files by default), and the **fields** the
-company's documents need. The model is told what a template needs and asks the user for what is
+a name, the company name, the brand colours (read from the files by default), the PDF margins
+(prefilled from the Word template), and the **fields** the company's documents need. The model is told what a template needs and asks the user for what is
 missing.
 
 ## What stays, goes and comes
@@ -49,7 +49,8 @@ missing.
 | Colour palette (up to six) | **New**, derived, read-only |
 | Custom fields | **New** |
 | Logo | Goes. A logo belongs in the Word and PowerPoint template |
-| Font files, font size, margins, header, footer, page size, orientation, page numbers, logo position | Go. They come from the files |
+| PDF margins | **Stay**, as the only PDF layout setting (`pdf.margins`). Prefilled from the Word template, see "PDF margins" |
+| Font files, font size, Word and PowerPoint margins, header, footer, page size, orientation, page numbers, logo position | Go. They come from the files |
 | Base design (`pdf.theme`) | Goes |
 | Letterhead PDF, letterhead for following pages | Go. A letterhead is the Word template's first-page header |
 | PowerPoint layout overrides (`pptx.layouts`), extra text slots (`pptx.slots`), footer text, slide numbers, aspect ratio | Go. Everything is detected from the template's placeholders and size |
@@ -76,6 +77,7 @@ A migration cleans existing templates up (see Migration).
   },
   "docx": { "template": "word-template.dotx" },
   "pptx": { "template": "powerpoint-template.potx" },
+  "pdf": { "margins": [71, 71, 71, 57] },
   "fields": {
     "classification": {
       "label": { "en": "Classification", "de": "Klassifizierung" },
@@ -124,6 +126,26 @@ accent and text colour into the three fields. It offers this when a PowerPoint o
 uploaded. It never overwrites a value without being asked. Because resolution falls back to the files, a template
 with just an upload already has a brand, so the button is a convenience, not a step the admin has
 to do.
+
+### PDF margins
+
+PDFs are not built from the Word file, so the Word template's margins do not reach them by
+themselves. A PDF therefore keeps one layout setting: `pdf.margins`, four values `[left, top, right,
+bottom]` in points, as today. It is resolved like the brand colours:
+
+1. The template's own `pdf.margins`.
+2. The margins of the Word template's last section (`pgMar`), the same values the Word merge
+   already reads.
+3. The built-in default `[50, 62, 50, 62]`.
+
+The admin page shows the four values with their source and prefills them when a Word template is
+uploaded, without overwriting values the admin has set. There is no setting for page size or
+orientation: a PDF takes them from the Word template's last section, else A4 portrait.
+
+Values keep today's limits (18 to 200 points); the engine raises the top and bottom margin to at
+least 36 points because the page footer sits in it. Margins matter again whenever something is drawn
+behind the text, which is what broke the letterhead: a logo taller than the margin ended up under
+the text. With no letterhead and no logo in the PDF, nothing sits behind the text.
 
 ### Placeholders: one syntax, one list
 
@@ -204,7 +226,7 @@ This applies to Word. PowerPoint has no custom fields in this rework (see below)
 | --- | --- |
 | Word | The Word template. Styles, headers, footers, first-page header, page setup and theme come from it. Without a Word template the neutral built-in design in the resolved brand |
 | PowerPoint | The PowerPoint template, or the built-in template made from the resolved brand. Footers and slide numbers come from the layout's own placeholders. Layouts are found automatically |
-| PDF | Option A (decided): built with the existing PDF engine. Colours from the resolved brand, bundled fonts, a footer with the company name and "Page x of y". No letterhead, no base design |
+| PDF | Option A (decided): built with the existing PDF engine. Colours from the resolved brand, bundled fonts, the template's PDF margins, a footer with the company name and "Page x of y". No letterhead, no base design |
 | Excel | Resolved brand colours and font for header rows, totals and accents |
 | Web artifacts, dashboards | Resolved brand colours, palette and fonts as CSS variables |
 
@@ -245,6 +267,7 @@ or alias.
 2. Company and brand: company name, the three colours with "Take colours from this file", the derived
    palette and fonts, shown read-only with their source ("from the PowerPoint template").
 3. Word template: upload and what was found: styles, first-page header, placeholders and fields.
+   Below it the four PDF margins, with their source ("from the Word template").
 4. PowerPoint template: upload and what was found: layouts per kind, with a warning where the
    fallback is used, and the theme colours and fonts.
 5. Fields: the declared fields of the template.
@@ -258,8 +281,10 @@ black after a colour was picked. That bug is reproduced first (Playwright) and f
 `V264__document_templates_rework.js` (next number after `V263`). For every
 `contents/document-templates/<id>/template.json`:
 
-- Remove the keys that go: `brand.headingFont`, `bodyFont`, `fontSize`, `logo`, `document`, `fonts`,
-  `pdf`, `pptx.layouts`, `pptx.slots`, `pptx.footer`, `pptx.slideNumbers`, `pptx.aspectRatio`.
+- Move `document.margins` to `pdf.margins`, so a margin an admin set is not lost.
+- Remove the keys that go: `brand.headingFont`, `bodyFont`, `fontSize`, `logo`, `document` (the rest
+  of it), `fonts`, `pdf.theme`, `pdf.letterhead`, `pdf.letterheadFollowing`, `pptx.layouts`,
+  `pptx.slots`, `pptx.footer`, `pptx.slideNumbers`, `pptx.aspectRatio`.
 - Delete the files they named: logo, fonts and both letterhead PDFs.
 - Declare the placeholders found in the Word template as fields (at most 50, see Custom fields), so
   nothing prints its braces.
@@ -285,11 +310,12 @@ This rework changes the ground under it:
 - **The deterministic half is already part of this concept.** Resolving colours, palette and fonts
   from the themes and the "Take colours from this file" button do what #3605 slice 1 describes for
   those values.
-- **Most of the extraction targets disappear.** Logo, margins, header and footer text, page size and
-  font files are no longer template settings, so there is nothing to propose for them.
-- **What remains for #3605:** company name, the three colours, the declared fields, and the optional
-  AI step that reconciles a guideline with the themes. Its `_propose` and `_accept` API and its
-  review interface need to be rewritten against the smaller schema.
+- **Most of the extraction targets disappear.** Logo, header and footer text, page size and font files
+  are no longer template settings, so there is nothing to propose for them. Margins stay, but only
+  for PDFs and prefilled from the Word template (see "PDF margins").
+- **What remains for #3605:** company name, the three colours, the PDF margins, the declared fields,
+  and the optional AI step that reconciles a guideline with the themes. Its `_propose` and `_accept`
+  API and its review interface need to be rewritten against the smaller schema.
 
 Proposal: implement this rework first, then reduce #3605 to that remainder and update its text.
 
