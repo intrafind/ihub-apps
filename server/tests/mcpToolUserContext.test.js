@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
 import { describe, it, expect, jest, beforeEach } from '@jest/globals';
-import { Client } from '@modelcontextprotocol/sdk/client/index.js';
-import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
+import { Client } from '@modelcontextprotocol/client';
+import { InMemoryTransport } from '@modelcontextprotocol/client';
 
 /**
  * The MCP gateway exposes native iHub tools (iFinder, Entra, Jira, ...) as MCP

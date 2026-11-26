@@ -1,12 +1,13 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
-import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import {
-  ListToolsRequestSchema,
-  ListResourcesRequestSchema
-} from '@modelcontextprotocol/sdk/types.js';
-import { z } from 'zod';
+  CLIENT_CAPABILITIES_META_KEY,
+  McpServer,
+  fromJsonSchema,
+  inputRequired,
+  inputResponse
+} from '@modelcontextprotocol/server';
 import configCache from '../../configCache.js';
 import { runTool } from '../tools/runTool.js';
 import {
@@ -23,13 +24,17 @@ import logger from '../../utils/logger.js';
 import { getLocalizedString } from '../../utils/localize.js';
 import { workflowAnswerParts } from '../workflow/answerParts.js';
 import { installedIntegrationById } from '../integrations/installedRefs.js';
-import { directCallNeedsApproval } from '../../utils/toolApproval.js';
+import { directCallNeedsApproval, resolveSideEffect } from '../../utils/toolApproval.js';
 import { APPROVAL_ERROR_CODES } from '../../../shared/toolApproval.js';
+import { argumentsDigest, gatewayRequestStateCodec } from './gatewayRequestState.js';
+import { attachGatewaySkills } from './gatewaySkills.js';
+import { attachGatewayTasks, clientAcceptsTasks, startGatewayTask } from './gatewayTasks.js';
 
 /**
  * Whether a tool exposed through the gateway needs a person's approval
- * (#2945). The gateway has nobody to ask: such a call is refused with
- * `APPROVAL_REQUIRED_NO_USER` instead of running.
+ * (#2945). The gateway asks the person through the MCP client (elicitation,
+ * see {@link gatewayApproval}); a client that cannot ask gets the call refused
+ * with `APPROVAL_REQUIRED_NO_USER` instead.
  *
  * @param {Object} tool
  * @param {Object} platform
@@ -65,109 +70,86 @@ function localizedToString(value) {
   return undefined;
 }
 
-/**
- * Convert a single JSON Schema node into a Zod type. Handles the subset of
- * JSON Schema that iHub app/workflow/tool definitions use (object, string,
- * number, integer, boolean, array, enum, nullable). Anything unrecognized
- * falls back to `z.any()` so a call is never rejected for a construct we can't
- * model.
- */
-function jsonSchemaNodeToZod(node) {
-  if (!node || typeof node !== 'object') return z.any();
-
-  // String enums map cleanly onto z.enum; mixed/other enums fall through.
-  if (
-    Array.isArray(node.enum) &&
-    node.enum.length > 0 &&
-    node.enum.every(v => typeof v === 'string')
-  ) {
-    const enumType = z.enum(node.enum);
-    const enumDesc = localizedToString(node.description);
-    return enumDesc ? enumType.describe(enumDesc) : enumType;
-  }
-
-  const rawType = Array.isArray(node.type) ? node.type.find(t => t !== 'null') : node.type;
-  let zodType;
-  switch (rawType) {
-    case 'string':
-      zodType = z.string();
-      break;
-    case 'number':
-    case 'integer':
-      zodType = z.number();
-      break;
-    case 'boolean':
-      zodType = z.boolean();
-      break;
-    case 'array':
-      zodType = z.array(node.items ? jsonSchemaNodeToZod(node.items) : z.any());
-      break;
-    case 'object': {
-      const props = node.properties || {};
-      // Free-form object (no declared properties, e.g. `additionalProperties`
-      // or an open payload). `z.object({})` strips every key and would silently
-      // drop the caller's whole object — the same empty-schema data loss this
-      // module exists to fix. `z.record` preserves arbitrary keys instead.
-      if (Object.keys(props).length === 0) {
-        zodType = z.record(z.any());
-        break;
-      }
-      const shape = {};
-      const req = Array.isArray(node.required) ? node.required : [];
-      for (const [key, child] of Object.entries(props)) {
-        let childType = jsonSchemaNodeToZod(child);
-        if (!req.includes(key)) childType = childType.optional();
-        shape[key] = childType;
-      }
-      zodType = z.object(shape);
-      break;
-    }
-    default:
-      zodType = z.any();
-  }
-
-  if (Array.isArray(node.type) && node.type.includes('null')) zodType = zodType.nullable();
-  const desc = localizedToString(node.description);
-  if (desc) zodType = zodType.describe(desc);
-  return zodType;
-}
+/** Keywords whose value maps names (not keywords) to subschemas. */
+const SCHEMA_NAME_MAPS = new Set([
+  'properties',
+  'patternProperties',
+  '$defs',
+  'definitions',
+  'dependentSchemas'
+]);
 
 /**
- * Convert a top-level JSON Schema object (`{ type:'object', properties,
- * required }`) into a Zod **raw shape** (`{ [prop]: ZodType }`).
- */
-function jsonSchemaToZodShape(jsonSchema) {
-  const shape = {};
-  if (!jsonSchema || typeof jsonSchema !== 'object' || !jsonSchema.properties) {
-    return shape;
-  }
-  const required = Array.isArray(jsonSchema.required) ? jsonSchema.required : [];
-  for (const [key, node] of Object.entries(jsonSchema.properties)) {
-    let childType = jsonSchemaNodeToZod(node);
-    if (!required.includes(key)) childType = childType.optional();
-    shape[key] = childType;
-  }
-  return shape;
-}
-
-/**
- * Build the config fragment that MCP's `registerTool(name, config, cb)` expects
- * for a tool's input.
+ * The JSON Schema a tool advertises: the tool's own parameters, with every
+ * localized `description` (`{ en, de }`) reduced to one string, as clients
+ * expect, and an object root.
  *
- * SDK 1.x reads `config.inputSchema` and requires it to be a **Zod raw shape**
- * (or Zod object) — it does NOT accept raw JSON Schema, and silently ignores any
- * other key (e.g. `jsonSchema`), which makes the tool advertise an empty
- * `{ properties: {} }` schema so clients strip every argument. We therefore
- * convert our JSON Schema to a Zod raw shape here. When there are no properties
- * we omit `inputSchema` entirely, preserving the SDK's no-validation path for
- * genuinely paramless tools.
+ * @param {Object} jsonSchema - The tool's parameters
+ * @returns {Object}
+ */
+export function toAdvertisedJsonSchema(jsonSchema) {
+  const clean = node => {
+    if (Array.isArray(node)) return node.map(clean);
+    if (!node || typeof node !== 'object') return node;
+    const out = {};
+    for (const [key, value] of Object.entries(node)) {
+      if (key === 'description') {
+        const text = localizedToString(value);
+        if (text) out.description = text;
+      } else if (SCHEMA_NAME_MAPS.has(key) && value && typeof value === 'object') {
+        out[key] = Object.fromEntries(
+          Object.entries(value).map(([name, child]) => [name, clean(child)])
+        );
+      } else {
+        out[key] = clean(value);
+      }
+    }
+    return out;
+  };
+  const root = clean(jsonSchema && typeof jsonSchema === 'object' ? jsonSchema : {});
+  const properties =
+    root.properties && typeof root.properties === 'object' && !Array.isArray(root.properties)
+      ? root.properties
+      : {};
+  return { ...root, type: 'object', properties };
+}
+
+/**
+ * The arguments a tool's schema declares at its top level, and nothing else.
+ *
+ * The SDK validates the arguments against the advertised JSON Schema, which
+ * lets an undeclared key through. The handlers behind the gateway read keys
+ * their schema may not offer (an app or workflow run reads `modelId`, a
+ * workflow spreads every argument into its run), so an undeclared key could
+ * pick a model the app pins or the caller may not use. SDK v1's Zod objects
+ * dropped such keys; this keeps it that way.
+ *
+ * @param {Object} args - The arguments as the client sent them
+ * @param {Object} jsonSchema - The tool's parameters
+ * @returns {Object}
+ */
+export function declaredArguments(args, jsonSchema) {
+  const properties = toAdvertisedJsonSchema(jsonSchema).properties;
+  const declared = {};
+  for (const name of Object.keys(properties)) {
+    if (args && Object.hasOwn(args, name)) declared[name] = args[name];
+  }
+  return declared;
+}
+
+/**
+ * The config fragment `registerTool(name, config, cb)` takes for a tool's
+ * input: the tool's JSON Schema, advertised as it is and validated by the SDK
+ * (`fromJsonSchema`).
+ *
+ * Every tool gets an `inputSchema`, a paramless one too: the SDK passes a tool
+ * registered without one the request context as its only argument.
+ *
+ * @param {Object} jsonSchema
+ * @returns {{inputSchema: Object}}
  */
 export function jsonSchemaToInputSchema(jsonSchema) {
-  const shape = jsonSchemaToZodShape(jsonSchema);
-  if (Object.keys(shape).length === 0) {
-    return {};
-  }
-  return { inputSchema: shape };
+  return { inputSchema: fromJsonSchema(toAdvertisedJsonSchema(jsonSchema)) };
 }
 
 /**
@@ -291,6 +273,139 @@ function isWorkflowAllowed(wf, user, expose) {
   return allowed.has('*') || allowed.has(wf.id);
 }
 
+/** Key of the approval question in a call's `inputRequests` / `inputResponses`. */
+const APPROVAL_INPUT_KEY = 'approval';
+
+/** What the person is asked to fill in: one checkbox. */
+const APPROVAL_REQUESTED_SCHEMA = Object.freeze({
+  type: 'object',
+  properties: {
+    approve: {
+      type: 'boolean',
+      title: 'Approve',
+      description: 'Run this action now'
+    }
+  },
+  required: ['approve']
+});
+
+/** Most characters of the arguments shown in the approval question. */
+const APPROVAL_ARGS_PREVIEW = 600;
+
+/**
+ * Whether the client of this request can ask its user a form question
+ * (elicitation): declared per request on 2026-07-28, at `initialize` on a
+ * 2025-era session. A bare `elicitation: {}` is form support (the meaning
+ * before modes existed).
+ *
+ * @param {McpServer} server
+ * @param {Object} ctx - The SDK's request context
+ * @returns {boolean}
+ */
+export function clientCanElicit(server, ctx) {
+  const capabilities =
+    ctx?.mcpReq?.envelope?.[CLIENT_CAPABILITIES_META_KEY] ??
+    server.server.getClientCapabilities?.();
+  const elicitation = capabilities?.elicitation;
+  if (!elicitation || typeof elicitation !== 'object') return false;
+  return Object.keys(elicitation).length === 0 || Boolean(elicitation.form);
+}
+
+/**
+ * The approval of a gated tool call, asked of the person through the MCP
+ * client (elicitation, #2945).
+ *
+ * The first round answers `input_required` with the question and a signed
+ * `requestState` naming the caller, the tool and a digest of the arguments
+ * (`gatewayRequestState.js`); the client asks its user and retries the call
+ * with the answer. Only an answer that comes back with that state counts, so
+ * a client cannot approve a call by sending an answer nobody was asked for, nor
+ * reuse an approval for other arguments. A client that cannot ask anyone gets
+ * the call refused with `APPROVAL_REQUIRED_NO_USER`, as before.
+ *
+ * @param {Object} params
+ * @param {McpServer} params.server
+ * @param {Object} params.ctx - The SDK's request context
+ * @param {Object} params.tool
+ * @param {Object} params.args
+ * @param {Object} params.user
+ * @returns {Promise<{approved: true}|{result: Object}>} Approved, or what to answer instead
+ */
+export async function gatewayApproval({ server, ctx, tool, args, user }) {
+  const binding = {
+    kind: 'approval',
+    tool: tool.id,
+    user: user.id,
+    args: argumentsDigest(args)
+  };
+  const state = ctx.mcpReq.requestState?.();
+  const answered =
+    state?.kind === binding.kind &&
+    state.tool === binding.tool &&
+    state.user === binding.user &&
+    state.args === binding.args;
+  if (answered) {
+    const answer = inputResponse(ctx.mcpReq.inputResponses, APPROVAL_INPUT_KEY);
+    if (answer.kind === 'elicit') {
+      if (answer.action === 'accept' && answer.content?.approve === true) {
+        logger.info('MCP gateway call approved by the user', {
+          component: 'McpServerService',
+          toolId: tool.id,
+          userId: user.id
+        });
+        return { approved: true };
+      }
+      return {
+        result: toolErrorResult(
+          `${APPROVAL_ERROR_CODES.USER_REJECTED}: the user did not approve this action; it was not run`
+        )
+      };
+    }
+  }
+  if (!clientCanElicit(server, ctx)) {
+    return {
+      result: toolErrorResult(
+        `${APPROVAL_ERROR_CODES.APPROVAL_REQUIRED_NO_USER}: this tool needs a person's approval and this MCP client cannot ask for it`
+      )
+    };
+  }
+  let preview = JSON.stringify(args ?? {});
+  if (preview.length > APPROVAL_ARGS_PREVIEW) {
+    preview = `${preview.slice(0, APPROVAL_ARGS_PREVIEW)}…`;
+  }
+  const name = tool._integration?.name || tool._integration?.instanceId;
+  const integration = name ? ` (${name})` : '';
+  return {
+    result: inputRequired({
+      inputRequests: {
+        [APPROVAL_INPUT_KEY]: inputRequired.elicit({
+          message: `iHub needs your approval to run "${tool.id}"${integration} with ${preview}`,
+          requestedSchema: APPROVAL_REQUESTED_SCHEMA
+        })
+      },
+      requestState: await gatewayRequestStateCodec().mint(binding)
+    })
+  };
+}
+
+/**
+ * MCP tool annotations of an installed integration's action, from the side
+ * effect iHub resolves for it (`utils/toolApproval.js`). Hints only: a client
+ * may run read-only calls in parallel or repeat them after a dropped
+ * connection.
+ *
+ * @param {Object} tool
+ * @returns {Object|undefined}
+ */
+function integrationToolAnnotations(tool) {
+  const installation = installedIntegrationById(tool._integration?.instanceId);
+  const { sideEffect } = resolveSideEffect(tool, installation);
+  if (sideEffect === 'read') return { readOnlyHint: true };
+  if (sideEffect === 'write') return { readOnlyHint: false, destructiveHint: false };
+  if (sideEffect === 'destructive') return { readOnlyHint: false, destructiveHint: true };
+  return undefined;
+}
+
 /**
  * Build the per-request MCP server bound to a specific authenticated user.
  *
@@ -298,9 +413,11 @@ function isWorkflowAllowed(wf, user, expose) {
  * @param {object} ctx.user - Enhanced user object (req.user after
  *   enhanceUserWithPermissions). MUST NOT be anonymous; mcpAuth enforces this.
  * @param {object} ctx.platform - Platform config (configCache.getPlatform()).
+ * @param {'legacy'|'modern'} [ctx.era='legacy'] - The protocol era the server
+ *   serves: `modern` for 2026-07-28 requests, `legacy` for 2025-era ones
  * @returns {Promise<McpServer>}
  */
-export async function buildMcpServer({ user, platform }) {
+export async function buildMcpServer({ user, platform, era = 'legacy' }) {
   if (!user || user.id === 'anonymous') {
     // Defence in depth — mcpAuth should already have rejected anonymous.
     throw new Error('MCP gateway requires an authenticated user');
@@ -312,21 +429,39 @@ export async function buildMcpServer({ user, platform }) {
 
   const server = new McpServer(
     { name: 'ihub-apps', version: '1.0.0' },
-    { capabilities: { tools: { listChanged: false }, resources: { listChanged: false } } }
+    {
+      capabilities: { tools: { listChanged: false }, resources: { listChanged: false } },
+      // The state of an approval round (gatewayRequestState.js); a state that
+      // fails the check is refused before a tool handler runs.
+      requestState: { verify: gatewayRequestStateCodec().verify }
+    }
   );
 
-  // Local registration counters — used below to install empty-list fallback
-  // handlers without reaching into SDK-private fields.
-  let registeredToolCount = 0;
-  let registeredResourceCount = 0;
-  const registerTool = (...args) => {
-    server.registerTool(...args);
-    registeredToolCount += 1;
-  };
-  const registerResource = (...args) => {
-    server.registerResource(...args);
-    registeredResourceCount += 1;
-  };
+  // Every tool is registered here: the handler gets only the arguments the
+  // tool's schema declares (`declaredArguments`), and each call leaves one
+  // structured log line (the audit trail of the gateway; the ledger records
+  // the tool runs of the invoked apps).
+  const registerTool = (name, { parameters, ...config }, handler) =>
+    server.registerTool(
+      name,
+      { ...config, ...jsonSchemaToInputSchema(parameters) },
+      async (args, ctx) => {
+        logger.info('MCP gateway tool call', {
+          component: 'McpServer',
+          tool: name,
+          userId: user.id,
+          era
+        });
+        return handler(declaredArguments(args, parameters), ctx);
+      }
+    );
+
+  // Long runs (apps, workflows) answer with a task handle to a client that
+  // takes one (MCP Tasks extension, 2026-07-28); everyone else waits.
+  const runMaybeAsTask = (name, ctx, run) =>
+    era === 'modern' && clientAcceptsTasks(ctx)
+      ? startGatewayTask({ user, toolName: name, run })
+      : run(undefined);
 
   // ---- Tools (the actions of the installed integrations) ------------------
   if (expose.tools && tokenScopes.includes(MCP_SCOPES.TOOLS_READ)) {
@@ -362,13 +497,15 @@ export async function buildMcpServer({ user, platform }) {
       tools = tools.filter(tool => reachable.has(tool.id));
     }
     for (const tool of tools) {
+      const annotations = integrationToolAnnotations(tool);
       registerTool(
         tool.id,
         {
           description: typeof tool.description === 'string' ? tool.description : '',
-          ...jsonSchemaToInputSchema(tool.parameters)
+          parameters: tool.parameters,
+          ...(annotations ? { annotations } : {})
         },
-        async args => {
+        async (args, ctx) => {
           if (!tokenScopes.includes(MCP_SCOPES.TOOLS_CALL)) {
             return toolErrorResult('insufficient_scope: mcp:tools:call required');
           }
@@ -384,18 +521,17 @@ export async function buildMcpServer({ user, platform }) {
           ) {
             return toolErrorResult('access_denied: tool not permitted for this caller');
           }
-          // A gated tool waits for a person's approval; nobody here can give it.
+          // A gated tool waits for a person's approval, asked through the client.
           if (gatewayCallNeedsApproval(tool, configCache.getPlatform?.() || platform)) {
-            return toolErrorResult(
-              `${APPROVAL_ERROR_CODES.APPROVAL_REQUIRED_NO_USER}: this tool needs a person's approval and cannot run through the MCP gateway`
-            );
+            const approval = await gatewayApproval({ server, ctx, tool, args, user });
+            if (!approval.approved) return approval.result;
           }
           try {
             // Inject the authenticated caller's identity + a tracking chatId.
             // Integration tools (iFinder, Entra, Jira, ...) run *as the user* and
             // reject calls without an authenticated `user`/`chatId` in their
-            // params. MCP args are schema-validated first, so they can never
-            // spoof these fields — we set them last regardless.
+            // params. `withTrustedToolContext` strips those fields from the
+            // arguments and sets them last, so arguments can never spoof them.
             const result = await runTool(
               tool.id,
               withTrustedToolContext(args, { user, chatId: `mcp-${Date.now()}` })
@@ -420,14 +556,15 @@ export async function buildMcpServer({ user, platform }) {
     const { data: apps = [] } = configCache.getApps();
     for (const app of apps) {
       if (!isAppAllowed(app, user, expose)) continue;
+      const toolName = buildAppToolName(app.id);
       registerTool(
-        buildAppToolName(app.id),
+        toolName,
         {
           description:
             extractText(app.description) || extractText(app.name) || `iHub app: ${app.id}`,
-          ...jsonSchemaToInputSchema(buildAppInputSchema(app))
+          parameters: buildAppInputSchema(app)
         },
-        async args => {
+        async (args, ctx) => {
           // Re-check scope + permission at call time so a token that loses the
           // scope, or a user removed from the app's groups, between list and
           // call can't still invoke it (mirrors the tools handler above).
@@ -437,27 +574,30 @@ export async function buildMcpServer({ user, platform }) {
           if (!isAppAllowed(app, user, expose)) {
             return toolErrorResult('access_denied: app not permitted for this caller');
           }
-          try {
-            let outputs = null;
-            const text = await invokeAppNonStreaming({
-              appId: app.id,
-              args: args || {},
-              user,
-              language: platform?.defaultLanguage || 'en',
-              onOutputs: produced => {
-                outputs = produced;
-              }
-            });
-            return appToolResult(text || '', outputs);
-          } catch (err) {
-            logger.warn('MCP gateway app invocation failed', {
-              component: 'McpServerService',
-              appId: app.id,
-              user: user.id,
-              error: err.message
-            });
-            return toolErrorResult(err.message || 'app invocation failed');
-          }
+          return runMaybeAsTask(toolName, ctx, async abortSignal => {
+            try {
+              let outputs = null;
+              const text = await invokeAppNonStreaming({
+                appId: app.id,
+                args: args || {},
+                user,
+                language: platform?.defaultLanguage || 'en',
+                onOutputs: produced => {
+                  outputs = produced;
+                },
+                ...(abortSignal ? { abortSignal } : {})
+              });
+              return appToolResult(text || '', outputs);
+            } catch (err) {
+              logger.warn('MCP gateway app invocation failed', {
+                component: 'McpServerService',
+                appId: app.id,
+                user: user.id,
+                error: err.message
+              });
+              return toolErrorResult(err.message || 'app invocation failed');
+            }
+          });
         }
       );
     }
@@ -468,17 +608,18 @@ export async function buildMcpServer({ user, platform }) {
     const { data: workflows = [] } = configCache.getWorkflows(true);
     for (const wf of workflows) {
       if (!isWorkflowAllowed(wf, user, expose)) continue;
+      const toolName = buildWorkflowToolName(wf.id);
       const paramsSchema = buildWorkflowMcpParams(wf);
       registerTool(
-        buildWorkflowToolName(wf.id),
+        toolName,
         {
           description:
             extractText(wf.chatIntegration?.toolDescription) ||
             extractText(wf.description) ||
             `iHub workflow: ${wf.id}`,
-          ...jsonSchemaToInputSchema(paramsSchema)
+          parameters: paramsSchema
         },
-        async args => {
+        async (args, ctx) => {
           // Re-check scope + permission at call time so a token that loses the
           // scope, or a user removed from the workflow's groups, between list
           // and call can't still run it (mirrors the tools handler above).
@@ -488,49 +629,53 @@ export async function buildMcpServer({ user, platform }) {
           if (!isWorkflowAllowed(wf, user, expose)) {
             return toolErrorResult('access_denied: workflow not permitted for this caller');
           }
-          try {
-            // The workflow runs as the authenticated caller (its per-user
-            // OAuth MCP calls use the caller's own token); the arguments can
-            // never name another user.
-            const { input: workflowArgs, context } = await workflowFileInput(args, user);
-            const result = await runTool(
-              `workflow_${wf.id}`,
-              withTrustedToolContext(workflowArgs, {
-                user,
-                chatId: context.chatId || `mcp-${Date.now()}`,
-                ...(context.fileData ? { _fileData: context.fileData } : {})
-              })
-            );
-            const answer = workflowAnswerParts(result);
-            const provenance = answer.ok
-              ? await recordTextOutput({
-                  text: answer.text,
-                  model: { id: `workflow:${wf.id}` },
-                  user
+          // A cancelled task stops recording, but the workflow engine runs its
+          // current execution to the end: cancellation is cooperative.
+          return runMaybeAsTask(toolName, ctx, async () => {
+            try {
+              // The workflow runs as the authenticated caller (its per-user
+              // OAuth MCP calls use the caller's own token); the arguments can
+              // never name another user.
+              const { input: workflowArgs, context } = await workflowFileInput(args, user);
+              const result = await runTool(
+                `workflow_${wf.id}`,
+                withTrustedToolContext(workflowArgs, {
+                  user,
+                  chatId: context.chatId || `mcp-${Date.now()}`,
+                  ...(context.fileData ? { _fileData: context.fileData } : {})
                 })
-              : null;
-            return workflowToolResult(result, provenance);
-          } catch (err) {
-            logger.warn('MCP gateway workflow run failed', {
-              component: 'McpServerService',
-              workflowId: wf.id,
-              user: user.id,
-              error: err.message
-            });
-            return toolErrorResult(err.message || 'workflow execution failed');
-          }
+              );
+              const answer = workflowAnswerParts(result);
+              const provenance = answer.ok
+                ? await recordTextOutput({
+                    text: answer.text,
+                    model: { id: `workflow:${wf.id}` },
+                    user
+                  })
+                : null;
+              return workflowToolResult(result, provenance);
+            } catch (err) {
+              logger.warn('MCP gateway workflow run failed', {
+                component: 'McpServerService',
+                workflowId: wf.id,
+                user: user.id,
+                error: err.message
+              });
+              return toolErrorResult(err.message || 'workflow execution failed');
+            }
+          });
         }
       );
     }
   }
 
-  // ---- Resources (sources + skills as MCP resources) ----------------------
+  // ---- Resources (projects + skills as MCP resources) ---------------------
   if (expose.resources && tokenScopes.includes(MCP_SCOPES.RESOURCES_READ)) {
     const resources = await listMcpResources({ user, platform, expose });
     for (const r of resources) {
       // registerResource binds a single URI to a read callback. The SDK's
       // `resources/list` is served from the union of registered entries.
-      registerResource(
+      server.registerResource(
         r.name,
         r.uri,
         { description: r.description, mimeType: r.mimeType },
@@ -561,37 +706,15 @@ export async function buildMcpServer({ user, platform }) {
         }
       );
     }
+    // The same skills over the MCP Skills extension (`skills/list`,
+    // `skill://` files with digests), for clients that load skills.
+    attachGatewaySkills(server, { user });
   }
 
-  // ---- Empty-registry fallbacks --------------------------------------------
-  // The SDK only installs its tools/list and resources/list handlers when at
-  // least one tool/resource was registered; with zero registrations a client
-  // gets JSON-RPC -32601 "Method not found", which MCP clients (Claude,
-  // Cursor) surface as a connection error. Since the registry is fixed after
-  // build, install explicit empty-list handlers instead.
-  if (registeredToolCount === 0) {
-    server.server.setRequestHandler(ListToolsRequestSchema, async () => ({ tools: [] }));
-  }
-  if (registeredResourceCount === 0) {
-    server.server.setRequestHandler(ListResourcesRequestSchema, async () => ({ resources: [] }));
-  }
-
-  // ---- Audit hook on every dispatch ---------------------------------------
-  // A structured log line per gateway request (the former SSE-tracker call had
-  // no stream to reach; the ledger records tool runs of the invoked apps).
-  try {
-    server.server.onRequest = async (request, extra) => {
-      logger.info('MCP gateway request', {
-        component: 'McpServer',
-        method: request?.method,
-        userId: user.id,
-        scopes: tokenScopes
-      });
-      return extra?.next?.();
-    };
-  } catch {
-    /* SDK may not expose onRequest in all versions */
-  }
+  // ---- Tasks extension (2026-07-28) ----------------------------------------
+  // `tasks/get` and friends exist on 2026-07-28 only; a 2025-era session has
+  // its own, different task vocabulary, which the gateway does not serve.
+  if (era === 'modern') attachGatewayTasks(server, { user });
 
   return server;
 }
@@ -745,6 +868,3 @@ export function buildWorkflowMcpParams(wf) {
   }
   return { type: 'object', properties, required };
 }
-
-// Expose zod re-export for tests that want to introspect the schema package.
-export { z };

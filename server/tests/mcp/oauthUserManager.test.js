@@ -5,7 +5,7 @@ import { describe, it, expect, jest, beforeAll, afterAll, beforeEach } from '@je
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
-import { UnauthorizedError } from '@modelcontextprotocol/sdk/client/auth.js';
+import { UnauthorizedError } from '@modelcontextprotocol/client';
 import tokenStorage from '../../services/TokenStorageService.js';
 import mcpClientManager, {
   USER_CONNECTION_IDLE_MS,

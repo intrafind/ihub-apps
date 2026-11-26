@@ -158,6 +158,7 @@ export async function invokeApp({
  * @param {(outputs: {generatedFiles: Array<Object>, images: Array<Object>, provenance: (Object|null)}) => void} [params.onOutputs] -
  *   Receives the provenance object of the answer and the files and pictures the app produced (`{ id, name, mimeType, bytes, data }` /
  *   `{ mimeType, data, name? }`, `data` base64); the return value stays the text
+ * @param {AbortSignal} [params.abortSignal] - Stops the run (a cancelled gateway task)
  * @returns {Promise<string>} Assistant text ('' when the model produced none)
  * @throws {Error} Invalid input, unknown app, request preparation or provider failure (`err.code`)
  */
@@ -167,7 +168,8 @@ export async function invokeAppNonStreaming({
   user,
   language,
   timeoutMs = 60000,
-  onOutputs
+  onOutputs,
+  abortSignal
 }) {
   const message = args?.message;
   if (typeof message !== 'string' || !message.trim()) {
@@ -211,7 +213,8 @@ export async function invokeAppNonStreaming({
     language,
     timeoutMs,
     files,
-    origin: 'mcp'
+    origin: 'mcp',
+    ...(abortSignal ? { abortSignal } : {})
   });
   if (typeof onOutputs === 'function') {
     onOutputs({

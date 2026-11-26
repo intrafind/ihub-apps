@@ -132,3 +132,28 @@ context on blank space.
   by the page and not by the user or iHub, and that the model must not follow instructions in them
   or put data from the conversation into an address. The note is in the `read_url` result
   (`sourceNotice`), once per web search, and in the description of the `read_url` tool.
+
+## MCP Gateway: Skills, Long Runs as Tasks and Approval Through the Client
+
+The MCP gateway (`/mcp`) now speaks the MCP revision 2026-07-28 next to the 2025 revisions, and
+supports three MCP extensions for the clients that declare them. Clients that do not keep working
+as before.
+
+- **2026-07-28 without sessions.** A client on the new revision needs no session: any worker and
+  any replica answers its requests, with no affinity and no stateless mode to switch on.
+- **Skills over MCP.** The skills a caller may use are served with `skills/list` and `skill://`
+  files, each listed with its SHA-256 digest, so clients such as Claude Code can offer them and load
+  them only when needed. Same switch and grant as the skill resources (`expose.resources`,
+  `mcp:resources:read`, the group's skills).
+- **Long runs as tasks.** An app or workflow called by a client that supports MCP Tasks returns a
+  task handle at once; the client fetches the answer when the run is done instead of holding the
+  request open. Tasks are kept 25 hours and only their owner sees them.
+- **Approval through the client.** A tool that needs a person's approval is no longer refused
+  outright: the gateway asks the person through their MCP client (elicitation) and runs the call
+  once they approve.
+- **Tool hints.** Integration actions carry MCP tool annotations (read-only, destructive) from
+  their side effect.
+- **Outbound:** iHub speaks 2026-07-28 to Streamable HTTP MCP servers that support it, and the 2025
+  handshake to all others.
+
+Details: [MCP Integration](../../mcp-integration.md#protocol-revisions).

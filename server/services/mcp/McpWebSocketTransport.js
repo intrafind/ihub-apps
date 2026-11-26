@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
 import WebSocket from 'ws';
-import { JSONRPCMessageSchema } from '@modelcontextprotocol/sdk/types.js';
+import { JSONRPCMessageSchema } from '@modelcontextprotocol/core';
 import { getWebSocketTlsOptions } from '../../utils/httpConfig.js';
 
 const SUBPROTOCOL = 'mcp';

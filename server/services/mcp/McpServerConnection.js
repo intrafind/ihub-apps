@@ -1,10 +1,12 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
-import { Client } from '@modelcontextprotocol/sdk/client/index.js';
-import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
-import { SSEClientTransport } from '@modelcontextprotocol/sdk/client/sse.js';
-import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
+import {
+  Client,
+  SSEClientTransport,
+  StreamableHTTPClientTransport
+} from '@modelcontextprotocol/client';
+import { StdioClientTransport } from '@modelcontextprotocol/client/stdio';
 import { URL } from 'node:url';
 import { safeFetch, assertSafeHost } from './safeFetch.js';
 import {
@@ -62,7 +64,7 @@ export class McpServerConnection {
    * @param {Object} serverConfig - Parsed `mcpServers.json` entry
    * @param {Object} [security] - `{ blockPrivateIps, allowedHosts }`
    * @param {Object} [options]
-   * @param {import('@modelcontextprotocol/sdk/client/auth.js').OAuthClientProvider} [options.authProvider] -
+   * @param {import('@modelcontextprotocol/client').OAuthClientProvider} [options.authProvider] -
    *   Per-user OAuth provider for the HTTP transports
    * @param {boolean} [options.catalogOnly=false] - Never connect; serve tools from `applyCatalog`
    * @param {(rawTools: Object[]) => void} [options.onToolsListed] - Receives every successful
@@ -313,7 +315,10 @@ export class McpServerConnection {
       try {
         this.client = new Client(
           { name: 'ihub-apps', version: '1.0.0' },
-          { capabilities: buildClientCapabilities(appsEnabledFor(this.config)) }
+          {
+            capabilities: buildClientCapabilities(appsEnabledFor(this.config)),
+            versionNegotiation: versionNegotiationFor(this.config.transport)
+          }
         );
         this.transport = await this._buildTransport();
         await this.client.connect(this.transport);
@@ -333,17 +338,14 @@ export class McpServerConnection {
           transport: this.config.transport.type
         });
 
-        // Refresh tool list when the server signals a change. The SDK's
-        // protocol already filters notifications by client capability, so the
-        // server only sends these if we declared listChanged support.
-        try {
-          this.client.onNotification?.({ method: 'notifications/tools/list_changed' }, async () => {
-            this.toolsCache = null;
-            this.appToolsCache = null;
-          });
-        } catch {
-          /* SDK version without this hook — fine, manual refresh still works */
-        }
+        // Refresh the tool list when the server signals a change (2025-era
+        // connections; a 2026-07-28 server sends it only on a
+        // `subscriptions/listen` stream, which this client does not open, so
+        // there the catalog refreshes on reconnect).
+        this.client.setNotificationHandler('notifications/tools/list_changed', async () => {
+          this.toolsCache = null;
+          this.appToolsCache = null;
+        });
       } catch (err) {
         // A missing or rejected user token is not a server fault: it must not
         // count towards marking the server unhealthy for everybody.
@@ -574,10 +576,10 @@ export class McpServerConnection {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), timeoutMs);
     try {
-      return await this.client.callTool({ name: originalName, arguments: args || {} }, undefined, {
-        signal: controller.signal,
-        timeout: timeoutMs
-      });
+      return await this.client.callTool(
+        { name: originalName, arguments: args || {} },
+        { signal: controller.signal, timeout: timeoutMs }
+      );
     } finally {
       clearTimeout(timer);
     }
@@ -671,6 +673,22 @@ export class McpServerConnection {
       ...(this.config.auth?.type === 'oauthUser' ? { authType: 'oauthUser' } : {})
     };
   }
+}
+
+/**
+ * How the client picks the protocol revision of a connection.
+ *
+ * Streamable HTTP probes with `server/discover` and speaks 2026-07-28 to a
+ * server that answers it, falling back to the 2025 `initialize` handshake for
+ * one that does not. The other transports keep the 2025 handshake: a probe
+ * over stdio spawns a second, short-lived copy of the server process, and the
+ * legacy SSE and WebSocket transports predate the 2026 revision.
+ *
+ * @param {Object} transport - The server's `transport` config
+ * @returns {{mode: 'auto'|'legacy'}}
+ */
+export function versionNegotiationFor(transport) {
+  return { mode: transport?.type === 'streamableHttp' ? 'auto' : 'legacy' };
 }
 
 /**
