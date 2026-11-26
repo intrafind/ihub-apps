@@ -18,6 +18,25 @@ import { OWASP_LLM } from './owasp.mjs';
 
 const UNTAGGED = 'untagged';
 
+/** The OWASP ids a result row carries; `untagged` when it carries none. */
+function idsOf(row) {
+  const tagged = row.testCase?.metadata?.owasp ?? row.metadata?.owasp;
+  return Array.isArray(tagged) && tagged.length > 0 ? tagged : [UNTAGGED];
+}
+
+/** Counts one result row for every id it carries. */
+function addRow(groups, row) {
+  const description = row.testCase?.description ?? row.description ?? '(no description)';
+  for (const id of idsOf(row)) {
+    const group = groups.get(id) ?? { tests: new Set(), runs: 0, passed: 0, failed: new Set() };
+    groups.set(id, group);
+    group.tests.add(description);
+    group.runs += 1;
+    if (row.success) group.passed += 1;
+    else group.failed.add(description);
+  }
+}
+
 /**
  * @param {Array<{results?: {results?: Array<Object>}}>} files - parsed promptfoo result files
  * @returns {Map<string, {tests: Set<string>, runs: number, passed: number, failed: Set<string>}>}
@@ -25,20 +44,7 @@ const UNTAGGED = 'untagged';
 export function groupByOwasp(files) {
   const groups = new Map();
   for (const file of files) {
-    for (const row of file?.results?.results ?? []) {
-      const description = row.testCase?.description ?? row.description ?? '(no description)';
-      const tagged = row.testCase?.metadata?.owasp ?? row.metadata?.owasp;
-      const ids = Array.isArray(tagged) && tagged.length > 0 ? tagged : [UNTAGGED];
-      for (const id of ids) {
-        if (!groups.has(id))
-          groups.set(id, { tests: new Set(), runs: 0, passed: 0, failed: new Set() });
-        const group = groups.get(id);
-        group.tests.add(description);
-        group.runs += 1;
-        if (row.success) group.passed += 1;
-        else group.failed.add(description);
-      }
-    }
+    for (const row of file?.results?.results ?? []) addRow(groups, row);
   }
   return groups;
 }

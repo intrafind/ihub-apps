@@ -20,6 +20,7 @@
  */
 
 import { MCP_INSTALLATION } from '../injection/scenario.mjs';
+import { waitUntil } from './waitUntil.mjs';
 import { CORPUS_EXFIL_ORIGIN, PAGES_APP, pagesAppConfig } from './corpus.mjs';
 
 /** The summarizer with the canary's mail tool. */
@@ -183,13 +184,14 @@ export async function installMailTool({ apiOrigin, canaryOrigin, admin }) {
     throw new Error(`mail tool: install failed (${installed.status}) ${await installed.text()}`);
   }
   // The MCP manager loads the installation in the background.
-  for (let attempt = 0; attempt < 60; attempt++) {
-    const listing = await call('GET', `/api/integrations/${MCP_INSTALLATION}`);
-    if (listing.ok) {
-      const names = ((await listing.json()).actions || []).map(a => a.name);
-      if (names.includes('send_email')) return;
-    }
-    await new Promise(resolve => setTimeout(resolve, 1000));
-  }
+  const listed = await waitUntil(
+    async () => {
+      const listing = await call('GET', `/api/integrations/${MCP_INSTALLATION}`);
+      if (!listing.ok) return false;
+      return ((await listing.json()).actions || []).some(a => a.name === 'send_email');
+    },
+    { attempts: 60 }
+  );
+  if (listed) return;
   throw new Error('mail tool: the installation never listed send_email');
 }

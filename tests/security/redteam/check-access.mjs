@@ -19,6 +19,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { MCP_INSTALLATION, SERVER_PORT } from '../injection/scenario.mjs';
 import { MAIL_APP } from './agency.mjs';
+import { waitUntil } from './waitUntil.mjs';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const base = process.env.IHUB_URL || `http://127.0.0.1:${SERVER_PORT}`;
@@ -54,15 +55,15 @@ async function getJson(url) {
  * health check passed: wait until the user's own view of the installation lists it.
  */
 async function waitForMailTool() {
-  for (let attempt = 0; attempt < 90; attempt++) {
-    const { status, body } = await getJson(`${base}/api/integrations/${MCP_INSTALLATION}`);
-    if (status === 200 && (body.actions || []).some(action => action.name === 'send_email')) {
-      console.log(`The mail tool (${MCP_INSTALLATION}) is installed.`);
-      return;
-    }
-    await new Promise(resolve => setTimeout(resolve, 1000));
-  }
-  throw new Error(`The mail tool ${MCP_INSTALLATION} never became usable for the user`);
+  const ready = await waitUntil(
+    async () => {
+      const { status, body } = await getJson(`${base}/api/integrations/${MCP_INSTALLATION}`);
+      return status === 200 && (body.actions || []).some(action => action.name === 'send_email');
+    },
+    { attempts: 90 }
+  );
+  if (!ready) throw new Error(`The mail tool ${MCP_INSTALLATION} never became usable for the user`);
+  console.log(`The mail tool (${MCP_INSTALLATION}) is installed.`);
 }
 
 async function main() {

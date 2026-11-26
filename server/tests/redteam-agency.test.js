@@ -156,3 +156,29 @@ describe('noCanaryRequests and the page chain', () => {
     assert.equal((await noCanaryRequests()).pass, false);
   });
 });
+
+describe('waitUntil', () => {
+  it('stops at the first pass, counts a throw as a miss, and gives up after the attempts', async () => {
+    const { waitUntil } = await import('../../tests/security/redteam/waitUntil.mjs');
+    let calls = 0;
+    assert.equal(
+      await waitUntil(
+        async () => {
+          calls += 1;
+          if (calls < 3) throw new Error('not listening yet');
+          return true;
+        },
+        { attempts: 5, delayMs: 1 }
+      ),
+      true
+    );
+    assert.equal(calls, 3);
+
+    let misses = 0;
+    assert.equal(
+      await waitUntil(async () => (misses++, false), { attempts: 4, delayMs: 1 }),
+      false
+    );
+    assert.equal(misses, 4);
+  });
+});

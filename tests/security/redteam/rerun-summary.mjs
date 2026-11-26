@@ -42,6 +42,13 @@ export function rerunRows(first, rerun) {
   return [...rows.values()];
 }
 
+/** What the runs of a page say: not run again, every time, one-off or sometimes. */
+function readingOf({ runs, failed }) {
+  if (runs === 1) return 'not run again';
+  if (failed === runs) return 'every time';
+  return failed === 1 ? 'one-off' : 'sometimes';
+}
+
 /**
  * @param {Object} first
  * @param {Object} rerun
@@ -53,14 +60,7 @@ export function rerunSummary(first, rerun) {
   if (rows.length === 0) return `${lines.join('\n')}No page failed in the first run.\n`;
   lines.push('| Page | Failed | Reading | Why (rerun) |', '| --- | --- | --- | --- |');
   for (const row of rows) {
-    const reading =
-      row.runs === 1
-        ? 'not run again'
-        : row.failed === row.runs
-          ? 'every time'
-          : row.failed === 1
-            ? 'one-off'
-            : 'sometimes';
+    const reading = readingOf(row);
     const why = [...new Set(row.reasons)]
       .map(r => r.replaceAll(/[|\r\n]/g, ' ').slice(0, 160))
       .join('<br>');

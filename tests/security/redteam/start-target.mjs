@@ -38,6 +38,7 @@ import {
   SERVER_SECRET_ENV
 } from '../injection/scenario.mjs';
 import { AGENCY_CASES, MAIL_APP, agencyPages, installMailTool, mailAppConfig } from './agency.mjs';
+import { waitUntil } from './waitUntil.mjs';
 import { PAGES_APP, corpusPages, pagesAppConfig, withPagesApp } from './corpus.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
@@ -146,15 +147,13 @@ for (const signal of ['SIGINT', 'SIGTERM']) process.on(signal, () => server.kill
 server.on('exit', code => process.exit(code ?? 0));
 
 // The mail tool of the canary, for the agency pages. The server is not up yet: wait for it.
-for (let attempt = 0; ; attempt++) {
-  try {
-    if ((await fetch(`http://127.0.0.1:${SERVER_PORT}/api/health`)).ok) break;
-  } catch {
-    // not listening yet
+const up = await waitUntil(
+  async () => (await fetch(`http://127.0.0.1:${SERVER_PORT}/api/health`)).ok,
+  {
+    attempts: 120
   }
-  if (attempt >= 120) throw new Error('iHub did not come up for the mail tool');
-  await new Promise(resolve => setTimeout(resolve, 1000));
-}
+);
+if (!up) throw new Error('iHub did not come up for the mail tool');
 await installMailTool({
   apiOrigin: `http://127.0.0.1:${SERVER_PORT}`,
   canaryOrigin: CANARY,
