@@ -72,3 +72,10 @@ test('sameDependencies: a changed dependency list makes the base install its own
     fs.rmSync(tmp, { recursive: true, force: true });
   }
 });
+
+test('npmCliLocations: next to the Node binary, never through PATH', async () => {
+  const { npmCliLocations } = await import('../../scripts/npm-cli.js');
+  const path = await import('node:path');
+  const [unix] = npmCliLocations('/opt/node24/bin/node');
+  assert.equal(unix, path.join('/opt/node24/lib/node_modules/npm/bin/npm-cli.js'));
+});

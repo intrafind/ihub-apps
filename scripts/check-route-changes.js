@@ -34,6 +34,7 @@ import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { dumpRoutes } from './dump-routes.js';
 import { gitExecutable } from './git-executable.js';
+import { npmCli } from './npm-cli.js';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -46,8 +47,8 @@ const PACKAGE_DIRS = ['', 'server', 'client'];
 function declaredDependencies(packageJsonPath) {
   try {
     const pkg = JSON.parse(fs.readFileSync(packageJsonPath, 'utf8'));
-    const sorted = deps =>
-      Object.entries(deps || {}).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
+    // Names are unique keys, so two of them are never equal.
+    const sorted = deps => Object.entries(deps || {}).sort(([a], [b]) => (a < b ? -1 : 1));
     return JSON.stringify([
       sorted(pkg.dependencies),
       sorted(pkg.devDependencies),
@@ -86,7 +87,7 @@ export function routesAtRef(ref) {
         fs.symlinkSync(path.join(root, modules), path.join(work, modules));
       } else {
         // The base needs packages this checkout dropped, or other versions.
-        execFileSync('npm', ['ci', '--no-audit', '--no-fund'], {
+        execFileSync(process.execPath, [npmCli(), 'ci', '--no-audit', '--no-fund'], {
           cwd: path.join(work, dir),
           stdio: 'pipe'
         });
