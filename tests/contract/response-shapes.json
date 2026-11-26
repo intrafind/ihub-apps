@@ -2695,6 +2695,7 @@
           "createdAt": "string",
           "description": "string",
           "error": "null",
+          "hasOriginal": "boolean",
           "id": "string",
           "kind": "string",
           "name": "string",
@@ -2742,6 +2743,9 @@
         "items": "number"
       }
     }
+  },
+  "GET /api/admin/projects/:id/items/:itemId/original": {
+    "skipped": "its parent path is not a readable list"
   },
   "GET /api/admin/projects/:id/items/:itemId/text": {
     "skipped": "its parent path is not a readable list"
@@ -6097,6 +6101,7 @@
           "createdAt": "string",
           "description": "string",
           "error": "null",
+          "hasOriginal": "boolean",
           "id": "string",
           "kind": "string",
           "name": "string",
@@ -6161,6 +6166,7 @@
           "createdAt": "string",
           "description": "string",
           "error": "null",
+          "hasOriginal": "boolean",
           "id": "string",
           "kind": "string",
           "name": "string",
@@ -6183,6 +6189,7 @@
       "createdAt": "string",
       "description": "string",
       "error": "null",
+      "hasOriginal": "boolean",
       "id": "string",
       "kind": "string",
       "name": "string",
@@ -6218,6 +6225,16 @@
       },
       "title": "string",
       "updatedAt": "string"
+    }
+  },
+  "GET /api/projects/:projectId/items/:itemId/original": {
+    "status": 410,
+    "shape": {
+      "code": "string",
+      "detail": "string",
+      "status": "number",
+      "title": "string",
+      "type": "string"
     }
   },
   "GET /api/projects/:projectId/items/:itemId/text": {
