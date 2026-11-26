@@ -249,7 +249,7 @@ const VALUE_CONVERTERS = {
   },
   boolean: value => value === true || value === 'true',
   array: value => (Array.isArray(value) ? value.filter(isString) : undefined),
-  string: value => String(value)
+  string: String
 };
 
 /** Wait for the answer, or for the turn to stop. */

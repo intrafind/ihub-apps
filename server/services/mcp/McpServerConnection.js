@@ -702,21 +702,27 @@ export class McpServerConnection {
    * nobody to ask, leaves the server's error as it is.
    *
    * @param {() => Promise<Object>} call
+   * @param {number} [round] - Refusals answered so far
    * @returns {Promise<Object>}
    */
-  async _callWithPagesOpened(call) {
-    for (let round = 0; ; round++) {
-      try {
-        return await call();
-      } catch (error) {
-        const pages = pagesRequiredBy(error);
-        if (!pages || !this.elicitation || round >= MAX_ELICITATION_ROUNDS) throw error;
-        for (const page of pages) {
-          const { action } = await this.elicitation({ params: { ...page, mode: 'url' } });
-          if (action !== 'accept') throw error;
-        }
-      }
+  async _callWithPagesOpened(call, round = 0) {
+    try {
+      return await call();
+    } catch (error) {
+      const pages = pagesRequiredBy(error);
+      if (!pages || !this.elicitation || round >= MAX_ELICITATION_ROUNDS) throw error;
+      // One page after the other: a person works through them in order.
+      const allDone = await this._askForPages(pages);
+      if (!allDone) throw error;
+      return this._callWithPagesOpened(call, round + 1);
     }
+  }
+
+  /** Put each page to the person in turn; true once they are done with all. */
+  async _askForPages([page, ...rest]) {
+    if (!page) return true;
+    const { action } = await this.elicitation({ params: { ...page, mode: 'url' } });
+    return action === 'accept' && this._askForPages(rest);
   }
 
   /**
