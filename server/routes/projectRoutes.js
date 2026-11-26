@@ -37,6 +37,11 @@ import { resolvePrincipal } from '../services/loop/runIdentity.js';
 import runLog from '../services/loop/RunLog.js';
 import { resolveShares } from './promptRoutes.js';
 import { getProjectRepository, isUserProjectId } from '../services/projects/ProjectRepository.js';
+import {
+  OCR_IMAGE_EXTENSIONS,
+  OCR_IMAGE_TYPES,
+  ocrSettings
+} from '../services/ocr/textRecognition.js';
 import { getProjectService } from '../services/projects/ProjectService.js';
 import {
   addUploadedItem,
@@ -412,6 +417,7 @@ export default function registerProjectRoutes(app) {
         if (availability.unavailable) ifinder.unavailable = true;
       }
     }
+    const ocr = ocrSettings(platform);
     res.json({
       ...base,
       ifinder,
@@ -423,11 +429,19 @@ export default function registerProjectRoutes(app) {
         used
       },
       kinds: enabledItemKinds({ platform, features, settings }),
+      // Images and scanned PDF pages are read by the OCR model when one is set (#3986).
+      textRecognition: { enabled: ocr.enabled, maxPages: ocr.maxPages },
       upload: {
         available: Boolean(getProjectService().ingest) && repo.hasBlobs(),
-        accept: ACCEPTED_TYPES.extensions,
-        mimeTypes: ACCEPTED_TYPES.mimeTypes,
-        summary: ACCEPTED_TYPES.summary
+        accept: ocr.enabled
+          ? [...ACCEPTED_TYPES.extensions, ...OCR_IMAGE_EXTENSIONS]
+          : ACCEPTED_TYPES.extensions,
+        mimeTypes: ocr.enabled
+          ? [...ACCEPTED_TYPES.mimeTypes, ...OCR_IMAGE_TYPES]
+          : ACCEPTED_TYPES.mimeTypes,
+        summary: ocr.enabled
+          ? `${ACCEPTED_TYPES.summary}, and images (PNG, JPEG, GIF, WebP), whose text is recognized`
+          : ACCEPTED_TYPES.summary
       }
     });
   });

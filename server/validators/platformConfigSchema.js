@@ -704,6 +704,10 @@ export const platformConfigSchema = z
           .prefault('original_and_text'),
         originalRetentionDays: z.number().prefault(14),
         evictOldestOriginalsOnQuota: z.boolean().prefault(true),
+        // Opt-in (#3986): an image or a scanned PDF attached to a chat is read by
+        // the OCR model (`ocr.modelId`) once, and the chat model gets its text
+        // instead of page images. Overridable per app (`app.uploads.recognizeText`).
+        recognizeText: z.boolean().prefault(false),
         quotas: z
           .object({
             maxFileBytes: z.number().prefault(25 * 1024 * 1024),
@@ -717,6 +721,17 @@ export const platformConfigSchema = z
           })
           .passthrough()
           .prefault({})
+      })
+      .passthrough()
+      .prefault({}),
+    // Text recognition at upload (#3986): the vision-capable model that reads
+    // images and the scanned pages of PDFs once, when they are uploaded or
+    // picked (`services/ocr/textRecognition.js`). No model, no recognition.
+    // `maxPages` caps the pages recognized per document.
+    ocr: z
+      .object({
+        modelId: z.string().nullable().prefault(null),
+        maxPages: z.number().int().positive().prefault(50)
       })
       .passthrough()
       .prefault({}),

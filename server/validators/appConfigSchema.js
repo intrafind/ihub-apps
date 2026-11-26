@@ -714,7 +714,9 @@ const baseAppConfigSchema = z.object({
   // Per-app override of `platform.uploads` (chat and task file storage).
   uploads: z
     .object({
-      storageMode: z.enum(['original_and_text', 'server_text_only', 'client_text_only']).optional()
+      storageMode: z.enum(['original_and_text', 'server_text_only', 'client_text_only']).optional(),
+      // Read images and scanned PDFs of this app's chats as text (`platform.ocr`).
+      recognizeText: z.boolean().optional()
     })
     .optional(),
   outputSchema: z.union([z.object({}).passthrough(), z.string()]).optional(),

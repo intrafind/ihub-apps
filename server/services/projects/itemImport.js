@@ -33,6 +33,11 @@ import { constants as BUFFER_CONSTANTS } from 'node:buffer';
 import JSZip from 'jszip';
 import { acceptedTypeOf, sniffBytes } from './extractText.js';
 import { ProjectError } from './projectErrors.js';
+import {
+  declaredRecognizableImageType,
+  ocrSettings,
+  recognizableImageTypeOf
+} from '../ocr/textRecognition.js';
 
 /** ZIP media types browsers and stores send for an archive. */
 const ZIP_MIMES = new Set(['application/zip', 'application/x-zip-compressed']);
@@ -131,6 +136,7 @@ async function inflateEntry(entry, maxBytes) {
  * @param {number} limits.maxFiles - Files to hand over at most (the room left in the project).
  * @param {number} limits.maxFileBytes - Largest file, unpacked.
  * @param {number} limits.maxTotalBytes - All files together, unpacked (the room left).
+ * @param {boolean} [limits.allowImages] - Images are taken too (the OCR model reads them, #3986).
  * @param {(file: {name: string, fileName: string, bytes: Buffer}) => Promise<boolean>} onFile -
  *   Resolves whether the file was taken: only taken files count against
  *   `maxFiles` and `maxTotalBytes`. All inflating together is bounded on its
@@ -140,7 +146,11 @@ async function inflateEntry(entry, maxBytes) {
  * @throws {ProjectError} `UNSUPPORTED_TYPE` for an archive that cannot be read
  *   (damaged, encrypted, too many entries).
  */
-export async function unpackZip(bytes, { maxFiles, maxFileBytes, maxTotalBytes }, onFile) {
+export async function unpackZip(
+  bytes,
+  { maxFiles, maxFileBytes, maxTotalBytes, allowImages = false },
+  onFile
+) {
   let archive;
   try {
     archive = await JSZip.loadAsync(bytes, { checkCRC32: false });
@@ -180,7 +190,10 @@ export async function unpackZip(bytes, { maxFiles, maxFileBytes, maxTotalBytes }
       skip(name, 'UNSUPPORTED_TYPE', 'An archive inside an archive is not unpacked');
       continue;
     }
-    if (!acceptedTypeOf({ name: fileName })) {
+    if (
+      !acceptedTypeOf({ name: fileName }) &&
+      !(allowImages && declaredRecognizableImageType({ name: fileName }))
+    ) {
       skip(name, 'UNSUPPORTED_TYPE', 'Projects do not take files of this type');
       continue;
     }
@@ -279,6 +292,8 @@ export async function importFile(
   { user, authorize, pinned = false, from = null, limits }
 ) {
   const archive = isZipArchive(file);
+  // Images are taken when the OCR model reads them (#3986); otherwise refused as before.
+  const allowImages = ocrSettings().enabled;
   const items = [];
   const skipped = [];
   const provenanceFrom = {
@@ -303,8 +318,16 @@ export async function importFile(
       // The type and the bytes are checked here as for an upload; `addItem`
       // and the pipeline check them again.
       if (
-        !acceptedTypeOf({ contentType: candidate.contentType, name: candidate.fileName }) ||
-        sniffBytes(candidate.bytes) === 'refused'
+        !(
+          acceptedTypeOf({ contentType: candidate.contentType, name: candidate.fileName }) ||
+          (allowImages &&
+            declaredRecognizableImageType({
+              contentType: candidate.contentType,
+              name: candidate.fileName
+            }))
+        ) ||
+        (sniffBytes(candidate.bytes) === 'refused' &&
+          !(allowImages && recognizableImageTypeOf(candidate.bytes)))
       ) {
         throw new ProjectError(
           'UNSUPPORTED_TYPE',
@@ -358,7 +381,8 @@ export async function importFile(
       {
         maxFiles: limits.maxFiles > 0 ? Math.max(0, limits.maxFiles - count) : Infinity,
         maxFileBytes: limits.maxFileBytes > 0 ? limits.maxFileBytes : Infinity,
-        maxTotalBytes: limits.maxProjectBytes > 0 ? limits.maxProjectBytes - used : Infinity
+        maxTotalBytes: limits.maxProjectBytes > 0 ? limits.maxProjectBytes - used : Infinity,
+        allowImages
       },
       add
     );
