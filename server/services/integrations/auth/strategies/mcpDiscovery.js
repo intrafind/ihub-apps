@@ -26,15 +26,13 @@
  * @module services/integrations/auth/strategies/mcpDiscovery
  */
 import {
+  checkResourceAllowed,
   discoverAuthorizationServerMetadata,
   discoverOAuthProtectedResourceMetadata,
   discoverOAuthServerInfo,
-  registerClient
-} from '@modelcontextprotocol/sdk/client/auth.js';
-import {
-  checkResourceAllowed,
+  registerClient,
   resourceUrlFromServerUrl
-} from '@modelcontextprotocol/sdk/shared/auth-utils.js';
+} from '@modelcontextprotocol/client';
 import {
   getMcpOAuthClientStore,
   McpOAuthClientStore,

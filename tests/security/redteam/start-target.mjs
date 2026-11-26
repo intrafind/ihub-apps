@@ -29,7 +29,14 @@ import { prepareE2eContents } from '../../config/e2e-contents.mjs';
 import { removeDisposableContents } from '../../config/e2e-fresh-contents.mjs';
 import { startCanary } from '../injection/canary.mjs';
 import { CANARY_PAGES, seedInjectionContents } from '../injection/seed.mjs';
-import { CANARY_PORT, LLM_PORT, SERVER_PORT, SERVER_SECRET_ENV } from '../injection/scenario.mjs';
+import {
+  CANARY,
+  CANARY_PORT,
+  LLM_PORT,
+  SERVER_PORT,
+  SERVER_SECRET_ENV
+} from '../injection/scenario.mjs';
+import { PAGES_APP, corpusPages, pagesAppConfig, withPagesApp } from './corpus.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
 const CONTENTS_DIR = 'contents-e2e-redteam';
@@ -82,6 +89,18 @@ fs.writeFileSync(
   )}\n`
 );
 
+// The page corpus of promptfooconfig.corpus.yaml: the summarizer app, and the permission for bob to
+// use it (the seed lists the apps of the groups by name).
+fs.writeFileSync(
+  path.join(contentsDir, 'apps', `${PAGES_APP}.json`),
+  `${JSON.stringify(pagesAppConfig(), null, 2)}\n`
+);
+const groupsPath = path.join(contentsDir, 'config', 'groups.json');
+fs.writeFileSync(
+  groupsPath,
+  `${JSON.stringify(withPagesApp(JSON.parse(fs.readFileSync(groupsPath, 'utf8'))), null, 2)}\n`
+);
+
 // The seeded apps name the stub as their preferred model: point them at the real one.
 const appsDir = path.join(contentsDir, 'apps');
 for (const file of fs.readdirSync(appsDir).filter(f => f.endsWith('.json'))) {
@@ -95,7 +114,12 @@ for (const file of fs.readdirSync(appsDir).filter(f => f.endsWith('.json'))) {
   }
 }
 
-await startCanary({ port: CANARY_PORT, pages: CANARY_PAGES });
+// The scenario's pages and the corpus pages, both under /page/<name>. The corpus' exfiltration
+// addresses point at the canary itself, so a request for one is recorded.
+await startCanary({
+  port: CANARY_PORT,
+  pages: { ...CANARY_PAGES, ...corpusPages(CANARY) }
+});
 
 const server = spawn(process.execPath, [path.join(root, 'server', 'server.js')], {
   cwd: path.join(root, 'server'),

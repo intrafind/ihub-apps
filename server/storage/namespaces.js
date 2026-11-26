@@ -242,6 +242,12 @@ export const RUNTIME_NAMESPACES = Object.freeze({
    */
   a2aClientContexts: 'a2a-client-contexts',
   /**
+   * Tasks the inbound MCP gateway created for a long-running `tools/call`
+   * (MCP Tasks extension), one document per task, owned by the caller, so
+   * `tasks/get` and `tasks/cancel` work on any worker.
+   */
+  mcpTasks: 'mcp-tasks',
+  /**
    * OAuth client registrations of outbound `oauthUser` MCP servers, one
    * document per server: how iHub identified itself at the server's
    * authorization server (pre-registered, CIMD or DCR) and the discovery

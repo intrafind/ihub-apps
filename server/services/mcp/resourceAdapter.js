@@ -77,12 +77,12 @@ const TEXT_MIME_TYPES = {
   '.sh': 'text/x-shellscript'
 };
 
-function resourceMimeType(relativePath) {
+export function resourceMimeType(relativePath) {
   return TEXT_MIME_TYPES[path.extname(relativePath).toLowerCase()] || null;
 }
 
 /** The text files a skill bundles next to its SKILL.md, as the loader reports them. */
-function skillResourceEntries(content) {
+export function skillResourceEntries(content) {
   return [
     ...(content?.references || []),
     ...(content?.scripts || []),
@@ -96,7 +96,7 @@ function skillResourceUri(skillName, relativePath) {
   return `ihub://skill/${encodeURIComponent(skillName)}/${encodedPath}`;
 }
 
-function isSkillVisible(skill, user) {
+export function isSkillVisible(skill, user) {
   if (!skill) return false;
   if (skill.enabled === false) return false;
   // Honour user.permissions.skills (built by enhanceUserWithPermissions).

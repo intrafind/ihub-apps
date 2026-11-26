@@ -42,3 +42,21 @@ default.
 **Before upgrading:** if your installation must keep no original files (for example because your
 compliance statement says so), set **What the server keeps** to "Only the text" (`server_text_only`).
 That applies to chat uploads too.
+
+## MCP: Approvals on the Gateway, Stricter Sign-In Discovery
+
+iHub's MCP support moves to version 2 of the MCP SDK. Two behaviors change.
+
+- **Approval-gated tools can run through the MCP gateway.** Until now the gateway refused every
+  tool whose approval mode needs a person. It now asks the person through their MCP client and
+  runs the call once they approve. A client that cannot ask still gets the refusal. What the
+  person sees is up to the client, and a client can be set up to answer on its own.
+- **Per-user sign-in checks the authorization server's metadata.** For an MCP server with
+  per-user OAuth, metadata whose `issuer` does not match the address it was fetched from is
+  refused (RFC 8414), and the user cannot sign in to that server.
+
+**Before upgrading:** if MCP clients should not run an approval-gated action at all, switch the
+action off on the installation, or take the integration out of the grants of the groups (or OAuth
+clients) that use the gateway, instead of relying on the gateway's refusal. If users cannot sign
+in to a per-user OAuth MCP server after the upgrade, ask its operator to fix the `issuer` in the
+authorization server's metadata.

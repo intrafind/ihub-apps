@@ -157,5 +157,30 @@ reading them again. Set it in **Admin → Chat history → Uploaded files → Te
   service, test it, and pick it as the engine. Other OCR services can be connected as integrations
   of type `ocr`.
 
-**Before upgrading:** nothing to do. Migration V265 adds the settings with no model set, so nothing
-is read until an administrator picks one.
+**Before upgrading:** nothing to do. Migration V265 adds the settings with the model engine and no
+model set, so nothing is read until an administrator picks one.
+
+## MCP Gateway: Skills, Long Runs as Tasks and Approval Through the Client
+
+The MCP gateway (`/mcp`) now speaks the MCP revision 2026-07-28 next to the 2025 revisions, and
+supports three MCP extensions for the clients that declare them. Clients that do not keep working
+as before.
+
+- **2026-07-28 without sessions.** A client on the new revision needs no session: any worker and
+  any replica answers its requests, with no affinity and no stateless mode to switch on.
+- **Skills over MCP.** The skills a caller may use are served with `skills/list` and `skill://`
+  files, each listed with its SHA-256 digest, so clients such as Claude Code can offer them and load
+  them only when needed. Same switch and grant as the skill resources (`expose.resources`,
+  `mcp:resources:read`, the group's skills).
+- **Long runs as tasks.** An app or workflow called by a client that supports MCP Tasks returns a
+  task handle at once; the client fetches the answer when the run is done instead of holding the
+  request open. Tasks are kept 25 hours and only their owner sees them.
+- **Approval through the client.** A tool that needs a person's approval is no longer refused
+  outright: the gateway asks the person through their MCP client (elicitation) and runs the call
+  once they approve.
+- **Tool hints.** Integration actions carry MCP tool annotations (read-only, destructive) from
+  their side effect.
+- **Outbound:** iHub speaks 2026-07-28 to Streamable HTTP MCP servers that support it, and the 2025
+  handshake to all others.
+
+Details: [MCP Integration](../../mcp-integration.md#protocol-revisions).
