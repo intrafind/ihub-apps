@@ -735,7 +735,12 @@ export const platformConfigSchema = z
         // integration of type `ocr` (e.g. the iFinder OCR service).
         engine: z.string().min(1).max(200).prefault('model'),
         modelId: z.string().nullable().prefault(null),
-        maxPages: z.number().int().positive().prefault(50)
+        maxPages: z.number().int().positive().prefault(50),
+        // Which pages of a PDF with a text layer are recognized: `scanned`
+        // (only pages without text), `smart` (also pages where pictures or
+        // drawings cover at least `minFigurePercent` of the page) or `all`.
+        pages: z.enum(['scanned', 'smart', 'all']).prefault('smart'),
+        minFigurePercent: z.number().int().min(1).max(100).prefault(20)
       })
       .passthrough()
       .prefault({}),

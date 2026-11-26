@@ -317,7 +317,13 @@ describe('text recognition settings (platform.ocr)', () => {
   test('reads no model and the default page limit, and offers the models that read images', async () => {
     const response = await request(createTestApp()).get('/api/admin/chat-history');
     expect(response.status).toBe(200);
-    expect(response.body.settings.ocr).toEqual({ engine: 'model', modelId: null, maxPages: 50 });
+    expect(response.body.settings.ocr).toEqual({
+      engine: 'model',
+      modelId: null,
+      maxPages: 50,
+      pages: 'smart',
+      minFigurePercent: 20
+    });
     expect(response.body.ocrModels.map(model => model.id)).toEqual(['vision-model']);
     expect(response.body.ocrEngines).toEqual([
       {
@@ -352,6 +358,23 @@ describe('text recognition settings (platform.ocr)', () => {
       .put('/api/admin/chat-history/settings')
       .send({ ocr: { engine: 'another-missing-ocr' } });
     expect(changed.status).toBe(400);
+  });
+
+  test('writes which pages of PDFs with text are read, and refuses an unknown selection', async () => {
+    const saved = await request(createTestApp())
+      .put('/api/admin/chat-history/settings')
+      .send({ ocr: { pages: 'all', minFigurePercent: 35 } });
+    expect(saved.status).toBe(200);
+    expect(state.stored.ocr).toMatchObject({ pages: 'all', minFigurePercent: 35 });
+
+    const unknown = await request(createTestApp())
+      .put('/api/admin/chat-history/settings')
+      .send({ ocr: { pages: 'some' } });
+    expect(unknown.status).toBe(400);
+    const tooMuch = await request(createTestApp())
+      .put('/api/admin/chat-history/settings')
+      .send({ ocr: { minFigurePercent: 150 } });
+    expect(tooMuch.status).toBe(400);
   });
 
   test('picks an installed OCR integration as the engine, and refuses any other', async () => {

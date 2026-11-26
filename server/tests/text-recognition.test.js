@@ -38,6 +38,7 @@ import {
   declaredRecognizableImageType,
   mergeRecognizedPages,
   ocrSettings,
+  pageNumbersOf,
   pagesWithoutText,
   recognizableImageTypeOf,
   recognizedTextOf
@@ -104,7 +105,11 @@ async function pdfOf(pages) {
   const picture = await doc.embedPng(png());
   for (const content of pages) {
     const page = doc.addPage([400, 300]);
-    if (typeof content === 'string') {
+    if (content && typeof content === 'object') {
+      // Text above a chart-sized picture: half the page.
+      page.drawText(content.text, { x: 20, y: 270, size: 10, font, maxWidth: 360, lineHeight: 12 });
+      page.drawImage(picture, { x: 20, y: 20, width: 360, height: 200 });
+    } else if (typeof content === 'string') {
       page.drawText(content, { x: 20, y: 250, size: 10, font, maxWidth: 360, lineHeight: 12 });
     } else {
       page.drawImage(picture, { x: 20, y: 20, width: 360, height: 260 });
@@ -263,6 +268,31 @@ describe('text recognition helpers', () => {
     assert.equal(declaredRecognizableImageType({ name: 'photo.tiff' }), null);
   });
 
+  it('puts a recognized page with text in place of its lines, keeping its marker', () => {
+    const extracted = [
+      '[Page 1 (printed: i)]',
+      'Old line one',
+      'Old line two',
+      '',
+      '[Page 2]',
+      'Kept text',
+      '',
+      '[Page 3: no extractable text]'
+    ].join('\n');
+    const merged = mergeRecognizedPages(
+      extracted,
+      new Map([
+        [1, 'Text and chart of page 1'],
+        [3, 'Scanned page 3']
+      ])
+    );
+    assert.equal(
+      merged,
+      '[Page 1 (printed: i)]\nText and chart of page 1\n\n[Page 2]\nKept text\n\n[Page 3]\nScanned page 3'
+    );
+    assert.deepEqual(pageNumbersOf(extracted), [1, 2, 3]);
+  });
+
   it('finds the pages without text and puts the recognized text in their place', () => {
     const text = '[Page 1]\nIntro text\n\n[Page 2: no extractable text]\n\n[Page 3]\nEnd';
     assert.deepEqual(pagesWithoutText(text), [2]);
@@ -392,6 +422,59 @@ describe('projects: text recognition at upload', () => {
     );
     assert.equal(error?.code, 'OCR_FAILED');
     assert.ok(calls.length <= 3, `${calls.length} pages were sent after the refusal`);
+  });
+
+  it('smart: also reads a page with text whose picture covers much of it', async () => {
+    setPlatform({ ocr: { modelId: 'ocr-vision', pages: 'smart', minFigurePercent: 20 } });
+    await createProject('ocr-smart');
+    const { project, item } = await upload(
+      'ocr-smart',
+      'report.pdf',
+      await pdfOf([{ text: TEXT_PAGE }, TEXT_PAGE]),
+      'application/pdf'
+    );
+    assert.equal(item.status, 'ready', JSON.stringify(item.error));
+    assert.equal(calls.length, 1, 'only the page with the chart is sent');
+    const text = await readText(project, item);
+    assert.match(text, /\[Page 1\]\nRecognized text of page 1/);
+    assert.match(text, /\[Page 2\]\nThis page has a real text layer/);
+    assert.equal(item.text.recognized.pages, 1);
+  });
+
+  it('scanned: reads no page that has text; all: reads every page', async () => {
+    const pdf = await pdfOf([{ text: TEXT_PAGE }, TEXT_PAGE]);
+    setPlatform({ ocr: { modelId: 'ocr-vision', pages: 'scanned' } });
+    await createProject('ocr-modes');
+    const scanned = await upload('ocr-modes', 'scanned-mode.pdf', pdf, 'application/pdf');
+    assert.equal(scanned.item.status, 'ready', JSON.stringify(scanned.item.error));
+    assert.equal(calls.length, 0);
+    assert.equal(scanned.item.text.recognized, undefined);
+
+    setPlatform({ ocr: { modelId: 'ocr-vision', pages: 'all' } });
+    const all = await upload('ocr-modes', 'all-mode.pdf', pdf, 'application/pdf');
+    assert.equal(all.item.status, 'ready', JSON.stringify(all.item.error));
+    assert.equal(calls.length, 2);
+    assert.equal(all.item.text.recognized.pages, 2);
+  });
+
+  it('keeps the extracted text of a page with text when its recognition fails', async () => {
+    setPlatform({ ocr: { modelId: 'ocr-vision', pages: 'all' } });
+    answer = n => {
+      if (n === 1) throw Object.assign(new Error('upstream timeout'), { status: 504 });
+      return `Recognized text of call ${n}.`;
+    };
+    await createProject('ocr-keep-page');
+    const { project, item } = await upload(
+      'ocr-keep-page',
+      'keep.pdf',
+      await pdfOf([TEXT_PAGE, TEXT_PAGE]),
+      'application/pdf'
+    );
+    assert.equal(item.status, 'ready', JSON.stringify(item.error));
+    const text = await readText(project, item);
+    assert.match(text, /real text layer/, 'the page that failed keeps its text');
+    assert.match(text, /Recognized text of call 2/);
+    assert.equal(item.text.recognized.failedPages, 1);
   });
 
   it('counts the pages that failed apart from the page limit', async () => {

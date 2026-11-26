@@ -80,7 +80,7 @@ const SETTINGS = {
       maxUserBytes: 5000
     }
   },
-  ocr: { modelId: null, maxPages: 50 }
+  ocr: { modelId: null, maxPages: 50, pages: 'smart', minFigurePercent: 20 }
 };
 const OCR_MODELS = [
   { id: 'vision-1', name: { en: 'Vision One', de: 'Vision Eins' } },
@@ -160,7 +160,7 @@ describe('Admin → Chat history → Text recognition', () => {
 
     await waitFor(() => expect(puts()).toHaveLength(1));
     const { body } = puts()[0][1];
-    expect(body.ocr).toEqual({ modelId: 'vision-1', maxPages: 20 });
+    expect(body.ocr).toMatchObject({ modelId: 'vision-1', maxPages: 20 });
     expect(body.uploads.recognizeText).toBe(true);
   });
 
@@ -225,6 +225,25 @@ describe('Admin → Chat history → Text recognition', () => {
     const { body } = puts()[0][1];
     expect(body.ocr.engine).toBe('ifinder-ocr');
     expect(body.uploads.recognizeText).toBe(true);
+  });
+
+  test('offers which pages of PDFs with text are read; the figure share only for smart', async () => {
+    await renderPage({ status: {}, stats: {}, settings: SETTINGS, ocrModels: OCR_MODELS });
+    const pages = screen.getByLabelText(uploadsText.pages);
+    expect(pages).toHaveValue('smart');
+    expect(screen.getByLabelText(uploadsText.minFigurePercent)).toHaveValue(20);
+
+    fireEvent.change(screen.getByLabelText(uploadsText.minFigurePercent), {
+      target: { value: '35' }
+    });
+    fireEvent.change(pages, { target: { value: 'all' } });
+    expect(screen.queryByLabelText(uploadsText.minFigurePercent)).not.toBeInTheDocument();
+
+    await act(async () => {
+      fireEvent.click(saveButton());
+    });
+    await waitFor(() => expect(puts()).toHaveLength(1));
+    expect(puts()[0][1].body.ocr).toMatchObject({ pages: 'all', minFigurePercent: 35 });
   });
 
   test('without an OCR integration, says how to get one', async () => {

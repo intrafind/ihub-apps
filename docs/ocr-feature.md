@@ -15,7 +15,9 @@ The OCR (Optical Character Recognition) feature converts PDF documents and image
 > recognition**. See [Projects → Images and scanned PDFs](projects.md#images-and-scanned-pdfs),
 > [Chat files → Text recognition in chats](chat-files.md#text-recognition-in-chats) and
 > [OCR engines](#ocr-engines) below. With a model as the engine it uses the same page rendering and
-> prompt as this tool; any engine reads only pages without a text layer.
+> prompt as this tool. Which pages of a PDF with text are read besides the scanned ones is a setting
+> (**Pages of PDFs with text**: only pages without text, smart (also pages with large pictures or
+> drawings), or all).
 
 ## OCR engines
 

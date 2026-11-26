@@ -166,7 +166,10 @@ const ocrSettingsSchema = z
   .object({
     engine: z.string().trim().min(1).max(200),
     modelId: z.string().trim().max(200).nullable(),
-    maxPages: z.number().int().positive().max(10000)
+    maxPages: z.number().int().positive().max(10000),
+    // Which pages of a PDF with text are read besides those without text.
+    pages: z.enum(['scanned', 'smart', 'all']),
+    minFigurePercent: z.number().int().min(1).max(100)
   })
   .partial()
   .strict();
@@ -260,8 +263,8 @@ function resolveSettings(platform) {
       };
     })(),
     ocr: (() => {
-      const { engine, modelId, maxPages } = ocrSettings(platform);
-      return { engine, modelId, maxPages };
+      const { engine, modelId, maxPages, pages, minFigurePercent } = ocrSettings(platform);
+      return { engine, modelId, maxPages, pages, minFigurePercent };
     })(),
     runLog: {
       enabled: ledger.enabled !== false,

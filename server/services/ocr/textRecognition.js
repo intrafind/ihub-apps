@@ -27,9 +27,14 @@
  * `app.uploads.recognizeText`); otherwise a chat still sends a scanned PDF as
  * page images.
  *
- * Only pages without text are sent to the engine, never a page that has a text
- * layer: a logo on a text page costs nothing. A PDF page goes to the engine as
- * a PNG image, whatever the engine, so an engine only ever reads images.
+ *  - `pages`: which pages of a PDF that has a text layer are read besides the
+ *    pages without text: `scanned` (none), `smart` (the default: pages where
+ *    pictures or drawings cover at least `minFigurePercent` of the page, as
+ *    `services/documents/pdf/pageFigures.js` measures it; a logo costs
+ *    nothing, a chart next to its text is read) or `all`.
+ *
+ * A PDF page goes to the engine as a PNG image, whatever the engine, so an
+ * engine only ever reads images.
  *
  * @module services/ocr/textRecognition
  */
@@ -59,6 +64,7 @@ async function heavyParts() {
       DEFAULT_OCR_PROMPT: pages.DEFAULT_OCR_PROMPT,
       extractTextFromPageImage: pages.extractTextFromPageImage,
       renderPdfPagesForRecognition: pool.renderPdfPagesForRecognition,
+      analyzePdfPageFigures: pool.analyzePdfPageFigures,
       resolveModelApiKey: utils.resolveModelApiKey,
       logAudit: audit.logAudit,
       installedIntegrationService: installed.default,
@@ -111,6 +117,18 @@ const PAGE_CONCURRENCY = 3;
 
 /** `[Page 3: no extractable text]`, as the PDF extraction writes it. */
 const NO_TEXT_PAGE = /^\[Page (\d+): no extractable text\]$/;
+
+/** Any page marker line: `[Page 3]`, `[Page 3 (printed: iii)]`, `[Page 3: no extractable text]`. */
+const PAGE_MARKER = /^\[Page (\d+)(?: \(printed: [^\]]*\))?(?:: no extractable text)?\]$/;
+
+/** Which pages of a PDF with a text layer are recognized (`platform.ocr.pages`). */
+export const PAGE_SELECTIONS = Object.freeze(['scanned', 'smart', 'all']);
+
+/** The page selection when the admin set none. */
+export const DEFAULT_PAGE_SELECTION = 'smart';
+
+/** The figure share (percent of the page) from which `smart` recognizes a page with text. */
+export const DEFAULT_MIN_FIGURE_PERCENT = 20;
 
 /**
  * A recognition that cannot run or failed. Codes: `OCR_UNAVAILABLE` (no
@@ -177,7 +195,11 @@ function engineImageTypes(instance) {
  * `imageExtensions` their file extensions.
  *
  * @param {Object} [platform]
- * @returns {{engine: string, modelId: string|null, integrationId: string|null, maxPages: number, enabled: boolean, imageTypes: string[], imageExtensions: string[]}}
+ * `pages` says which pages of a PDF that has a text layer are read besides
+ * those without text: `scanned` (none), `smart` (those where pictures or
+ * drawings cover at least `minFigurePercent` of the page) or `all`.
+ *
+ * @returns {{engine: string, modelId: string|null, integrationId: string|null, maxPages: number, pages: string, minFigurePercent: number, enabled: boolean, imageTypes: string[], imageExtensions: string[]}}
  */
 export function ocrSettings(platform = configCache.getPlatform?.() || {}) {
   const ocr = platform?.ocr || {};
@@ -195,7 +217,21 @@ export function ocrSettings(platform = configCache.getPlatform?.() || {}) {
   const imageExtensions = [...OCR_IMAGE_TYPE_BY_EXTENSION]
     .filter(([, type]) => imageTypes.includes(type))
     .map(([extension]) => extension);
-  return { engine, modelId, integrationId, maxPages, enabled, imageTypes, imageExtensions };
+  const pages = PAGE_SELECTIONS.includes(ocr.pages) ? ocr.pages : DEFAULT_PAGE_SELECTION;
+  const figure = Math.floor(Number(ocr.minFigurePercent));
+  const minFigurePercent =
+    Number.isFinite(figure) && figure >= 1 && figure <= 100 ? figure : DEFAULT_MIN_FIGURE_PERCENT;
+  return {
+    engine,
+    modelId,
+    integrationId,
+    maxPages,
+    pages,
+    minFigurePercent,
+    enabled,
+    imageTypes,
+    imageExtensions
+  };
 }
 
 /**
@@ -530,22 +566,51 @@ export function pagesWithoutText(extractedText) {
 }
 
 /**
- * Put recognized page texts in place of the "no extractable text" markers.
+ * The numbers of every page an extracted PDF text marks, with or without text.
+ *
+ * @param {string} extractedText
+ * @returns {number[]}
+ */
+export function pageNumbersOf(extractedText) {
+  const pages = [];
+  for (const line of String(extractedText || '').split('\n')) {
+    const match = PAGE_MARKER.exec(line.trim());
+    if (match) pages.push(Number(match[1]));
+  }
+  return pages;
+}
+
+/**
+ * Put recognized page texts in place of the pages they were read from: a
+ * page without text gets `[Page N]` and its recognized text in place of its
+ * marker; a page with text keeps its marker line and gets the recognized text
+ * in place of its extracted lines (the engine read the whole page: its text
+ * and what its pictures and drawings show). A page not in `recognized` stays
+ * as it was.
  *
  * @param {string} extractedText
  * @param {Map<number, string>} recognized - Page number → text.
  * @returns {string}
  */
 export function mergeRecognizedPages(extractedText, recognized) {
-  return String(extractedText || '')
-    .split('\n')
-    .map(line => {
-      const match = NO_TEXT_PAGE.exec(line.trim());
-      if (!match) return line;
+  const out = [];
+  let skipping = false;
+  for (const line of String(extractedText || '').split('\n')) {
+    const match = PAGE_MARKER.exec(line.trim());
+    if (match) {
       const text = recognized.get(Number(match[1]));
-      return text ? `[Page ${match[1]}]\n${text}` : line;
-    })
-    .join('\n');
+      skipping = Boolean(text);
+      if (!text) out.push(line);
+      else if (NO_TEXT_PAGE.test(line.trim())) out.push(`[Page ${match[1]}]`, text, '');
+      else out.push(line.trim(), text, '');
+      continue;
+    }
+    if (!skipping) out.push(line);
+  }
+  return out
+    .join('\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
 }
 
 /** The text of recognized pages alone, for a PDF without any text layer. */
@@ -591,7 +656,7 @@ export async function recognizeScannedPdf(
   if (typeof extractedText !== 'string' || !extractedText) {
     return recognizePdfPages(bytes, { wanted: null, extractedText: null, platform, user, name });
   }
-  const wanted = pagesWithoutText(extractedText);
+  const wanted = await pagesToRecognize(bytes, extractedText, ocrSettings(platform));
   if (wanted.length === 0) return null;
   try {
     return await recognizePdfPages(bytes, { wanted, extractedText, platform, user, name });
@@ -602,6 +667,40 @@ export async function recognizeScannedPdf(
       error: error?.message
     });
     return null;
+  }
+}
+
+/**
+ * The pages of a PDF with a text layer to recognize, per `settings.pages`:
+ * the pages without text first, then the pages with text that the selection
+ * adds (`smart`: pictures or drawings covering at least `minFigurePercent` of
+ * the page; `all`: every one), each in page order. When the figure analysis
+ * fails, `smart` falls back to the pages without text.
+ *
+ * @param {Buffer} bytes
+ * @param {string} extractedText
+ * @param {{pages: string, minFigurePercent: number}} settings
+ * @returns {Promise<number[]>}
+ */
+async function pagesToRecognize(bytes, extractedText, settings) {
+  const scanned = pagesWithoutText(extractedText);
+  if (settings.pages === 'scanned') return scanned;
+  const withText = pageNumbersOf(extractedText).filter(page => !scanned.includes(page));
+  if (settings.pages === 'all') return [...scanned, ...withText];
+  if (withText.length === 0) return scanned;
+  try {
+    const { analyzePdfPageFigures } = await heavyParts();
+    const { pages } = await analyzePdfPageFigures(bytes);
+    const figures = new Set(
+      pages.filter(entry => entry.figurePercent >= settings.minFigurePercent).map(e => e.page)
+    );
+    return [...scanned, ...withText.filter(page => figures.has(page))];
+  } catch (error) {
+    logger.warn('The pages of a PDF could not be analyzed for pictures and drawings', {
+      component: COMPONENT,
+      error: error?.message
+    });
+    return scanned;
   }
 }
 

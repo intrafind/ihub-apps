@@ -135,7 +135,10 @@ an OCR integration, `platform.ocr.engine`; see
 - An attached image (PNG, JPEG, GIF, WebP) is stored as a document: the recognition engine reads its
   text **once**, and the chat model gets that text on every turn, also a model without vision.
 - A PDF without a text layer is read the same way instead of being sent as page images; a PDF with
-  some scanned pages gets the recognized text in place of those pages. No page images are kept.
+  some scanned pages gets the recognized text in place of those pages, and per
+  `platform.ocr.pages` the pages with large pictures or drawings, or all pages, are read too (see
+  [Projects → Images and scanned PDFs](projects.md#images-and-scanned-pdfs)). No page images are
+  kept.
 - The file says so (`meta.recognized`: model or OCR integration, pages, date; "Text recognized" on
   its card). At most
   `platform.ocr.maxPages` pages are read per file.

@@ -768,9 +768,10 @@ export class ProjectIngestService {
             extracted &&
             ocr.enabled &&
             extracted.contentType === PDF_MIME &&
-            pagesWithoutText(extracted.text).length > 0
+            (ocr.pages !== 'scanned' || pagesWithoutText(extracted.text).length > 0)
           ) {
-            // Some pages are scanned: those are recognized, the rest is kept.
+            // Pages without text, and per `ocr.pages` pages with large
+            // pictures or drawings (or all), are recognized; the rest is kept.
             recognize = { pdf: true, extractedText: extracted.text };
           }
           if (extracted) {

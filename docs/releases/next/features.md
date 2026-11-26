@@ -141,7 +141,10 @@ reading them again. Set it in **Admin → Chat history → Uploaded files → Te
 
 - **Projects** use it whenever a model is set: images (PNG, JPEG, GIF, WebP) can be uploaded, picked
   from a cloud drive, unpacked from a ZIP archive and copied from a chat, and scanned PDFs no longer
-  fail. Only pages without a text layer are sent to the model.
+  fail. Which pages of a PDF with text are read besides the scanned ones is up to the admin
+  (**Pages of PDFs with text**): only pages without text, **smart** (the default: also pages where
+  pictures, charts, diagrams or tables cover at least 20% of the page, so a chart next to its text is
+  read too), or all pages.
 - **Chats** use it only when **Read images and scanned PDFs in chats as text** is switched on (per
   app too). Then an attached image or scanned PDF is read once and the model gets its text; switched
   off, chats send them as images, as before.

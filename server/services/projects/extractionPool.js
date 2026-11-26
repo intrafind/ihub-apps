@@ -312,6 +312,25 @@ export async function renderScannedPdfPages(bytes, maxPages) {
 }
 
 /**
+ * How much of each page of a PDF pictures and drawings cover (percent), for
+ * the "smart" page selection of text recognition; in a thread when the pool
+ * is on.
+ *
+ * @param {Buffer} bytes - Not moved: the pages are rendered from it afterwards.
+ * @returns {Promise<{pages: Array<{page: number, figurePercent: number}>}>}
+ */
+export async function analyzePdfPageFigures(bytes) {
+  assertAcceptingJobs();
+  if (!extractionThreadsEnabled()) {
+    const { analyzePageFigures } = await import('../documents/pdf/pageFigures.js');
+    return analyzePageFigures(bytes);
+  }
+  const { envelope } = await runInThread('analyzePdfPageFigures', {}, { bytes });
+  if (!envelope.ok) throw new Error(envelope.error?.message || 'The PDF could not be analyzed');
+  return envelope.result;
+}
+
+/**
  * Render chosen pages of a PDF as base64 PNGs for text recognition, in a
  * thread when the pool is on (so a large or crafted PDF does not hold the
  * event loop).

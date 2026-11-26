@@ -239,14 +239,16 @@ function CheckboxField({ id, label, help, checked, onChange, disabled = false })
  * it is ready.
  *
  * @param {Object} props
- * @param {{engine?: string, modelId: string|null, maxPages: number}} props.ocr - `settings.ocr`.
+ * @param {{engine?: string, modelId: string|null, maxPages: number, pages?: string, minFigurePercent?: number}} props.ocr -
+ *   `settings.ocr`; `pages`: which pages of a PDF with text are read (`scanned`, `smart`, `all`),
+ *   `minFigurePercent`: from how much picture or drawing `smart` reads a page with text.
  * @param {boolean} props.recognizeText - `settings.uploads.recognizeText`.
  * @param {Array<{id: string, name: string|Object}>} props.models - `ocrModels` of the overview:
  *   the enabled models that read images.
  * @param {Array<{id: string, name: string, enabled: boolean}>} props.engines - `ocrEngines` of the
  *   overview: the installed OCR integrations.
  * @param {string} props.language
- * @param {(key: 'engine'|'modelId'|'maxPages', value: string|number|null) => void} props.onOcrChange
+ * @param {(key: 'engine'|'modelId'|'maxPages'|'pages'|'minFigurePercent', value: string|number|null) => void} props.onOcrChange
  * @param {(value: boolean) => void} props.onRecognizeTextChange
  * @param {Function} props.t
  * @returns {JSX.Element}
@@ -270,6 +272,7 @@ function TextRecognitionSettings({
   const pickedEngine = engines.find(entry => entry.id === engine) || null;
   const engineMissing = !usesModel && !pickedEngine;
   const ready = usesModel ? Boolean(modelId) : pickedEngine?.enabled === true;
+  const pageSelection = ocr.pages || 'smart';
   return (
     <div className="pt-4 border-t border-gray-200 dark:border-gray-700 space-y-4">
       <div>
@@ -395,6 +398,54 @@ function TextRecognitionSettings({
           value={ocr.maxPages}
           onChange={value => onOcrChange('maxPages', Math.max(1, value))}
         />
+        <div>
+          <label
+            htmlFor="uploads-ocr-pages"
+            className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1"
+          >
+            {t('admin.chatHistory.uploads.ocr.pages', 'Pages of PDFs with text')}
+          </label>
+          <select
+            id="uploads-ocr-pages"
+            value={pageSelection}
+            onChange={e => onOcrChange('pages', e.target.value)}
+            className={inputClass}
+          >
+            <option value="scanned">
+              {t('admin.chatHistory.uploads.ocr.pagesScanned', 'Only pages without text')}
+            </option>
+            <option value="smart">
+              {t(
+                'admin.chatHistory.uploads.ocr.pagesSmart',
+                'Smart: also pages with large pictures or drawings'
+              )}
+            </option>
+            <option value="all">{t('admin.chatHistory.uploads.ocr.pagesAll', 'All pages')}</option>
+          </select>
+          <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+            {t(
+              'admin.chatHistory.uploads.ocr.pagesHelp',
+              'Pages without a text layer are always read. A page with text that is read gets the recognized text in place of its own, so a chart or diagram next to the text is read too; if reading it fails, the page keeps its text.'
+            )}
+          </p>
+        </div>
+        {pageSelection === 'smart' && (
+          <NumberField
+            id="uploads-ocr-min-figure"
+            label={t(
+              'admin.chatHistory.uploads.ocr.minFigurePercent',
+              'Smart: least picture or drawing share of a page (%)'
+            )}
+            help={t(
+              'admin.chatHistory.uploads.ocr.minFigurePercentHelp',
+              'A page with text is read when pictures, charts, diagrams or tables cover at least this much of it. A logo or a line covers a few percent; a chart over half the page about 30 to 50.'
+            )}
+            min={1}
+            max={100}
+            value={ocr.minFigurePercent ?? 20}
+            onChange={value => onOcrChange('minFigurePercent', Math.min(100, Math.max(1, value)))}
+          />
+        )}
       </div>
       <CheckboxField
         id="uploads-recognize-text"

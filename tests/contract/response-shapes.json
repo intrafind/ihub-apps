@@ -742,7 +742,9 @@
         "ocr": {
           "engine": "string",
           "maxPages": "number",
-          "modelId": "null"
+          "minFigurePercent": "number",
+          "modelId": "null",
+          "pages": "string"
         },
         "runLog": {
           "cleanupEnabled": "boolean",
@@ -1052,7 +1054,9 @@
       "ocr": {
         "engine": "string",
         "maxPages": "number",
-        "modelId": "null"
+        "minFigurePercent": "number",
+        "modelId": "null",
+        "pages": "string"
       },
       "officeIntegration": {
         "calendarStarterPrompts": ["object"],

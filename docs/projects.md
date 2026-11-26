@@ -243,10 +243,19 @@ like any other extracted text, so every app can use the document, also one whose
 images, and no question pays for reading it again.
 
 - **What is read:** an image (PNG, JPEG, GIF, WebP), uploaded, picked from a cloud drive, unpacked
-  from a ZIP archive or copied from a chat; and the pages of a PDF without a text layer (scanned
-  pages). A page that has text is never sent to the engine, so a logo on a text page costs nothing.
-  A PDF with some scanned pages keeps the text of the others and gets the recognized text in place
-  of the scanned ones.
+  from a ZIP archive or copied from a chat; the pages of a PDF without a text layer (scanned pages);
+  and, per **Pages of PDFs with text** (`platform.ocr.pages`), pages that do have text:
+
+  | Setting | Pages with text that are read |
+  |---|---|
+  | `scanned` | none: only pages without text |
+  | `smart` (default) | those where pictures or drawings (charts, diagrams, tables) cover at least `platform.ocr.minFigurePercent` of the page (20% by default). A logo or a rule line covers a few percent; a chart over half the page about 30 to 50. A picture covering the whole page under a text layer (a scan with its text) does not count |
+  | `all` | every page |
+
+  A page without text gets the recognized text in place of its marker. A page with text that is
+  read gets it in place of its own lines, since the engine reads the whole page, the text and what
+  the chart or diagram shows; if reading it fails, it keeps its text. Pages that are not read keep
+  their text.
 - **Page limit:** at most `platform.ocr.maxPages` pages (50 by default) are read per document. Pages
   past it keep the marker "no extractable text", and the document says it was cut. A page the
   engine could not read (an error, a timeout) keeps its marker too, and the document says how many
