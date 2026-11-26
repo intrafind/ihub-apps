@@ -4,8 +4,8 @@
 /**
  * Preflight of the nightly red team (`.github/workflows/redteam.yml`): proves the setup
  * before the model is asked anything. The signed-in user (`IHUB_TOKEN`, bob) must be
- * recognised by iHub and must be allowed to use every app `promptfooconfig.yaml` calls
- * and the model those apps run on. Without it the inference API answers
+ * recognised by iHub and must be allowed to use every app the promptfoo configs call
+ * (`promptfooconfig.yaml`, `promptfooconfig.corpus.yaml`) and the model those apps run on. Without it the inference API answers
  * `404 app_not_found` for an app that exists (it does not tell "missing" from "not
  * yours"), and promptfoo reports a transform error for every test.
  *
@@ -22,6 +22,8 @@ import { SERVER_PORT } from '../injection/scenario.mjs';
 const here = path.dirname(fileURLToPath(import.meta.url));
 const base = process.env.IHUB_URL || `http://127.0.0.1:${SERVER_PORT}`;
 const token = process.env.IHUB_TOKEN || '';
+/** The configs of the run: every app any of them calls must be usable. */
+const CONFIGS = ['promptfooconfig.yaml', 'promptfooconfig.corpus.yaml'];
 /** The model start-target.mjs installs and points the seeded apps at. */
 const MODEL_ID = 'redteam-model';
 
@@ -47,8 +49,15 @@ async function getJson(url) {
 }
 
 async function main() {
-  const apps = appsOfConfig(fs.readFileSync(path.join(here, 'promptfooconfig.yaml'), 'utf8'));
-  if (apps.length === 0) throw new Error('No app found in promptfooconfig.yaml');
+  const apps = [
+    ...new Set(
+      CONFIGS.flatMap(file => {
+        const ids = appsOfConfig(fs.readFileSync(path.join(here, file), 'utf8'));
+        if (ids.length === 0) throw new Error(`No app found in ${file}`);
+        return ids;
+      })
+    )
+  ];
 
   const { status, body } = await getJson(`${base}/api/inference/v1/models`);
   const listed = new Set((body.data || []).map(model => model.id));
