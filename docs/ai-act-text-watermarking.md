@@ -300,7 +300,7 @@ marked too but are not in the answer.
 | Hosted models | Not watermarked by iHub; use `by: "provider"` with a written statement. |
 | Greedy decoding (temperature 0, `topK` 1) | No watermark; recorded `applied: false`, `reason: "greedy"`. |
 | Structured output (JSON schema, `json_object`) | Grammar-constrained decoding gives a weak mark; recorded `applied: false`, `reason: "structured_output"`. |
-| Fewer than about 200 scored tokens | Cannot be decided: "too short to tell". |
+| Fewer scored tokens than the minimum (iHub: 200 by default; a gateway: its own) | Cannot be decided: "too short to tell". |
 | Paraphrase, translation, heavy editing, summaries | The mark weakens or disappears. A miss is not proof of human origin. |
 | Beam search, some speculative-decoding setups | Not marked or weak (iHub never sends beam search). |
 | One key set for the installation | All `by: "ihub"` models share it; two vLLM servers on different keys give permanent "not detected" for one. |

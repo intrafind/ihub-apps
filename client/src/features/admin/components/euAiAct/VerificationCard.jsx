@@ -125,7 +125,7 @@ function describeRow(row, t) {
           word: t('admin.euAiAct.verify.tooShort', 'Too short to tell'),
           text: t(
             'admin.euAiAct.verify.wmTooShort',
-            'Only {{n}} tokens could be scored; about 200 are needed. No conclusion.',
+            'Only {{n}} tokens could be scored, too few for a conclusion.',
             { n: row.scoredTokens ?? 0 }
           )
         };
@@ -376,7 +376,7 @@ export default function VerificationCard({ maxFileBytes = DEFAULT_MAX_FILE_BYTES
               <p id="verify-text-help" className="mt-1 text-xs text-gray-600 dark:text-gray-400">
                 {t(
                   'admin.euAiAct.verify.textHelp',
-                  'Texts shorter than about 200 tokens cannot be judged by the watermark check.'
+                  'Short texts cannot be judged by the watermark check. How many tokens it needs depends on the detection settings.'
                 )}
               </p>
             </div>
