@@ -392,13 +392,18 @@ const FACTS_BY_DEFINITION = {
   ],
   'com.intrafind/brave-search': item => keyedEngineFacts(item, 'BRAVE_SEARCH_API_KEY'),
   'com.intrafind/staan-search': item => keyedEngineFacts(item, 'STAAN_API_KEY'),
-  'com.intrafind/qwant-search': () => [
-    {
-      id: 'apiKey',
-      ...label('apiKey', 'API key'),
-      valueKey: `${FACT_PREFIX}.noKeyNeeded`,
-      valueDefault: 'no key needed'
-    }
+  'com.intrafind/searxng-search': (item, context) => [
+    fieldFact(item, 'instanceUrl', 'instanceUrl', label('instanceUrl', 'Instance'), {
+      mono: true,
+      context
+    }),
+    hasValue(item.values?.authorizationRef)
+      ? secretFact(
+          'authorization',
+          label('authorization', 'Authorization'),
+          item.values.authorizationRef
+        )
+      : null
   ],
   'com.intrafind/office365': (item, context) => [
     fieldFact(item, 'tenantId', 'tenantId', label('tenantId', 'Tenant ID'), {

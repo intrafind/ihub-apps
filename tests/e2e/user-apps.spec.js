@@ -195,12 +195,25 @@ let toolStub = null;
  * The search engine the cases about web search need. A fresh install has none
  * unless the environment holds a key (`STAAN_API_KEY`, `BRAVE_SEARCH_API_KEY`),
  * and CI holds none: without an engine nobody may use web search, and creating
- * an app that asks for it answers 403. Qwant needs no key. No case sends a
- * search: the scripted model only reads a page.
+ * an app that asks for it answers 403. The engine needs a key to count as
+ * usable (the chat offers the web search switch only for an engine that can
+ * answer; Staan without a key cannot), so it is installed with a credential
+ * that holds a made-up key. No case sends a search: the scripted model only
+ * reads a page.
  */
-const SEARCH_ENGINE = Object.freeze({ id: 'qwant', definition: 'com.intrafind/qwant-search' });
-/** Whether this run installed {@link SEARCH_ENGINE}, and so removes it again. */
+const SEARCH_ENGINE = Object.freeze({
+  id: 'staan',
+  definition: 'com.intrafind/staan-search',
+  values: { apiKeyRef: 'e2e-search-engine-key' }
+});
+const SEARCH_ENGINE_KEY = Object.freeze({
+  id: SEARCH_ENGINE.values.apiKeyRef,
+  type: 'secret',
+  value: 'e2e-not-a-real-key'
+});
+/** Whether this run installed {@link SEARCH_ENGINE} and its key, and so removes them again. */
 let installedSearchEngine = false;
+let createdSearchEngineKey = false;
 
 test.beforeAll(async ({ playwright, baseURL }) => {
   const admin = await apiAs(playwright, baseURL, ADMIN);
@@ -237,6 +250,11 @@ test.beforeAll(async ({ playwright, baseURL }) => {
       'the three accounts exist'
     ).toBeTruthy();
 
+    // 409: the key is there from an earlier run against a kept server.
+    const key = await admin.post('/api/admin/credentials', { data: SEARCH_ENGINE_KEY });
+    await expectOk(key, `creating the search engine key ${SEARCH_ENGINE_KEY.id}`, [409]);
+    createdSearchEngineKey = key.status() === 201;
+
     // 409: the engine is there already (a kept server, or a key in the environment).
     const engine = await admin.post('/api/admin/integrations/installed', { data: SEARCH_ENGINE });
     await expectOk(engine, `installing the search engine ${SEARCH_ENGINE.id}`, [409]);
@@ -270,6 +288,9 @@ test.afterAll(async ({ playwright, baseURL }) => {
     await admin.delete(`/api/admin/models/${TOOL_MODEL_ID}`);
     if (installedSearchEngine) {
       await admin.delete(`/api/admin/integrations/installed/${SEARCH_ENGINE.id}`);
+    }
+    if (createdSearchEngineKey) {
+      await admin.delete(`/api/admin/credentials/${SEARCH_ENGINE_KEY.id}`);
     }
     await admin.put('/api/admin/user-apps/_settings', { data: DEFAULT_SETTINGS });
     await admin.put('/api/admin/features', { data: { userApps: false } });

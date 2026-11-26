@@ -111,8 +111,8 @@ const websearchSchema = z
     // native search where the model runs it.
     required: z.boolean().optional().prefault(false),
     // The engine: `auto` (the first engine the user may use: Brave, Staan,
-    // Qwant, then any other installation of type `web-search` by id) or the
-    // id of an engine installation (`brave`, `staan`, `qwant`, a third-party
+    // SearXNG, then any other installation of type `web-search` by id) or the
+    // id of an engine installation (`brave`, `staan`, `searxng`, a third-party
     // engine's id). A named engine that is not available means no tool-based
     // search; it never falls back to another one.
     provider: zSafeId.min(1).max(64).optional().prefault('auto'),

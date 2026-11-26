@@ -5,11 +5,8 @@
  * Staan (staan.ai) web search provider.
  *
  * Staan is a keyed, documented search API — https://docs.staan.ai/docs/web-search
- * — which makes it the third engine behind `WebSearchService`, alongside Brave
- * (keyed) and Qwant (keyless). It is the useful middle ground between the two:
- * unlike Qwant it is a real product with an account behind it, so it answers
- * requests from data-centre IP ranges instead of a DataDome captcha; unlike
- * Brave it takes European market targeting (`fr-fr`, `de-de`) as a first-class
+ * — the second engine behind `WebSearchService`, alongside Brave. Unlike Brave
+ * it takes European market targeting (`fr-fr`, `de-de`) as a first-class
  * request parameter.
  *
  * ## Testability
@@ -39,6 +36,7 @@
  * @module services/search/staanProvider
  */
 import { SearchProvider } from './SearchProvider.js';
+import { networkFailure, readJsonBody, searchFailure, waitBeforeRetry } from './providerRequest.js';
 import { getStaanApiKey } from './staanApiKey.js';
 import { resolveSearchLanguage } from './searchLanguage.js';
 import { emitToolProgress } from '../loop/RunStream.js';
@@ -531,7 +529,7 @@ class StaanSearchProvider extends SearchProvider {
 
     while (true) {
       const res = await this.fetchOnce(url, { method, body, apiKey }, endpoint);
-      const payload = await readJson(res);
+      const payload = await readJsonBody(res);
       const error = parseStaanError(payload, res.status);
 
       if (!error) {
@@ -548,35 +546,24 @@ class StaanSearchProvider extends SearchProvider {
       const retryable =
         error.code === 'STAAN_RATE_LIMITED' || res.status === 429 || res.status === 503;
       if (retryable && attempt < MAX_RETRIES) {
-        const retryAfter = Number(res.headers?.get?.('retry-after'));
-        const waitMs =
-          Number.isFinite(retryAfter) && retryAfter > 0
-            ? Math.min(retryAfter * 1000, 5000)
-            : this.retryBackoffMs * (attempt + 1);
-        logger.warn('Staan search rate-limited; backing off and retrying', {
-          component: 'WebSearch',
+        await waitBeforeRetry({
+          res,
+          attempt,
+          backoffMs: this.retryBackoffMs,
           provider: 'staan',
-          status: res.status,
-          attempt: attempt + 1,
-          waitMs
+          label: 'Staan'
         });
-        await new Promise(resolve => setTimeout(resolve, waitMs));
         attempt += 1;
         continue;
       }
 
-      logger.error('Staan search failed', {
-        component: 'WebSearch',
+      throw searchFailure({
+        error,
+        res,
         provider: 'staan',
-        status: res.status,
-        offset,
-        errorCode: error.code,
-        errorMessage: error.message
+        label: 'Staan',
+        details: { offset }
       });
-      const err = new Error(error.message);
-      err.code = error.code;
-      err.status = res.status;
-      throw err;
     }
   }
 
@@ -600,43 +587,13 @@ class StaanSearchProvider extends SearchProvider {
     try {
       return await this.fetchImpl(url, { method, headers, body });
     } catch (error) {
-      const causeMsg =
-        error?.cause?.message || (typeof error?.cause === 'string' ? error.cause : undefined);
-      logger.error('Staan search network request failed', {
-        component: 'WebSearch',
+      throw networkFailure({
+        error,
         provider: 'staan',
-        endpoint,
-        errorName: error?.name,
-        errorCode: error?.code || error?.cause?.code,
-        errorMessage: error?.message,
-        errorCause: causeMsg,
-        hint: 'If a proxy is configured, verify HTTPS_PROXY/HTTP_PROXY, ssl.domainWhitelist, and proxy.urlPatterns in platform.json.'
+        label: 'Staan',
+        details: { endpoint }
       });
-      const detailParts = [error?.message];
-      if (error?.code) detailParts.push(`code=${error.code}`);
-      if (causeMsg) detailParts.push(`cause=${causeMsg}`);
-      const wrapped = new Error(
-        `Staan search request failed: ${detailParts.filter(Boolean).join(' ')}`
-      );
-      wrapped.code = error?.code || error?.cause?.code || 'NETWORK_ERROR';
-      wrapped.cause = error;
-      throw wrapped;
     }
-  }
-}
-
-/**
- * Read a response body as JSON, returning null when it is not JSON at all (an
- * HTML error page from a proxy, an empty body) so the caller classifies it via
- * {@link parseStaanError} rather than throwing a SyntaxError.
- * @param {Object} res - fetch Response
- * @returns {Promise<Object|null>}
- */
-async function readJson(res) {
-  try {
-    return await res.json();
-  } catch {
-    return null;
   }
 }
 

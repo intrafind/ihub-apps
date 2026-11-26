@@ -129,7 +129,7 @@ function WebSearchSection({ app, onChange, engines = null }) {
                 >
                   {t(
                     'admin.apps.edit.websearchProviderDesc',
-                    'Models with native search (Google, OpenAI, Anthropic) search themselves when Use Native Search is on; no engine is needed for that. On other models the app uses this engine. Auto takes the first engine the user may use: Brave, Staan, Qwant, then any other engine.'
+                    'Models with native search (Google, OpenAI, Anthropic) search themselves when Use Native Search is on; no engine is needed for that. On other models the app uses this engine. Auto takes the first engine the user may use: Brave, Staan, SearXNG, then any other engine.'
                   )}
                 </p>
                 {engineStatus === 'missing' && (

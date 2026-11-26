@@ -181,15 +181,15 @@
     "concurrency": 2,
     "requestDelayMs": 100
   },
-  "qwant": {
-    "toolId": "qwantSearch",
+  "searxng": {
+    "toolId": "searxngSearch",
     "name": {
-      "en": "Qwant Web / Internet Search",
-      "de": "Qwant Web- / Internetsuche"
+      "en": "SearXNG Web / Internet Search",
+      "de": "SearXNG Web- / Internetsuche"
     },
     "description": {
-      "en": "Search the web / internet using Qwant for up-to-date information. Needs no API key. Optionally extracts full page content from the top results. Use the 'query' parameter with your search terms.",
-      "de": "Durchsuchen Sie das Web / Internet mit Qwant für aktuelle Informationen. Benötigt keinen API-Schlüssel. Extrahiert optional vollständige Seiteninhalte aus den Top-Ergebnissen. Verwenden Sie den 'query' Parameter mit Ihren Suchbegriffen."
+      "en": "Search the web / internet through the organisation's own SearXNG instance for up-to-date information. Optionally extracts full page content from the top results. Use the 'query' parameter with your search terms.",
+      "de": "Durchsuchen Sie das Web / Internet über die SearXNG-Instanz der Organisation für aktuelle Informationen. Extrahiert optional vollständige Seiteninhalte aus den Top-Ergebnissen. Verwenden Sie den 'query' Parameter mit Ihren Suchbegriffen."
     },
     "parameters": {
       "type": "object",
@@ -212,12 +212,12 @@
         "maxResults": {
           "type": "integer",
           "description": {
-            "en": "Maximum number of results to return / pages to extract content from (default: 10). Qwant returns at most 10 results per search.",
-            "de": "Maximale Anzahl der zurückzugebenden Ergebnisse / Seiten, von denen Inhalte extrahiert werden (Standard: 10). Qwant liefert maximal 10 Ergebnisse pro Suche."
+            "en": "Maximum number of results to return / pages to extract content from (default: 10, at most 20).",
+            "de": "Maximale Anzahl der zurückzugebenden Ergebnisse / Seiten, von denen Inhalte extrahiert werden (Standard: 10, höchstens 20)."
           },
           "default": 10,
           "minimum": 1,
-          "maximum": 10
+          "maximum": 20
         },
         "contentMaxLength": {
           "type": "integer",
@@ -239,8 +239,8 @@
         "language": {
           "type": "string",
           "description": {
-            "en": "Language or locale for the search results, e.g. 'en', 'de' or 'de-CH' (default: English/US)",
-            "de": "Sprache oder Gebietsschema für die Suchergebnisse, z. B. 'en', 'de' oder 'de-CH' (Standard: Englisch/US)"
+            "en": "Language or locale for the search results, e.g. 'en', 'de' or 'de-CH' (default: the user's language)",
+            "de": "Sprache oder Gebietsschema für die Suchergebnisse, z. B. 'en', 'de' oder 'de-CH' (Standard: die Sprache des Benutzers)"
           }
         },
         "freshness": {
@@ -264,7 +264,6 @@
       },
       "required": ["query"]
     },
-    "concurrency": 1,
-    "requestDelayMs": 1100
+    "concurrency": 2
   }
 }

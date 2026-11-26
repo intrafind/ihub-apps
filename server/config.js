@@ -68,11 +68,6 @@ const env = cleanEnv(
     // names are passed through dynamically, which is why BRAVE_SEARCH_API_KEY
     // worked while BRAVE_SEARCH_ENDPOINT silently did not.
     BRAVE_SEARCH_ENDPOINT: str({ optional: true }),
-    // Base URL of Qwant's JSON search API; the category ("web") is appended.
-    QWANT_SEARCH_ENDPOINT: str({ optional: true }),
-    // Qwant answers a default Node user agent with a bot challenge, so the
-    // provider sends a browser one. Override it if Qwant starts rejecting it.
-    QWANT_SEARCH_USER_AGENT: str({ optional: true }),
     // Staan's web search endpoint. STAAN_API_KEY needs no declaration: it
     // reaches `config` through the dynamic `*_API_KEY` pass-through below.
     STAAN_SEARCH_ENDPOINT: str({ optional: true }),
@@ -140,8 +135,6 @@ const config = Object.freeze({
   NODE_ENV: env.NODE_ENV,
   IFINDER_PRIVATE_KEY: env.IFINDER_PRIVATE_KEY,
   BRAVE_SEARCH_ENDPOINT: env.BRAVE_SEARCH_ENDPOINT,
-  QWANT_SEARCH_ENDPOINT: env.QWANT_SEARCH_ENDPOINT,
-  QWANT_SEARCH_USER_AGENT: env.QWANT_SEARCH_USER_AGENT,
   STAAN_SEARCH_ENDPOINT: env.STAAN_SEARCH_ENDPOINT,
   WEB_READER_USER_AGENT: env.WEB_READER_USER_AGENT,
   SEARCH_CACHE_TTL_MS: env.SEARCH_CACHE_TTL_MS

@@ -5,37 +5,31 @@
  * Turn the outcome of a web search into something an admin can act on.
  *
  * The admin connectivity test exists because the interesting failure is not
- * "the search failed" but *why*, and the two most common whys need opposite
- * responses:
+ * "the search failed" but *why*: a missing or rejected API key is a
+ * configuration problem fixed on the very page the admin is looking at, a
+ * rate limit clears on its own, and a network failure points at the proxy or
+ * TLS setup.
  *
- *  - **Qwant blocked by DataDome.** Nothing in iHub is misconfigured. Qwant
- *    challenges requests from data-centre IP ranges, so the server's egress IP
- *    is the variable — retrying, re-saving the provider or changing the query
- *    will never help. The admin needs to know to change egress or use Brave.
- *  - **Brave missing or rejecting its key.** Genuinely a configuration problem,
- *    fixed on the very page the admin is looking at.
- *
- * Reported verbatim, a captcha reads as an opaque `HTTP 403` and an admin
- * reasonably concludes the feature is broken. So the classification lives here,
- * as pure functions over an outcome: no network, no Express, no provider
- * instance, and therefore straightforward to test and to reuse.
+ * Reported verbatim, all of these read as an opaque `HTTP 4xx` or `fetch
+ * failed`. So the classification lives here, as pure functions over an
+ * outcome: no network, no Express, no provider instance, and therefore
+ * straightforward to test and to reuse.
  *
  * @module services/search/searchDiagnostics
  */
 
 /**
  * @typedef {Object} SearchDiagnosis
- * @property {'ok'|'empty'|'blocked'|'unconfigured'|'rate_limited'|'network'|'error'} status
+ * @property {'ok'|'empty'|'unconfigured'|'rate_limited'|'network'|'error'} status
  * @property {string} code - Stable machine-readable code (the provider's error code where it has one)
  * @property {string} title - One-line summary
  * @property {string} detail - What happened, in an admin's terms
  * @property {string[]} remediation - Concrete next steps, most useful first
- * @property {string|null} blockedBy - Bot-protection vendor when one was detected
  * @property {boolean} retryable - Whether running the same test again could plausibly differ
  */
 
 /** Human labels for the providers this test covers. */
-const PROVIDER_LABELS = { brave: 'Brave Search', qwant: 'Qwant', staan: 'Staan' };
+const PROVIDER_LABELS = { brave: 'Brave Search', staan: 'Staan', searxng: 'SearXNG' };
 
 /**
  * Label a provider for a message, falling back to its id.
@@ -70,7 +64,6 @@ export function diagnoseSearchSuccess(payload, provider) {
       detail:
         'The request reached the provider and was answered normally — connectivity is fine. The query itself matched nothing.',
       remediation: ['Try a broader query, such as a single common word.'],
-      blockedBy: null,
       retryable: true
     };
   }
@@ -81,7 +74,6 @@ export function diagnoseSearchSuccess(payload, provider) {
     title: `${label} returned ${count} result${count === 1 ? '' : 's'}`,
     detail: `This server can reach ${label} and search works from here.`,
     remediation: [],
-    blockedBy: null,
     retryable: false
   };
 }
@@ -90,7 +82,7 @@ export function diagnoseSearchSuccess(payload, provider) {
  * Diagnose a thrown search error.
  *
  * `WebSearchService` wraps provider errors but preserves `code`, so the
- * provider's own classification (`QWANT_CAPTCHA`, `QWANT_RATE_LIMITED`, …) is
+ * provider's own classification (`STAAN_UNAUTHORIZED`, `STAAN_RATE_LIMITED`, …) is
  * what is matched on; the message is only consulted as a fallback for the
  * unconfigured-key case, which predates those codes.
  *
@@ -104,65 +96,6 @@ export function diagnoseSearchError(error, provider) {
   const message = error?.message || 'Unknown error';
 
   switch (code) {
-    case 'QWANT_CAPTCHA':
-      return {
-        status: 'blocked',
-        code,
-        title: `${label} is blocking this server's IP address`,
-        detail:
-          "Qwant's API sits behind DataDome, which answered with a captcha instead of results. DataDome challenges traffic from data-centre IP ranges, so this is about where this server sends its requests from — not about how the provider is configured here. Nothing on this page will change it, and retrying will not either.",
-        remediation: [
-          'Route the outbound search traffic through an egress IP Qwant accepts — typically an office or residential network rather than cloud hosting.',
-          'If this server must stay on its current network, configure Brave Search and select it as the provider instead.',
-          'If an outbound HTTP proxy is in use, check whether its exit IP is the one being challenged.'
-        ],
-        blockedBy: 'datadome',
-        retryable: false
-      };
-
-    case 'QWANT_RATE_LIMITED':
-      return {
-        status: 'rate_limited',
-        code,
-        title: `${label} is rate-limiting this server`,
-        detail:
-          'The provider accepted the request but asked us to slow down. This is usually temporary and clears on its own.',
-        remediation: [
-          'Wait a minute and run the test again.',
-          "Raise the tool's requestDelayMs if searches are being issued in rapid bursts."
-        ],
-        blockedBy: null,
-        retryable: true
-      };
-
-    case 'QWANT_ACCESS_DENIED':
-      return {
-        status: 'blocked',
-        code,
-        title: `${label} refused the request`,
-        detail: `The provider answered with HTTP 403 and no captcha body. The request reached it, so this is a refusal rather than a network problem. ${message}`,
-        remediation: [
-          'Run the test again — a refusal without a captcha body is sometimes the first stage of a bot challenge.',
-          'If it persists, treat it like a DataDome block: change egress IP, or use Brave Search.'
-        ],
-        blockedBy: null,
-        retryable: true
-      };
-
-    case 'QWANT_INVALID_RESPONSE':
-      return {
-        status: 'error',
-        code,
-        title: `${label} returned something that is not JSON`,
-        detail: `The response body could not be parsed. This usually means an interception page — a captcha, a corporate proxy notice or a login wall — was returned in place of the API response. ${message}`,
-        remediation: [
-          'Check whether an outbound proxy or filtering appliance is rewriting the response.',
-          'Verify that the configured endpoint still points at the provider’s API.'
-        ],
-        blockedBy: null,
-        retryable: true
-      };
-
     case 'STAAN_UNAUTHORIZED':
       return {
         status: 'unconfigured',
@@ -174,7 +107,6 @@ export function diagnoseSearchError(error, provider) {
           'Check the key is still active in the staan.ai dashboard.',
           'If the key is set through STAAN_API_KEY instead, restart the server after changing it.'
         ],
-        blockedBy: null,
         retryable: false
       };
 
@@ -188,7 +120,6 @@ export function diagnoseSearchError(error, provider) {
           'Wait a moment and run the test again.',
           "Raise the staanSearch tool's requestDelayMs if searches are issued in rapid bursts (the documented limit is 20 requests/second)."
         ],
-        blockedBy: null,
         retryable: true
       };
 
@@ -202,7 +133,6 @@ export function diagnoseSearchError(error, provider) {
           'Try the test with a plain one-word query, which rules out the query as the cause.',
           'If a custom STAAN_SEARCH_ENDPOINT is set, check it still points at the v2 web search endpoint.'
         ],
-        blockedBy: null,
         retryable: false
       };
 
@@ -215,6 +145,129 @@ export function diagnoseSearchError(error, provider) {
         remediation: [
           'Check whether an outbound proxy or filtering appliance is rewriting the response.',
           'Verify that the configured endpoint still points at the provider’s API.'
+        ],
+        retryable: true
+      };
+
+    case 'SEARXNG_NOT_CONFIGURED':
+      return {
+        status: 'unconfigured',
+        code,
+        title: `${label} has no instance URL`,
+        detail: `${label} searches through an instance you run, and none is configured. ${message}`,
+        remediation: [
+          'Enter the base URL of your SearXNG instance, e.g. https://search.example.org'
+        ],
+        blockedBy: null,
+        retryable: false
+      };
+
+    case 'SEARXNG_TARGET_BLOCKED':
+      return {
+        status: 'blocked',
+        code,
+        title: `${label} address is refused by the SSRF check`,
+        detail: message,
+        remediation: [
+          'Company-internal addresses (10.x, 172.16-31.x, 192.168.x) are allowed. A loopback address such as localhost, a link-local or metadata address, or a name this server cannot resolve is not.',
+          'If the instance really is there, add its host to ssrf.allowedHosts (Admin → Security); a name that only a proxy resolves needs the same.'
+        ],
+        blockedBy: null,
+        retryable: false
+      };
+
+    case 'SEARXNG_REDIRECT':
+      return {
+        status: 'error',
+        code,
+        title: `${label} answered a redirect`,
+        detail: message,
+        remediation: [
+          'Enter the URL the redirect leads to (often the https:// address) as the instance URL.'
+        ],
+        blockedBy: null,
+        retryable: false
+      };
+
+    case 'SEARXNG_FORBIDDEN':
+      return {
+        status: 'blocked',
+        code,
+        title: `${label} refused the request (HTTP 403)`,
+        detail: `The instance was reached but did not answer. ${message}`,
+        remediation: [
+          'Most often: the JSON output is off. Add json to search.formats in the instance’s settings.yml (formats: [html, json]) and restart it.',
+          'If json is enabled: check whether the reverse proxy in front of the instance denies this server, or whether the instance’s bot limiter bans it (pass_ip under [botdetection.ip_lists] in limiter.toml).'
+        ],
+        blockedBy: null,
+        retryable: false
+      };
+
+    case 'SEARXNG_UNAUTHORIZED':
+      return {
+        status: 'unconfigured',
+        code,
+        title: `${label} wants a credential this server did not send`,
+        detail: `The instance (or the reverse proxy in front of it) was reached, so connectivity is fine. ${message}`,
+        remediation: [
+          'Pick a credential of type secret in the Authorization field. A secret is sent as Bearer <secret>; a secret that starts with "Basic " (e.g. Basic dXNlcjpwYXNz) is sent as it is.',
+          'Check the secret is still the one the proxy expects.'
+        ],
+        blockedBy: null,
+        retryable: false
+      };
+
+    case 'SEARXNG_NOT_FOUND':
+      return {
+        status: 'error',
+        code,
+        title: `${label} was not found at this URL`,
+        detail: message,
+        remediation: [
+          'Use the base URL of the instance, e.g. https://search.example.org (a trailing /search is removed).',
+          'If the instance runs under a path behind a reverse proxy, include that path.'
+        ],
+        blockedBy: null,
+        retryable: false
+      };
+
+    case 'SEARXNG_RATE_LIMITED':
+      return {
+        status: 'rate_limited',
+        code,
+        title: `${label} is rate-limiting this server`,
+        detail: `The instance accepted the request but its limiter asked us to slow down. ${message}`,
+        remediation: [
+          'Allow this server’s address in the instance’s limiter (pass_ip under [botdetection.ip_lists] in limiter.toml), or switch the limiter off for a private instance.',
+          'Behind a reverse proxy the instance needs X-Forwarded-For and X-Real-IP to see the real client address.'
+        ],
+        blockedBy: null,
+        retryable: true
+      };
+
+    case 'SEARXNG_INVALID_RESPONSE':
+      return {
+        status: 'error',
+        code,
+        title: `${label} did not return search results`,
+        detail: message,
+        remediation: [
+          'Open the URL in a browser: it should show the SearXNG search page.',
+          'Check that no login page, proxy notice or other service answers at this address.'
+        ],
+        blockedBy: null,
+        retryable: true
+      };
+
+    case 'SEARXNG_ENGINES_UNAVAILABLE':
+      return {
+        status: 'error',
+        code,
+        title: `${label} is running, but its search engines did not answer`,
+        detail: message,
+        remediation: [
+          'Open the instance’s own search page and look at the engines it marks as failed (CAPTCHA, timeout, access denied).',
+          'Engines such as Google or Bing block many data-centre addresses; enable engines that answer from this host, or route the instance through another egress.'
         ],
         blockedBy: null,
         retryable: true
@@ -238,7 +291,6 @@ export function diagnoseSearchError(error, provider) {
           'Check ssl.domainWhitelist and proxy.urlPatterns in platform.json.',
           'Confirm the provider’s host is reachable from this network at all.'
         ],
-        blockedBy: null,
         retryable: true
       };
 
@@ -255,9 +307,8 @@ export function diagnoseSearchError(error, provider) {
       detail: `${label} needs a key before it can answer any search.`,
       remediation: [
         `Enter the key on this page, or set the provider's API key environment variable and restart the server.`,
-        'Or switch the app to another engine: Staan (also keyed) or Qwant (no API key, but blocked on many cloud hosts).'
+        'Or switch the app to the other engine, Brave Search or Staan.'
       ],
-      blockedBy: null,
       retryable: false
     };
   }
@@ -272,7 +323,6 @@ export function diagnoseSearchError(error, provider) {
         'Re-enter the API key — a truncated or expired key looks exactly like this.',
         'Check the key is still active in the provider’s own dashboard.'
       ],
-      blockedBy: null,
       retryable: false
     };
   }
@@ -287,7 +337,6 @@ export function diagnoseSearchError(error, provider) {
         'Wait a minute and run the test again.',
         'Check the plan’s request-per-second limit against the tool’s requestDelayMs.'
       ],
-      blockedBy: null,
       retryable: true
     };
   }
@@ -298,7 +347,6 @@ export function diagnoseSearchError(error, provider) {
     title: `${label} search failed`,
     detail: message,
     remediation: ['Check the server log for the full error, which records the provider response.'],
-    blockedBy: null,
     retryable: true
   };
 }

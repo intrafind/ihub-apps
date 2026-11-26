@@ -67,6 +67,33 @@ what to do, instead of "Request failed with status code 413" or "Payload Too Lar
   connection to iHub" instead of the general "Could not be saved", and is still sent with the
   message.
 
+## Web Search: Search Through Your Own SearXNG Instance
+
+Web search can now go through a [SearXNG](https://docs.searxng.org/) instance you run yourself. The
+search traffic of iHub then goes to a gateway under your control instead of a search vendor's API.
+
+- **Admin → Integrations → Web search → SearXNG** installs the engine. The **Instance URL** is
+  required (`https://search.example.org`, a trailing `/search` is removed). SearXNG has no API key:
+  if a reverse proxy in front of it asks for a sign-in, pick a credential in **Authorization**; it is
+  sent as a bearer token, or as it is when it starts with `Basic `.
+- The instance must list `json` under `search.formats` in its `settings.yml`. SearXNG answers
+  HTTP 403 otherwise, and **Test connection** says so, together with the other usual causes (wrong
+  path, the limiter, a rejected credential, engines that do not answer).
+- Apps use it with `websearch.provider: "searxng"`. On **Auto** it comes after Brave and Staan, so
+  existing installs do not change.
+- SearXNG forwards each query to the engines enabled in it. Queries leave your network if those
+  are external engines: the control is yours, the engines' view of the query is decided in the
+  instance.
+- The instance address is checked like any other admin-entered URL: company-internal addresses
+  work as they are, while `localhost`, link-local and cloud-metadata addresses need the host on
+  `ssrf.allowedHosts` (Admin → Security). The connection goes to the checked address and a
+  redirect is reported, not followed.
+- Its hits are listed in the chat but stay private (a shared chat does not keep them), because an
+  instance may search an intranet as well.
+- SearXNG is AGPL-licensed software you operate; iHub only calls its HTTP API and does not bundle
+  it. See [Web tools](../../web-tools.md#searxng-your-own-search-gateway) for the setup, the licence
+  notes and the troubleshooting table.
+
 ## Web Pages and HTML Files: Images Left Out, Whitespace Trimmed, Page Text Marked as the Page's
 
 When the model reads a web page (**Read page** in web search) or an HTML file in a project, it now

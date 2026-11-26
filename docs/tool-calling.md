@@ -1150,7 +1150,7 @@ iHub Apps ships with a set of pre-configured built-in tools that cover the most 
 
 - **Provider**: Any model supporting function calling
 - **Description**: Web search powered by the Brave Search API for privacy-focused search results, with optional content extraction
-- **Type**: Server-side execution — the `search` action of the built-in engine **Brave Search** (installation `brave`, **Admin → Integrations → Web search**), not a tool file in `contents/tools/`; the same holds for `staanSearch` (`staan`) and `qwantSearch` (`qwant`). The page reader `read_url` is a platform tool of the web search feature (`server/defaults/tools/read_url.json`)
+- **Type**: Server-side execution — the `search` action of the built-in engine **Brave Search** (installation `brave`, **Admin → Integrations → Web search**), not a tool file in `contents/tools/`; the same holds for `staanSearch` (`staan`). The page reader `read_url` is a platform tool of the web search feature (`server/defaults/tools/read_url.json`)
 - **Parameters**:
   - `query` (string, required): The search query or search terms
   - `extractContent` (boolean, optional): Extract full content from top results (default: configured by app's `websearch.extractContent`)
@@ -1210,14 +1210,14 @@ iHub Apps ships with a set of pre-configured built-in tools that cover the most 
 - **Gemini models** + `useNativeSearch: true` → Google Search grounding
 - **OpenAI Responses models** + `useNativeSearch: true` → OpenAI Web Search
 - **Anthropic models** + `useNativeSearch: true` → Anthropic Web Search
-- **Otherwise** → the engine named by `provider` (an engine installation id), if it is installed, enabled and granted to the user; for `"auto"`, the first engine that is, in the order Brave, Staan, Qwant, then any other engine by id; no engine means no web search on that model
+- **Otherwise** → the engine named by `provider` (an engine installation id), if it is installed, enabled and granted to the user; for `"auto"`, the first engine that is, in the order Brave, Staan, SearXNG, then any other engine by id; no engine means no web search on that model
 
 **Key properties**:
 
 | Property | Type | Default | Description |
 |----------|------|---------|-------------|
 | `enabled` | Boolean | `false` | Enable web search for this app |
-| `provider` | String | `"auto"` | `"auto"` or the id of an installed engine: `"brave"`, `"staan"`, `"qwant"` or a third-party engine's id |
+| `provider` | String | `"auto"` | `"auto"` or the id of an installed engine: `"brave"`, `"staan"` or a third-party engine's id |
 | `useNativeSearch` | Boolean | `true` | Prefer native search for Gemini/OpenAI/Anthropic models |
 | `maxResults` | Number | `5` | Maximum search results (1-20) |
 | `extractContent` | Boolean | `true` | Extract full page content from results |
@@ -1225,7 +1225,7 @@ iHub Apps ships with a set of pre-configured built-in tools that cover the most 
 | `enabledByDefault` | Boolean | `false` | Whether search is active by default for users |
 | `researchGuidance` | Boolean or String | `true` | Research instruction added to the system prompt when search is on; `false` = off, string = custom text |
 
-**Migration**: Existing apps with websearch tool IDs (`braveSearch`, `enhancedWebSearch`, etc.) in their former tool list are automatically migrated to the new format on server startup. Migration V195 moves the search engines' API keys from `providers.json` into credentials, deletes the shipped tool files `braveSearch.json`, `staanSearch.json`, `qwantSearch.json` and `read_url.json` from `contents/tools/`, and strips the search ids from the app's former tool list; migration V204 installs one engine per key (and Qwant where it was reachable) in place of the former `websearch` installation.
+**Migration**: Existing apps with websearch tool IDs (`braveSearch`, `enhancedWebSearch`, etc.) in their former tool list are automatically migrated to the new format on server startup. Migration V195 moves the search engines' API keys from `providers.json` into credentials, deletes the shipped tool files `braveSearch.json`, `staanSearch.json`, `qwantSearch.json` and `read_url.json` from `contents/tools/`, and strips the search ids from the app's former tool list; migration V204 installs one engine per key (and Qwant where it was reachable) in place of the former `websearch` installation; migration V264 removes the Qwant engine again.
 
 ### `iFinder`
 

@@ -2,35 +2,41 @@
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
 import searchWithExtraction from './lib/searchWithExtraction.js';
-import { QWANT_MAX_WEB_RESULTS } from '../services/search/qwantProvider.js';
+import {
+  SEARXNG_DEFAULT_RESULTS,
+  SEARXNG_MAX_WEB_RESULTS
+} from '../services/search/searxngProvider.js';
 
 /**
- * Perform a web search using Qwant, with optional content extraction.
+ * Perform a web search through the customer's own SearXNG instance, with
+ * optional content extraction.
  *
- * Qwant is the keyless counterpart to `braveSearch`: it needs no API key and no
- * account, so an install with no search subscription can still answer from the
- * live web. The result shape is identical to `braveSearch`, so an app can swap
- * `websearch.provider` without the model seeing a different contract.
+ * Shares its contract with `braveSearch`, `staanSearch` and `qwantSearch`, so
+ * an app can swap `websearch.provider` without the model seeing a different
+ * tool. The instance is the installation's `instanceUrl`; nothing here names a
+ * vendor endpoint. SearXNG has no date filter that covers every engine, so
+ * `freshness` is sent as `time_range` (where its engines honour it) and the
+ * shared search body drops dated results outside the window as well.
  *
  * @param {Object} params - The search parameters
  * @param {string} [params.query] - The search query
  * @param {string} [params.q] - Alternative query parameter name
  * @param {boolean} [params.extractContent=false] - Whether to extract full content from result pages
- * @param {number} [params.maxResults=10] - Maximum results to return / pages to extract (Qwant returns at most 10 per search)
+ * @param {number} [params.maxResults=10] - Maximum results to return / pages to extract (at most 20)
  * @param {number} [params.contentMaxLength=3000] - Maximum characters of extracted content per page
  * @param {string} [params.focus] - The question being researched: with `extractContent`, a long page returns the sections that answer it
  * @param {string} [params.language] - Language/locale for the results (e.g. "de", "en-GB")
  * @param {string} [params.freshness] - Only results from the last `day` | `week` | `month` | `year`
- * @param {string[]|string} [params.includeDomains] - Restrict results to these domains (max 10)
+ * @param {string[]|string} [params.includeDomains] - Restrict results to these domains (max 10; `site:` operators)
  * @param {string} [params.chatId] - The chat ID for context tracking
  * @returns {Promise<Object>} Search results, optionally with extracted page content
  * @throws {Error} If no query is provided
  */
-export default async function qwantSearch({
+export default async function searxngSearch({
   query,
   q,
   extractContent = false,
-  maxResults = QWANT_MAX_WEB_RESULTS,
+  maxResults = SEARXNG_DEFAULT_RESULTS,
   contentMaxLength = 3000,
   focus,
   language,
@@ -44,15 +50,12 @@ export default async function qwantSearch({
     throw new Error('query parameter is required (use "query" or "q")');
   }
 
-  // A single Qwant web request pages in tens. Asking the provider for more than
-  // that would silently return ten anyway, so the cap is applied up front and
-  // the model is told the real number in the tool description.
-  const limit = Math.min(Number(maxResults) || QWANT_MAX_WEB_RESULTS, QWANT_MAX_WEB_RESULTS);
+  const limit = Math.min(Number(maxResults) || SEARXNG_DEFAULT_RESULTS, SEARXNG_MAX_WEB_RESULTS);
 
   return searchWithExtraction({
     query: searchQuery,
-    provider: 'qwant',
-    component: 'QwantSearch',
+    provider: 'searxng',
+    component: 'SearxngSearch',
     extractContent,
     maxResults: limit,
     contentMaxLength,
@@ -60,6 +63,6 @@ export default async function qwantSearch({
     freshness,
     includeDomains,
     chatId,
-    searchOptions: { language, count: limit }
+    searchOptions: { language, count: limit, timeRange: freshness }
   });
 }

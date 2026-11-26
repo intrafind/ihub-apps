@@ -51,11 +51,10 @@ import {
 
 const INSTALLED = [
   {
-    id: 'qwant',
-    definition: 'com.intrafind/qwant-search',
+    id: 'acme',
+    definition: 'org.acme/search',
     type: 'web-search',
-    builtIn: true,
-    label: 'Qwant'
+    label: 'Acme Search'
   },
   {
     id: 'brave',
@@ -110,7 +109,7 @@ describe('IntegrationsConfigSection', () => {
     expect(screen.getByText('Enable iAssistant')).toBeInTheDocument();
 
     const generic = screen.getByTestId('app-integrations');
-    expect(within(generic).queryByText('Qwant')).not.toBeInTheDocument();
+    expect(within(generic).queryByText('Acme Search')).not.toBeInTheDocument();
     expect(within(generic).queryByText('Brave Search')).not.toBeInTheDocument();
     expect(within(generic).queryByText('iassistant')).not.toBeInTheDocument();
     expect(within(generic).queryByText('office365')).not.toBeInTheDocument();
@@ -150,11 +149,11 @@ describe('IntegrationsConfigSection', () => {
       within(select)
         .getAllByRole('option')
         .map(option => option.textContent)
-    ).toEqual(['Auto', 'Qwant (qwant)']);
+    ).toEqual(['Auto', 'Acme Search (acme)']);
     expect(select).toHaveValue('auto');
     expect(screen.queryByTestId('websearch-no-engine')).not.toBeInTheDocument();
-    fireEvent.change(select, { target: { value: 'qwant' } });
-    expect(onChange.mock.calls.at(-1)[0].websearch).toEqual({ enabled: true, provider: 'qwant' });
+    fireEvent.change(select, { target: { value: 'acme' } });
+    expect(onChange.mock.calls.at(-1)[0].websearch).toEqual({ enabled: true, provider: 'acme' });
   });
 
   it('warns about an engine the app names that is not installed, or is disabled', async () => {
@@ -544,7 +543,7 @@ describe('IntegrationsConfigSection', () => {
       integrations: {
         'com.intrafind/office365': {},
         'type:storage': {},
-        'com.intrafind/qwant-search': {},
+        'org.acme/search': {},
         'type:web-search': {},
         'gone-integration': {}
       }
@@ -553,7 +552,7 @@ describe('IntegrationsConfigSection', () => {
     for (const key of [
       'com.intrafind/office365',
       'type:storage',
-      'com.intrafind/qwant-search',
+      'org.acme/search',
       'type:web-search'
     ]) {
       expect(screen.queryByTestId(`stale-integration-${key}`)).not.toBeInTheDocument();
@@ -826,24 +825,24 @@ describe('mergeInstallationDetails', () => {
 });
 
 describe('webSearchEngines', () => {
-  it('lists the engines in Auto’s order: Brave, Staan, Qwant, then the others by id', () => {
+  it('lists the engines in Auto’s order: Brave, Staan, then the others by id', () => {
     const engines = webSearchEnginesOf([
       { id: 'zeta', type: 'web-search' },
-      { id: 'qwant', type: 'web-search' },
+      { id: 'searxng', type: 'web-search' },
       { id: 'jira' },
       { id: 'acme', type: 'web-search' },
       { id: 'staan', type: 'web-search' },
       { id: 'brave', type: 'web-search' }
     ]);
-    expect(engines.map(engine => engine.id)).toEqual(['brave', 'staan', 'qwant', 'acme', 'zeta']);
+    expect(engines.map(engine => engine.id)).toEqual(['brave', 'staan', 'searxng', 'acme', 'zeta']);
     expect(webSearchEnginesOf(null)).toEqual([]);
   });
 
   it('tells what the engine an app names means', () => {
-    const engines = [{ id: 'qwant' }, { id: 'brave', enabled: false }];
+    const engines = [{ id: 'acme' }, { id: 'brave', enabled: false }];
     expect(webSearchEngineStatus(undefined, engines)).toBe('auto');
     expect(webSearchEngineStatus('auto', engines)).toBe('auto');
-    expect(webSearchEngineStatus('qwant', engines)).toBe('ok');
+    expect(webSearchEngineStatus('acme', engines)).toBe('ok');
     expect(webSearchEngineStatus('brave', engines)).toBe('disabled');
     expect(webSearchEngineStatus('staan', engines)).toBe('missing');
     expect(webSearchEngineStatus('staan', null)).toBe('unknown');

@@ -53,7 +53,7 @@ ProxyAuth | Proxy Authentication | Sign-in from headers or tokens set by a rever
 Authorization | Authorization | Group inheritance and permission checks for apps, models and tools | localized
 IFinderService | iFinder | iFinder document search and retrieval | localized
 JiraService | Jira | Jira integration: sign-in and issue requests | localized
-WebSearch | Web Search | Web search requests to Brave, Staan, Qwant and other search engines | localized
+WebSearch | Web Search | Web search requests to Brave, Staan, SearXNG and other search engines | localized
 McpClientManager | MCP Clients | Connections to MCP servers: connect, list tools, reconnect | localized
 `;
 

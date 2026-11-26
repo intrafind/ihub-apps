@@ -187,7 +187,7 @@ const CATALOG = [
     authModes: ['oauth-user'],
     actionCount: 0
   },
-  ...['Brave Search', 'Staan', 'Qwant'].map(name => ({
+  ...['Brave Search', 'Staan'].map(name => ({
     id: `com.intrafind/${name.split(' ')[0].toLowerCase()}-search`,
     name,
     version: '1.0.0',
@@ -434,10 +434,9 @@ describe('Catalog and Inbound tabs', () => {
       'built-in',
       'catalog'
     ]);
-    // The three engines are grouped under Web search.
+    // The engines are grouped under Web search.
     expect(within(groups[0]).getByText('Brave Search')).toBeInTheDocument();
     expect(within(groups[0]).getByText('Staan')).toBeInTheDocument();
-    expect(within(groups[0]).getByText('Qwant')).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'Install Jira' }));
     expect(screen.getByTestId('install-dialog')).toHaveTextContent('com.intrafind/jira');

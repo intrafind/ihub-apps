@@ -4,7 +4,7 @@
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
 /**
- * The built-in web search engine connectors (`brave`, `staan`, `qwant`): one
+ * The built-in web search engine connectors (`brave`, `staan`): one
  * action `search` under the historical tool id, the shipped definitions that
  * name them, and the installation test, which checks the key of the values
  * under test (credential, environment variable) and runs one live search with
@@ -23,7 +23,6 @@ import webSearchService from '../services/WebSearchService.js';
 import {
   apiKeyStep,
   braveSearchConnector,
-  qwantSearchConnector,
   staanSearchConnector
 } from '../services/integrations/protocols/native/connectors/websearch/index.js';
 import { getConnector } from '../services/integrations/protocols/native/connectors/index.js';
@@ -85,9 +84,10 @@ describe('definitions and connectors', () => {
       assert.equal(def.type, 'web-search');
       assert.equal(def.builtIn, true);
       assert.equal(def.singleton.instanceId, id);
-      // 1.1.0: model guidance and example prompts (#2974).
-      assert.equal(def.version, '1.1.0');
-      assert.equal(def.releases[0].version, '1.1.0');
+      // 1.1.0: model guidance and example prompts (#2974); SearXNG started at 1.0.0 with them.
+      const version = id === 'searxng' ? '1.0.0' : '1.1.0';
+      assert.equal(def.version, version);
+      assert.equal(def.releases[0].version, version);
       assert.deepEqual(
         def.actions.map(action => [action.name, action.toolId]),
         [['search', toolId]]
@@ -99,7 +99,7 @@ describe('definitions and connectors', () => {
     });
   }
 
-  it('Brave and Staan take a credential API key; Qwant has no field', async () => {
+  it('Brave and Staan take a credential API key', async () => {
     for (const id of ['brave', 'staan']) {
       const def = await definitionOf(id);
       assert.deepEqual(
@@ -107,7 +107,60 @@ describe('definitions and connectors', () => {
         [['apiKeyRef', 'credential', ['secret']]]
       );
     }
-    assert.deepEqual((await definitionOf('qwant')).install, []);
+  });
+
+  it('SearXNG takes the URL of the instance and an optional credential for a proxy', async () => {
+    const def = await definitionOf('searxng');
+    assert.deepEqual(
+      def.install.map(field => [field.key, field.type, Boolean(field.required)]),
+      [
+        ['instanceUrl', 'url', true],
+        ['authorizationRef', 'credential', false]
+      ]
+    );
+    assert.deepEqual(def.install[1].credentialTypes, ['secret']);
+  });
+});
+
+describe('the SearXNG test', () => {
+  const connector = getConnector('searxngSearch');
+
+  it('fails without a usable instance URL and does not search', async () => {
+    searches.length = 0;
+    for (const values of [{}, { instanceUrl: 'ftp://x' }, { instanceUrl: 'http://u:p@host' }]) {
+      const steps = await connector.test({ values });
+      assert.equal(steps.length, 1);
+      assert.equal(steps[0].id, 'instance');
+      assert.equal(steps[0].status, 'fail');
+    }
+    assert.equal(searches.length, 0);
+  });
+
+  it('warns when a credential would travel over plain http to another host', async () => {
+    const status = async instanceUrl =>
+      (await connector.test({ values: { instanceUrl, authorizationRef: 'brave-key' } }))[0].status;
+    assert.equal(await status('http://searxng:8080'), 'warn');
+    assert.equal(await status('https://search.example.org'), 'ok');
+    assert.equal(await status('http://127.0.0.1:8080'), 'ok');
+    assert.equal(await status('http://localhost:8080'), 'ok');
+  });
+
+  it('searches with the unsaved values, uncached', async () => {
+    searches.length = 0;
+    const steps = await connector.test({
+      values: { instanceUrl: 'http://localhost:8080/search/' }
+    });
+    assert.deepEqual(
+      steps.map(step => [step.id, step.status]),
+      [
+        ['instance', 'ok'],
+        ['search', 'ok']
+      ]
+    );
+    assert.equal(searches[0].options.provider, 'searxng');
+    assert.equal(searches[0].options.skipCache, true);
+    assert.equal(searches[0].options.settings.baseUrl, 'http://localhost:8080');
+    assert.equal(searches[0].options.settings.authorization, undefined);
   });
 });
 
@@ -137,10 +190,6 @@ describe('the API key step', () => {
     const { step } = apiKeyStep('brave', {});
     assert.equal(step.status, 'fail');
     assert.match(step.message, /BRAVE_SEARCH_API_KEY/);
-  });
-
-  it('needs nothing for Qwant', () => {
-    assert.equal(apiKeyStep('qwant', {}).step.status, 'ok');
   });
 });
 
@@ -172,10 +221,10 @@ describe('the installation test', () => {
   it('reports a failed search with the diagnosis', async () => {
     webSearchService.search = async () => {
       const error = new Error('captcha');
-      error.code = 'QWANT_CAPTCHA';
+      error.code = 'HTTP_429';
       throw error;
     };
-    const steps = await qwantSearchConnector.test({ values: {} });
+    const steps = await braveSearchConnector.test({ values: { apiKeyRef: 'brave-key' } });
     assert.equal(steps[1].id, 'search');
     assert.equal(steps[1].status, 'fail');
   });

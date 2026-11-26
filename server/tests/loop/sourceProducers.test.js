@@ -27,13 +27,12 @@ import {
 import { sourcesAddedData } from '../../services/loop/contracts/runLogEvents.js';
 
 /** The platform's own web search tools, as their shipped definitions run them. */
-const SCRIPTS = { braveSearch: 'braveSearch.js', qwantSearch: 'qwantSearch.js' };
+const SCRIPTS = { braveSearch: 'braveSearch.js', staanSearch: 'staanSearch.js' };
 
 /** What the tools these tests call declare (the shipped definitions do; the id never decides). */
 const WEB = { kind: 'search', origin: 'web' };
 const DECLARED = {
   braveSearch: WEB,
-  qwantSearch: WEB,
   staanSearch: WEB,
   webSearch: WEB,
   read_url: { kind: 'fetch', origin: 'web' }
@@ -111,7 +110,7 @@ test('web: a source carries what its card shows, and no markup or unsafe link', 
 });
 
 test('web: extracted pages are read or not readable; one sighting per page', () => {
-  const { items } = extract('qwantSearch', {
+  const { items } = extract('staanSearch', {
     results: [
       { title: 'A', url: 'https://a.example/' },
       { title: 'B', url: 'https://b.example/' }
@@ -167,7 +166,7 @@ test('web: a failed page read is still a page the turn tried', () => {
 test('web: which tools are web search is their declared category, never their id', () => {
   const webTool = id => ({ id, activity: { kind: 'search', origin: 'web' } });
   const reader = { id: 'read_url', activity: { kind: 'fetch', origin: 'web' } };
-  for (const id of ['braveSearch', 'qwantSearch', 'staanSearch', 'anything']) {
+  for (const id of ['braveSearch', 'staanSearch', 'anything']) {
     assert.equal(webSourceProducer.matches({ toolId: id, toolDef: webTool(id) }), true, id);
   }
   assert.equal(webSourceProducer.matches({ toolId: 'read_url', toolDef: reader }), true);
@@ -222,7 +221,7 @@ test('web: only the platform’s own web search scripts make their hits public',
       .private;
   const brave = { id: 'braveSearch', script: 'braveSearch.js' };
   assert.equal(privacyOf('braveSearch', brave), false);
-  assert.equal(privacyOf('webSearch', { id: 'webSearch', script: 'qwantSearch.js' }), false);
+  assert.equal(privacyOf('webSearch', { id: 'webSearch', script: 'staanSearch.js' }), false);
   // Named like the platform's search, but running something else.
   assert.equal(privacyOf('braveSearch', { id: 'braveSearch' }), true);
   assert.equal(privacyOf('braveSearch', { ...brave, type: 'openapi' }), true);
@@ -248,8 +247,7 @@ test('web: the search action of a shipped engine makes its hits public', () => {
   };
   for (const [id, instanceId] of [
     ['braveSearch', 'brave'],
-    ['staanSearch', 'staan'],
-    ['qwantSearch', 'qwant']
+    ['staanSearch', 'staan']
   ]) {
     const { items } = webSourceProducer.fromToolResult({
       toolId: id,
@@ -282,6 +280,16 @@ test('web: the search action of a shipped engine makes its hits public', () => {
     result
   });
   assert.equal(bareId.items[0].private, true);
+  // SearXNG is a shipped engine too, but its instance may search an intranet:
+  // the hits are listed and stay private.
+  const searxng = webSourceProducer.fromToolResult({
+    toolId: 'searxngSearch',
+    toolDef: engineTool('searxngSearch', 'searxng', 'com.intrafind/searxng-search'),
+    args: { query: 'example' },
+    result
+  });
+  assert.equal(searxng.items.length, 1);
+  assert.equal(searxng.items[0].private, true);
 });
 
 test('web: a third-party engine’s search reports web sources, kept private', () => {

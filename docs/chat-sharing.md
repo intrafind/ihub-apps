@@ -98,7 +98,7 @@ and what the answer did (see
 public sources — the pages a web search returned — so the viewer sees them in
 the sources panel with their citation badges. It carries the activity without anything a call found or read with the
 owner's permissions, for the reason below. In the activity, only the public
-web searches (Brave, Qwant, Staan and a model's own web search) keep their
+web searches (Brave, Staan and a model's own web search) keep their
 hits, arguments and errors; every other call — iFinder and configured sources,
 MCP and intranet tools, metadata lookups, and pages read by the page reader,
 which can reach intranet hosts on the SSL whitelist — keeps its name, query and

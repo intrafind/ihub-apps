@@ -12,7 +12,7 @@
  *   with the page reader next to it where the provider takes function tools;
  *   on other models it offers the search tool of the app's engine (`auto` or
  *   a named one) with the page reader, or nothing while no engine is available;
- * - a workflow node that lists `braveSearch` / `qwantSearch` /
+ * - a workflow node that lists `braveSearch` / `staanSearch` /
  *   `read_url` in `tools` gets the engine tool only while that engine is
  *   installed, enabled and granted, and the page reader always (a platform
  *   tool); a node's generic `webSearch` falls back to the first engine the
@@ -70,7 +70,7 @@ describe('an app with web search on', () => {
   });
 
   it('searches natively without any integration grant', async () => {
-    useWebSearch({ installed: [engine('qwant')], groups: grantResearchOnly() });
+    useWebSearch({ installed: [engine('staan')], groups: grantResearchOnly() });
     assert.equal(
       resolveAppNativeWebSearch(app(), 'anthropic', undefined, undefined)?.provider,
       'anthropic'
@@ -86,22 +86,22 @@ describe('an app with web search on', () => {
   });
 
   it('gets the auto engine with the page reader on a model without native search', async () => {
-    useWebSearch({ installed: [engine('qwant'), engine('staan')] });
+    useWebSearch({ installed: [engine('acme'), engine('staan')] });
     const offered = await getToolsForApp(app(), 'en', { modelProvider: 'mistral', user: STAFF });
     assert.deepEqual(ids(offered), [READ_URL_TOOL_ID, 'staanSearch']);
   });
 
   it('gets the engine instead of native search when the app turns native search off', async () => {
-    useWebSearch({ installed: [engine('qwant')] });
+    useWebSearch({ installed: [engine('staan')] });
     const offered = await getToolsForApp(app({ useNativeSearch: false }), 'en', {
       modelProvider: 'anthropic',
       user: STAFF
     });
-    assert.deepEqual(ids(offered), ['qwantSearch', READ_URL_TOOL_ID]);
+    assert.deepEqual(ids(offered), [READ_URL_TOOL_ID, 'staanSearch']);
   });
 
   it('with a named engine that is missing, gets no tool search but keeps native search', async () => {
-    useWebSearch({ installed: [engine('qwant')] });
+    useWebSearch({ installed: [engine('staan')] });
     const named = app({ provider: 'brave' });
     const mistral = await getToolsForApp(named, 'en', { modelProvider: 'mistral', user: STAFF });
     assert.deepEqual(ids(mistral), []);
@@ -114,28 +114,28 @@ describe('an app with web search on', () => {
   });
 
   it('gets the engine only when the user’s groups grant it', async () => {
-    useWebSearch({ installed: [engine('qwant')], groups: grantResearchOnly('type:web-search') });
+    useWebSearch({ installed: [engine('staan')], groups: grantResearchOnly('type:web-search') });
     const outside = await getToolsForApp(app(), 'en', { modelProvider: 'mistral', user: STAFF });
     assert.deepEqual(ids(outside), []);
     const inside = await getToolsForApp(app(), 'en', {
       modelProvider: 'mistral',
       user: RESEARCHER
     });
-    assert.deepEqual(ids(inside), ['qwantSearch', READ_URL_TOOL_ID]);
+    assert.deepEqual(ids(inside), [READ_URL_TOOL_ID, 'staanSearch']);
   });
 
   it('applies its settings to the engine tool’s parameter defaults', async () => {
-    useWebSearch({ installed: [engine('qwant')] });
+    useWebSearch({ installed: [engine('brave')] });
     const [search] = (
       await getToolsForApp(app({ maxResults: 50, contentMaxLength: 1000 }), 'en', {
         modelProvider: 'mistral',
         user: STAFF
       })
-    ).filter(t => t.id === 'qwantSearch');
-    // Clamped to what Qwant accepts.
-    assert.equal(search.parameters.properties.maxResults.default, 10);
+    ).filter(t => t.id === 'braveSearch');
+    // Clamped to what Brave accepts.
+    assert.equal(search.parameters.properties.maxResults.default, 20);
     assert.equal(search.parameters.properties.contentMaxLength.default, 1000);
-    assert.equal(search._integration.instanceId, 'qwant');
+    assert.equal(search._integration.instanceId, 'brave');
     assert.equal(search._integration.action, 'search');
   });
 
@@ -148,7 +148,7 @@ describe('an app with web search on', () => {
   });
 
   it('gets nothing while the user turned web search off', async () => {
-    useWebSearch({ installed: [engine('qwant')] });
+    useWebSearch({ installed: [engine('staan')] });
     const offered = await getToolsForApp(app(), 'en', {
       modelProvider: 'mistral',
       user: STAFF,
@@ -179,7 +179,7 @@ describe('workflow nodes and web search tools', () => {
 
   it('get no engine tool while it is missing, off or not granted, and the reader regardless', async () => {
     const node = { integrations: { brave: {} }, systemTools: ['read_url'] };
-    useWebSearch({ installed: [engine('qwant')] });
+    useWebSearch({ installed: [engine('staan')] });
     assert.deepEqual(ids(await nodeTools(node, RESEARCHER)), [READ_URL_TOOL_ID]);
     useWebSearch({ installed: [engine('brave', { enabled: false })] });
     assert.deepEqual(ids(await nodeTools({ integrations: { brave: {} } }, RESEARCHER)), []);
@@ -189,9 +189,9 @@ describe('workflow nodes and web search tools', () => {
   });
 
   it('select no engine by a tool reference: systemTools takes platform tools only', async () => {
-    useWebSearch({ installed: [engine('qwant')] });
+    useWebSearch({ installed: [engine('staan')] });
     assert.deepEqual(
-      ids(await nodeTools({ systemTools: ['qwant', 'qwantSearch', 'websearch'] }, RESEARCHER)),
+      ids(await nodeTools({ systemTools: ['staan', 'staanSearch', 'websearch'] }, RESEARCHER)),
       []
     );
   });
@@ -204,22 +204,22 @@ describe('workflow nodes and web search tools', () => {
   });
 
   it('get the engine the node’s webSearch resolved to, while it is granted', async () => {
-    useWebSearch({ installed: [engine('qwant')] });
-    const offered = await getToolsForNode({ engineToolIds: ['qwantSearch'] }, 'en', {
+    useWebSearch({ installed: [engine('staan')] });
+    const offered = await getToolsForNode({ engineToolIds: ['staanSearch'] }, 'en', {
       modelProvider: 'mistral',
       user: STAFF
     });
-    assert.deepEqual(ids(offered), ['qwantSearch']);
-    useWebSearch({ installed: [engine('qwant')], groups: grantResearchOnly('brave') });
+    assert.deepEqual(ids(offered), ['staanSearch']);
+    useWebSearch({ installed: [engine('staan')], groups: grantResearchOnly('brave') });
     assert.deepEqual(
-      ids(await getToolsForNode({ engineToolIds: ['qwantSearch'] }, 'en', { user: STAFF })),
+      ids(await getToolsForNode({ engineToolIds: ['staanSearch'] }, 'en', { user: STAFF })),
       []
     );
   });
 
   it('an app has no tool list: the engine tool comes with app.websearch only', async () => {
-    useWebSearch({ installed: [engine('qwant')] });
-    const offered = await getToolsForApp({ id: 'a', tools: ['qwantSearch', 'read_url'] }, 'en', {
+    useWebSearch({ installed: [engine('staan')] });
+    const offered = await getToolsForApp({ id: 'a', tools: ['staanSearch', 'read_url'] }, 'en', {
       modelProvider: 'mistral',
       user: STAFF
     });
@@ -227,7 +227,7 @@ describe('workflow nodes and web search tools', () => {
   });
 
   it('a workflow node’s webSearch falls back to the first engine the user may use', async () => {
-    useWebSearch({ installed: [engine('qwant'), engine('staan')] });
+    useWebSearch({ installed: [engine('acme'), engine('staan')] });
     assert.equal(await resolveWebSearchEngineToolId('auto', { user: STAFF }), 'staanSearch');
     useWebSearch({ installed: [] });
     assert.equal(await resolveWebSearchEngineToolId('auto', { user: STAFF }), null);
@@ -237,16 +237,16 @@ describe('workflow nodes and web search tools', () => {
 describe('the fallback tools when a provider turns native search down', () => {
   const directive = { provider: 'anthropic', fallback: 'auto' };
 
-  beforeEach(() => useWebSearch({ installed: [engine('brave'), engine('qwant')] }));
+  beforeEach(() => useWebSearch({ installed: [engine('brave'), engine('staan')] }));
 
   it('are the app’s engine with the page reader', async () => {
-    const app = { id: 'web-chat', websearch: { enabled: true, provider: 'qwant' } };
+    const app = { id: 'web-chat', websearch: { enabled: true, provider: 'staan' } };
     const offered = await resolveNativeWebSearchFallbackTools(directive, {
       app,
       language: 'en',
       user: STAFF
     });
-    assert.deepEqual(ids(offered), ['qwantSearch', READ_URL_TOOL_ID]);
+    assert.deepEqual(ids(offered), [READ_URL_TOOL_ID, 'staanSearch']);
   });
 
   it('are the first engine the user may use without an app', async () => {
@@ -259,8 +259,8 @@ describe('the fallback tools when a provider turns native search down', () => {
 
   it('are nothing when the engine is not granted, or none is installed', async () => {
     useWebSearch({
-      installed: [engine('brave'), engine('qwant')],
-      groups: grantResearchOnly('qwant')
+      installed: [engine('brave'), engine('staan')],
+      groups: grantResearchOnly('staan')
     });
     const app = { id: 'web-chat', websearch: { enabled: true, provider: 'brave' } };
     assert.deepEqual(

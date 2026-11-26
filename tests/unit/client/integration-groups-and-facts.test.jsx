@@ -166,8 +166,21 @@ describe('installation facts', () => {
       lines(installationFacts({ definition: 'com.intrafind/staan-search', values: {} }))
     ).toEqual(['API key: not set', 'Without a key: STAAN_API_KEY']);
     expect(
-      lines(installationFacts({ definition: 'com.intrafind/qwant-search', values: {} }))
-    ).toEqual(['API key: no key needed']);
+      lines(
+        installationFacts({
+          definition: 'com.intrafind/searxng-search',
+          values: { instanceUrl: 'http://searxng:8080', authorizationRef: 'proxy-secret' }
+        })
+      )
+    ).toEqual(['Instance: http://searxng:8080', 'Authorization: set']);
+    expect(
+      lines(
+        installationFacts({
+          definition: 'com.intrafind/searxng-search',
+          values: { instanceUrl: 'http://searxng:8080' }
+        })
+      )
+    ).toEqual(['Instance: http://searxng:8080']);
     expect(
       lines(
         installationFacts({
@@ -291,7 +304,7 @@ describe('installation facts', () => {
       'com.intrafind/entra-directory',
       'com.intrafind/brave-search',
       'com.intrafind/staan-search',
-      'com.intrafind/qwant-search',
+      'com.intrafind/searxng-search',
       'com.intrafind/office365',
       'com.intrafind/google-drive',
       'com.intrafind/nextcloud',
@@ -366,7 +379,7 @@ describe('apps binding an installation', () => {
     const apps = [
       { id: 'named', name: { en: 'Named' }, websearch: { enabled: true, provider: 'brave' } },
       { id: 'auto', name: { en: 'Auto' }, websearch: { enabled: true } },
-      { id: 'other', name: { en: 'Other' }, websearch: { enabled: true, provider: 'qwant' } },
+      { id: 'other', name: { en: 'Other' }, websearch: { enabled: true, provider: 'staan' } },
       { id: 'off', name: { en: 'Off' }, websearch: { enabled: false, provider: 'brave' } }
     ];
     const brave = { id: 'brave', definition: 'com.intrafind/brave-search', type: 'web-search' };
