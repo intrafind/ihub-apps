@@ -33,6 +33,10 @@ import { getProjectRepository } from '../services/projects/ProjectRepository.js'
 import { readOriginal, readText } from '../services/projects/ItemTextStore.js';
 import { evictItemText } from '../services/knowledge/ItemTextService.js';
 import { isZipArchive } from '../services/projects/itemImport.js';
+import { fetchSourceFile, ingestFromSource } from '../services/chatFiles/fileSources.js';
+import { chatFilePolicy } from '../services/chatFiles/chatFilePolicy.js';
+import { getChatFileRepository } from '../services/chatFiles/ChatFileRepository.js';
+import { getProjectService } from '../services/projects/ProjectService.js';
 
 const MASTER = crypto.createHash('sha256').update('item-import-master').digest('hex');
 const ADA = { id: 'user-ada', name: 'Ada Lovelace', groups: ['authenticated'] };
@@ -523,5 +527,173 @@ describe('isZipArchive', () => {
     );
     assert.equal(isZipArchive({ name: 'sheet.ods', bytes }), false);
     assert.equal(isZipArchive({ name: 'fake.zip', bytes: Buffer.from('not a zip at all') }), false);
+  });
+});
+
+describe('Use in app: copying into a chat as a file', () => {
+  /** Copy `source` into a new chat of `user`, as `POST /api/chats/:chatId/files` does. */
+  async function useInApp(user, source) {
+    chatCounter += 1;
+    const scope = { type: 'chat', id: `use-in-app-${chatCounter}` };
+    const file = await ingestFromSource({
+      source,
+      user,
+      scope,
+      ownerId: user.id,
+      policy: chatFilePolicy(),
+      store: getChatFileRepository()
+    });
+    return { scope, file };
+  }
+
+  async function uploadTo(projectId, user, name, bytes, extra = {}) {
+    const { item } = await getProjectService().addItem(
+      projectId,
+      {
+        kind: 'upload',
+        ref: {},
+        file: { buffer: bytes, name, contentType: 'text/markdown' },
+        ...extra
+      },
+      { user, wait: true }
+    );
+    return item;
+  }
+
+  it('copies an artifact of the caller’s chat; the copy outlives the chat', async () => {
+    const chatId = await seedChat(ADA);
+    const bytes = Buffer.from('# Findings\n\nThe supplier is late.\n');
+    const artifact = await seedArtifact(chatId, {
+      mimeType: 'text/markdown',
+      name: 'findings.md',
+      bytes
+    });
+
+    const { scope, file } = await useInApp(ADA, {
+      kind: 'chat-artifact',
+      ref: { chatId, artifactId: artifact.id }
+    });
+    assert.equal(file.name, 'findings.md');
+    assert.equal(file.origin, 'connector');
+    assert.equal(file.hasOriginal, true);
+    assert.equal(file.source.kind, 'chat-artifact');
+    assert.deepEqual(file.source.ref, { chatId, artifactId: artifact.id });
+    assert.equal(file.source.refreshOnRun, undefined);
+
+    await getChatRepository().deleteChat(chatId);
+
+    const original = await getChatFileRepository().getOriginal(scope, file.id);
+    assert.deepEqual(original.data, bytes);
+    const text = await getChatFileRepository().getText(scope, file.id);
+    assert.match(text.text, /supplier is late/);
+  });
+
+  it('refuses an artifact of a chat the caller cannot read', async () => {
+    const chatId = await seedChat(ADA);
+    const artifact = await seedArtifact(chatId, {
+      mimeType: 'text/markdown',
+      name: 'secret.md',
+      bytes: Buffer.from('# Secret\n')
+    });
+    await assert.rejects(
+      fetchSourceFile({
+        source: { kind: 'chat-artifact', ref: { chatId, artifactId: artifact.id } },
+        user: GRACE
+      }),
+      error => error.code === 'SOURCE_GONE' && error.status === 404
+    );
+  });
+
+  it('copies an artifact shared with the caller without recording the owner’s chat', async () => {
+    const chatId = await seedChat(ADA);
+    const artifact = await seedArtifact(chatId, {
+      mimeType: 'text/csv',
+      name: 'prices.csv',
+      bytes: Buffer.from('item,price\nbolt,1\n')
+    });
+    const share = await getChatShareRepository().createShare({
+      chatId,
+      ownerId: ADA.id,
+      identityMode: 'default',
+      mode: 'authenticated',
+      target: 'artifact',
+      artifact
+    });
+    const { file } = await useInApp(GRACE, {
+      kind: 'chat-artifact',
+      ref: { shareId: share.id, artifactId: artifact.id }
+    });
+    assert.equal(file.name, 'prices.csv');
+    assert.deepEqual(file.source.ref, { shareId: share.id, artifactId: artifact.id });
+  });
+
+  it('refuses an image: chats take documents as files', async () => {
+    const chatId = await seedChat(ADA);
+    const artifact = await seedArtifact(chatId, {
+      kind: 'image',
+      mimeType: 'image/png',
+      name: 'chart.png',
+      bytes: Buffer.from('89504e470d0a1a0a0000000d49484452', 'hex')
+    });
+    await assert.rejects(
+      useInApp(ADA, { kind: 'chat-artifact', ref: { chatId, artifactId: artifact.id } }),
+      error => error.code === 'UNSUPPORTED_TYPE'
+    );
+  });
+
+  it('hands over a project document as its original', async () => {
+    const project = await createProject(ADA, 'Templates');
+    const bytes = Buffer.from('# Offer template\n\nDear {{customer}},\n');
+    const item = await uploadTo(project.id, ADA, 'offer-template.md', bytes);
+
+    const { scope, file } = await useInApp(ADA, {
+      kind: 'project-item',
+      ref: { projectId: project.id, itemId: item.id }
+    });
+    assert.equal(file.name, 'offer-template.md');
+    assert.deepEqual(file.source.ref, { projectId: project.id, itemId: item.id });
+    const original = await getChatFileRepository().getOriginal(scope, file.id);
+    assert.deepEqual(original.data, bytes);
+  });
+
+  it('hands over the text as Markdown when the project kept no original', async () => {
+    platform.uploads = { storageMode: 'server_text_only' };
+    configCache.setCacheEntry('config/platform.json', platform);
+    try {
+      const project = await createProject(ADA, 'Text only');
+      const item = await uploadTo(project.id, ADA, 'notes.txt', Buffer.from('plain notes'));
+      const fetched = await fetchSourceFile({
+        source: { kind: 'project-item', ref: { projectId: project.id, itemId: item.id } },
+        user: ADA
+      });
+      assert.equal(fetched.name, 'notes.md');
+      assert.equal(fetched.contentType, 'text/markdown');
+      assert.match(fetched.bytes.toString('utf8'), /plain notes/);
+    } finally {
+      delete platform.uploads;
+      configCache.setCacheEntry('config/platform.json', platform);
+    }
+  });
+
+  it('refuses a document marked Not for AI, and a project the caller cannot use', async () => {
+    const project = await createProject(ADA, 'Mixed');
+    const hidden = await uploadTo(project.id, ADA, 'hr.md', Buffer.from('# HR\n'), {
+      excludedFromAi: true
+    });
+    const open = await uploadTo(project.id, ADA, 'open.md', Buffer.from('# Open\n'));
+    await assert.rejects(
+      fetchSourceFile({
+        source: { kind: 'project-item', ref: { projectId: project.id, itemId: hidden.id } },
+        user: ADA
+      }),
+      error => error.code === 'SOURCE_FORBIDDEN' && error.status === 403
+    );
+    await assert.rejects(
+      fetchSourceFile({
+        source: { kind: 'project-item', ref: { projectId: project.id, itemId: open.id } },
+        user: GRACE
+      }),
+      error => error.code === 'SOURCE_GONE' && error.status === 404
+    );
   });
 });
