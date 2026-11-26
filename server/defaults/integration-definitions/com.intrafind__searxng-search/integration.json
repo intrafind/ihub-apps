@@ -1,0 +1,109 @@
+{
+  "id": "com.intrafind/searxng-search",
+  "version": "1.0.0",
+  "compatibility": {
+    "ihub": ">=5.6.0"
+  },
+  "releases": [
+    {
+      "version": "1.0.0",
+      "date": "2026-11-26",
+      "summary": {
+        "en": "First version: web search through your own SearXNG instance (self-hosted metasearch gateway), installed as searxng.",
+        "de": "Erste Version: Websuche über die eigene SearXNG-Instanz (selbst betriebenes Metasuch-Gateway), installiert als searxng."
+      },
+      "notes": {
+        "features": "releases/1.0.0/features.md"
+      }
+    }
+  ],
+  "name": {
+    "en": "SearXNG",
+    "de": "SearXNG"
+  },
+  "description": {
+    "en": "Search the web through a SearXNG instance you run yourself. SearXNG is a metasearch gateway: it forwards the query to the engines you configure and removes tracking. Needs the URL of your instance, with JSON output enabled.",
+    "de": "Das Web über eine selbst betriebene SearXNG-Instanz durchsuchen. SearXNG ist ein Metasuch-Gateway: Es leitet die Anfrage an die von Ihnen konfigurierten Suchmaschinen weiter und entfernt Tracking. Braucht die URL Ihrer Instanz mit aktivierter JSON-Ausgabe."
+  },
+  "publisher": {
+    "name": "IntraFind Software AG",
+    "verification": "intrafind"
+  },
+  "categories": ["search", "web"],
+  "type": "web-search",
+  "docsUrl": "https://github.com/intrafind/ihub-apps/blob/main/docs/web-tools.md#searxng-self-hosted-metasearch",
+  "builtIn": true,
+  "singleton": {
+    "instanceId": "searxng"
+  },
+  "protocol": {
+    "type": "native",
+    "module": "searxngSearch"
+  },
+  "auth": {
+    "modes": ["none"]
+  },
+  "install": [
+    {
+      "key": "instanceUrl",
+      "type": "url",
+      "required": true,
+      "title": {
+        "en": "Instance URL",
+        "de": "Instanz-URL"
+      },
+      "description": {
+        "en": "The base URL of your SearXNG instance, e.g. https://search.example.org or http://searxng:8080. A trailing /search is removed. The instance must list json under search.formats in its settings.yml, or it answers HTTP 403.",
+        "de": "Die Basis-URL Ihrer SearXNG-Instanz, z. B. https://search.example.org oder http://searxng:8080. Ein angehängtes /search wird entfernt. Die Instanz muss json unter search.formats in ihrer settings.yml aufführen, sonst antwortet sie mit HTTP 403."
+      }
+    },
+    {
+      "key": "authorizationRef",
+      "type": "credential",
+      "credentialTypes": ["secret"],
+      "title": {
+        "en": "Authorization (optional)",
+        "de": "Autorisierung (optional)"
+      },
+      "description": {
+        "en": "SearXNG has no sign-in of its own. If a reverse proxy in front of it asks for one, pick a credential of type secret: it is sent as \"Authorization: Bearer <secret>\"; a secret that starts with \"Basic \" is sent as it is. Leave empty when the instance needs none.",
+        "de": "SearXNG hat keine eigene Anmeldung. Verlangt ein Reverse-Proxy davor eine, einen Zugangsdaten-Eintrag vom Typ Secret wählen: Er wird als „Authorization: Bearer <Secret>“ gesendet; ein Secret, das mit „Basic “ beginnt, unverändert. Leer lassen, wenn die Instanz keine braucht."
+      }
+    }
+  ],
+  "capabilities": ["tools"],
+  "actions": [
+    {
+      "name": "search",
+      "toolId": "searxngSearch",
+      "title": {
+        "en": "Search the web",
+        "de": "Im Web suchen"
+      },
+      "description": {
+        "en": "Search the web through your SearXNG instance.",
+        "de": "Das Web über Ihre SearXNG-Instanz durchsuchen."
+      },
+      "sideEffect": "read",
+      "dataFlow": "external",
+      "guidance": {
+        "en": "Write the query as a few keywords, in the language of the pages you expect. Add the year for anything that changes over time.",
+        "de": "Formuliere die Anfrage als wenige Stichwörter in der Sprache der erwarteten Seiten. Ergänze die Jahreszahl bei allem, was sich mit der Zeit ändert."
+      },
+      "examples": [
+        {
+          "en": "What changed in the EU AI Act this year?",
+          "de": "Was hat sich dieses Jahr am EU AI Act geändert?"
+        },
+        {
+          "en": "Find the current opening hours of the city library.",
+          "de": "Finde die aktuellen Öffnungszeiten der Stadtbibliothek."
+        }
+      ]
+    }
+  ],
+  "instructions": {
+    "en": "Search the web when the question needs current or public information the conversation does not hold. Search in several short queries rather than one long one, read the pages the results point to when a snippet is not enough, and cite every source you use.",
+    "de": "Suche im Web, wenn die Frage aktuelle oder öffentliche Informationen braucht, die das Gespräch nicht enthält. Suche mit mehreren kurzen Anfragen statt einer langen, lies die Seiten der Treffer, wenn ein Ausschnitt nicht reicht, und zitiere jede Quelle, die du verwendest."
+  }
+}

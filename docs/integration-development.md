@@ -94,8 +94,8 @@ reach a viewer who lacks those permissions.
   what the public sighting reported. Your private excerpt never reaches a share because a web
   search also returned the same URL.
 - A name never makes results public. Only the platform's own web search engines (Brave, Staan,
-  Qwant) report public hits; a third-party web search engine's hits are private unless its
-  definition declares them public.
+  Qwant) report public hits; the hits of SearXNG (its instance may search an intranet) and of a
+  third-party web search engine are private unless the definition declares them public.
 
 ## 5. Let the model cite it
 
@@ -315,10 +315,10 @@ the tool definition instead. The paths point into that tool's result:
 
 Web search is a feature of the app (`app.websearch`); an **engine** is an installed integration of
 type `web-search` that the feature calls when the model has no native search. iHub ships Brave
-Search, Staan and Qwant as engines; yours sits next to them under **Admin → Integrations → Web
+Search, Staan, Qwant and SearXNG as engines; yours sits next to them under **Admin → Integrations → Web
 search**, in the app editor's engine list and in **All web search engines** (`type:web-search`)
 on the group page. Apps on `websearch.provider: "auto"` take the first engine the user may use:
-the shipped ones in the order Brave, Staan, Qwant, then the others by installation id; an app may
+the shipped ones in the order Brave, Staan, Qwant, SearXNG, then the others by installation id; an app may
 also name your installation id.
 
 The contract:

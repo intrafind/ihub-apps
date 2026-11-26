@@ -101,7 +101,7 @@ function engineSearchTool(engine, tools) {
  * `provider` is `app.websearch.provider`:
  *
  * - `auto` (or unset): the first engine that is enabled and that the user's
- *   groups grant, in the order Brave, Staan, Qwant, then every other
+ *   groups grant, in the order Brave, Staan, Qwant, SearXNG, then every other
  *   installation of type `web-search` by id (`sortWebSearchEngines`);
  * - an installation id: that engine, and nothing when it is missing, disabled
  *   or not granted to the user. It never falls back to another engine, so an

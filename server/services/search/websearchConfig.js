@@ -23,6 +23,8 @@ import credentialService from '../CredentialService.js';
 import logger from '../../utils/logger.js';
 import {
   ENGINE_API_KEY_FIELD,
+  ENGINE_AUTHORIZATION_FIELD,
+  ENGINE_INSTANCE_URL_FIELD,
   builtInEngine,
   isWebSearchEngine,
   sortWebSearchEngines
@@ -40,7 +42,7 @@ function installedIntegrations() {
 
 /**
  * The installed web search engines, enabled or not, in the order
- * `websearch.provider: "auto"` tries them (Brave, Staan, Qwant, then any
+ * `websearch.provider: "auto"` tries them (Brave, Staan, Qwant, SearXNG, then any
  * other engine by id).
  *
  * @returns {Object[]} installations of type `web-search`
@@ -124,15 +126,93 @@ export function resolveStaanApiKey() {
 }
 
 /**
+ * The base URL of a SearXNG instance as the admin entered it, reduced to what
+ * the provider appends `/search` to: scheme, host, port and path, without a
+ * trailing slash, a trailing `/search` (the ticket's example is
+ * `http://localhost:8080/search`), a query string, a fragment or credentials.
+ *
+ * @param {unknown} value - the `instanceUrl` install value
+ * @returns {string|null} e.g. `https://search.example.org/searx`, or null when it is not an http(s) URL
+ * @example
+ * normalizeSearxngBaseUrl('http://localhost:8080/search'); // → 'http://localhost:8080'
+ */
+export function normalizeSearxngBaseUrl(value) {
+  if (typeof value !== 'string' || !value.trim()) return null;
+  let url;
+  try {
+    url = new URL(value.trim());
+  } catch {
+    return null;
+  }
+  if (url.protocol !== 'http:' && url.protocol !== 'https:') return null;
+  if (url.username || url.password) return null;
+  const path = url.pathname.replace(/\/+$/, '').replace(/\/search$/, '');
+  return `${url.origin}${path}`;
+}
+
+/**
+ * The `Authorization` header value for the credential a SearXNG installation
+ * references. SearXNG has no authentication of its own: a reverse proxy in
+ * front of it asks for one. The secret is sent as `Bearer <secret>`; a secret
+ * that already starts with `Basic ` or `Bearer ` is sent as it is, which is how
+ * a proxy that wants HTTP Basic is served.
+ *
+ * @param {string} secret
+ * @returns {string}
+ */
+export function searxngAuthorizationHeader(secret) {
+  const value = String(secret).trim();
+  return /^(basic|bearer)\s+\S/i.test(value) ? value : `Bearer ${value}`;
+}
+
+/**
+ * What a SearXNG search needs: the instance's base URL and, when the
+ * installation references one, the `Authorization` header value.
+ *
+ * @param {Object} [values] - install values; the installed engine's by default
+ *   (the admin's test passes the unsaved ones)
+ * @returns {{ baseUrl: string|null, authorization: string|undefined, ref: string|null, refMissing: boolean }}
+ *   `baseUrl` null: no (valid) URL; `refMissing`: a credential is referenced but has no value
+ */
+export function resolveSearxngSettings(values) {
+  const effective = values ?? getWebSearchEngine('searxng')?.values ?? {};
+  const baseUrl = normalizeSearxngBaseUrl(effective?.[ENGINE_INSTANCE_URL_FIELD]);
+  const ref = effective?.[ENGINE_AUTHORIZATION_FIELD];
+  if (typeof ref !== 'string' || !ref) {
+    return { baseUrl, authorization: undefined, ref: null, refMissing: false };
+  }
+  try {
+    const secret = credentialService.tryResolveSecret(ref);
+    if (secret) {
+      return { baseUrl, authorization: searxngAuthorizationHeader(secret), ref, refMissing: false };
+    }
+  } catch (error) {
+    logger.error('Failed to resolve the SearXNG credential from the credential store', {
+      component: 'WebSearch',
+      engine: 'searxng',
+      error: error.message
+    });
+  }
+  return { baseUrl, authorization: undefined, ref, refMissing: true };
+}
+
+/**
  * Whether an engine has what it needs to answer: a keyed built-in engine
- * (Brave, Staan) needs a key; Qwant and third-party engines need nothing iHub
- * can check here (their own test says more).
+ * (Brave, Staan) needs a key; SearXNG needs the URL of its instance; Qwant and
+ * third-party engines need nothing iHub can check here (their own test says
+ * more).
  *
  * @param {{ id: string }|null} engine - the installation
  * @returns {boolean}
  */
 export function isWebSearchEngineConfigured(engine) {
   if (!engine?.id) return false;
+  if (
+    engine.id === 'searxng' &&
+    (!engine.definition || engine.definition === builtInEngine('searxng').definition)
+  ) {
+    return Boolean(resolveSearxngSettings(engine.values || {}).baseUrl);
+  }
   const builtIn = builtInEngine(engine.id);
   if (!builtIn?.keyEnv || (engine.definition && engine.definition !== builtIn.definition)) {
     return true;

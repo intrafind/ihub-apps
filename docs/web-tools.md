@@ -13,7 +13,7 @@ This document describes the web tools available in the iHub Apps platform for se
 
 iHub Apps provides a unified web search system that automatically selects the best search provider based on the active model. Web search is configured per-app through the `websearch` configuration object rather than through individual tool IDs.
 
-Each search engine is an integration of its own, of type `web-search`, installed under **Admin → Integrations** (group **Web search**, see [Integrations](integrations.md)): **Brave Search** (`com.intrafind/brave-search`, installation `brave`), **Staan** (`com.intrafind/staan-search`, `staan`) and **Qwant** (`com.intrafind/qwant-search`, `qwant`). An engine installation holds what that engine needs (Brave and Staan: the API key); a third party can ship its own engine (see [Writing your own engine](#writing-your-own-engine)). Apps switch web search on in their own settings and pick an engine or **Auto**.
+Each search engine is an integration of its own, of type `web-search`, installed under **Admin → Integrations** (group **Web search**, see [Integrations](integrations.md)): **Brave Search** (`com.intrafind/brave-search`, installation `brave`), **Staan** (`com.intrafind/staan-search`, `staan`) **Qwant** (`com.intrafind/qwant-search`, `qwant`) and **SearXNG** (`com.intrafind/searxng-search`, `searxng`, a metasearch gateway you run yourself). An engine installation holds what that engine needs (Brave and Staan: the API key; SearXNG: the URL of your instance); a third party can ship its own engine (see [Writing your own engine](#writing-your-own-engine)). Apps switch web search on in their own settings and pick an engine or **Auto**.
 
 **No engine is needed for native search.** A fresh install ships no engine: an app with web search on searches with the model's own search on Google, OpenAI Responses and Anthropic models, and gets no web search on other models until an engine is installed. The page reader `read_url` belongs to the web search feature, not to an engine.
 
@@ -27,6 +27,7 @@ Each search engine is an integration of its own, of type `web-search`, installed
 | **Brave Search** | Engine (installation `brave`) | Privacy-focused search, any model (needs an API key) |
 | **Staan Search** | Engine (installation `staan`) | European search index, any model, works from cloud hosting (needs an API key) |
 | **Qwant Search** | Engine (installation `qwant`) | Privacy-focused search, any model, **no API key required** |
+| **SearXNG** | Engine (installation `searxng`) | Search through your own metasearch gateway, any model; needs the URL of an instance with JSON output enabled (see [SearXNG](#searxng-your-own-search-gateway)) |
 | Your own | Engine (any `web-search` installation) | A `script` or `openapi` definition of type `web-search` |
 
 ### Additional Web Tools
@@ -66,7 +67,7 @@ Add a `websearch` object to your app configuration:
 | Property | Type | Default | Description |
 |----------|------|---------|-------------|
 | `enabled` | Boolean | `false` | Enable web search for this app |
-| `provider` | String | `"auto"` | Engine used when native search does not apply: `"auto"` or the id of an engine installation (`"brave"`, `"staan"`, `"qwant"`, a third-party engine's id). `"auto"` takes the first engine that is enabled and that the user's groups grant, in the order Brave, Staan, Qwant, then any other engine by id. A named engine that is missing, disabled or not granted means no tool-based search (native search still works); it never falls back to another engine |
+| `provider` | String | `"auto"` | Engine used when native search does not apply: `"auto"` or the id of an engine installation (`"brave"`, `"staan"`, `"qwant"`, `"searxng"`, a third-party engine's id). `"auto"` takes the first engine that is enabled and that the user's groups grant, in the order Brave, Staan, Qwant, SearXNG, then any other engine by id. A named engine that is missing, disabled or not granted means no tool-based search (native search still works); it never falls back to another engine |
 | `required` | Boolean | `false` | Hide the app while its engine is not available: on `"auto"` while no engine is installed and enabled, on a named engine while that one is missing or disabled. Off, the app stays available and searches natively where the model can |
 | `useNativeSearch` | Boolean | `true` | Prefer native search (Google Search for Gemini, OpenAI Web Search for GPT, Anthropic Web Search for Claude) when available |
 | `maxResults` | Number | `5` | Maximum number of search results (1-20) |
@@ -100,8 +101,8 @@ The system automatically selects the best search tool at runtime based on the mo
 │  Otherwise → the engine of `provider`:           │
 │    "auto"  → the first engine that is enabled    │
 │              and granted to the user: Brave,     │
-│              Staan, Qwant, then any other        │
-│              engine by id                        │
+│              Staan, Qwant, SearXNG, then any     │
+│              other engine by id                  │
 │    an id   → that engine, if it is installed,    │
 │              enabled and granted                 │
 │    none    → no web search on this model         │
@@ -478,6 +479,7 @@ falls back to its own default only when the engine does not serve that language:
 | Brave | `search_lang` (ISO 639-1) and `country` (2-letter), when the language is one Brave lists | no language parameters — an untargeted search |
 | Staan | `market` (`de-de`, `en-gb`, …) | `en-us` |
 | Qwant | `locale` (`de_DE`, `en_GB`, …) | `en_US` |
+| SearXNG | `language` (`de`, `en-GB`, …), as given | SearXNG's own default |
 
 Step 2 is what makes a German install behave correctly in the places where no
 user language exists — a workflow or agent run, which has no browser request
@@ -492,6 +494,119 @@ edited directly in `contents/config/platform.json`.
 
 A model can still override the language for one search by passing the tool's
 `language` parameter, which beats both of the above.
+
+### SearXNG: Your Own Search Gateway
+
+[SearXNG](https://docs.searxng.org/) is a metasearch engine you run yourself. It has no index of its
+own: it forwards each query to the search engines you enable in it (Google, Bing, Brave, DuckDuckGo
+and others) and merges their answers. The **SearXNG** engine (`com.intrafind/searxng-search`,
+installation `searxng`) makes iHub a client of such an instance, so the search traffic of iHub goes
+to a gateway under your control and not to a search vendor's API.
+
+**What this gives you, and what it does not.**
+
+- iHub sends your SearXNG instance the query and the language, and nothing about the user. The
+  engines behind the instance see the instance's address, not iHub's and not the user's.
+- The instance decides which engines see a query, and you can log, filter or block there. That is
+  the control.
+- **The queries still leave your network** if the instance forwards them to Google, Bing or another
+  external engine. Only an instance whose engines are all hosted by you keeps a query inside. Do not
+  describe SearXNG as "searching on-premise"; describe it as "search under your control".
+- SearXNG is not a search engine with an index. It answers as well as the engines behind it do, and
+  those engines can block it (CAPTCHA, rate limits), especially from data-centre addresses.
+
+#### Set up the instance
+
+SearXNG's own [installation guide](https://docs.searxng.org/admin/installation.html) is the
+reference. iHub needs two things from the instance:
+
+1. **JSON output.** SearXNG answers `format=json` only when `json` is listed under
+   `search.formats` in its `settings.yml`; otherwise it answers **HTTP 403**. This is the most
+   common reason a new setup fails.
+2. **Being reachable from the iHub server**, without a bot limiter that blocks it.
+
+A minimal `settings.yml` for a private instance, mounted into the container as `/etc/searxng/`:
+
+```yaml
+use_default_settings: true
+search:
+  formats:
+    - html
+    - json
+server:
+  secret_key: '<a long random string, e.g. from: openssl rand -hex 32>'
+  limiter: false
+```
+
+```bash
+docker run -d --name searxng -p 8080:8080 -v ./searxng:/etc/searxng docker.io/searxng/searxng
+```
+
+If you switch the limiter on (it is off unless `server.limiter: true`), put the iHub server's
+address under `pass_ip` in `[botdetection.ip_lists]` of `limiter.toml`, and make sure a reverse
+proxy in front of SearXNG passes `X-Forwarded-For` and `X-Real-IP`, or SearXNG does not see the real
+client address.
+
+#### Install it in iHub
+
+1. **Admin → Integrations**, group **Web search**, install **SearXNG**.
+2. **Instance URL** (required): the base URL of the instance, e.g. `https://search.example.org` or
+   `http://searxng:8080`. A trailing `/search` is removed; an instance running under a path needs
+   that path (`https://host/searx`). A URL with a user name and password in it is refused: use the
+   authorization field.
+3. **Authorization** (optional): SearXNG has no sign-in of its own. If a reverse proxy in front of
+   it asks for one, pick a credential of type **secret**. It is sent as
+   `Authorization: Bearer <secret>`; a secret that already starts with `Basic ` or `Bearer ` is sent
+   as it is, which is how a proxy that wants HTTP Basic is served (`Basic dXNlcjpwYXNz`).
+4. **Test connection** checks the URL and the credential as entered and runs one live search. It
+   tells the usual causes apart: JSON output off (403), wrong URL or path (404), the limiter (429),
+   a credential the proxy rejects (401), and an instance whose engines all failed.
+5. Apps pick it with `websearch.provider: "searxng"`, or take it on **Auto**: SearXNG comes after
+   Brave, Staan and Qwant, so an install that also has one of those on Auto keeps using it. Name
+   `searxng` in the apps that must use your gateway.
+
+The instance is a normal outbound connection of iHub: it follows `HTTPS_PROXY` / `NO_PROXY` and
+`proxy.urlPatterns`, so an instance on the internal network needs a proxy bypass when a corporate
+proxy is configured; and for a self-signed or private-CA certificate it follows
+`ssl.ignoreInvalidCertificates` with the host in `ssl.domainWhitelist` (see
+[Proxy configuration](proxy-configuration.md)).
+
+#### How a search behaves
+
+| | |
+|---|---|
+| Request | `GET <instance>/search?q=…&format=json&categories=general&language=…` |
+| Language | The user's language (`de`, `de-CH`, …), else `platform.defaultLanguage`; SearXNG applies its own default for one it does not know |
+| Results | One page, the first `maxResults` (default 10, at most 20); SearXNG has no result count |
+| `freshness` | Sent as `time_range`. SearXNG has `day`, `month` and `year` only, so `week` is sent as `month`; engines that ignore the range are covered by dropping dated results outside the window afterwards |
+| `includeDomains` | `site:` operators in the query |
+| Cache | Per instance, query, language, range and count (`SEARCH_CACHE_TTL_MS`) |
+| Throttle | At most two searches at a time |
+| Sources | Hits are listed in the chat and stay **private**: an instance can search an intranet too, so a shared chat does not keep them |
+
+#### Licence
+
+SearXNG is licensed under the GNU AGPL v3. iHub does not contain, bundle, link or copy any SearXNG
+code: it calls the instance's documented HTTP API, as it would call any web service, and you run the
+instance yourself. Using SearXNG this way puts no licence obligation on iHub. Your own obligations
+as the operator are those of the AGPL: if you **modify** SearXNG and others use the modified
+instance over a network (the people searching through iHub do), section 13 requires you to offer
+them the corresponding source of your modified version. An unmodified instance needs nothing beyond
+what the AGPL already says about redistribution. This is a description, not legal advice; have your
+counsel confirm it for your setup. IntraFind does not ship a SearXNG image; the commands above pull
+the upstream one.
+
+#### Troubleshooting
+
+| Test says | Cause | What to do |
+|---|---|---|
+| `SEARXNG_FORBIDDEN` (HTTP 403) | `json` is not in `search.formats` (the default); or the proxy or the limiter refuses this server | Add `json` to `search.formats`, restart the instance; check the proxy and `pass_ip` |
+| `SEARXNG_UNAUTHORIZED` (401) | The proxy in front of SearXNG wants a credential | Pick a secret in **Authorization** (`Basic …` for Basic auth) |
+| `SEARXNG_NOT_FOUND` (404) | The URL does not lead to SearXNG | Use the base URL; add the path an instance runs under |
+| `SEARXNG_RATE_LIMITED` (429) | The instance's limiter throttles iHub | `pass_ip` for the iHub server, or limiter off for a private instance |
+| `SEARXNG_INVALID_RESPONSE` | HTML or another service answered | Open the URL in a browser; check for a login page or proxy notice |
+| `SEARXNG_ENGINES_UNAVAILABLE` | The instance is up, but no engine answered | Open the instance's own search page and see which engines fail (CAPTCHA, timeout); use engines that answer from that host |
+| Network error | DNS, port, TLS or proxy | See `ssl.domainWhitelist` and the proxy settings above |
 
 ### Connectivity Test (Admin UI)
 
@@ -656,6 +771,26 @@ injected from the app's `websearch` config. Two things set it apart:
 request carrying both, so `includeDomains` wins when both are given.
 
 **Returns**: Search results with title, URL, description, `hostname` and the site's favicon (Staan's `favicon_url`), and optionally extracted page content.
+
+### SearXNG Search (`searxngSearch`)
+
+**Purpose**: Search the web through your own [SearXNG](#searxng-your-own-search-gateway) instance.
+
+The same result shape and parameters as the other engines, so an app can switch `websearch.provider`
+without the model seeing a different contract.
+
+**Parameters**:
+
+- `query` (string, required): Search query
+- `extractContent` (boolean, optional): Extract full content from top results (default: configured by app)
+- `maxResults` (number, optional): Maximum results to return (default: configured by app, max: 20)
+- `contentMaxLength` (number, optional): Maximum content length per page (default: configured by app)
+- `focus` (string, optional): The question being researched; see [Focused reading](#focused-reading-focus)
+- `language` (string, optional): Language or locale for the results, e.g. `en`, `de`, `de-CH` (default: the user's language)
+- `freshness` (string, optional): Only results from the last `day`, `week`, `month` or `year` (sent as `time_range`; dated results outside the window are dropped as well, undated ones kept)
+- `includeDomains` (string[], optional): Only results from these domains (max 10; sent as `site:` operators)
+
+**Returns**: Search results with title, URL, description, hostname and an optional `publishedDate`, and optionally extracted page content.
 
 ### Result Shape and Filters
 

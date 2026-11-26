@@ -161,6 +161,12 @@
       "dataFlow": "external"
     }
   },
+  "com.intrafind/searxng-search": {
+    "search": {
+      "sideEffect": "read",
+      "dataFlow": "external"
+    }
+  },
   "com.intrafind/staan-search": {
     "search": {
       "sideEffect": "read",

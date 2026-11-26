@@ -11,6 +11,7 @@
  * | `braveSearch`                 | `com.intrafind/brave-search` | `brave`      | `braveSearch` |
  * | `staanSearch`                 | `com.intrafind/staan-search` | `staan`      | `staanSearch` |
  * | `qwantSearch`                 | `com.intrafind/qwant-search` | `qwant`      | `qwantSearch` |
+ * | `searxngSearch`               | `com.intrafind/searxng-search` | `searxng`  | `searxngSearch` |
  *
  * The search runs the shipped scripts (`server/tools/braveSearch.js`, …);
  * their parameters are `parameters.json`, keyed by engine id. Brave and Staan
@@ -26,13 +27,17 @@ import { fileURLToPath } from 'node:url';
 import braveSearch from '../../../../../../tools/braveSearch.js';
 import staanSearch from '../../../../../../tools/staanSearch.js';
 import qwantSearch from '../../../../../../tools/qwantSearch.js';
+import searxngSearch from '../../../../../../tools/searxngSearch.js';
 import webSearchService from '../../../../../WebSearchService.js';
 import {
   diagnoseSearchError,
   diagnoseSearchSuccess,
   providerLabel
 } from '../../../../../search/searchDiagnostics.js';
-import { resolveEngineApiKeyDetails } from '../../../../../search/websearchConfig.js';
+import {
+  resolveEngineApiKeyDetails,
+  resolveSearxngSettings
+} from '../../../../../search/websearchConfig.js';
 import { builtInEngine, WEB_SEARCH_ACTION } from '../../../../../search/webSearchEngines.js';
 import { registerThrottleHints } from '../../../../../../requestThrottler.js';
 
@@ -41,7 +46,12 @@ const PARAMETERS = JSON.parse(
 );
 
 /** The search script of each engine. */
-const RUNNERS = Object.freeze({ brave: braveSearch, staan: staanSearch, qwant: qwantSearch });
+const RUNNERS = Object.freeze({
+  brave: braveSearch,
+  staan: staanSearch,
+  qwant: qwantSearch,
+  searxng: searxngSearch
+});
 
 const TEST_QUERY = 'open source software';
 const TEST_TIMEOUT_MS = 20000;
@@ -120,15 +130,65 @@ export function apiKeyStep(engineId, values) {
 }
 
 /**
+ * The first step of the SearXNG test: the instance URL and the credential of
+ * the values under test.
+ *
+ * @param {Object} values - the install values under test
+ * @returns {{ step: Object, settings: Object }}
+ */
+export function instanceStep(values) {
+  const settings = resolveSearxngSettings(values || {});
+  const label = 'Instance';
+  if (!settings.baseUrl) {
+    return {
+      step: {
+        id: 'instance',
+        label,
+        status: 'fail',
+        message: 'No instance URL, or it is not an http(s) URL without credentials',
+        hints: ['Enter the base URL of your SearXNG instance, e.g. https://search.example.org']
+      },
+      settings
+    };
+  }
+  if (settings.refMissing) {
+    return {
+      step: {
+        id: 'instance',
+        label,
+        status: 'warn',
+        message: `${settings.baseUrl}; credential "${settings.ref}" has no value or does not exist, so no Authorization header is sent`,
+        hints: [
+          'Pick a credential that holds the secret, or clear the field if the instance needs none'
+        ]
+      },
+      settings
+    };
+  }
+  return {
+    step: {
+      id: 'instance',
+      label,
+      status: 'ok',
+      message: settings.authorization
+        ? `${settings.baseUrl}, with an Authorization header from credential "${settings.ref}"`
+        : `${settings.baseUrl}, without credentials`
+    },
+    settings
+  };
+}
+
+/**
  * One live search with the engine (cache bypassed, so a blocked egress IP or
  * a revoked key shows up), with the diagnosis the former connectivity test
  * gave.
  *
  * @param {string} engineId
  * @param {string|undefined} apiKey - the key under test (keyed engines)
+ * @param {Object} [extra] - more provider options (SearXNG: the settings under test)
  * @returns {Promise<Object>} the step
  */
-async function searchStep(engineId, apiKey) {
+async function searchStep(engineId, apiKey, extra = {}) {
   const label = `Search with ${providerLabel(engineId)}`;
   const started = Date.now();
   try {
@@ -136,7 +196,8 @@ async function searchStep(engineId, apiKey) {
       webSearchService.search(TEST_QUERY, {
         provider: engineId,
         skipCache: true,
-        ...(apiKey ? { apiKey } : {})
+        ...(apiKey ? { apiKey } : {}),
+        ...extra
       }),
       TEST_TIMEOUT_MS
     );
@@ -164,7 +225,7 @@ async function searchStep(engineId, apiKey) {
 /**
  * The native connector of one built-in engine.
  *
- * @param {'brave'|'staan'|'qwant'} engineId
+ * @param {'brave'|'staan'|'qwant'|'searxng'} engineId
  * @returns {Object} the connector (`id`, `actions.search`, `test`)
  */
 export function createEngineConnector(engineId) {
@@ -191,6 +252,11 @@ export function createEngineConnector(engineId) {
      * (keyed engines), then one live search.
      */
     async test({ values }) {
+      if (engineId === 'searxng') {
+        const { step, settings } = instanceStep(values);
+        if (step.status === 'fail') return [step];
+        return [step, await searchStep(engineId, undefined, { settings })];
+      }
       const { step, key } = apiKeyStep(engineId, values);
       if (step.status === 'fail') return [step];
       return [step, await searchStep(engineId, key)];
@@ -203,3 +269,4 @@ export function createEngineConnector(engineId) {
 export const braveSearchConnector = createEngineConnector('brave');
 export const staanSearchConnector = createEngineConnector('staan');
 export const qwantSearchConnector = createEngineConnector('qwant');
+export const searxngSearchConnector = createEngineConnector('searxng');

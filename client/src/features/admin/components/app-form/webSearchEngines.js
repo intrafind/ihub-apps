@@ -5,8 +5,8 @@
  * The web search engines as the app editor offers them: the installations of
  * type `web-search` (`GET /api/admin/integrations/installed`), in the order
  * `websearch.provider: "auto"` tries them on the server
- * (`server/services/search/webSearchEngines.js`): Brave, Staan, Qwant, then
- * every other engine by id.
+ * (`server/services/search/webSearchEngines.js`): Brave, Staan, Qwant, SearXNG,
+ * then every other engine by id.
  *
  * Pure module (no React), so the order and the status rules are tested on
  * their own.
@@ -18,7 +18,7 @@
 export const AUTO_ENGINE = 'auto';
 
 /** The shipped engines, in the order `auto` tries them. */
-export const BUILT_IN_ENGINE_ORDER = Object.freeze(['brave', 'staan', 'qwant']);
+export const BUILT_IN_ENGINE_ORDER = Object.freeze(['brave', 'staan', 'qwant', 'searxng']);
 
 /**
  * The engine installations, sorted as `auto` tries them.

@@ -826,16 +826,24 @@ describe('mergeInstallationDetails', () => {
 });
 
 describe('webSearchEngines', () => {
-  it('lists the engines in Auto’s order: Brave, Staan, Qwant, then the others by id', () => {
+  it('lists the engines in Auto’s order: Brave, Staan, Qwant, SearXNG, then the others by id', () => {
     const engines = webSearchEnginesOf([
       { id: 'zeta', type: 'web-search' },
+      { id: 'searxng', type: 'web-search' },
       { id: 'qwant', type: 'web-search' },
       { id: 'jira' },
       { id: 'acme', type: 'web-search' },
       { id: 'staan', type: 'web-search' },
       { id: 'brave', type: 'web-search' }
     ]);
-    expect(engines.map(engine => engine.id)).toEqual(['brave', 'staan', 'qwant', 'acme', 'zeta']);
+    expect(engines.map(engine => engine.id)).toEqual([
+      'brave',
+      'staan',
+      'qwant',
+      'searxng',
+      'acme',
+      'zeta'
+    ]);
     expect(webSearchEnginesOf(null)).toEqual([]);
   });
 

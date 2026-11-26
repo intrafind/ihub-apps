@@ -29,7 +29,8 @@ import {
 export const ENGINE_DEFINITIONS = Object.freeze({
   brave: 'com.intrafind/brave-search',
   staan: 'com.intrafind/staan-search',
-  qwant: 'com.intrafind/qwant-search'
+  qwant: 'com.intrafind/qwant-search',
+  searxng: 'com.intrafind/searxng-search'
 });
 
 /** A third-party engine (`type: web-search`, installation `acme`, tool `acme__search`) used by the tests. */

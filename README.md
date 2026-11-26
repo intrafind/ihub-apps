@@ -432,7 +432,7 @@ Best for: customization, contributing, building new apps.
 
 ### 🛠️ Tools & Integrations
 
-- **Web search**: Brave, Staan, Qwant, and native search for Claude, Gemini and OpenAI
+- **Web search**: Brave, Staan, Qwant, your own SearXNG instance, and native search for Claude, Gemini and OpenAI
 - **Page reader**: The model opens and reads pages as Markdown
 - **Microsoft Entra**: Corporate directory and people search
 - **Jira integration**: Issue tracking and project management

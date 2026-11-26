@@ -282,6 +282,16 @@ test('web: the search action of a shipped engine makes its hits public', () => {
     result
   });
   assert.equal(bareId.items[0].private, true);
+  // SearXNG is a shipped engine too, but its instance may search an intranet:
+  // the hits are listed and stay private.
+  const searxng = webSourceProducer.fromToolResult({
+    toolId: 'searxngSearch',
+    toolDef: engineTool('searxngSearch', 'searxng', 'com.intrafind/searxng-search'),
+    args: { query: 'example' },
+    result
+  });
+  assert.equal(searxng.items.length, 1);
+  assert.equal(searxng.items[0].private, true);
 });
 
 test('web: a third-party engine’s search reports web sources, kept private', () => {

@@ -6,9 +6,9 @@
 /**
  * `websearch.provider` → web search engine.
  *
- * Every engine is an installation of type `web-search` (Brave, Staan, Qwant,
+ * Every engine is an installation of type `web-search` (Brave, Staan, Qwant, SearXNG,
  * or a third party's). `auto` takes the first engine that is enabled and that
- * the user's groups grant, in the order Brave, Staan, Qwant, then any other
+ * the user's groups grant, in the order Brave, Staan, Qwant, SearXNG, then any other
  * engine by id; a named engine is that one or nothing — it never falls back to
  * another engine, so an app set to one engine does not silently answer from
  * another. No engine means no tool-based search; native search does not need
@@ -67,6 +67,30 @@ describe('auto', () => {
     assert.equal(idOf('auto', { user: STAFF }), 'staan');
     useWebSearch({ installed: [engine('qwant')] });
     assert.equal(idOf('auto', { user: STAFF }), 'qwant');
+  });
+
+  it('takes SearXNG after the other built-ins, and alone when it is the only engine', async () => {
+    useWebSearch({ installed: [engine('searxng'), engine('qwant')] });
+    assert.equal(idOf('auto', { user: STAFF }), 'qwant');
+    useWebSearch({ installed: [engine('searxng', { values: { instanceUrl: 'http://s:8080' } })] });
+    assert.equal(idOf('auto', { user: STAFF }), 'searxng');
+    assert.equal(idOf('searxng', { user: STAFF }), 'searxng');
+    assert.equal(await resolveWebSearchEngineToolId('searxng', { user: STAFF }), 'searxngSearch');
+  });
+
+  it('does not offer SearXNG as available until its URL is set', async () => {
+    useWebSearch({ installed: [engine('searxng')] });
+    const available = await describeWebSearchAvailability(
+      { id: 'a', websearch: { enabled: true, provider: 'searxng' } },
+      STAFF
+    );
+    assert.equal(available.script, false);
+    useWebSearch({ installed: [engine('searxng', { values: { instanceUrl: 'http://s:8080' } })] });
+    const ready = await describeWebSearchAvailability(
+      { id: 'a', websearch: { enabled: true, provider: 'searxng' } },
+      STAFF
+    );
+    assert.equal(ready.script, true);
   });
 
   it('treats a missing provider value as auto', () => {
@@ -224,6 +248,12 @@ describe('sortWebSearchEngines', () => {
       sorted.map(e => e.id),
       ['brave', 'staan', 'qwant', 'acme', 'zeta']
     );
+    assert.deepEqual(
+      sortWebSearchEngines(['acme', 'searxng', 'qwant', 'brave'].map(id => ({ id }))).map(
+        e => e.id
+      ),
+      ['brave', 'qwant', 'searxng', 'acme']
+    );
   });
 
   it('names a tool and a definition for every built-in engine', () => {
@@ -232,7 +262,8 @@ describe('sortWebSearchEngines', () => {
       [
         ['brave', 'braveSearch', 'com.intrafind/brave-search'],
         ['staan', 'staanSearch', 'com.intrafind/staan-search'],
-        ['qwant', 'qwantSearch', 'com.intrafind/qwant-search']
+        ['qwant', 'qwantSearch', 'com.intrafind/qwant-search'],
+        ['searxng', 'searxngSearch', 'com.intrafind/searxng-search']
       ]
     );
   });
