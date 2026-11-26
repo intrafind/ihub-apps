@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
 import '@testing-library/jest-dom';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import InstallationSkillsPanel from '../../../client/src/features/admin/components/integrations/InstallationSkillsPanel';
 import {
   approveInstallationSkill,
@@ -77,6 +77,9 @@ const ITEMS = [
 
 beforeEach(() => {
   fetchInstallationSkills.mockReset().mockResolvedValue({ items: ITEMS });
+  fetchInstallationSkillFile
+    .mockReset()
+    .mockImplementation(async (_id, _name, path) => ({ path, size: 9, text: 'FILE TEXT' }));
   approveInstallationSkill.mockClear();
   revokeInstallationSkill.mockClear();
 });
@@ -119,6 +122,51 @@ describe('the Skills tab', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Approve' }));
     expect(await screen.findByRole('alert')).toHaveTextContent(/Review it again/);
     expect(fetchInstallationSkills).toHaveBeenCalledTimes(2);
+  });
+
+  it('shows the file opened last, whichever read answers first', async () => {
+    const answers = {};
+    fetchInstallationSkillFile.mockImplementation(
+      (_id, _name, path) => new Promise(resolve => (answers[path] = resolve))
+    );
+    fetchInstallationSkills.mockResolvedValue({
+      items: [
+        {
+          ...ITEMS[0],
+          files: [
+            { path: 'SKILL.md', size: 1 },
+            { path: 'references/A.md', size: 1 }
+          ]
+        }
+      ]
+    });
+    render(<InstallationSkillsPanel instanceId="billing" />);
+    fireEvent.click(await screen.findByRole('button', { name: 'SKILL.md' }));
+    fireEvent.click(screen.getByRole('button', { name: 'references/A.md' }));
+    answers['references/A.md']({ path: 'references/A.md', size: 1, text: 'TEXT OF A' });
+    expect(await screen.findByText('TEXT OF A')).toBeInTheDocument();
+    // The superseded read answers last: it is not shown.
+    await act(async () => {
+      answers['SKILL.md']({ path: 'SKILL.md', size: 1, text: 'TEXT OF SKILL' });
+    });
+    expect(screen.queryByText('TEXT OF SKILL')).not.toBeInTheDocument();
+    expect(screen.getByText('TEXT OF A')).toBeInTheDocument();
+  });
+
+  it('drops an open preview once the server changed the skill', async () => {
+    render(<InstallationSkillsPanel instanceId="billing" />);
+    fireEvent.click(await screen.findByRole('button', { name: 'SKILL.md' }));
+    expect(await screen.findByText('FILE TEXT')).toBeInTheDocument();
+    // The approval finds the skill changed; the list reloads with a new digest.
+    fetchInstallationSkills.mockResolvedValueOnce({
+      items: [{ ...ITEMS[0], digest: 'sha256:deploy-2' }, ITEMS[1], ITEMS[2]]
+    });
+    approveInstallationSkill.mockRejectedValueOnce({
+      response: { data: { code: 'SKILL_LISTING_CHANGED', detail: 'changed' } }
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Approve' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent(/Review it again/);
+    expect(screen.queryByText('FILE TEXT')).not.toBeInTheDocument();
   });
 
   it('withdraws an approval', async () => {

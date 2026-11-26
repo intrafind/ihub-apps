@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import Badge from '../../../../shared/components/Badge';
 import LoadingSpinner from '../../../../shared/components/LoadingSpinner';
@@ -73,19 +73,24 @@ function SkillFiles({ instanceId, item }) {
   const [open, setOpen] = useState(null);
   const [file, setFile] = useState(null);
   const [error, setError] = useState(null);
+  // The read whose answer may still be shown: a later click supersedes it,
+  // so an earlier answer arriving last never shows under the later file.
+  const latestReadRef = useRef(0);
 
   const show = async path => {
+    const request = ++latestReadRef.current;
+    setFile(null);
+    setError(null);
     if (open === path) {
       setOpen(null);
       return;
     }
     setOpen(path);
-    setFile(null);
-    setError(null);
     try {
-      setFile(await fetchInstallationSkillFile(instanceId, item.name, path));
+      const loaded = await fetchInstallationSkillFile(instanceId, item.name, path);
+      if (request === latestReadRef.current) setFile(loaded);
     } catch (err) {
-      setError(getAdminApiErrorMessage(err));
+      if (request === latestReadRef.current) setError(getAdminApiErrorMessage(err));
     }
   };
 
@@ -275,7 +280,9 @@ export default function InstallationSkillsPanel({ instanceId }) {
                   )}
                   {/* What the server offers now; an approved skill it no longer lists has none. */}
                   {Array.isArray(item.files) && item.status !== 'missing' && (
-                    <SkillFiles instanceId={instanceId} item={item} />
+                    // Keyed by the digest: when the server changed the skill, the
+                    // preview of what it offered before goes with the old listing.
+                    <SkillFiles key={item.digest} instanceId={instanceId} item={item} />
                   )}
                   {item.status === 'not_approvable' && (
                     <p className="mt-1 text-xs text-gray-600 dark:text-gray-400">
