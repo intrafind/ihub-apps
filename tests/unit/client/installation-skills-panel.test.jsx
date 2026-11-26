@@ -109,7 +109,12 @@ describe('the Skills tab', () => {
     render(<InstallationSkillsPanel instanceId="billing" />);
     fireEvent.click(await screen.findByRole('button', { name: 'SKILL.md' }));
     await waitFor(() =>
-      expect(fetchInstallationSkillFile).toHaveBeenCalledWith('billing', 'deploy', 'SKILL.md')
+      expect(fetchInstallationSkillFile).toHaveBeenCalledWith(
+        'billing',
+        'deploy',
+        'SKILL.md',
+        ITEMS[0].digest
+      )
     );
     expect(await screen.findByText('FILE TEXT')).toBeInTheDocument();
   });
@@ -167,6 +172,24 @@ describe('the Skills tab', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Approve' }));
     expect(await screen.findByRole('alert')).toHaveTextContent(/Review it again/);
     expect(screen.queryByText('FILE TEXT')).not.toBeInTheDocument();
+  });
+
+  it('reloads instead of showing a file of a skill the server changed since', async () => {
+    render(<InstallationSkillsPanel instanceId="billing" />);
+    fetchInstallationSkills.mockResolvedValueOnce({
+      items: [{ ...ITEMS[0], digest: 'sha256:deploy-2' }, ITEMS[1], ITEMS[2]]
+    });
+    fetchInstallationSkillFile.mockRejectedValueOnce({
+      response: { data: { code: 'SKILL_LISTING_CHANGED', detail: 'changed' } }
+    });
+    fireEvent.click(await screen.findByRole('button', { name: 'SKILL.md' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent(/Review it again/);
+    expect(fetchInstallationSkills).toHaveBeenCalledTimes(2);
+    // The list shows the new version, with no file of either version open.
+    expect(screen.getByRole('button', { name: 'SKILL.md' })).toHaveAttribute(
+      'aria-expanded',
+      'false'
+    );
   });
 
   it('withdraws an approval', async () => {

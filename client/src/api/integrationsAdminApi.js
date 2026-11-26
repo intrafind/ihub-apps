@@ -153,8 +153,8 @@ export const approveInstallationSkill = async (id, name, digest) =>
     .data;
 
 /** One file of a server skill as the server offers it now: `{ path, size, text?, truncated? }`. */
-export const fetchInstallationSkillFile = async (id, skillName, path) => {
-  const query = new URLSearchParams({ skillName, path });
+export const fetchInstallationSkillFile = async (id, skillName, path, digest) => {
+  const query = new URLSearchParams({ skillName, path, digest });
   return (await makeAdminApiCall(`${instancePath(id)}/skill-files?${query}`)).data;
 };
 

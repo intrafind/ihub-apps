@@ -211,9 +211,13 @@ Verified files are kept in memory by digest. Nothing is written to the skill
 folders. A user's read is never answered from another connection's copy, so a
 per-user server that refuses a file to one user is not bypassed. The routes are
 `GET /api/admin/integrations/installed/{id}/skills`,
-`GET /api/admin/integrations/installed/{id}/skill-files?skillName=&path=` and
-`PUT` (body `{ digest }`, the reviewed item's) / `DELETE
-/api/admin/integrations/installed/{id}/skill-approvals/{skillName}`.
+`GET /api/admin/integrations/installed/{id}/skill-files?skillName=&path=&digest=` and
+`PUT` (body `{ digest }`) / `DELETE
+/api/admin/integrations/installed/{id}/skill-approvals/{skillName}`. The file
+read and the approval both carry the listed item's `digest`. When the server
+changed the skill since the list was loaded, both answer `409
+SKILL_LISTING_CHANGED` and the tab reloads, so an admin never reads or approves
+one version under another version's listing.
 
 ### Transports
 

@@ -390,21 +390,40 @@ const MAX_REVIEW_CHARS = 512 * 1024;
 /**
  * One file of a skill as the server offers it now, for the admin to read
  * before approving: verified against the current listing, never cached. A file
- * the server sends as bytes only comes back without text.
+ * the server sends as bytes only comes back without text. `options.digest` is
+ * the item's `digest` from the admin's listing: a skill the server changed
+ * since is refused (`SKILL_LISTING_CHANGED`), so the admin never reads one
+ * version's file under another version's listing.
  *
  * @param {string} instanceId
  * @param {string} name - The skill
  * @param {string} path - Path relative to the skill root (`SKILL.md`, `references/x.md`)
  * @param {Object} user - The admin
  * @param {Object} [deps]
+ * @param {Object} [options]
+ * @param {string} [options.digest] - The listed entry's digest
  * @returns {Promise<{path: string, size: number, text?: string, truncated?: boolean}>}
  */
-export async function readInstallationSkillFile(instanceId, name, path, user, deps = {}) {
+export async function readInstallationSkillFile(
+  instanceId,
+  name,
+  path,
+  user,
+  deps = {},
+  options = {}
+) {
   const d = await depsOf(deps);
   mcpInstallation(instanceId, d);
   const skills = await liveListing(instanceId, user, d);
   const matches = skills.filter(skill => skill.frontmatter?.name === name);
   const skill = matches.length === 1 && Array.isArray(matches[0].resources) ? matches[0] : null;
+  if (skill && options.digest !== entryDigest(skill)) {
+    throw new ServiceError(
+      'SKILL_LISTING_CHANGED',
+      `The skill "${name}" changed since it was listed; review it again`,
+      { details: { instanceId, name } }
+    );
+  }
   const resource = skill?.resources.find(r => skillFilePath(skill, r.uri) === path);
   if (!resource) {
     throw new ServiceError('SERVER_SKILL_NOT_FOUND', `${instanceId} offers no file "${path}"`, {

@@ -64,11 +64,16 @@ function sizeText(bytes) {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
+/** Whether the server refused a request because the skill changed since it was listed. */
+const listingChanged = err => err?.response?.data?.code === 'SKILL_LISTING_CHANGED';
+
 /**
  * The files of a listed skill, each opened read-only as the server offers it
- * now, so the admin reads what they approve before approving it.
+ * now, so the admin reads what they approve before approving it. A read names
+ * the listed digest; when the server changed the skill since, `onChanged`
+ * reloads the listing instead of showing a file of another version.
  */
-function SkillFiles({ instanceId, item }) {
+function SkillFiles({ instanceId, item, onChanged }) {
   const { t } = useTranslation();
   const [open, setOpen] = useState(null);
   const [file, setFile] = useState(null);
@@ -87,10 +92,12 @@ function SkillFiles({ instanceId, item }) {
     }
     setOpen(path);
     try {
-      const loaded = await fetchInstallationSkillFile(instanceId, item.name, path);
+      const loaded = await fetchInstallationSkillFile(instanceId, item.name, path, item.digest);
       if (request === latestReadRef.current) setFile(loaded);
     } catch (err) {
-      if (request === latestReadRef.current) setError(getAdminApiErrorMessage(err));
+      if (request !== latestReadRef.current) return;
+      if (listingChanged(err)) onChanged(item);
+      else setError(getAdminApiErrorMessage(err));
     }
   };
 
@@ -185,6 +192,21 @@ export default function InstallationSkillsPanel({ instanceId }) {
     load();
   }, [load]);
 
+  // The server changed the skill since this list: show what it offers now.
+  const reloadChanged = useCallback(
+    async item => {
+      await load();
+      setActionError({
+        name: item.name,
+        message: t(
+          'admin.integrations.skills.changedSinceListed',
+          'The server changed this skill since the list was loaded. Review it again before you approve it.'
+        )
+      });
+    },
+    [load, t]
+  );
+
   const act = async (item, action) => {
     setBusy(item.name);
     setActionError(null);
@@ -193,18 +215,8 @@ export default function InstallationSkillsPanel({ instanceId }) {
       else await revokeInstallationSkill(instanceId, item.name);
       await load();
     } catch (err) {
-      const changed = err?.response?.data?.code === 'SKILL_LISTING_CHANGED';
-      // The server changed the skill since this list: show what it offers now.
-      if (changed) await load();
-      setActionError({
-        name: item.name,
-        message: changed
-          ? t(
-              'admin.integrations.skills.changedSinceListed',
-              'The server changed this skill since the list was loaded. Review it again before you approve it.'
-            )
-          : getAdminApiErrorMessage(err)
-      });
+      if (listingChanged(err)) await reloadChanged(item);
+      else setActionError({ name: item.name, message: getAdminApiErrorMessage(err) });
     } finally {
       setBusy(null);
     }
@@ -282,7 +294,12 @@ export default function InstallationSkillsPanel({ instanceId }) {
                   {Array.isArray(item.files) && item.status !== 'missing' && (
                     // Keyed by the digest: when the server changed the skill, the
                     // preview of what it offered before goes with the old listing.
-                    <SkillFiles key={item.digest} instanceId={instanceId} item={item} />
+                    <SkillFiles
+                      key={item.digest}
+                      instanceId={instanceId}
+                      item={item}
+                      onChanged={reloadChanged}
+                    />
                   )}
                   {item.status === 'not_approvable' && (
                     <p className="mt-1 text-xs text-gray-600 dark:text-gray-400">

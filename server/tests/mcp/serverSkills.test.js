@@ -261,27 +261,34 @@ describe.each([
 
   it('lets the admin read a file before approving', async () => {
     try {
-      const skillMd = await readInstallationSkillFile(
-        'billing',
-        'deploy',
-        'SKILL.md',
-        admin,
-        h.deps
-      );
+      const { items } = await listInstallationSkills('billing', admin, h.deps);
+      const listed = { digest: items.find(item => item.name === 'deploy').digest };
+      const read = path =>
+        readInstallationSkillFile('billing', 'deploy', path, admin, h.deps, listed);
+      const skillMd = await read('SKILL.md');
       expect(skillMd).toMatchObject({ path: 'SKILL.md' });
       expect(skillMd.text).toContain('name: deploy');
-      expect(
-        await readInstallationSkillFile(
-          'billing',
-          'deploy',
-          'references/CHECKLIST.md',
-          admin,
-          h.deps
-        )
-      ).toMatchObject({ text: '1. Plan\n2. Deploy\n' });
+      expect(await read('references/CHECKLIST.md')).toMatchObject({
+        text: '1. Plan\n2. Deploy\n'
+      });
+      await expect(read('../secret')).rejects.toMatchObject({ code: 'SERVER_SKILL_NOT_FOUND' });
+    } finally {
+      await h.conn.disconnect();
+    }
+  });
+
+  it('refuses a file read of a skill the server changed since it was listed', async () => {
+    try {
+      const { items } = await listInstallationSkills('billing', admin, h.deps);
+      const listed = { digest: items.find(item => item.name === 'deploy').digest };
+      files.deploy['references/CHECKLIST.md'] = '1. Something else\n';
+      // The admin would read the new text under the old listing, and approve it unseen.
       await expect(
-        readInstallationSkillFile('billing', 'deploy', '../secret', admin, h.deps)
-      ).rejects.toMatchObject({ code: 'SERVER_SKILL_NOT_FOUND' });
+        readInstallationSkillFile('billing', 'deploy', 'SKILL.md', admin, h.deps, listed)
+      ).rejects.toMatchObject({ code: 'SKILL_LISTING_CHANGED' });
+      await expect(
+        readInstallationSkillFile('billing', 'deploy', 'SKILL.md', admin, h.deps)
+      ).rejects.toMatchObject({ code: 'SKILL_LISTING_CHANGED' });
     } finally {
       await h.conn.disconnect();
     }

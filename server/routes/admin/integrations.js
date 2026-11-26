@@ -1175,15 +1175,21 @@ export default function registerAdminIntegrationsRoutes(app) {
    *         schema:
    *           type: string
    *         description: "Path relative to the skill root, e.g. `SKILL.md`"
+   *       - in: query
+   *         name: digest
+   *         required: true
+   *         schema:
+   *           type: string
+   *         description: "The skill's `digest` from the listing the admin is reviewing"
    *     responses:
    *       200:
    *         description: "`{ path, size, text?, truncated? }`"
    *       400:
-   *         description: "`BAD_REQUEST`: no skill name or path"
+   *         description: "`BAD_REQUEST`: no skill name, path or digest"
    *       404:
    *         description: "`INTEGRATION_NOT_FOUND`, `SERVER_SKILL_NOT_FOUND`"
    *       409:
-   *         description: "`SKILLS_NOT_SUPPORTED`, `INTEGRATION_AUTH_REQUIRED`"
+   *         description: "`SKILL_LISTING_CHANGED`, `SKILLS_NOT_SUPPORTED`, `INTEGRATION_AUTH_REQUIRED`"
    *       502:
    *         description: "`SKILL_UNREADABLE`, `UPSTREAM_ERROR`"
    */
@@ -1193,7 +1199,7 @@ export default function registerAdminIntegrationsRoutes(app) {
     async (req, res) => {
       const id = req.params.id;
       assertValidId(id, 'integration');
-      const { skillName, path: filePath } = req.query;
+      const { skillName, path: filePath, digest } = req.query;
       if (typeof skillName !== 'string' || !SKILL_NAME_PATTERN.test(skillName)) {
         throw new ServiceError('BAD_REQUEST', 'Invalid skill name', { details: { skillName } });
       }
@@ -1202,8 +1208,15 @@ export default function registerAdminIntegrationsRoutes(app) {
           details: { path: filePath ?? null }
         });
       }
+      if (typeof digest !== 'string' || !digest || digest.length > 256) {
+        throw new ServiceError('BAD_REQUEST', 'The digest of the listed skill is required', {
+          details: { digest: digest ?? null }
+        });
+      }
       // The path only selects a file the server's listing names; nothing is read from disk.
-      res.json(await readInstallationSkillFile(id, skillName, filePath, req.user));
+      res.json(
+        await readInstallationSkillFile(id, skillName, filePath, req.user, undefined, { digest })
+      );
     }
   );
 
