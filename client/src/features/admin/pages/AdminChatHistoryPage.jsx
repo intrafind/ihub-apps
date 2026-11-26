@@ -210,20 +210,264 @@ function SizeField({ id, label, help, bytes, unit = MB, unitLabel = 'MB', onChan
   );
 }
 
-function CheckboxField({ id, label, help, checked, onChange }) {
+function CheckboxField({ id, label, help, checked, onChange, disabled = false }) {
   return (
     <div>
-      <label htmlFor={id} className="flex items-center">
+      <label htmlFor={id} className={`flex items-center${disabled ? ' opacity-60' : ''}`}>
         <input
           id={id}
           type="checkbox"
           checked={!!checked}
+          disabled={disabled}
           onChange={e => onChange(e.target.checked)}
           className="rounded-sm border-gray-300 text-blue-600 focus:ring-blue-500"
         />
         <span className="ml-2 text-sm font-medium text-gray-700 dark:text-gray-300">{label}</span>
       </label>
       {help && <p className="text-xs text-gray-500 dark:text-gray-400 mt-1 ml-6">{help}</p>}
+    </div>
+  );
+}
+
+/**
+ * Text recognition at upload (#3986), inside "Uploaded files": the installation-wide engine that
+ * reads images and the PDF pages without a text layer once when they are uploaded
+ * (`platform.ocr.engine`: `model`, a vision model, or an installed OCR integration such as the
+ * iFinder OCR service), the model of the `model` engine (`platform.ocr.modelId`, "Off" when empty),
+ * the most pages it reads per document (`platform.ocr.maxPages`), and whether chats use it
+ * (`platform.uploads.recognizeText`; an app can override it). Projects always use the engine while
+ * it is ready.
+ *
+ * @param {Object} props
+ * @param {{engine?: string, modelId: string|null, maxPages: number, pages?: string, minFigurePercent?: number}} props.ocr -
+ *   `settings.ocr`; `pages`: which pages of a PDF with text are read (`scanned`, `smart`, `all`),
+ *   `minFigurePercent`: from how much picture or drawing `smart` reads a page with text.
+ * @param {boolean} props.recognizeText - `settings.uploads.recognizeText`.
+ * @param {Array<{id: string, name: string|Object}>} props.models - `ocrModels` of the overview:
+ *   the enabled models that read images.
+ * @param {Array<{id: string, name: string, enabled: boolean}>} props.engines - `ocrEngines` of the
+ *   overview: the installed OCR integrations.
+ * @param {string} props.language
+ * @param {(key: 'engine'|'modelId'|'maxPages'|'pages'|'minFigurePercent', value: string|number|null) => void} props.onOcrChange
+ * @param {(value: boolean) => void} props.onRecognizeTextChange
+ * @param {Function} props.t
+ * @returns {JSX.Element}
+ */
+function TextRecognitionSettings({
+  ocr,
+  recognizeText,
+  models,
+  engines,
+  language,
+  onOcrChange,
+  onRecognizeTextChange,
+  t
+}) {
+  const engine = ocr.engine || 'model';
+  const usesModel = engine === 'model';
+  const modelId = ocr.modelId || '';
+  // A model that was picked and is no longer offered (disabled, or no longer reads images) stays
+  // visible, so the admin sees what is set and can switch it off or replace it.
+  const missing = modelId && !models.some(model => model.id === modelId);
+  const pickedEngine = engines.find(entry => entry.id === engine) || null;
+  const engineMissing = !usesModel && !pickedEngine;
+  const ready = usesModel ? Boolean(modelId) : pickedEngine?.enabled === true;
+  const pageSelection = ocr.pages || 'smart';
+  return (
+    <div className="pt-4 border-t border-gray-200 dark:border-gray-700 space-y-4">
+      <div>
+        <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">
+          {t('admin.chatHistory.uploads.ocr.title', 'Text recognition')}
+        </h3>
+        <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+          {t(
+            'admin.chatHistory.uploads.ocr.description',
+            'The text of an image (PNG, JPEG, GIF, WebP) or of the PDF pages without a text layer is read once, when the file is uploaded; every model then works with that text. Projects use it whenever an engine is ready; chats only when switched on below. The images and pages are sent to the engine when they are uploaded: the provider of the model, or the OCR service.'
+          )}
+        </p>
+      </div>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div>
+          <label
+            htmlFor="uploads-ocr-engine"
+            className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1"
+          >
+            {t('admin.chatHistory.uploads.ocr.engine', 'Engine')}
+          </label>
+          <select
+            id="uploads-ocr-engine"
+            value={engine}
+            onChange={e => onOcrChange('engine', e.target.value)}
+            className={inputClass}
+          >
+            <option value="model">
+              {t('admin.chatHistory.uploads.ocr.engineModel', 'A model that reads images')}
+            </option>
+            {engines.map(entry => (
+              <option key={entry.id} value={entry.id}>
+                {entry.enabled
+                  ? entry.name
+                  : t('admin.chatHistory.uploads.ocr.engineOff', '{{name}} (switched off)', {
+                      name: entry.name
+                    })}
+              </option>
+            ))}
+            {engineMissing && (
+              <option value={engine}>
+                {t('admin.chatHistory.uploads.ocr.unavailable', '{{model}} (not available)', {
+                  model: engine
+                })}
+              </option>
+            )}
+          </select>
+          <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+            {engines.length > 0
+              ? t(
+                  'admin.chatHistory.uploads.ocr.engineHelp',
+                  'An OCR integration reads the pages on its own servers instead of a model; set it up under Admin → Integrations.'
+                )
+              : t(
+                  'admin.chatHistory.uploads.ocr.engineNone',
+                  'To use an OCR service instead of a model, install an OCR integration (such as the iFinder OCR service) under Admin → Integrations.'
+                )}{' '}
+            <Link
+              to="/admin/integrations"
+              className="text-blue-600 dark:text-blue-400 hover:underline"
+            >
+              {t('admin.chatHistory.uploads.ocr.integrationsLink', 'Open Integrations')}
+            </Link>
+          </p>
+        </div>
+        {usesModel ? (
+          <div>
+            <label
+              htmlFor="uploads-ocr-model"
+              className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1"
+            >
+              {t('admin.chatHistory.uploads.ocr.modelId', 'Text recognition model')}
+            </label>
+            <select
+              id="uploads-ocr-model"
+              value={modelId}
+              onChange={e => onOcrChange('modelId', e.target.value || null)}
+              className={inputClass}
+            >
+              <option value="">{t('admin.chatHistory.uploads.ocr.off', 'Off')}</option>
+              {models.map(model => (
+                <option key={model.id} value={model.id}>
+                  {getLocalizedContent(model.name, language) || model.id}
+                </option>
+              ))}
+              {missing && (
+                <option value={modelId}>
+                  {t('admin.chatHistory.uploads.ocr.unavailable', '{{model}} (not available)', {
+                    model: modelId
+                  })}
+                </option>
+              )}
+            </select>
+            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+              {t(
+                'admin.chatHistory.uploads.ocr.modelIdHelp',
+                'Only enabled models that read images are offered. "Off" stops text recognition: images are then refused and scanned PDFs are handled as before.'
+              )}
+            </p>
+          </div>
+        ) : (
+          <div className="text-xs text-gray-500 dark:text-gray-400 md:pt-6">
+            {ready
+              ? t(
+                  'admin.chatHistory.uploads.ocr.engineReady',
+                  'Images and scanned pages go to {{name}}. Its own settings (address, languages) decide how well it reads them.',
+                  { name: pickedEngine.name }
+                )
+              : t(
+                  'admin.chatHistory.uploads.ocr.engineNotReady',
+                  'This integration is switched off or no longer installed, so nothing is recognized: images are refused and scanned PDFs are handled as before.'
+                )}
+          </div>
+        )}
+        <NumberField
+          id="uploads-ocr-max-pages"
+          label={t('admin.chatHistory.uploads.ocr.maxPages', 'Most pages per document')}
+          help={t(
+            'admin.chatHistory.uploads.ocr.maxPagesHelp',
+            'Pages beyond this are not read; the document then says that only the first pages were recognized. Each page is one request to the engine.'
+          )}
+          min={1}
+          value={ocr.maxPages}
+          onChange={value => onOcrChange('maxPages', Math.max(1, value))}
+        />
+        <div>
+          <label
+            htmlFor="uploads-ocr-pages"
+            className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1"
+          >
+            {t('admin.chatHistory.uploads.ocr.pages', 'Pages of PDFs with text')}
+          </label>
+          <select
+            id="uploads-ocr-pages"
+            value={pageSelection}
+            onChange={e => onOcrChange('pages', e.target.value)}
+            className={inputClass}
+          >
+            <option value="scanned">
+              {t('admin.chatHistory.uploads.ocr.pagesScanned', 'Only pages without text')}
+            </option>
+            <option value="smart">
+              {t(
+                'admin.chatHistory.uploads.ocr.pagesSmart',
+                'Smart: also pages with large pictures or drawings'
+              )}
+            </option>
+            <option value="all">{t('admin.chatHistory.uploads.ocr.pagesAll', 'All pages')}</option>
+          </select>
+          <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+            {t(
+              'admin.chatHistory.uploads.ocr.pagesHelp',
+              'Pages without a text layer are always read. A page with text that is read gets the recognized text in place of its own, so a chart or diagram next to the text is read too; if reading it fails, the page keeps its text.'
+            )}
+          </p>
+        </div>
+        {pageSelection === 'smart' && (
+          <NumberField
+            id="uploads-ocr-min-figure"
+            label={t(
+              'admin.chatHistory.uploads.ocr.minFigurePercent',
+              'Smart: least picture or drawing share of a page (%)'
+            )}
+            help={t(
+              'admin.chatHistory.uploads.ocr.minFigurePercentHelp',
+              'A page with text is read when pictures, charts, diagrams or tables cover at least this much of it. A logo or a line covers a few percent; a chart over half the page about 30 to 50.'
+            )}
+            min={1}
+            max={100}
+            value={ocr.minFigurePercent ?? 20}
+            onChange={value => onOcrChange('minFigurePercent', Math.min(100, Math.max(1, value)))}
+          />
+        )}
+      </div>
+      <CheckboxField
+        id="uploads-recognize-text"
+        label={t(
+          'admin.chatHistory.uploads.ocr.recognizeText',
+          'Read images and scanned PDFs in chats as text'
+        )}
+        help={
+          ready
+            ? t(
+                'admin.chatHistory.uploads.ocr.recognizeTextHelp',
+                'An image or a scanned PDF attached to a chat is then stored with its recognized text instead of being sent to the chat model as pictures, so models without vision can use it too. Not where only the text extracted in the browser is kept. An app can override this.'
+              )
+            : t(
+                'admin.chatHistory.uploads.ocr.recognizeTextNoModel',
+                'Choose a text recognition model or a ready OCR integration first.'
+              )
+        }
+        checked={recognizeText}
+        disabled={!ready}
+        onChange={onRecognizeTextChange}
+      />
     </div>
   );
 }
@@ -345,7 +589,9 @@ function AdminChatHistoryPage() {
           evidence: settings.evidence,
           runLog: settings.runLog,
           sharing: settings.sharing,
-          uploads: settings.uploads
+          uploads: settings.uploads,
+          // Text recognition at upload (#3986); absent on a server without it
+          ...(settings.ocr ? { ocr: settings.ocr } : {})
         }
       });
       setMessage({
@@ -1177,6 +1423,18 @@ function AdminChatHistoryPage() {
                 onChange={value => updateUploadQuota('maxApiBytes', value)}
               />
             </div>
+            {settings.ocr && (
+              <TextRecognitionSettings
+                ocr={settings.ocr}
+                recognizeText={settings.uploads.recognizeText === true}
+                models={overview?.ocrModels || []}
+                engines={overview?.ocrEngines || []}
+                language={i18n.language}
+                onOcrChange={(key, value) => updateSetting('ocr', key, value)}
+                onRecognizeTextChange={value => updateSetting('uploads', 'recognizeText', value)}
+                t={t}
+              />
+            )}
           </div>
         </div>
 

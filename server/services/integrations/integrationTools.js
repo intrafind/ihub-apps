@@ -36,6 +36,9 @@ import {
   pickDefaultScope
 } from './scopes/index.js';
 
+/** The integration type of an OCR engine (see `services/ocr/textRecognition.js`). */
+const OCR_INTEGRATION_TYPE = 'ocr';
+
 /**
  * Installed integrations as tools.
  *
@@ -269,6 +272,9 @@ export async function discoverIntegrationTools(language = null) {
   }
   const tools = [];
   for (const resolved of resolvedAll) {
+    // An OCR engine reads uploads for iHub (`services/ocr/textRecognition.js`);
+    // its `recognize` action takes file bytes and is no tool for a model.
+    if (resolved.definition.type === OCR_INTEGRATION_TYPE) continue;
     const adapter = getProtocolAdapter(resolved.definition.protocol.type);
     try {
       // An adapter over a system that already shapes tools (MCP) hands them

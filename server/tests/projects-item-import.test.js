@@ -14,8 +14,10 @@ import path from 'node:path';
 import { after, before, beforeEach, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import JSZip from 'jszip';
+import { PNG } from 'pngjs';
 
 import configCache from '../configCache.js';
+import llmClient from '../services/loop/LLMClient.js';
 import { bootstrapStorage, shutdownStorageBootstrap } from '../storage/bootstrap.js';
 import { resolveGroupInheritance } from '../utils/authorization.js';
 import { locateConfigFile } from '../utils/configFileLocation.js';
@@ -568,6 +570,87 @@ describe('POST /api/projects/:projectId/items/_import', () => {
       body: { source: { kind: 'nextcloud', ref: {} } }
     });
     assert.equal(res.statusCode, 400);
+  });
+});
+
+describe('with text recognition (#3986)', () => {
+  const originalComplete = llmClient.complete;
+  let calls;
+  before(() => {
+    configCache.setCacheEntry('config/models.json', [
+      {
+        id: 'ocr-vision',
+        modelId: 'ocr-vision',
+        name: { en: 'OCR' },
+        provider: 'local',
+        url: 'http://localhost:9/v1/chat/completions',
+        supportsImages: true,
+        enabled: true
+      }
+    ]);
+  });
+  beforeEach(() => {
+    calls = 0;
+    llmClient.complete = async () => {
+      calls += 1;
+      return { content: 'Whiteboard: next steps for the ACME offer.' };
+    };
+    platform.ocr = { modelId: 'ocr-vision', maxPages: 10 };
+    configCache.setCacheEntry('config/platform.json', platform);
+  });
+  after(() => {
+    llmClient.complete = originalComplete;
+    delete platform.ocr;
+    configCache.setCacheEntry('config/platform.json', platform);
+  });
+
+  const picture = () => {
+    const image = new PNG({ width: 20, height: 10 });
+    image.data.fill(90);
+    return PNG.sync.write(image);
+  };
+
+  it('copies an image into a project, with its recognized text', async () => {
+    const project = await createProject(ADA, 'Whiteboards');
+    const chatId = await seedChat(ADA);
+    const bytes = picture();
+    const artifact = await seedArtifact(chatId, {
+      kind: 'image',
+      mimeType: 'image/png',
+      name: 'whiteboard.png',
+      bytes
+    });
+    const res = await importArtifact(ADA, project.id, { chatId, artifactId: artifact.id });
+    assert.equal(res.statusCode, 202, JSON.stringify(res.body));
+    const { project: stored, items } = await settled(project.id, [res.body.items[0].id]);
+    assert.equal(items[0].status, 'ready', JSON.stringify(items[0].error));
+    assert.equal(calls, 1);
+    assert.match(await readText(stored, items[0]), /ACME offer/);
+    assert.deepEqual(await readOriginal(stored, items[0]), bytes);
+    assert.equal(items[0].text.recognized.modelId, 'ocr-vision');
+  });
+
+  it('unpacks the images of a ZIP archive too', async () => {
+    const project = await createProject(ADA, 'Scans');
+    const chatId = await seedChat(ADA);
+    const archive = await zipOf({
+      'notes.md': '# Notes\n',
+      'photo.png': picture(),
+      'clip.mp4': 'x'
+    });
+    const artifact = await seedArtifact(chatId, {
+      kind: 'archive',
+      mimeType: 'application/zip',
+      name: 'scans.zip',
+      bytes: archive
+    });
+    const res = await importArtifact(ADA, project.id, { chatId, artifactId: artifact.id });
+    assert.equal(res.statusCode, 202, JSON.stringify(res.body));
+    assert.deepEqual(res.body.items.map(item => item.name).sort(), ['notes.md', 'photo.png']);
+    assert.deepEqual(
+      res.body.skipped.map(entry => entry.name),
+      ['clip.mp4']
+    );
   });
 });
 

@@ -1,0 +1,781 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
+/**
+ * Text recognition at upload (#3986): the text of an image, or of the pages of
+ * a PDF that have no text layer (scanned pages), recognized once by the
+ * installation's OCR engine and stored like any other extracted text. Every
+ * model can then read the document, with or without vision, and no turn pays
+ * for the recognition again.
+ *
+ * Settings (`platform.ocr`):
+ *
+ *  - `engine`: who recognizes the text. `model` (the default) is a
+ *    vision-capable model of the installation (`modelId`); any other value is
+ *    the id of an installed integration of type `ocr`, whose `recognize`
+ *    action gets one image at a time (the **OCR engine contract**, see
+ *    `docs/integration-development.md`). iHub ships one: the iFinder OCR
+ *    service (`com.intrafind/ifinder-ocr`).
+ *  - `modelId`: the vision-capable model of the `model` engine. Unset, the
+ *    `model` engine recognizes nothing and uploads behave as without OCR (an
+ *    image is refused, a scanned PDF fails with `NO_TEXT`).
+ *  - `maxPages`: the most pages recognized per document. Pages past it keep
+ *    their "no extractable text" marker; the result says it was cut.
+ *
+ * Projects use it whenever a model is set. Chat uploads use it only where it
+ * is switched on (`platform.uploads.recognizeText`, overridable per app with
+ * `app.uploads.recognizeText`); otherwise a chat still sends a scanned PDF as
+ * page images.
+ *
+ *  - `pages`: which pages of a PDF that has a text layer are read besides the
+ *    pages without text: `scanned` (none), `smart` (the default: pages where
+ *    pictures or drawings cover at least `minFigurePercent` of the page, as
+ *    `services/documents/pdf/pageFigures.js` measures it; a logo costs
+ *    nothing, a chart next to its text is read) or `all`.
+ *
+ * A PDF page goes to the engine as a PNG image, whatever the engine, so an
+ * engine only ever reads images.
+ *
+ * @module services/ocr/textRecognition
+ */
+import configCache from '../../configCache.js';
+import logger from '../../utils/logger.js';
+import { getDefinitionTypes, getOcrImageTypes } from '../integrations/integrationTypes.js';
+
+/**
+ * The model call, PDF rendering, key lookup, integration runner and audit,
+ * loaded on first use: the ingest pipelines import this module for its
+ * settings and checks, and the model client's and the integrations' imports
+ * reach back into the projects.
+ */
+let heavy = null;
+async function heavyParts() {
+  if (!heavy) {
+    const [pages, utils, audit, installed, protocols, usage, pool] = await Promise.all([
+      import('./pageRecognition.js'),
+      import('../../utils.js'),
+      import('../AuditLogService.js'),
+      import('../integrations/InstalledIntegrationService.js'),
+      import('../integrations/protocols/index.js'),
+      import('../integrations/actionUsage.js'),
+      import('../projects/extractionPool.js')
+    ]);
+    heavy = {
+      DEFAULT_OCR_PROMPT: pages.DEFAULT_OCR_PROMPT,
+      extractTextFromPageImage: pages.extractTextFromPageImage,
+      renderPdfPagesForRecognition: pool.renderPdfPagesForRecognition,
+      analyzePdfPageFigures: pool.analyzePdfPageFigures,
+      resolveModelApiKey: utils.resolveModelApiKey,
+      logAudit: audit.logAudit,
+      installedIntegrationService: installed.default,
+      getProtocolAdapter: protocols.getProtocolAdapter,
+      recordActionEvent: usage.recordActionEvent
+    };
+  }
+  return heavy;
+}
+
+/** The `platform.ocr.engine` value of the vision-model engine (the default). */
+export const MODEL_ENGINE = 'model';
+
+/** The integration type of an OCR engine. */
+export const OCR_INTEGRATION_TYPE = 'ocr';
+
+/** The one action iHub calls on an OCR integration (the engine contract). */
+export const OCR_RECOGNIZE_ACTION = 'recognize';
+
+/** The installations file, as `InstalledIntegrationService` reads it from the config cache. */
+const INTEGRATIONS_FILE = 'config/integrations.json';
+
+const COMPONENT = 'TextRecognition';
+
+/** Image types a vision model reads. */
+export const OCR_IMAGE_TYPES = Object.freeze([
+  'image/png',
+  'image/jpeg',
+  'image/webp',
+  'image/gif'
+]);
+
+/** The image type of each file extension of {@link OCR_IMAGE_TYPES}. */
+const OCR_IMAGE_TYPE_BY_EXTENSION = new Map([
+  ['.png', 'image/png'],
+  ['.jpg', 'image/jpeg'],
+  ['.jpeg', 'image/jpeg'],
+  ['.gif', 'image/gif'],
+  ['.webp', 'image/webp']
+]);
+
+/** File extensions of {@link OCR_IMAGE_TYPES}, for an upload's accept list. */
+export const OCR_IMAGE_EXTENSIONS = Object.freeze(['.png', '.jpg', '.jpeg', '.gif', '.webp']);
+
+/** Pages recognized per document when the admin set no limit. */
+export const DEFAULT_OCR_MAX_PAGES = 50;
+
+/** Pages rendered and sent to the engine at the same time. */
+const PAGE_CONCURRENCY = 3;
+
+/** `[Page 3: no extractable text]`, as the PDF extraction writes it. */
+const NO_TEXT_PAGE = /^\[Page (\d+): no extractable text\]$/;
+
+/** Any page marker line: `[Page 3]`, `[Page 3 (printed: iii)]`, `[Page 3: no extractable text]`. */
+const PAGE_MARKER = /^\[Page (\d+)(?: \(printed: [^\]]*\))?(?:: no extractable text)?\]$/;
+
+/** Which pages of a PDF with a text layer are recognized (`platform.ocr.pages`). */
+export const PAGE_SELECTIONS = Object.freeze(['scanned', 'smart', 'all']);
+
+/** The page selection when the admin set none. */
+export const DEFAULT_PAGE_SELECTION = 'smart';
+
+/** The figure share (percent of the page) from which `smart` recognizes a page with text. */
+export const DEFAULT_MIN_FIGURE_PERCENT = 20;
+
+/**
+ * A recognition that cannot run or failed. Codes: `OCR_UNAVAILABLE` (no
+ * engine set, or it cannot be used), `OCR_FAILED` (the engine refused or every
+ * page failed), `OCR_NO_TEXT` (the engine found no text).
+ */
+export class TextRecognitionError extends Error {
+  constructor(code, message) {
+    super(message);
+    this.name = 'TextRecognitionError';
+    this.code = code;
+  }
+}
+
+/**
+ * The installation of an OCR integration engine, when it exists, is switched
+ * on and is of type `ocr` as far as the loaded definitions say (a sync check
+ * for the upload paths; the recognition itself checks the definition and its
+ * migration state too).
+ * @param {string} instanceId
+ * @returns {Object|null} the installation
+ */
+function readyOcrInstallation(instanceId) {
+  const installed = configCache.get?.(INTEGRATIONS_FILE)?.data?.installed;
+  if (!Array.isArray(installed)) return null;
+  const instance = installed.find(entry => entry?.id === instanceId);
+  if (!instance || instance.enabled === false) return null;
+  const types = getDefinitionTypes();
+  if (
+    instance.definition &&
+    Object.hasOwn(types, instance.definition) &&
+    types[instance.definition] !== OCR_INTEGRATION_TYPE
+  ) {
+    return null;
+  }
+  return instance;
+}
+
+/** Whether the model can recognize text: it exists, is enabled and reads images. */
+function modelIsReady(modelId) {
+  const { data: models = [] } = configCache.getModels?.() || {};
+  const model = (models || []).find(entry => entry?.id === modelId);
+  return (
+    Boolean(model) &&
+    model.enabled !== false &&
+    Boolean(model.supportsImages || model.supportsVision)
+  );
+}
+
+/** The image types of an engine: the ones it declares that iHub sends at all. */
+function engineImageTypes(instance) {
+  const declared = instance?.definition ? getOcrImageTypes(instance.definition) : null;
+  return declared ? OCR_IMAGE_TYPES.filter(type => declared.includes(type)) : [...OCR_IMAGE_TYPES];
+}
+
+/**
+ * The OCR settings of the installation.
+ *
+ * `engine` is `model` or the id of an OCR integration; `enabled` says whether
+ * that engine is ready: the model exists, is enabled and reads images
+ * (`model`), or the integration is installed, switched on and of type `ocr`.
+ * `imageTypes` are the image types the engine reads (an integration declares
+ * them as the `enum` of its `recognize` action's `mimeType`), and
+ * `imageExtensions` their file extensions.
+ *
+ * @param {Object} [platform]
+ * `pages` says which pages of a PDF that has a text layer are read besides
+ * those without text: `scanned` (none), `smart` (those where pictures or
+ * drawings cover at least `minFigurePercent` of the page) or `all`.
+ *
+ * @returns {{engine: string, modelId: string|null, integrationId: string|null, maxPages: number, pages: string, minFigurePercent: number, enabled: boolean, imageTypes: string[], imageExtensions: string[]}}
+ */
+export function ocrSettings(platform = configCache.getPlatform?.() || {}) {
+  const ocr = platform?.ocr || {};
+  const modelId = typeof ocr.modelId === 'string' && ocr.modelId.trim() ? ocr.modelId.trim() : null;
+  const named = typeof ocr.engine === 'string' ? ocr.engine.trim() : '';
+  const engine = named && named !== MODEL_ENGINE ? named : MODEL_ENGINE;
+  const integrationId = engine === MODEL_ENGINE ? null : engine;
+  const maxPages =
+    Number.isFinite(Number(ocr.maxPages)) && Number(ocr.maxPages) > 0
+      ? Math.floor(Number(ocr.maxPages))
+      : DEFAULT_OCR_MAX_PAGES;
+  const instance = integrationId ? readyOcrInstallation(integrationId) : null;
+  const enabled = integrationId ? Boolean(instance) : Boolean(modelId) && modelIsReady(modelId);
+  const imageTypes = instance ? engineImageTypes(instance) : [...OCR_IMAGE_TYPES];
+  const imageExtensions = [...OCR_IMAGE_TYPE_BY_EXTENSION]
+    .filter(([, type]) => imageTypes.includes(type))
+    .map(([extension]) => extension);
+  const pages = PAGE_SELECTIONS.includes(ocr.pages) ? ocr.pages : DEFAULT_PAGE_SELECTION;
+  const figure = Math.floor(Number(ocr.minFigurePercent));
+  const minFigurePercent =
+    Number.isFinite(figure) && figure >= 1 && figure <= 100 ? figure : DEFAULT_MIN_FIGURE_PERCENT;
+  return {
+    engine,
+    modelId,
+    integrationId,
+    maxPages,
+    pages,
+    minFigurePercent,
+    enabled,
+    imageTypes,
+    imageExtensions
+  };
+}
+
+/**
+ * Whether chat uploads of this app recognize text: an OCR engine is ready and
+ * the opt-in is on (`app.uploads.recognizeText` over `platform.uploads.recognizeText`).
+ *
+ * @param {Object} [platform]
+ * @param {Object|null} [appConfig]
+ * @returns {boolean}
+ */
+export function chatRecognizesText(platform = configCache.getPlatform?.() || {}, appConfig = null) {
+  if (!ocrSettings(platform).enabled) return false;
+  const override = appConfig?.uploads?.recognizeText;
+  if (typeof override === 'boolean') return override;
+  return platform?.uploads?.recognizeText === true;
+}
+
+const baseType = mimeType =>
+  String(mimeType || '')
+    .split(';')[0]
+    .trim()
+    .toLowerCase();
+
+/**
+ * Whether a media type is an image the engine reads.
+ * @param {string} mimeType
+ * @param {{imageTypes: string[]}} [settings] - {@link ocrSettings}; the installation's by default.
+ */
+export function isRecognizableImage(mimeType, settings = ocrSettings()) {
+  return settings.imageTypes.includes(baseType(mimeType));
+}
+
+/**
+ * The image type of these bytes, by their signature, when the engine reads
+ * it (PNG, JPEG, GIF or WebP, as far as the engine declares). The bytes
+ * decide, not the declared type.
+ *
+ * @param {Buffer|Uint8Array} bytes - The file, or at least its first 12 bytes.
+ * @param {{imageTypes: string[]}} [settings] - {@link ocrSettings}; the installation's by default.
+ * @returns {string|null}
+ */
+export function recognizableImageTypeOf(bytes, settings = ocrSettings()) {
+  const type = imageTypeBySignature(bytes);
+  return type && settings.imageTypes.includes(type) ? type : null;
+}
+
+function imageTypeBySignature(bytes) {
+  if (!bytes || bytes.length < 4) return null;
+  const head = Buffer.from(bytes.subarray(0, 12));
+  const hex = head.toString('hex');
+  if (hex.startsWith('89504e470d0a1a0a')) return 'image/png';
+  if (hex.startsWith('ffd8ff')) return 'image/jpeg';
+  if (hex.startsWith('47494638')) return 'image/gif';
+  if (
+    head.length >= 12 &&
+    head.toString('latin1', 0, 4) === 'RIFF' &&
+    head.toString('latin1', 8, 12) === 'WEBP'
+  ) {
+    return 'image/webp';
+  }
+  return null;
+}
+
+/**
+ * The image type a file declares, by its media type or its name, when it is
+ * one the engine reads (a check before the bytes are there).
+ *
+ * @param {{contentType?: string, name?: string}} file
+ * @param {{imageTypes: string[]}} [settings] - {@link ocrSettings}; the installation's by default.
+ * @returns {string|null}
+ */
+export function declaredRecognizableImageType(
+  { contentType, name } = {},
+  settings = ocrSettings()
+) {
+  const declared = baseType(contentType);
+  if (isRecognizableImage(declared, settings)) return declared;
+  const dot = String(name || '').lastIndexOf('.');
+  const byName =
+    dot >= 0 ? OCR_IMAGE_TYPE_BY_EXTENSION.get(String(name).slice(dot).toLowerCase()) : null;
+  return byName && settings.imageTypes.includes(byName) ? byName : null;
+}
+
+/**
+ * The OCR model and its API key, decided once per document.
+ *
+ * @param {{modelId: string|null}} settings
+ * @returns {Promise<{model: Object, apiKey: string|null}>}
+ * @throws {TextRecognitionError} `OCR_UNAVAILABLE`
+ */
+async function resolveOcrModel(settings) {
+  if (!settings.modelId) {
+    throw new TextRecognitionError('OCR_UNAVAILABLE', 'No model is set for text recognition');
+  }
+  const { data: models = [] } = configCache.getModels?.() || {};
+  const model = models.find(entry => entry.id === settings.modelId);
+  if (!model || model.enabled === false) {
+    throw new TextRecognitionError(
+      'OCR_UNAVAILABLE',
+      `The text recognition model ${settings.modelId} is not available`
+    );
+  }
+  if (!(model.supportsImages || model.supportsVision)) {
+    throw new TextRecognitionError(
+      'OCR_UNAVAILABLE',
+      `The text recognition model ${settings.modelId} cannot read images`
+    );
+  }
+  const { resolveModelApiKey } = await heavyParts();
+  const resolution = await resolveModelApiKey(model.id);
+  if (resolution.state !== 'ok' && resolution.state !== 'keyless') {
+    throw new TextRecognitionError(
+      'OCR_UNAVAILABLE',
+      `The text recognition model ${settings.modelId} has no usable API key`
+    );
+  }
+  // A keyless model is an explicit decision: '' sends no Authorization header.
+  return { model, apiKey: resolution.state === 'keyless' ? '' : resolution.apiKey };
+}
+
+/**
+ * The status of a failed engine call, when it has one: a 4xx is a refusal of
+ * the request itself (a bad key, a type the engine does not read), which no
+ * other page would get past.
+ */
+function refusalStatusOf(error) {
+  const status = Number(error?.status ?? error?.statusCode);
+  return Number.isInteger(status) && status >= 400 && status < 500 ? status : null;
+}
+
+/** A page whose recognition failed for a reason that may not hit the next page. */
+function failedPage(pageNum, error, engineLabel) {
+  logger.warn('Text recognition failed for a page', {
+    component: COMPONENT,
+    engine: engineLabel,
+    page: pageNum,
+    error: error?.message
+  });
+  return { text: '', failed: true };
+}
+
+/** The vision-model engine. */
+async function modelEngine(settings) {
+  const { model, apiKey } = await resolveOcrModel(settings);
+  const { extractTextFromPageImage, DEFAULT_OCR_PROMPT } = await heavyParts();
+  return {
+    label: `model ${model.id}`,
+    record: { modelId: model.id },
+    auditId: model.id,
+    /** Recognize one page image; a refusal by the model (4xx) stops the document. */
+    async recognize(base64, mimeType, { pageNum }) {
+      try {
+        const text = await extractTextFromPageImage(
+          base64,
+          model,
+          apiKey,
+          pageNum,
+          DEFAULT_OCR_PROMPT,
+          mimeType
+        );
+        return { text: String(text || '').trim() };
+      } catch (error) {
+        const status = refusalStatusOf(error);
+        if (status) {
+          throw new TextRecognitionError(
+            'OCR_FAILED',
+            `The text recognition model refused the request (${status})`
+          );
+        }
+        return failedPage(pageNum, error, model.id);
+      }
+    }
+  };
+}
+
+/**
+ * The text an OCR integration's `recognize` action answered: a string, or an
+ * object with `text` (a string) or `pages` (a list of `{ text }`). A tool
+ * error (`{ error: true, message, status? }`) is thrown with its status.
+ *
+ * @param {*} result
+ * @returns {string}
+ */
+export function recognizedTextOf(result) {
+  if (typeof result === 'string') return result.trim();
+  if (result && typeof result === 'object') {
+    if (result.error === true || typeof result.error === 'string') {
+      const error = new Error(
+        String(
+          result.message || (typeof result.error === 'string' ? result.error : '') || 'failed'
+        ).slice(0, 500)
+      );
+      if (result.status !== undefined) error.status = result.status;
+      throw error;
+    }
+    if (typeof result.text === 'string') return result.text.trim();
+    if (Array.isArray(result.pages)) {
+      return result.pages
+        .map(page => (typeof page === 'string' ? page : page?.text))
+        .filter(text => typeof text === 'string' && text.trim())
+        .map(text => text.trim())
+        .join('\n\n');
+    }
+  }
+  throw new Error('The OCR integration answered without a text');
+}
+
+/**
+ * The OCR integration engine: the installation's `recognize` action, called
+ * through its protocol adapter. The admin picked it for the whole
+ * installation, so it runs for every user, whatever their integration grants.
+ */
+async function integrationEngine(settings) {
+  const { installedIntegrationService, getProtocolAdapter, recordActionEvent } = await heavyParts();
+  const id = settings.integrationId;
+  const resolved = await installedIntegrationService.resolve(id, 'en');
+  const unavailable = reason =>
+    new TextRecognitionError('OCR_UNAVAILABLE', `The text recognition integration ${id} ${reason}`);
+  if (!resolved) throw unavailable('is not installed');
+  if (!resolved.definition) throw unavailable('has no definition');
+  if (resolved.definition.type !== OCR_INTEGRATION_TYPE) {
+    throw unavailable('is not an OCR integration');
+  }
+  if (resolved.incompatible || resolved.blocked) {
+    throw unavailable(
+      `cannot run: ${resolved.statusReason || resolved.migration?.statusReason || 'see Admin → Integrations'}`
+    );
+  }
+  if (resolved.instance.enabled === false) throw unavailable('is switched off');
+  const action = resolved.definition.actions.find(entry => entry.name === OCR_RECOGNIZE_ACTION);
+  if (!action) throw unavailable(`has no ${OCR_RECOGNIZE_ACTION} action`);
+  const adapter = getProtocolAdapter(resolved.definition.protocol.type);
+  return {
+    label: `integration ${id}`,
+    record: { integrationId: id },
+    auditId: id,
+    /** Recognize one image; a refusal by the engine (4xx) stops the document. */
+    async recognize(base64, mimeType, { pageNum, name, user }) {
+      recordActionEvent(id, OCR_RECOGNIZE_ACTION, 'call');
+      try {
+        const result = await adapter.run({
+          definition: resolved.definition,
+          instance: resolved.instance,
+          document: resolved.document,
+          security: resolved.security,
+          action,
+          args: { content: base64, mimeType, ...(name ? { name: String(name) } : {}) },
+          context: { user, params: { user } }
+        });
+        return { text: recognizedTextOf(result) };
+      } catch (error) {
+        recordActionEvent(id, OCR_RECOGNIZE_ACTION, 'error');
+        const status = refusalStatusOf(error);
+        if (status) {
+          throw new TextRecognitionError(
+            'OCR_FAILED',
+            `The text recognition integration ${id} refused the request (${status}): ${String(
+              error?.message || ''
+            ).slice(0, 300)}`
+          );
+        }
+        return failedPage(pageNum, error, id);
+      }
+    }
+  };
+}
+
+/**
+ * The engine of these settings, decided once per document.
+ * @throws {TextRecognitionError} `OCR_UNAVAILABLE`
+ */
+async function resolveEngine(settings) {
+  return settings.integrationId ? integrationEngine(settings) : modelEngine(settings);
+}
+
+async function audit({ user, name, engine, pages }) {
+  const { logAudit } = await heavyParts();
+  logAudit({
+    actor: user || undefined,
+    action: 'execute',
+    resource: 'textRecognition',
+    resourceId: engine.auditId,
+    summary: `Recognized the text of ${pages} page${pages === 1 ? '' : 's'} of "${String(
+      name || 'a file'
+    ).slice(0, 200)}" with ${engine.label}`
+  });
+}
+
+/**
+ * Recognize the text of an image.
+ *
+ * @param {Buffer} bytes
+ * @param {string} mimeType - One of {@link OCR_IMAGE_TYPES}.
+ * @param {Object} [options]
+ * @param {Object} [options.platform]
+ * @param {Object} [options.user] - Who uploaded it (audit).
+ * @param {string} [options.name]
+ * @returns {Promise<{text: string, recognition: {modelId?: string, integrationId?: string, pages: number, at: string}}>}
+ * @throws {TextRecognitionError}
+ */
+export async function recognizeImage(bytes, mimeType, { platform, user, name } = {}) {
+  const settings = ocrSettings(platform);
+  if (!isRecognizableImage(mimeType, settings)) {
+    throw new TextRecognitionError('OCR_UNAVAILABLE', `Images of type ${mimeType} cannot be read`);
+  }
+  const engine = await resolveEngine(settings);
+  const { text, failed } = await engine.recognize(bytes.toString('base64'), mimeType, {
+    pageNum: 1,
+    name,
+    user
+  });
+  if (failed)
+    throw new TextRecognitionError('OCR_FAILED', 'The text of the image could not be recognized');
+  if (!text) throw new TextRecognitionError('OCR_NO_TEXT', 'No text was found in the image');
+  await audit({ user, name, engine, pages: 1 });
+  return { text, recognition: { ...engine.record, pages: 1, at: new Date().toISOString() } };
+}
+
+/**
+ * The pages an extracted PDF text marks as having no extractable text.
+ *
+ * @param {string} extractedText
+ * @returns {number[]}
+ */
+export function pagesWithoutText(extractedText) {
+  const pages = [];
+  for (const line of String(extractedText || '').split('\n')) {
+    const match = NO_TEXT_PAGE.exec(line.trim());
+    if (match) pages.push(Number(match[1]));
+  }
+  return pages;
+}
+
+/**
+ * The numbers of every page an extracted PDF text marks, with or without text.
+ *
+ * @param {string} extractedText
+ * @returns {number[]}
+ */
+export function pageNumbersOf(extractedText) {
+  const pages = [];
+  for (const line of String(extractedText || '').split('\n')) {
+    const match = PAGE_MARKER.exec(line.trim());
+    if (match) pages.push(Number(match[1]));
+  }
+  return pages;
+}
+
+/**
+ * Put recognized page texts in place of the pages they were read from: a
+ * page without text gets `[Page N]` and its recognized text in place of its
+ * marker; a page with text keeps its marker line and gets the recognized text
+ * in place of its extracted lines (the engine read the whole page: its text
+ * and what its pictures and drawings show). A page not in `recognized` stays
+ * as it was.
+ *
+ * @param {string} extractedText
+ * @param {Map<number, string>} recognized - Page number → text.
+ * @returns {string}
+ */
+export function mergeRecognizedPages(extractedText, recognized) {
+  const out = [];
+  let skipping = false;
+  for (const line of String(extractedText || '').split('\n')) {
+    const match = PAGE_MARKER.exec(line.trim());
+    if (match) {
+      const text = recognized.get(Number(match[1]));
+      skipping = Boolean(text);
+      if (!text) out.push(line);
+      else if (NO_TEXT_PAGE.test(line.trim())) out.push(`[Page ${match[1]}]`, text, '');
+      else out.push(line.trim(), text, '');
+      continue;
+    }
+    if (!skipping) out.push(line);
+  }
+  return out
+    .join('\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+}
+
+/** The text of recognized pages alone, for a PDF without any text layer. */
+function recognizedPagesText(numPages, recognized) {
+  const blocks = [];
+  for (let page = 1; page <= numPages; page += 1) {
+    const text = recognized.get(page);
+    blocks.push(text ? `[Page ${page}]\n${text}` : `[Page ${page}: no extractable text]`);
+  }
+  return blocks.join('\n\n');
+}
+
+/**
+ * Recognize the pages of a PDF that have no text.
+ *
+ * With `extractedText` (the PDF's text as extracted, with its page markers;
+ * the extraction passes it only for a PDF that has text elsewhere), the pages
+ * it marks as having no extractable text are recognized and their text is put
+ * in place of the markers; a PDF with no such page is returned as `null`
+ * (nothing to do). That recognition is best effort: when it cannot run or
+ * reads nothing (a blank page, an engine that is down), the document keeps
+ * its extracted text and its markers (`null`), as without recognition.
+ * Without `extractedText` (no text layer at all), every page is recognized,
+ * and a failure fails the document.
+ *
+ * The pages are rendered in the extraction pool's threads, a few at a time,
+ * and sent to the engine as they come; after a refusal (4xx) no further page
+ * is rendered or sent.
+ *
+ * @param {Buffer} bytes
+ * @param {Object} [options]
+ * @param {string|null} [options.extractedText]
+ * @param {Object} [options.platform]
+ * @param {Object} [options.user]
+ * @param {string} [options.name]
+ * @returns {Promise<{text: string, recognition: {modelId?: string, integrationId?: string, pages: number, truncated?: boolean, failedPages?: number, at: string}}|null>}
+ * @throws {TextRecognitionError}
+ */
+export async function recognizeScannedPdf(
+  bytes,
+  { extractedText = null, platform, user, name } = {}
+) {
+  if (typeof extractedText !== 'string' || !extractedText) {
+    return recognizePdfPages(bytes, { wanted: null, extractedText: null, platform, user, name });
+  }
+  const wanted = await pagesToRecognize(bytes, extractedText, ocrSettings(platform));
+  if (wanted.length === 0) return null;
+  try {
+    return await recognizePdfPages(bytes, { wanted, extractedText, platform, user, name });
+  } catch (error) {
+    logger.warn('Text recognition of the pages without text failed; the extracted text is kept', {
+      component: COMPONENT,
+      code: error?.code,
+      error: error?.message
+    });
+    return null;
+  }
+}
+
+/**
+ * The pages of a PDF with a text layer to recognize, per `settings.pages`:
+ * the pages without text first, then the pages with text that the selection
+ * adds (`smart`: pictures or drawings covering at least `minFigurePercent` of
+ * the page; `all`: every one), each in page order. When the figure analysis
+ * fails, `smart` falls back to the pages without text.
+ *
+ * @param {Buffer} bytes
+ * @param {string} extractedText
+ * @param {{pages: string, minFigurePercent: number}} settings
+ * @returns {Promise<number[]>}
+ */
+async function pagesToRecognize(bytes, extractedText, settings) {
+  const scanned = pagesWithoutText(extractedText);
+  if (settings.pages === 'scanned') return scanned;
+  const withText = pageNumbersOf(extractedText).filter(page => !scanned.includes(page));
+  if (settings.pages === 'all') return [...scanned, ...withText];
+  if (withText.length === 0) return scanned;
+  try {
+    const { analyzePdfPageFigures } = await heavyParts();
+    const { pages } = await analyzePdfPageFigures(bytes);
+    const figures = new Set(
+      pages.filter(entry => entry.figurePercent >= settings.minFigurePercent).map(e => e.page)
+    );
+    return [...scanned, ...withText.filter(page => figures.has(page))];
+  } catch (error) {
+    logger.warn('The pages of a PDF could not be analyzed for pictures and drawings', {
+      component: COMPONENT,
+      error: error?.message
+    });
+    return scanned;
+  }
+}
+
+/** The page numbers of the next batch to render, or an empty list when done. */
+function nextBatch(state, maxPages) {
+  if (state.queue) return state.queue.splice(0, PAGE_CONCURRENCY);
+  const limit = state.numPages ? Math.min(state.numPages, maxPages) : maxPages;
+  const batch = [];
+  while (batch.length < PAGE_CONCURRENCY && state.next <= limit) {
+    batch.push(state.next);
+    state.next += 1;
+  }
+  return batch;
+}
+
+/**
+ * Render and recognize pages batch by batch: `wanted` names them, or `null`
+ * means every page of the document (its count known after the first batch).
+ */
+async function recognizePdfPages(bytes, { wanted, extractedText, platform, user, name }) {
+  const settings = ocrSettings(platform);
+  const engine = await resolveEngine(settings);
+  const { renderPdfPagesForRecognition } = await heavyParts();
+  const state = { queue: wanted ? wanted.slice(0, settings.maxPages) : null, next: 1, numPages: 0 };
+  const recognized = new Map();
+  let failures = 0;
+  for (let batch = nextBatch(state, settings.maxPages); batch.length > 0;) {
+    let rendered;
+    try {
+      rendered = await renderPdfPagesForRecognition(bytes, batch);
+    } catch (error) {
+      logger.warn('Pages could not be rendered for text recognition', {
+        component: COMPONENT,
+        pages: batch,
+        error: error?.message
+      });
+      failures += batch.length;
+      // Without a page count there is no telling where the document ends.
+      if (!state.numPages) break;
+      batch = nextBatch(state, settings.maxPages);
+      continue;
+    }
+    state.numPages = rendered.pages;
+    // A refusal (TextRecognitionError) rejects here and ends the loop: no
+    // further batch is rendered or sent.
+    await Promise.all(
+      rendered.images.map(async ({ page, base64 }) => {
+        const result = await engine.recognize(base64, 'image/png', { pageNum: page, name, user });
+        if (result.failed) failures += 1;
+        else if (result.text) recognized.set(page, result.text);
+      })
+    );
+    batch = nextBatch(state, settings.maxPages);
+  }
+  if (recognized.size === 0) {
+    throw new TextRecognitionError(
+      failures > 0 ? 'OCR_FAILED' : 'OCR_NO_TEXT',
+      failures > 0
+        ? 'The text of the scanned pages could not be recognized'
+        : 'No text was found on the scanned pages'
+    );
+  }
+  await audit({ user, name, engine, pages: recognized.size });
+  const truncated = wanted ? wanted.length > settings.maxPages : state.numPages > settings.maxPages;
+  const text = extractedText
+    ? mergeRecognizedPages(extractedText, recognized)
+    : recognizedPagesText(state.numPages, recognized);
+  return {
+    text,
+    recognition: {
+      ...engine.record,
+      pages: recognized.size,
+      ...(truncated ? { truncated: true } : {}),
+      ...(failures > 0 ? { failedPages: failures } : {}),
+      at: new Date().toISOString()
+    }
+  };
+}

@@ -58,8 +58,9 @@ const isEnabled = item => item.enabled !== false;
 function hasOwnPanel(item) {
   if (item.id === IASSISTANT_INSTANCE_ID || item.id === IFINDER_INSTANCE_ID) return true;
   // Web search engines are picked in the web search panel; storage providers
-  // have their own card (they bring files, no model actions).
-  return item.type === 'web-search' || item.type === 'storage';
+  // have their own card (they bring files, no model actions); OCR engines are
+  // picked once for the installation (Admin → Chat history), never per app.
+  return item.type === 'web-search' || item.type === 'storage' || item.type === 'ocr';
 }
 
 /**

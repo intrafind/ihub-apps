@@ -1,0 +1,125 @@
+{
+  "id": "com.intrafind/ifinder-ocr",
+  "version": "1.0.0",
+  "compatibility": {
+    "ihub": ">=5.6.0"
+  },
+  "releases": [
+    {
+      "version": "1.0.0",
+      "date": "2026-11-26",
+      "summary": {
+        "en": "First version: text recognition of uploaded images and scanned PDF pages through the iFinder OCR service (Tesseract), installed as ifinder-ocr.",
+        "de": "Erste Version: Texterkennung hochgeladener Bilder und gescannter PDF-Seiten über den iFinder-OCR-Dienst (Tesseract), installiert als ifinder-ocr."
+      },
+      "notes": {
+        "features": "releases/1.0.0/features.md"
+      }
+    }
+  ],
+  "name": {
+    "en": "iFinder OCR service",
+    "de": "iFinder-OCR-Dienst"
+  },
+  "description": {
+    "en": "Recognize the text of uploaded images and scanned PDF pages with the OCR service of iFinder (if-ocr, Tesseract), instead of a vision model. The pages stay on your own servers. Pick it as the engine under Admin → Chat history → Text recognition once it is installed.",
+    "de": "Den Text hochgeladener Bilder und gescannter PDF-Seiten mit dem OCR-Dienst von iFinder (if-ocr, Tesseract) erkennen statt mit einem Vision-Modell. Die Seiten bleiben auf Ihren eigenen Servern. Nach der Installation unter Admin → Chatverlauf → Texterkennung als Engine wählen."
+  },
+  "publisher": {
+    "name": "IntraFind Software AG",
+    "verification": "intrafind"
+  },
+  "categories": ["ocr", "documents"],
+  "type": "ocr",
+  "docsUrl": "https://github.com/intrafind/ihub-apps/blob/main/docs/ocr-feature.md#ocr-engines",
+  "builtIn": true,
+  "singleton": {
+    "instanceId": "ifinder-ocr"
+  },
+  "protocol": {
+    "type": "native",
+    "module": "ifinderOcr"
+  },
+  "auth": {
+    "modes": ["none"]
+  },
+  "install": [
+    {
+      "key": "serviceUrl",
+      "type": "url",
+      "required": true,
+      "title": {
+        "en": "Service URL",
+        "de": "Dienst-URL"
+      },
+      "description": {
+        "en": "The address of the OCR service with its API path, e.g. http://if-ocr:9618/ocr-api (the default port is 9618). A URL without a path gets /ocr-api; a trailing /v1/text is removed.",
+        "de": "Die Adresse des OCR-Dienstes mit seinem API-Pfad, z. B. http://if-ocr:9618/ocr-api (der Standardport ist 9618). Eine URL ohne Pfad bekommt /ocr-api; ein angehängtes /v1/text wird entfernt."
+      }
+    },
+    {
+      "key": "authorizationRef",
+      "type": "credential",
+      "credentialTypes": ["secret"],
+      "title": {
+        "en": "Authorization (optional)",
+        "de": "Autorisierung (optional)"
+      },
+      "description": {
+        "en": "The OCR service accepts every request in its default setup. When it is configured for JWT or OAuth2, pick a credential of type secret: it is sent as \"Authorization: Bearer <secret>\"; a secret that starts with \"Basic \" is sent as it is.",
+        "de": "Der OCR-Dienst nimmt in seiner Standardeinrichtung jede Anfrage an. Ist er für JWT oder OAuth2 eingerichtet, einen Zugangsdaten-Eintrag vom Typ Secret wählen: Er wird als „Authorization: Bearer <Secret>“ gesendet; ein Secret, das mit „Basic “ beginnt, unverändert."
+      }
+    },
+    {
+      "key": "timeoutMs",
+      "type": "number",
+      "title": {
+        "en": "Timeout per page (ms)",
+        "de": "Zeitlimit pro Seite (ms)"
+      },
+      "description": {
+        "en": "How long one page or image may take. The service runs two recognitions at a time and queues the rest, so a busy service needs more.",
+        "de": "Wie lange eine Seite oder ein Bild dauern darf. Der Dienst erkennt zwei gleichzeitig und stellt den Rest an, ein ausgelasteter Dienst braucht also mehr."
+      },
+      "default": 120000,
+      "min": 5000,
+      "max": 600000,
+      "advanced": true
+    }
+  ],
+  "capabilities": [],
+  "actions": [
+    {
+      "name": "recognize",
+      "title": {
+        "en": "Recognize text",
+        "de": "Text erkennen"
+      },
+      "description": {
+        "en": "Recognize the text of one image (PNG, JPEG, GIF, BMP or TIFF). iHub calls it for uploaded images and for each scanned PDF page; it is not offered to models as a tool.",
+        "de": "Den Text eines Bildes erkennen (PNG, JPEG, GIF, BMP oder TIFF). iHub ruft die Aktion für hochgeladene Bilder und jede gescannte PDF-Seite auf; Modellen wird sie nicht als Werkzeug angeboten."
+      },
+      "sideEffect": "read",
+      "dataFlow": "internal",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "content": {
+            "type": "string",
+            "description": "The image, base64-encoded."
+          },
+          "mimeType": {
+            "type": "string",
+            "description": "The media type of the image. The service reads these types; iHub sends no other.",
+            "enum": ["image/png", "image/jpeg", "image/gif", "image/bmp", "image/tiff"]
+          },
+          "name": {
+            "type": "string",
+            "description": "The file name, for the log."
+          }
+        },
+        "required": ["content", "mimeType"]
+      }
+    }
+  ]
+}

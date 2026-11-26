@@ -38,9 +38,19 @@ import {
   ExtractionError,
   MAX_IMPORT_TEXT_CHARS,
   MAX_TEXT_CHARS,
+  PDF_MIME,
   extractText,
-  normalizeText
+  normalizeText,
+  sniffBytes
 } from './extractText.js';
+import {
+  TextRecognitionError,
+  ocrSettings,
+  pagesWithoutText,
+  recognizableImageTypeOf,
+  recognizeImage,
+  recognizeScannedPdf
+} from '../ocr/textRecognition.js';
 import {
   storeOriginal,
   storeText,
@@ -228,7 +238,8 @@ function errorOf(error) {
   if (
     error instanceof ProjectError ||
     error instanceof ExtractionError ||
-    error instanceof KnowledgeError
+    error instanceof KnowledgeError ||
+    error instanceof TextRecognitionError
   ) {
     return { code: error.code, message: error.message };
   }
@@ -688,6 +699,11 @@ export class ProjectIngestService {
       //    while few are converted.
       const maxChars = input.purpose === 'import' ? MAX_IMPORT_TEXT_CHARS : MAX_TEXT_CHARS;
       let extracted = null;
+      // Text recognition (#3986): an image, or the pages of a PDF without a text
+      // layer, read by the OCR model. Decided under the conversion slot, run
+      // after it: the model calls must not hold up other conversions.
+      const ocr = ocrSettings(this._platform());
+      let recognize = null;
       const releaseConvert = await this._acquireConvert(job);
       try {
         // The wait for the slot counts towards the reconciler's budget too (see
@@ -730,18 +746,73 @@ export class ProjectIngestService {
             ...infoFromText(normalized.text)
           };
           if (!extracted.text) throw new ExtractionError('NO_TEXT', 'The text is empty');
+        } else if (ocr.enabled && recognizableImageTypeOf(bytes, ocr)) {
+          recognize = { image: recognizableImageTypeOf(bytes, ocr) };
         } else {
           const started = Date.now();
-          extracted = await extractText({ bytes, contentType, name }, { maxChars });
-          logger.debug('Extracted a project item', {
-            ...where,
-            contentType: extracted.contentType,
-            chars: extracted.text.length,
-            ms: Date.now() - started
-          });
+          try {
+            extracted = await extractText({ bytes, contentType, name }, { maxChars });
+          } catch (error) {
+            // A PDF without a text layer: every page is recognized.
+            if (
+              !ocr.enabled ||
+              !(error instanceof ExtractionError) ||
+              error.code !== 'NO_TEXT' ||
+              sniffBytes(bytes) !== 'pdf'
+            ) {
+              throw error;
+            }
+            recognize = { pdf: true, extractedText: null };
+          }
+          if (
+            extracted &&
+            ocr.enabled &&
+            extracted.contentType === PDF_MIME &&
+            (ocr.pages !== 'scanned' || pagesWithoutText(extracted.text).length > 0)
+          ) {
+            // Pages without text, and per `ocr.pages` pages with large
+            // pictures or drawings (or all), are recognized; the rest is kept.
+            recognize = { pdf: true, extractedText: extracted.text };
+          }
+          if (extracted) {
+            logger.debug('Extracted a project item', {
+              ...where,
+              contentType: extracted.contentType,
+              chars: extracted.text.length,
+              ms: Date.now() - started
+            });
+          }
         }
       } finally {
         releaseConvert();
+      }
+
+      if (recognize) {
+        const started = Date.now();
+        const context = { platform: this._platform(), user: job.user, name };
+        const result = recognize.image
+          ? await recognizeImage(bytes, recognize.image, context)
+          : await recognizeScannedPdf(bytes, {
+              ...context,
+              extractedText: recognize.extractedText
+            });
+        if (result) {
+          const normalized = normalizeText(result.text, { maxChars });
+          extracted = {
+            ...(extracted || {}),
+            text: normalized.text,
+            contentType: recognize.image || PDF_MIME,
+            truncated: Boolean(extracted?.truncated) || normalized.truncated,
+            recognition: result.recognition,
+            ...(extracted ? {} : infoFromText(normalized.text))
+          };
+          if (!extracted.text) throw new ExtractionError('NO_TEXT', 'No text was recognized');
+        }
+        logger.debug('Recognized the text of a project item', {
+          ...where,
+          pages: result?.recognition?.pages || 0,
+          ms: Date.now() - started
+        });
       }
 
       // 4b. The same text as stored (#3622): a page whose HTML changes on
@@ -788,6 +859,7 @@ export class ProjectIngestService {
         text: extracted.text,
         original: { contentType: extracted.contentType, bytes: size, pages: extracted.pages },
         truncated: extracted.truncated,
+        recognition: extracted.recognition || null,
         platform: this._platform(),
         repository: this.repository
       });

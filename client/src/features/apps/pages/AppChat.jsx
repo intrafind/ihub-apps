@@ -3074,7 +3074,11 @@ function AppChat({
       // only: all of them have to know that an attachment is being processed
       isAttachmentProcessing: fileUploadHandler.isAttachmentProcessing,
       onAttachmentProcessingChange: fileUploadHandler.setAttachmentProcessing,
-      uploadConfig: fileUploadHandler.createUploadConfig(app, currentModel),
+      // An image goes to the server for text recognition where the app's chats use it (#3986)
+      uploadConfig: fileUploadHandler.createUploadConfig(app, currentModel, {
+        recognizeImages: chatFileUploads.recognizesImages,
+        recognizedImageTypes: chatFileUploads.recognizedImageTypes
+      }),
       // While recording, Send stops the recording and sends it — with or
       // without anything typed.
       allowEmptySubmit:
@@ -3213,7 +3217,11 @@ function AppChat({
             onMessageChange={setInput}
             uploadConfig={fileUploadHandler.createUploadConfig(
               app,
-              models.find(m => m.id === selectedModel)
+              models.find(m => m.id === selectedModel),
+              {
+                recognizeImages: chatFileUploads.recognizesImages,
+                recognizedImageTypes: chatFileUploads.recognizedImageTypes
+              }
             )}
             selectedFile={fileUploadHandler.selectedFile}
             onFileSelect={chatFileUploads.handleFileSelect}

@@ -1,0 +1,29 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
+/**
+ * Text recognition at upload (#3986): `platform.ocr` (the engine that reads
+ * images and scanned PDF pages: `model`, the vision model `modelId`, or an
+ * installed OCR integration; the most pages per document; which pages of a
+ * PDF with text are read: `smart`, also those with large pictures or drawings) and the chat
+ * opt-in `platform.uploads.recognizeText`. The engine is the model and no
+ * model is set, so nothing changes until an administrator picks one.
+ */
+export const version = '266';
+export const description = 'add_text_recognition_settings';
+
+export async function precondition(ctx) {
+  return await ctx.fileExists('config/platform.json');
+}
+
+export async function up(ctx) {
+  const config = await ctx.readJson('config/platform.json');
+  ctx.setDefault(config, 'ocr.engine', 'model');
+  ctx.setDefault(config, 'ocr.modelId', null);
+  ctx.setDefault(config, 'ocr.maxPages', 50);
+  ctx.setDefault(config, 'ocr.pages', 'smart');
+  ctx.setDefault(config, 'ocr.minFigurePercent', 20);
+  ctx.setDefault(config, 'uploads.recognizeText', false);
+  await ctx.writeJson('config/platform.json', config);
+  ctx.log('Added platform.ocr (model engine, no model) and uploads.recognizeText (off)');
+}

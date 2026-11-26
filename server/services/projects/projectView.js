@@ -87,6 +87,7 @@ export function serializeItem(item, project = null, settings = null) {
           sha256: text.sha256,
           extractedAt: text.extractedAt,
           truncated: text.truncated === true,
+          ...(text.recognized ? { recognized: text.recognized } : {}),
           original: text.original || null
         }
       : null

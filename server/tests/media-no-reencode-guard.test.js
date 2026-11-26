@@ -23,7 +23,8 @@ const FORBIDDEN =
 const PNGJS = /['"]pngjs['"]/;
 const PNGJS_ALLOWED = [
   'services/documents/pdf/PdfService.js',
-  'routes/toolsService/processors/ocrProcessor.js'
+  // PDF page rendering for OCR (the OCR tool and text recognition at upload).
+  'services/ocr/pageRecognition.js'
 ];
 
 function* sources(dir) {

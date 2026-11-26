@@ -27,6 +27,7 @@ needs no code in any of them.
 | An SDK, several calls per answer, or a per-user sign-in | A **script** integration: a definition folder with a connector module (a tool file `contents/tools/<id>.json` with `server/tools/<script>.js` still loads for developers) | JavaScript | [Integrations](integrations.md#writing-a-definition), [Tool Calling](tool-calling.md), this guide |
 | A service that answers like a model (iAssistant) | A model adapter | JavaScript | [LLM Client](llm-client.md) |
 | A web search engine for apps with web search on | An integration definition of `"type": "web-search"` with one action `search` | none (`openapi`) or one connector file (`script`) | [Web search engines](#web-search-engines) below, [Integrations](integrations.md) |
+| An OCR service to read uploaded images and scanned pages | An integration definition of `"type": "ocr"` with one action `recognize` | usually one connector file (`script`) | [OCR engines](#ocr-engines) below, [OCR](ocr-feature.md#ocr-engines) |
 
 Whatever you build, the user's view of what it found is the same. The rest of this guide is about
 that view.
@@ -365,6 +366,55 @@ one bundled file and runs in the server process, so a registry may deliver it on
 trusts the registry for code (see [Integrations → Code-based integrations](integrations.md#code-based-integrations-script)).
 An outbound request from a connector must honour the platform's TLS and proxy settings as any
 other. A full example connector is in [Web Tools → Writing your own engine](web-tools.md#writing-your-own-engine).
+
+## OCR engines
+
+Text recognition at upload ([Projects → Images and scanned PDFs](projects.md#images-and-scanned-pdfs))
+reads with one engine for the installation: a vision model, or an installed integration of type
+`ocr` that the admin picks under **Admin → Chat history → Uploaded files → Text recognition →
+Engine** (`platform.ocr.engine`). iHub ships the iFinder OCR service as one
+([OCR → OCR engines](ocr-feature.md#ocr-engines)); yours sits next to it under **Admin →
+Integrations → Text recognition**.
+
+The contract:
+
+| Part | Rule |
+|---|---|
+| Definition | `"type": "ocr"`, a `native`, `script`, `openapi` or `http` protocol (not `mcp` or `a2a`); any install fields you need |
+| Action | one action named **`recognize`**, which the definition schema requires. It is no tool: a model never sees it and no app binds it |
+| Arguments | **`content`**: one image, base64-encoded; **`mimeType`**: its type (`image/png`, `image/jpeg`, `image/gif`, `image/webp`); **`name`**: the file name, when known. An engine that reads only some of these types declares them as the `enum` of `mimeType` in the action's `parameters`; iHub then accepts only those images while the engine is in use (the iFinder OCR service declares no WebP). A PDF page arrives as a PNG: iHub renders the pages it reads (those without a text layer, and per `platform.ocr.pages` those with large pictures or drawings, or all) and sends one image per call, up to three calls at once and at most `platform.ocr.maxPages` pages per document |
+| Result | the text as a string, or `{ text }`, or `{ pages: [{ text }] }` (joined with blank lines). An empty text means "no text on this image" |
+| Errors | throw, or return `{ error: true, status?, message }`. A 4xx `status` is a refusal of the request (a bad key, a type the service does not read): no further page is sent, and the document fails with `OCR_FAILED`. Any other failure fails that page only (`failedPages`); the document fails when no page was read. In a PDF that has text elsewhere, a failure never fails the document: it keeps its text and the "no extractable text" markers |
+| Access | runs while the installation is enabled, for every user who uploads (the admin chose it for the installation), whatever the groups grant |
+| Test | the connector's `test` (or the definition's `health` action) should send a small image |
+
+The shape of a `script` connector (`protocol: { "type": "script", "module": "connector.js" }`):
+
+```js
+export default {
+  id: 'example-ocr',
+  actions: {
+    recognize: {
+      async run({ content, mimeType }, ctx) {
+        const image = Buffer.from(content, 'base64');
+        // Send `image` to your service; `ctx.values` holds the install values.
+        const text = await recognizeWithYourService(image, mimeType, ctx.values);
+        return { text };
+      }
+    }
+  },
+  async test({ values }) {
+    // Send a small blank image; return the steps of the test.
+    return [{ id: 'service', label: 'Service', status: 'ok', message: values.serviceUrl }];
+  }
+};
+```
+
+The connector is one bundled file that runs in the server process (see
+[Integrations → Code-based integrations](integrations.md#code-based-integrations-script)), and an
+outbound request from it must honour the platform's TLS, proxy and SSRF settings like any other.
+The built-in iFinder connector (`server/services/integrations/protocols/native/connectors/ifinderOcr/`)
+is a complete example: an SSRF-checked, pinned `httpFetch` with no redirects followed.
 
 ## Checklist
 

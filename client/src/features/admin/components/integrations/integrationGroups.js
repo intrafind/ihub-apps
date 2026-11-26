@@ -14,6 +14,7 @@
  * | People directories  | `type: "people-directory"`         |
  * | Web search          | `type: "web-search"`               |
  * | Storage providers   | `type: "storage"`                  |
+ * | Text recognition    | `type: "ocr"`                      |
  * | MCP servers         | `protocol: "mcp"`                  |
  * | Agents              | `protocol: "a2a"`                  |
  * | Custom              | definition `custom/<id>` (builder) |
@@ -65,6 +66,16 @@ export const INTEGRATION_GROUPS = Object.freeze([
       'Cloud storage users browse and attach files from in the chat and in projects.',
     icon: 'cloud',
     accent: 'bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300'
+  },
+  {
+    id: 'ocr',
+    titleKey: 'admin.integrations.groups.ocr.title',
+    titleDefault: 'Text recognition',
+    descriptionKey: 'admin.integrations.groups.ocr.description',
+    descriptionDefault:
+      'OCR services that read uploaded images and scanned PDF pages; pick one under Chat history → Text recognition.',
+    icon: 'document-text',
+    accent: 'bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300'
   },
   {
     id: 'mcp',
@@ -119,7 +130,8 @@ export const INTEGRATION_GROUPS = Object.freeze([
 const GROUP_BY_TYPE = Object.freeze({
   'people-directory': 'people-directories',
   'web-search': 'web-search',
-  storage: 'storage'
+  storage: 'storage',
+  ocr: 'ocr'
 });
 
 /** Group ids by protocol. */

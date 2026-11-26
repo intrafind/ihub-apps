@@ -14,6 +14,7 @@ import {
   saveAttachmentFile,
   saveAttachmentText
 } from '../utils/attachmentContent';
+import { recognitionOf, recognitionTitle } from '../utils/textRecognition';
 
 // Auto-collapse the list by default once it reaches this many files. Below the
 // threshold the list stays fully expanded with no collapse chrome — a 1-3 file
@@ -23,11 +24,57 @@ import {
 const AUTO_COLLAPSE_THRESHOLD = 4;
 
 /**
- * Why a file could not be saved to the chat. It is still sent with the
- * message, so this is a hint, not a stop.
+ * Why the server could not recognize the text of an image (#3986). Such an image holds no text
+ * the model could read, so unlike other files it is not sent with the message.
  */
-function uploadErrorText(code, t) {
+function recognitionErrorText(code, t) {
   switch (code) {
+    case 'OCR_UNAVAILABLE':
+      return t(
+        'attachedFiles.errors.recognition.unavailable',
+        'Text recognition is not available right now; this image is not sent'
+      );
+    case 'OCR_FAILED':
+      return t(
+        'attachedFiles.errors.recognition.failed',
+        'The text of this image could not be recognized; it is not sent. Please try again later'
+      );
+    case 'OCR_NO_TEXT':
+      return t(
+        'attachedFiles.errors.recognition.noText',
+        'No text was found in this image; it is not sent'
+      );
+    default:
+      return t(
+        'attachedFiles.errors.recognition.notSaved',
+        'Could not be saved to the chat, so its text was not recognized; this image is not sent'
+      );
+  }
+}
+
+/**
+ * Why a file could not be saved to the chat. It is still sent with the
+ * message, so this is a hint, not a stop — except for an image whose text the
+ * server was to recognize, which has nothing else to send.
+ */
+function uploadErrorText(code, t, file) {
+  if (file?.recognizeOnUpload === true) return recognitionErrorText(code, t);
+  switch (code) {
+    case 'OCR_UNAVAILABLE':
+      return t(
+        'attachedFiles.errors.ocrUnavailable',
+        'Text recognition is not available right now; the file is sent with the message only'
+      );
+    case 'OCR_FAILED':
+      return t(
+        'attachedFiles.errors.ocrFailed',
+        'The text of the scanned pages could not be recognized; the file is sent with the message only'
+      );
+    case 'OCR_NO_TEXT':
+      return t(
+        'attachedFiles.errors.ocrNoText',
+        'No text was found on the scanned pages; the file is sent with the message only'
+      );
     case 'QUOTA_CHAT_FILES':
     case 'QUOTA_CHAT_BYTES':
       return t(
@@ -318,7 +365,7 @@ export default function AttachedFilesList({
                         className="ml-2 text-amber-700 dark:text-amber-400"
                         data-testid="attached-file-upload-error"
                       >
-                        · {uploadErrorText(file.uploadError, t)}
+                        · {uploadErrorText(file.uploadError, t, file)}
                       </output>
                     )}
                   </div>
@@ -326,6 +373,7 @@ export default function AttachedFilesList({
                     <div
                       className="text-xs text-gray-500 dark:text-gray-400"
                       data-testid="attached-file-content"
+                      title={recognitionTitle(recognitionOf(file), t)}
                     >
                       {contentLineOf(file, t)}
                     </div>

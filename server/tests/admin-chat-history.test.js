@@ -32,6 +32,12 @@ jest.unstable_mockModule('../configCache.js', () => ({
   default: {
     getPlatform: () => state.stored,
     getFeatures: () => state.features,
+    getModels: () => ({
+      data: [
+        { id: 'vision-model', name: { en: 'Vision' }, supportsImages: true },
+        { id: 'text-model', name: { en: 'Text' } }
+      ]
+    }),
     refreshCacheEntry: async () => {}
   }
 }));
@@ -101,6 +107,24 @@ jest.unstable_mockModule('../services/runtime/RunSummaryRepository.js', () => ({
     stats: async () => ({ totalExecutions: 4, totalUsers: 2, byStatus: {}, byKind: {} })
   })
 }));
+
+// The OCR integrations the engine setting may name.
+jest.unstable_mockModule('../services/integrations/InstalledIntegrationService.js', () => {
+  const installed = [
+    { id: 'ifinder-ocr', definition: 'com.intrafind/ifinder-ocr' },
+    { id: 'jira', definition: 'com.intrafind/jira' }
+  ];
+  const types = { 'com.intrafind/ifinder-ocr': 'ocr', 'com.intrafind/jira': undefined };
+  const service = {
+    list: () => installed,
+    resolve: async instance => ({
+      instance,
+      label: instance.id === 'ifinder-ocr' ? 'iFinder OCR service' : instance.id,
+      definition: { id: instance.definition, type: types[instance.definition] }
+    })
+  };
+  return { default: service, installedIntegrationService: service };
+});
 
 const { default: registerAdminChatHistoryRoutes } = await import('../routes/admin/chatHistory.js');
 const { default: errorHandler } = await import('../middleware/errorHandler.js');
@@ -289,6 +313,117 @@ describe('compaction model setting (platform.chats.compaction)', () => {
   });
 });
 
+describe('text recognition settings (platform.ocr)', () => {
+  test('reads no model and the default page limit, and offers the models that read images', async () => {
+    const response = await request(createTestApp()).get('/api/admin/chat-history');
+    expect(response.status).toBe(200);
+    expect(response.body.settings.ocr).toEqual({
+      engine: 'model',
+      modelId: null,
+      maxPages: 50,
+      pages: 'smart',
+      minFigurePercent: 20
+    });
+    expect(response.body.ocrModels.map(model => model.id)).toEqual(['vision-model']);
+    expect(response.body.ocrEngines).toEqual([
+      {
+        id: 'ifinder-ocr',
+        name: 'iFinder OCR service',
+        definition: 'com.intrafind/ifinder-ocr',
+        enabled: true
+      }
+    ]);
+  });
+
+  test('a stored model or engine that went away does not block saving the other settings', async () => {
+    state.stored.ocr = { engine: 'model', modelId: 'text-model', maxPages: 50 };
+    const unchanged = await request(createTestApp())
+      .put('/api/admin/chat-history/settings')
+      .send({
+        ocr: { engine: 'model', modelId: 'text-model', maxPages: 50 },
+        chats: { retentionDays: 30 }
+      });
+    expect(unchanged.status).toBe(200);
+    expect(state.stored.chats.retentionDays).toBe(30);
+
+    state.stored.ocr = { engine: 'uninstalled-ocr', modelId: null, maxPages: 50 };
+    const stale = await request(createTestApp())
+      .put('/api/admin/chat-history/settings')
+      .send({ ocr: { engine: 'uninstalled-ocr', maxPages: 20 } });
+    expect(stale.status).toBe(200);
+    expect(state.stored.ocr.maxPages).toBe(20);
+
+    // A change to a value that cannot work is still refused.
+    const changed = await request(createTestApp())
+      .put('/api/admin/chat-history/settings')
+      .send({ ocr: { engine: 'another-missing-ocr' } });
+    expect(changed.status).toBe(400);
+  });
+
+  test('writes which pages of PDFs with text are read, and refuses an unknown selection', async () => {
+    const saved = await request(createTestApp())
+      .put('/api/admin/chat-history/settings')
+      .send({ ocr: { pages: 'all', minFigurePercent: 35 } });
+    expect(saved.status).toBe(200);
+    expect(state.stored.ocr).toMatchObject({ pages: 'all', minFigurePercent: 35 });
+
+    const unknown = await request(createTestApp())
+      .put('/api/admin/chat-history/settings')
+      .send({ ocr: { pages: 'some' } });
+    expect(unknown.status).toBe(400);
+    const tooMuch = await request(createTestApp())
+      .put('/api/admin/chat-history/settings')
+      .send({ ocr: { minFigurePercent: 150 } });
+    expect(tooMuch.status).toBe(400);
+  });
+
+  test('picks an installed OCR integration as the engine, and refuses any other', async () => {
+    const picked = await request(createTestApp())
+      .put('/api/admin/chat-history/settings')
+      .send({ ocr: { engine: 'ifinder-ocr' } });
+    expect(picked.status).toBe(200);
+    expect(state.stored.ocr.engine).toBe('ifinder-ocr');
+
+    const notOcr = await request(createTestApp())
+      .put('/api/admin/chat-history/settings')
+      .send({ ocr: { engine: 'jira' } });
+    expect(notOcr.status).toBe(400);
+    expect(state.stored.ocr.engine).toBe('ifinder-ocr');
+
+    const back = await request(createTestApp())
+      .put('/api/admin/chat-history/settings')
+      .send({ ocr: { engine: 'model' } });
+    expect(back.status).toBe(200);
+    expect(state.stored.ocr.engine).toBe('model');
+  });
+
+  test('writes the model, the page limit and the chat opt-in', async () => {
+    const response = await request(createTestApp())
+      .put('/api/admin/chat-history/settings')
+      .send({ ocr: { modelId: 'vision-model', maxPages: 20 }, uploads: { recognizeText: true } });
+    expect(response.status).toBe(200);
+    expect(response.body.changed).toEqual(
+      expect.arrayContaining(['ocr.modelId', 'ocr.maxPages', 'uploads.recognizeText'])
+    );
+    expect(state.stored.ocr).toEqual({ modelId: 'vision-model', maxPages: 20 });
+    expect(state.stored.uploads.recognizeText).toBe(true);
+  });
+
+  test('refuses a model that cannot read images, and switches off with an empty id', async () => {
+    const refused = await request(createTestApp())
+      .put('/api/admin/chat-history/settings')
+      .send({ ocr: { modelId: 'text-model' } });
+    expect(refused.status).toBe(400);
+
+    state.stored.ocr = { modelId: 'vision-model' };
+    const off = await request(createTestApp())
+      .put('/api/admin/chat-history/settings')
+      .send({ ocr: { modelId: '' } });
+    expect(off.status).toBe(200);
+    expect(state.stored.ocr.modelId).toBeNull();
+  });
+});
+
 describe('uploaded files settings (platform.uploads)', () => {
   test('reads the effective upload settings with defaults filled in', async () => {
     const response = await request(createTestApp()).get('/api/admin/chat-history');
@@ -299,6 +434,7 @@ describe('uploaded files settings (platform.uploads)', () => {
       storageMode: 'original_and_text',
       originalRetentionDays: 14,
       evictOldestOriginalsOnQuota: true,
+      recognizeText: false,
       quotas: {
         maxFileBytes: 25 * 1024 * 1024,
         maxChatBytes: 100 * 1024 * 1024,

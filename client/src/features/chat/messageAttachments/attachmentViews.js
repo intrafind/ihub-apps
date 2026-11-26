@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
 import { describeAttachment } from '../../upload/utils/attachmentDescription';
+import { recognitionOf } from '../../upload/utils/textRecognition';
 
 /**
  * What a sent message shows of its attachments, as plain data.
@@ -121,16 +122,19 @@ function readOfStored(descriptor, kind) {
   // A picture the server did not send to the model again (a regenerated turn) must not say so
   if (kind === 'image' && descriptor.sentToModel === false) return null;
   if (kind === 'image' || kind === 'audio') return { kind };
-  if (!Number.isFinite(descriptor.textBytes)) return null;
+  // Read by the text recognition model (#3986): said even without the text's size
+  const recognized = recognitionOf(descriptor);
+  if (!Number.isFinite(descriptor.textBytes) && !recognized) return null;
   const pageImages = Math.max(0, Number(descriptor.pageImageCount) || 0);
   return {
     kind: 'document',
     stub: true,
     // The server's `textBytes` counts the page images of a scan too: a scan has no text to size
-    textBytes: pageImages > 0 ? 0 : descriptor.textBytes,
+    textBytes: pageImages > 0 ? 0 : Number(descriptor.textBytes) || 0,
     pageImages,
     truncated: descriptor.truncated === true,
-    originalKept: descriptor.hasOriginal === true
+    originalKept: descriptor.hasOriginal === true,
+    ...(recognized ? { recognized } : {})
   };
 }
 
@@ -165,7 +169,8 @@ function fromStored(descriptor, index) {
   const name = String(descriptor.name || descriptor.fileName || '');
   const rawType = descriptor.fileType || descriptor.mimeType || descriptor.type;
   const mimeType = typeof rawType === 'string' && rawType.includes('/') ? rawType : null;
-  const kind = storedKindOf(rawType);
+  // An image whose text was recognized went to the model as a document, not as a picture
+  const kind = recognitionOf(descriptor) ? 'document' : storedKindOf(rawType);
   const read = readOfStored(descriptor, kind);
   const originalKept = storedOriginalKept(descriptor, kind, read);
   return {

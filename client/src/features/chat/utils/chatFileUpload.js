@@ -116,6 +116,18 @@ export function buildUploadPayload(entry, mode) {
 }
 
 /**
+ * What the server recorded when its text recognition model read a file
+ * (`meta.recognized` of a stored chat file, #3986), or `null`.
+ *
+ * @param {Object} descriptor
+ * @returns {{modelId: string, pages: number, truncated?: boolean, at?: string}|null}
+ */
+function recognizedOf(descriptor) {
+  const recognized = descriptor?.meta?.recognized || descriptor?.recognized;
+  return recognized && typeof recognized === 'object' ? recognized : null;
+}
+
+/**
  * The entry after the server stored it: it now has an id, and keeps what the
  * composer needs to show it.
  *
@@ -138,6 +150,8 @@ export function withStoredFile(entry, descriptor) {
     ...(Number.isFinite(descriptor.pageImageCount)
       ? { pageImageCount: descriptor.pageImageCount }
       : {}),
+    // The text recognition model read the file (#3986): the chip says so
+    ...(recognizedOf(descriptor) ? { recognized: recognizedOf(descriptor) } : {}),
     uploadState: 'done',
     uploadProgress: 100,
     uploadError: undefined

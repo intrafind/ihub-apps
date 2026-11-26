@@ -11,6 +11,7 @@
  * @module services/chatFiles/chatFilePolicy
  */
 import configCache from '../../configCache.js';
+import { chatRecognizesText, ocrSettings } from '../ocr/textRecognition.js';
 
 /**
  * Supported upload storage modes (`platform.uploads.storageMode` and per-app
@@ -227,6 +228,14 @@ export function uploadsClientConfig(platformConfig = {}, { storageAvailable = tr
     enabled: settings.enabled && storageAvailable,
     storageMode: settings.storageMode,
     originalRetentionDays: settings.originalRetentionDays,
-    quotas: settings.quotas
+    quotas: settings.quotas,
+    // Text recognition (#3986): whether an OCR engine is ready, whether chat
+    // uploads use it (an app's `uploads.recognizeText` overrides the latter),
+    // and the image types the engine reads.
+    textRecognition: {
+      available: ocrSettings(platformConfig).enabled,
+      chats: chatRecognizesText(platformConfig, null),
+      imageTypes: ocrSettings(platformConfig).imageTypes
+    }
   };
 }

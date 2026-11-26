@@ -24,7 +24,12 @@
  */
 
 /** The known types, in the order the admin lists their groups. */
-export const INTEGRATION_TYPES = Object.freeze(['people-directory', 'web-search', 'storage']);
+export const INTEGRATION_TYPES = Object.freeze([
+  'people-directory',
+  'web-search',
+  'storage',
+  'ocr'
+]);
 
 /** Prefix of an `app.integrations` key that binds every installation of a type. */
 export const TYPE_BINDING_PREFIX = 'type:';
@@ -56,11 +61,48 @@ let loadedDefinitionTypes = Object.freeze({});
  */
 export function publishDefinitionTypes(entries) {
   const types = {};
+  const ocrImageTypes = {};
   for (const entry of entries) {
     const definition = entry?.definition;
     if (definition?.id && definition.type) types[definition.id] = definition.type;
+    if (definition?.id && definition.type === 'ocr') {
+      const declared = declaredOcrImageTypes(definition);
+      if (declared) ocrImageTypes[definition.id] = declared;
+    }
   }
   loadedDefinitionTypes = Object.freeze(types);
+  loadedOcrImageTypes = Object.freeze(ocrImageTypes);
+}
+
+/**
+ * The image types an OCR definition reads, as its `recognize` action declares
+ * them (`parameters.properties.mimeType.enum`), or null when it declares none.
+ * @param {Object} definition
+ * @returns {ReadonlyArray<string>|null}
+ */
+function declaredOcrImageTypes(definition) {
+  const action = (definition.actions || []).find(entry => entry?.name === 'recognize');
+  const declared = action?.parameters?.properties?.mimeType?.enum;
+  if (!Array.isArray(declared)) return null;
+  const types = declared
+    .filter(type => typeof type === 'string' && type)
+    .map(type => type.toLowerCase());
+  return types.length > 0 ? Object.freeze(types) : null;
+}
+
+/** definition id → image types, of the OCR definitions that declare them. */
+let loadedOcrImageTypes = Object.freeze({});
+
+/**
+ * The image types an OCR definition declared, or null when it declared none
+ * (or is not loaded).
+ * @param {string} definitionId
+ * @returns {ReadonlyArray<string>|null}
+ */
+export function getOcrImageTypes(definitionId) {
+  return Object.hasOwn(loadedOcrImageTypes, definitionId)
+    ? loadedOcrImageTypes[definitionId]
+    : null;
 }
 
 /**

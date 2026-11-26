@@ -11,6 +11,7 @@
  */
 
 import { modelTakesFileKind } from '../../../shared/utils/modelInputCapabilities';
+import { awaitsRecognition } from '../../upload/utils/textRecognition';
 
 /**
  * Attachments as the uploader holds them and as the API takes them: none
@@ -28,7 +29,9 @@ export function toApiFileField(files) {
 /**
  * Split what the composer holds (nothing, one attachment or a list) into the
  * three kinds the API names. A document is an attachment whose `type` is
- * `document`; an entry of any other type is not sent as a file.
+ * `document`; an entry of any other type is not sent as a file. An image the
+ * server has not recognized the text of (still uploading, or refused) holds
+ * nothing the model could read and is left out (`awaitsRecognition`, #3986).
  *
  * @param {Object|Object[]|null|undefined} selected - `fileUploadHandler.selectedFile`
  * @returns {{ images: Object[], audioFiles: Object[], documents: Object[] }}
@@ -38,7 +41,7 @@ export function classifyFiles(selected) {
   return {
     images: list.filter(file => file.type === 'image'),
     audioFiles: list.filter(file => file.type === 'audio'),
-    documents: list.filter(file => file.type === 'document')
+    documents: list.filter(file => file.type === 'document' && !awaitsRecognition(file))
   };
 }
 

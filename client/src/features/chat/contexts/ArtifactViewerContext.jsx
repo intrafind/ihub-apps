@@ -25,7 +25,10 @@ import { createContext, useContext } from 'react';
  *   stored artifact; only present where another app's chat can be opened.
  * - `copyArtifactToProject(descriptor)` — "Copy to project…" for one stored
  *   artifact; only present where user projects are on. The card still checks
- *   `canCopyArtifactToProject` (no pictures).
+ *   `canCopyArtifactToProject` (no pictures, unless projects recognize their text).
+ * - `imageTextRecognition` — `{ apps, projects }` (`useImageTextRecognition`):
+ *   whether a picture may be used in an app or copied to a project because the
+ *   server recognizes its text (#3986). Absent: neither.
  *
  * @type {import('react').Context<Object|null>}
  */
@@ -37,7 +40,8 @@ export default ArtifactViewerContext;
  * @returns {{ openArtifact: Function, openFile?: Function, openFiles?: Function,
  *   openSource?: Function, sourcesInPane?: boolean, activeId?: string|null,
  *   shareArtifact?: Function|null, openArtifactInApp?: Function|null,
- *   copyArtifactToProject?: Function|null }|null}
+ *   copyArtifactToProject?: Function|null,
+ *   imageTextRecognition?: {apps: boolean, projects: boolean} }|null}
  */
 export function useArtifactViewer() {
   return useContext(ArtifactViewerContext);

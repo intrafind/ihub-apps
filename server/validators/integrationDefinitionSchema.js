@@ -1074,6 +1074,7 @@ export const integrationDefinitionSchema = z
     const keys = checkInstallFieldKeys(def, addIssue);
     const actionNames = checkActions(def, addIssue);
     checkWebSearchContract(def, actionNames, addIssue);
+    checkOcrContract(def, actionNames, addIssue);
     checkBuiltInFlags(def, addIssue);
     checkScopes(def, actionNames, addIssue);
     checkActionReferences(def, actionNames, addIssue);
@@ -1183,6 +1184,22 @@ function checkWebSearchContract(def, actionNames, addIssue) {
     !actionNames.has('search')
   ) {
     addIssue(['actions'], 'a web-search definition needs an action named "search"');
+  }
+}
+
+/**
+ * The OCR engine contract (#3986): text recognition at upload calls the
+ * engine's action `recognize` (`services/ocr/textRecognition.js`). Protocols
+ * whose actions are listed at run time (MCP, A2A) cannot declare it.
+ * @param {object} def - the parsed definition
+ * @param {Set<string>} actionNames
+ * @param {AddIssue} addIssue
+ */
+function checkOcrContract(def, actionNames, addIssue) {
+  if (def.type === 'ocr' && ['mcp', 'a2a'].includes(def.protocol.type)) {
+    addIssue(['protocol'], 'an ocr definition cannot use the mcp or a2a protocol');
+  } else if (def.type === 'ocr' && !actionNames.has('recognize')) {
+    addIssue(['actions'], 'an ocr definition needs an action named "recognize"');
   }
 }
 

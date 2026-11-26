@@ -67,6 +67,12 @@
       "dataFlow": "internal"
     }
   },
+  "com.intrafind/ifinder-ocr": {
+    "recognize": {
+      "sideEffect": "read",
+      "dataFlow": "internal"
+    }
+  },
   "com.intrafind/ihub": {
     "ask_user": {
       "sideEffect": "read",
@@ -155,6 +161,12 @@
       "dataFlow": "internal"
     }
   },
+  "com.intrafind/searxng-search": {
+    "search": {
+      "sideEffect": "read",
+      "dataFlow": "external"
+    }
+  },
   "com.intrafind/staan-search": {
     "search": {
       "sideEffect": "read",
@@ -185,12 +197,6 @@
     "request_domain": {
       "sideEffect": "write",
       "dataFlow": "internal"
-    }
-  },
-  "com.intrafind/searxng-search": {
-    "search": {
-      "sideEffect": "read",
-      "dataFlow": "external"
     }
   }
 }
