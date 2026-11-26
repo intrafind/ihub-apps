@@ -553,7 +553,9 @@ test('the MCP gateway keeps sessions and apps to their user', async () => {
     data: rpc(4, 'tools/call', { name: SECRET_APP_ID, arguments: { content: 'hello' } })
   });
   const text = await call.text();
-  expect(text).toContain('"isError":true');
+  // Refused: a tool the caller may not see is an unknown tool, which MCP SDK v2
+  // answers with JSON-RPC -32602 (v1 answered with an `isError` result).
+  expect(text).toMatch(/"error":\{"code":-32602|"isError":true/);
   expect(text).not.toContain('E2E reply');
   const tools = await carolKey.post('/mcp', {
     headers: { ...MCP_HEADERS, 'mcp-session-id': carolSession },
