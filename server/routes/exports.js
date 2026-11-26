@@ -61,7 +61,9 @@ function appOf(appId) {
 /**
  * The look of an export: a document template (the app's, when it pins one;
  * else the one the request names; else the default template) or, when the
- * request names a built-in theme or no template exists, a theme.
+ * request names a built-in theme or no template exists, a theme. A document
+ * template brings its own colours and page; the chat layout under it is the
+ * default theme's.
  */
 async function exportLook(body, pdfDefaults) {
   const requested = typeof body.template === 'string' ? body.template : undefined;
@@ -70,7 +72,7 @@ async function exportLook(body, pdfDefaults) {
     return { theme: requested, bundle: null };
   }
   const bundle = await templateBundleFor({ format: 'pdf', app, requested });
-  if (bundle) return { theme: bundle.template.pdf.theme, bundle };
+  if (bundle) return { theme: 'default', bundle };
   return {
     theme: BUILT_IN_THEMES.includes(pdfDefaults.defaultTemplate)
       ? pdfDefaults.defaultTemplate
@@ -110,12 +112,6 @@ export default function registerExportRoutes(app) {
           title: body.title,
           appName: body.appName,
           template,
-          themeOptions: bundle
-            ? {
-                primaryColor: bundle.template.brand.primaryColor,
-                accentColor: bundle.template.brand.accentColor
-              }
-            : undefined,
           // The dialog sends the watermark the user chose; without one the
           // platform default applies when it is enabled.
           watermark:

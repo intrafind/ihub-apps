@@ -187,3 +187,48 @@ as before.
   handshake to all others.
 
 Details: [MCP Integration](../../mcp-integration.md#protocol-revisions).
+
+## Document Templates: Colours and Fonts From the Word and PowerPoint Files
+
+A document template that sets no colours of its own takes them from its Word and PowerPoint files,
+so a template with just an upload already has a brand.
+
+- **Where a colour comes from:** the template's own colour, else the PowerPoint theme, else the
+  Word theme, else a neutral default. A Word document follows the Word template's theme first.
+  Primary and accent colour are the first accents of the theme that are real colours, not greys;
+  the text colour is the theme's dark 1.
+- **Palette and fonts:** up to six palette colours and the theme's heading and body fonts are read
+  from the files too. The tool descriptions tell the model the brand of the template that applies,
+  read-only, with the fonts as names only: the reader's computer may not have them.
+- **PDF margins:** PDFs take the page margins, the page size and the orientation of the Word
+  template's last section, unless the template sets its own margins.
+- **On the template page:** the colour fields show the colour the files give (with its source, such
+  as "From the PowerPoint template") instead of a black swatch while nothing is set, and a picked
+  colour stays. **Take colours from the PowerPoint/Word template** copies the colours of a file's
+  theme into the fields. The palette and the heading and body font are shown read-only. The PDF
+  margins show their source and prefill from the Word template; **Use the Word template's
+  margins** takes your own values back.
+
+## Word Templates: Year, Page Numbers, Table of Contents and Custom Fields
+
+A Word template can hold more placeholders, written `{{name}}`, and the model asks the user for
+what a template needs.
+
+- **Built in:** `{{year}}` (the year of the document's date), `{{page}}` and `{{pages}}` (Word page
+  number fields that keep the formatting of their text), and `{{toc}}`.
+- **Table of contents:** a paragraph that holds only `{{toc}}` is where the contents go. The
+  document gets one unless the model sets `toc: false`; without `{{toc}}` the contents stay an
+  option at the start of the document. Word fills the contents when the file is opened and asks to
+  update fields; other viewers show it empty.
+- **Custom fields:** any other `{{name}}` (letters, digits, underscores) is a field of the
+  template: a classification, a department, a document number. Declare them under `fields` in
+  `contents/document-templates/<id>/template.json` with a label, a description, whether the field
+  is required, the allowed values and a default. Uploading a Word template declares the
+  placeholders it contains, and the **Fields** section of the template page edits them: a label, a
+  description for the model, the allowed values, a default, "required", and a warning for a field
+  the Word template no longer contains.
+- **The model asks:** the Word tool lists the fields, passes their values in `fields`, and stops
+  with `missing_fields` when a required value is missing or not allowed. The model is told to ask
+  the user and never to invent a value. `edit_docx` changes one field and keeps the others.
+- **Author:** the author of a Word document is the person who asked for it, unless the model names
+  one.

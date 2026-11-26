@@ -60,3 +60,34 @@ action off on the installation, or take the integration out of the grants of the
 clients) that use the gateway, instead of relying on the gateway's refusal. If users cannot sign
 in to a per-user OAuth MCP server after the upgrade, ask its operator to fix the `issuer` in the
 authorization server's metadata.
+
+## Document Templates Take Their Design From the Word and PowerPoint Files
+
+A document template now holds a name, the company name, the brand colours (read from the Word and
+PowerPoint files unless set), the margins of PDFs and the fields of its Word template. The design
+itself lives in the company's Word and PowerPoint templates, so the settings that described it a
+second time are gone.
+
+- **Gone from a template:** the logo, the heading and body fonts and the font size, uploaded font
+  files, page size, orientation, margins of Word and PowerPoint, header, footer, page numbers, logo
+  position, the PDF base design (`default`, `professional`, `minimal`), both letterhead PDFs, the
+  PowerPoint layout choices, extra text slots, footer text, slide numbers and slide format.
+  Fonts are read from the themes of the files and cannot be edited.
+- **PDFs** are still made by iHub's own PDF engine, not from the Word file: they follow the brand
+  colours, the Word template's page and margins, and carry a footer with the company name and
+  "Page X of Y". They no longer print a letterhead or a logo.
+- **PowerPoint** finds its layouts by itself; a text slot is a placeholder named like `Kicker` or
+  `Lead`. Footer text comes from the model and slide numbers from the layout's placeholders.
+- **The chat export** keeps its built-in `default`, `professional` and `minimal` designs for
+  installations without a template; a document template no longer chooses one of them.
+- **Migration:** on the first start, every `contents/document-templates/<id>/template.json` is
+  rewritten (a margin set under `document.margins` moves to `pdf.margins`), the logo, font and
+  letterhead files are deleted, and the `{{placeholders}}` of the Word template become fields. The
+  names that do not fit in the 50 fields a template may have are written to the server log.
+  Template files with the removed settings are refused afterwards.
+
+**Before upgrading:** put the logo and the letterhead of your documents into the Word template (the
+first-page header) and the PowerPoint template (master and layouts), and check what the Word
+template's page setup gives your PDFs. The migration deletes the logo, font and letterhead files of
+your templates: keep copies of them if you still need them.
+

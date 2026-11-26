@@ -1508,10 +1508,9 @@
           "brand": "object",
           "default": "boolean",
           "description": "object",
-          "document": "object",
           "docx": "object",
           "enabled": "boolean",
-          "fonts": [],
+          "fields": "object",
           "id": "string",
           "name": "object",
           "pdf": "object",
@@ -1524,16 +1523,29 @@
     "status": 200,
     "shape": {
       "files": {},
+      "resolved": {
+        "brand": {
+          "accentColor": "string",
+          "palette": "array",
+          "primaryColor": "string",
+          "sources": "object",
+          "textColor": "string"
+        },
+        "pdf": {
+          "inherited": "object",
+          "margins": "array",
+          "source": "string"
+        }
+      },
       "template": {
         "brand": {},
         "default": "boolean",
         "description": {
           "en": "string"
         },
-        "document": {},
         "docx": {},
         "enabled": "boolean",
-        "fonts": [],
+        "fields": {},
         "id": "string",
         "name": {
           "en": "string"

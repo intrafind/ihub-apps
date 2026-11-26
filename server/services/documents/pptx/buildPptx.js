@@ -849,26 +849,22 @@ export function ensureNotesMaster(template, types) {
 }
 
 /**
- * What a template's slots are: their ids (declared ones, the ones its layouts
- * have, and the conventional `kicker` and `lead`) and what happens to a slot's
+ * What a template's slots are: their ids (the conventional `kicker` and `lead`,
+ * and any other the layouts name by convention) and what happens to a slot's
  * text when the slide's layout has no placeholder for it.
  */
-function slotRulesOf(layouts, declared = {}) {
+function slotRulesOf(layouts) {
   const slotRules = {};
   for (const [id, conventional] of Object.entries(CONVENTIONAL_SLOTS)) {
     slotRules[id] = conventional.ifMissing;
   }
-  for (const [id, slot] of Object.entries(declared || {})) {
-    slotRules[id] = slot.ifMissing || CONVENTIONAL_SLOTS[id]?.ifMissing || 'drop';
-  }
   for (const layout of layouts) {
     for (const id of layoutSlotIds(layout)) slotRules[id] ||= 'drop';
   }
-  const layoutSlotIdsOfTemplate = new Set(layouts.flatMap(layoutSlotIds));
   return {
     slotRules,
     slotIds: new Set(Object.keys(slotRules)),
-    layoutSlotIds: layoutSlotIdsOfTemplate
+    layoutSlotIds: new Set(layouts.flatMap(layoutSlotIds))
   };
 }
 
@@ -879,8 +875,6 @@ function slotRulesOf(layouts, declared = {}) {
  *   `slideNumbers`.
  * @param {Object} options
  * @param {Buffer} options.template - The template package (`.pptx`/`.potx`).
- * @param {Object} [options.layouts] - Layout names by kind (admin's choice).
- * @param {Object} [options.slots] - The slots the document template declares (`pptx.slots`).
  * @param {boolean} [options.keepTemplateSlides] - Keep the slides the template
  *   file already has and add the new ones after them (`append`); by default
  *   they are removed and only the master and layouts are used.
@@ -888,11 +882,11 @@ function slotRulesOf(layouts, declared = {}) {
  */
 export async function buildPptx(
   spec,
-  { template: templateBuffer, layouts: overrides, keepTemplateSlides = false, slots } = {}
+  { template: templateBuffer, keepTemplateSlides = false } = {}
 ) {
   const warnings = [];
   const slides = sanitizeSlides(spec.slides, { warnings, imageBytes: 0 });
-  const template = await loadPresentationTemplate(templateBuffer, { slots });
+  const template = await loadPresentationTemplate(templateBuffer);
   const { zip } = template;
   const types = await ContentTypes.read(zip);
   types.setOverride(PRESENTATION, PRESENTATION_TYPE);
@@ -916,9 +910,9 @@ export async function buildPptx(
     slideSize: template.slideSize,
     accent: theme.colors.accent1 || '1E3A8A',
     themeColors: theme.colors,
-    layouts: chooseLayouts(template.layouts, overrides),
+    layouts: chooseLayouts(template.layouts),
     allLayouts: template.layouts,
-    ...slotRulesOf(template.layouts, slots),
+    ...slotRulesOf(template.layouts),
     bodySizes: ph => {
       const sizes = master?.bodySizes || [2000, 1800, 1600];
       return ph?.size ? [ph.size, ...sizes.slice(1)] : sizes;

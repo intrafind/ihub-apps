@@ -143,42 +143,80 @@ const TEMPLATE_NOTES = {
   choice: {
     en: 'Corporate document templates are available (parameter "template"); a template overrides theme, colours and fonts.',
     de: 'Unternehmensvorlagen sind verfügbar (Parameter "template"); eine Vorlage ersetzt Design, Farben und Schriften.'
+  },
+  brand: {
+    en: "Brand of the template (read-only): primary colour {primary}, accent colour {accent}, text colour {text}; palette {palette}; fonts: headings {heading}, body {body} (names only: the reader's computer may not have them).",
+    de: 'Marke der Vorlage (nur lesen): Hauptfarbe {primary}, Akzentfarbe {accent}, Textfarbe {text}; Palette {palette}; Schriften: Überschriften {heading}, Text {body} (nur Namen: auf dem Rechner des Lesers können sie fehlen).'
   }
 };
+
+/** What the model is told about the brand of the template that applies, or an empty string. */
+function brandNote(brand, language) {
+  if (!brand) return '';
+  const fonts = [brand.headingFont, brand.bodyFont];
+  return getLocalizedString(TEMPLATE_NOTES.brand, language)
+    .replace('{primary}', brand.primaryColor)
+    .replace('{accent}', brand.accentColor)
+    .replace('{text}', brand.textColor)
+    .replace('{palette}', (brand.palette || []).join(', '))
+    .replace('{heading}', fonts[0] || fonts[1] || '—')
+    .replace('{body}', fonts[1] || fonts[0] || '—');
+}
+
+/**
+ * The parameters a tool offers: without the ones a pinned template decides
+ * (`removed`), and without the field parameters when no template has fields.
+ */
+function offeredParameters(definition, templates, removed = []) {
+  const names = [...removed, ...(templates?.fieldsApply ? [] : definition.fieldParameters || [])];
+  if (!names.length) return definition.parameters;
+  const properties = { ...definition.parameters.properties };
+  for (const name of names) delete properties[name];
+  return { ...definition.parameters, properties };
+}
 
 /**
  * A tool definition adjusted to the app's document templates: with a pinned
  * template the brand parameters go (the template decides), otherwise a
- * `template` choice is offered when templates exist.
+ * `template` choice is offered when templates exist. The parameters for the
+ * template's own fields are offered only when a template has fields.
  */
 function withTemplates(definition, templates, language) {
   if (!definition.usesDocumentTemplate || !templates) {
     return {
       description: getLocalizedString(definition.description, language),
-      parameters: definition.parameters
+      parameters: offeredParameters(definition, templates)
     };
   }
   const guide = definition.templateGuide ? templates.guides?.[definition.templateGuide] : '';
-  const description = `${getLocalizedString(definition.description, language)}${guide ? `\n\n${guide}` : ''}`;
+  // Each tool is told the brand its own output uses (a Word document follows the Word theme first).
+  const brand = brandNote(
+    templates.brands && definition.templateGuide in templates.brands
+      ? templates.brands[definition.templateGuide]
+      : templates.brand,
+    language
+  );
+  const description = [getLocalizedString(definition.description, language), guide, brand]
+    .filter(Boolean)
+    .join('\n\n');
   const note = key => getLocalizedString(TEMPLATE_NOTES[key], language);
   if (templates.pinned) {
-    const properties = { ...definition.parameters.properties };
-    for (const name of definition.brandParameters || []) delete properties[name];
     return {
       description: `${description} ${note('pinned').replace('{name}', templates.pinned.name)}`,
-      parameters: { ...definition.parameters, properties }
+      parameters: offeredParameters(definition, templates, definition.brandParameters)
     };
   }
-  if (!templates.choices?.length) return { description, parameters: definition.parameters };
+  const parameters = offeredParameters(definition, templates);
+  if (!templates.choices?.length) return { description, parameters };
   const list = templates.choices
     .map(t => `"${t.id}": ${t.name}${t.description ? ` (${t.description})` : ''}`)
     .join('; ');
   return {
     description: `${description} ${note('choice')}`,
     parameters: {
-      ...definition.parameters,
+      ...parameters,
       properties: {
-        ...definition.parameters.properties,
+        ...parameters.properties,
         template: {
           type: 'string',
           enum: ['default', ...templates.choices.map(t => t.id)],

@@ -14,6 +14,7 @@ import {
   listTemplates,
   readTemplateAsset,
   removeTemplateAsset,
+  resolveTemplateSettings,
   saveTemplate,
   saveTemplateAsset
 } from '../../services/documents/templates/DocumentTemplateService.js';
@@ -31,7 +32,9 @@ import { sendCreated, segment } from '../../utils/created.js';
  *   DELETE /api/admin/document-templates/:id                delete it and its files
  *   POST   /api/admin/document-templates/:id/files/:slot    upload a file (multipart `file`)
  *   DELETE /api/admin/document-templates/:id/files/:slot    remove a file
- *   GET    /api/admin/document-templates/:id/files/:slot    download a file (logo preview)
+ *   GET    /api/admin/document-templates/:id/files/:slot    download a file
+ *   POST   /api/admin/document-templates/:id/files/:slot/_read-brand
+ *                                                           the colours of a file's theme
  *   POST   /api/admin/document-templates/:id/sample/:format a sample PDF, PNG, DOCX or PPTX
  *
  * Every route is behind `adminAuth`. Uploaded files are parsed before they are
@@ -54,12 +57,6 @@ const SAMPLE_TYPES = {
 };
 
 const ASSET_TYPES = {
-  png: 'image/png',
-  jpg: 'image/jpeg',
-  jpeg: 'image/jpeg',
-  pdf: 'application/pdf',
-  ttf: 'font/ttf',
-  otf: 'font/otf',
   docx: SAMPLE_TYPES.docx,
   dotx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.template',
   pptx: SAMPLE_TYPES.pptx,
@@ -86,17 +83,10 @@ function handle(operation, handler) {
   };
 }
 
-/** The file a template has in a slot (font slots: the family's face). */
-function assetInSlot(template, slot, { family, face } = {}) {
-  if (slot === 'logo') return template.brand.logo;
-  if (slot === 'letterhead') return template.pdf.letterhead;
-  if (slot === 'letterheadFollowing') return template.pdf.letterheadFollowing;
+/** The file a template has in a slot. */
+function assetInSlot(template, slot) {
   if (slot === 'wordTemplate') return template.docx.template;
   if (slot === 'powerpointTemplate') return template.pptx.template;
-  if (slot === 'font') {
-    const font = template.fonts.find(f => f.family.toLowerCase() === String(family).toLowerCase());
-    return font?.[face || 'normal'];
-  }
   return undefined;
 }
 
@@ -111,9 +101,7 @@ async function describeFiles(template) {
       const { analyzePowerpointTemplate } =
         await import('../../services/documents/pptx/pptxTemplate.js');
       out.powerpointTemplate = await analyzePowerpointTemplate(
-        await readTemplateAsset(template.id, template.pptx.template),
-        template.pptx.layouts,
-        { slots: template.pptx.slots }
+        await readTemplateAsset(template.id, template.pptx.template)
       );
     } catch (error) {
       out.powerpointTemplate = { error: error.message };
@@ -130,6 +118,15 @@ async function describeFiles(template) {
     }
   }
   return out;
+}
+
+/** A template with what its files hold and what it resolves to: the editor's view of it. */
+async function describeTemplate(template) {
+  return {
+    template,
+    files: await describeFiles(template),
+    resolved: await resolveTemplateSettings(template)
+  };
 }
 
 /** Runs the multipart upload middleware; its failures are answered as ServiceErrors. */
@@ -173,7 +170,7 @@ export default function registerAdminDocumentTemplatesRoutes(app) {
     handle('loaded', async (req, res) => {
       const template = await getTemplate(req.params.id, { includeDisabled: true });
       if (!template) throw new ServiceError('NOT_FOUND', 'Template not found.');
-      res.json({ template, files: await describeFiles(template) });
+      res.json(await describeTemplate(template));
     })
   );
 
@@ -182,7 +179,7 @@ export default function registerAdminDocumentTemplatesRoutes(app) {
     adminAuth,
     handle('saved', async (req, res) => {
       const template = await saveTemplate(req.params.id, bodyOf(req));
-      res.json({ template, files: await describeFiles(template) });
+      res.json(await describeTemplate(template));
     })
   );
 
@@ -207,15 +204,13 @@ export default function registerAdminDocumentTemplatesRoutes(app) {
       const result = await saveTemplateAsset(req.params.id, {
         slot: req.params.slot,
         data: req.file.buffer,
-        originalName: req.file.originalname,
-        family: req.body?.family,
-        face: req.body?.face || 'normal'
+        originalName: req.file.originalname
       });
       res.json({
         template: result.template,
         file: result.file,
         info: result.info,
-        files: await describeFiles(result.template)
+        ...(await describeTemplate(result.template))
       });
     })
   );
@@ -224,12 +219,25 @@ export default function registerAdminDocumentTemplatesRoutes(app) {
     `${base}/:id/files/:slot`,
     adminAuth,
     handle('saved', async (req, res) => {
-      const template = await removeTemplateAsset(req.params.id, {
-        slot: req.params.slot,
-        family: req.query.family,
-        face: req.query.face
-      });
-      res.json({ template, files: await describeFiles(template) });
+      const template = await removeTemplateAsset(req.params.id, { slot: req.params.slot });
+      res.json(await describeTemplate(template));
+    })
+  );
+
+  app.post(
+    `${base}/:id/files/:slot/_read-brand`,
+    adminAuth,
+    handle('read', async (req, res) => {
+      const template = await getTemplate(req.params.id, { includeDisabled: true });
+      const name = template ? assetInSlot(template, req.params.slot) : null;
+      if (!name || !referencedAssets(template).includes(name)) {
+        throw new ServiceError('NOT_FOUND', 'File not found.');
+      }
+      const { readThemeBrand } = await import('../../services/documents/templates/themeBrand.js');
+      const format = req.params.slot === 'wordTemplate' ? 'docx' : 'pptx';
+      const brand = await readThemeBrand(await readTemplateAsset(template.id, name), format);
+      const { primaryColor, accentColor, textColor, palette, headingFont, bodyFont } = brand || {};
+      res.json({ primaryColor, accentColor, textColor, palette, headingFont, bodyFont });
     })
   );
 
@@ -238,12 +246,7 @@ export default function registerAdminDocumentTemplatesRoutes(app) {
     adminAuth,
     handle('loaded', async (req, res) => {
       const template = await getTemplate(req.params.id, { includeDisabled: true });
-      const name = template
-        ? assetInSlot(template, req.params.slot, {
-            family: req.query.family,
-            face: req.query.face
-          })
-        : null;
+      const name = template ? assetInSlot(template, req.params.slot) : null;
       if (!name || !referencedAssets(template).includes(name)) {
         throw new ServiceError('NOT_FOUND', 'File not found.');
       }
@@ -257,10 +260,7 @@ export default function registerAdminDocumentTemplatesRoutes(app) {
       );
       res.setHeader('X-Content-Type-Options', 'nosniff');
       res.setHeader('Cache-Control', 'no-store');
-      // Only the logo is shown in the page; every other file downloads.
-      if (req.params.slot !== 'logo') {
-        res.setHeader('Content-Disposition', buildContentDisposition(name));
-      }
+      res.setHeader('Content-Disposition', buildContentDisposition(name));
       res.send(data);
     })
   );
