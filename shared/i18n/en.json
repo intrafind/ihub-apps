@@ -5238,7 +5238,8 @@
         "tabs": {
           "overview": "Overview",
           "settings": "Settings",
-          "releases": "Releases"
+          "releases": "Releases",
+          "skills": "Skills"
         },
         "remove": "Remove",
         "definitionMissing": "The definition \"{{definition}}\" of this installation is not loaded: it offers no actions and cannot be edited. Install the definition again from the marketplace, or remove the installation.",
@@ -6154,6 +6155,29 @@
           "approved": "Approved, not installed yet",
           "declined": "Declined",
           "fulfilled": "Installed"
+        }
+      },
+      "skills": {
+        "intro": "Skills are instructions the server ships for using its tools well. A skill reaches chats only after you approve it here, in apps that turn skills on and use this integration. If the server changes an approved skill, it stops loading until you approve it again.",
+        "unsupported": "This server offers no skills.",
+        "connectFirst": "Each user signs in to this server. Connect your own account to see the skills it offers.",
+        "none": "The server lists no skills.",
+        "files": "{{count}} files, {{size}}",
+        "approvedAt": "Approved {{date}}",
+        "approve": "Approve",
+        "approveAgain": "Approve again",
+        "revoke": "Withdraw approval",
+        "status": {
+          "approved": "Approved",
+          "changed": "Changed on the server",
+          "missing": "No longer offered",
+          "notApprovable": "Cannot be approved",
+          "available": "Not approved"
+        },
+        "reason": {
+          "duplicateName": "The server offers more than one skill by this name.",
+          "dynamic": "The server does not list this skill’s files, so they cannot be checked.",
+          "invalidName": "The skill’s name does not follow the skill naming rules."
         }
       }
     },
@@ -13964,6 +13988,11 @@
     "INVALID_REASON": "The reason must be text.",
     "REASON_TOO_LONG": "The reason is too long.",
     "INTEGRATION_NOT_FOUND": "The integration was not found.",
+    "SKILLS_NOT_SUPPORTED": "This integration does not offer skills.",
+    "SERVER_SKILL_NOT_FOUND": "The server does not offer this skill.",
+    "SKILL_NOT_APPROVABLE": "This skill cannot be approved.",
+    "SKILL_UNREADABLE": "The skill's files could not be read from the server.",
+    "INVALID_SKILL_APPROVAL": "The skill approval is not valid.",
     "INTEGRATION_NOT_CONFIGURED": "The integration is not configured.",
     "INTEGRATION_NOT_GRANTED": "You are not allowed to use this integration.",
     "DOCUMENT_DETAILS_UNAVAILABLE": "This integration has no details for its documents.",

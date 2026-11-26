@@ -4,7 +4,7 @@
 /**
  * Skill access: which skills a request may load.
  *
- * Two kinds of skill reach a request:
+ * Three kinds of skill reach a request:
  *
  * - A **global skill** (a folder under `contents/skills/`) is usable when it
  *   is installed, listed on the app (or the agent node) the request runs in —
@@ -14,6 +14,10 @@
  *   switched on, the app does not opt out (`skillSettings.allowPersonal:
  *   false`), and the caller owns it or it is shared with them. Agents, OAuth
  *   clients and anonymous callers never get one.
+ * - A **server skill** (`<installation>:<name>`, a skill an MCP server offers,
+ *   see `services/mcp/mcpSkills.js`) is usable when an admin approved it on
+ *   the installation, the app binds that installation and the installation
+ *   is granted to the user. Agent nodes never get one.
  *
  * Both only apply in an app that turned skills on (`skillSettings.enabled:
  * true`, see {@link skillsEnabledIn}); an app that did not gets no skill
@@ -36,12 +40,14 @@
  */
 
 import configCache from '../configCache.js';
+import logger from '../utils/logger.js';
 import { isFeatureEnabled } from '../featureRegistry.js';
 import { estimateTokensMemo } from '../../shared/tokenEstimator.js';
 import { ALL_SKILLS } from '../../shared/appWildcards.js';
 import { disablesModelInvocation, getSkillContent, getSkillResource } from './skillLoader.js';
 import { getUserSkillRepository, isUserSkillId } from './skills/UserSkillRepository.js';
 import { isUserSkillsConfigured } from './skills/userSkillSettings.js';
+import { isServerSkillId, loadServerSkill, usableServerSkills } from './mcp/mcpSkills.js';
 import {
   canHoldUserPrompts,
   effectiveGroups,
@@ -159,6 +165,29 @@ export async function getUsablePersonalSkill(skillId, { app, user }) {
 }
 
 /**
+ * The server skills `user` may use in `app` (see `services/mcp/mcpSkills.js`).
+ * Empty when the skills feature is off or the app has no skills.
+ *
+ * @param {Object} options
+ * @param {Object} [options.app] - App config
+ * @param {Object} options.user - Expanded user
+ * @returns {Promise<Array<Object>>}
+ */
+export async function getUsableServerSkills({ app, user }) {
+  if (!isFeatureEnabled('skills', configCache.getFeatures()) || !skillsEnabledIn(app)) return [];
+  try {
+    return await usableServerSkills({ app, user });
+  } catch (error) {
+    // Server skills never cost a turn the skills it has otherwise.
+    logger.warn('Server skills left out of the turn', {
+      component: 'skillAccess',
+      error: error.message
+    });
+    return [];
+  }
+}
+
+/**
  * Whether `skillName` may be loaded: a global skill among the usable ones for
  * `skillIds` and `user`, or a user skill `user` may use in `app`.
  *
@@ -174,6 +203,9 @@ export async function isSkillUsable(skillName, { skillIds, user, app }) {
   if (!skillsEnabledIn(app)) return false;
   if (isUserSkillId(skillName)) {
     return Boolean(await getUsablePersonalSkill(skillName, { app, user }));
+  }
+  if (isServerSkillId(skillName)) {
+    return (await getUsableServerSkills({ app, user })).some(skill => skill.id === skillName);
   }
   const usable = await getUsableSkills({ skillIds, user });
   return usable.some(skill => skill.name === skillName);
@@ -225,6 +257,10 @@ export async function loadUsableSkill(skillName, { skillIds, user, app }) {
       }
     };
   }
+  if (isServerSkillId(skillName)) {
+    if (!isFeatureEnabled('skills', configCache.getFeatures())) return null;
+    return loadServerSkill(skillName, { app, user });
+  }
   if (!(await isSkillUsable(skillName, { skillIds, user, app }))) return null;
   // The instructions of a system skill point to other skills only where the app has them.
   const available = (await getUsableSkills({ skillIds, user })).map(skill => skill.name);
@@ -259,11 +295,18 @@ export async function listSkillsForPrompt({ app, user }) {
     isModelInvocable
   );
   const personal = (await getUsablePersonalSkills({ app, user })).slice(0, MAX_LISTED_USER_SKILLS);
+  const server = (await getUsableServerSkills({ app, user })).filter(isModelInvocable);
   return [
     ...global.map(skill => ({
       name: skill.name,
       displayName: skill.name,
       description: skill.description || ''
+    })),
+    // Under its id, with the server it comes from in front of the description.
+    ...server.map(skill => ({
+      name: skill.id,
+      displayName: skill.name,
+      description: `${skill.serverName}: ${skill.description}`
     })),
     ...personal.map(skill => ({
       name: skill.id,
@@ -607,11 +650,18 @@ export async function resolveSkillsForTurn({ requested = [], text = '', earlier 
   )) {
     if (!personalByName.has(skill.name)) personalByName.set(skill.name, skill);
   }
-  const byId = id => (isUserSkillId(id) ? personalById.get(id) : globalByName.get(id));
+  // Server skills are named by their id only: `/name` never picks one.
+  const server = await getUsableServerSkills({ app, user });
+  const serverById = new Map(server.map(skill => [skill.id, skill]));
+  const byId = id => {
+    if (isUserSkillId(id)) return personalById.get(id);
+    if (isServerSkillId(id)) return serverById.get(id);
+    return globalByName.get(id);
+  };
   const byName = name => personalByName.get(name) || globalByName.get(name);
 
   const asEntry = (skill, origin) =>
-    isUserSkillId(skill.id)
+    isUserSkillId(skill.id) || isServerSkillId(skill.id)
       ? { name: skill.id, displayName: skill.name, description: skill.description || '', origin }
       : { name: skill.name, displayName: skill.name, description: skill.description || '', origin };
 

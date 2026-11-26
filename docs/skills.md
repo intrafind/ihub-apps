@@ -51,8 +51,11 @@ A skill is loaded only when the current app and user may use it. For a global sk
 the app enables skills, the skill is installed, listed in the app's `skills` — or the app lists
 `"*"` (**All skills** in the app editor), which assigns every skill, including ones installed
 later — and granted to the user's groups. For a user skill: the app enables skills, the user owns the skill or it is shared
-with them, and the app does not set `skillSettings.allowPersonal: false`. Agents use only the
-global skills on their profile.
+with them, and the app does not set `skillSettings.allowPersonal: false`. For a skill an MCP
+server ships (`<installation>:<name>`): the app enables skills and binds the installation, the
+installation is granted to the user, and an admin approved the skill on the installation's
+**Skills** tab (see [MCP Integration → Skills from the server](mcp-integration.md#skills-from-the-server)).
+Agents use only the global skills on their profile.
 
 ## How skills reach the model
 

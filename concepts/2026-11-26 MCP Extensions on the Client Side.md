@@ -11,7 +11,7 @@ iHub talks MCP in two directions. The **gateway** (`/mcp`, iHub as server) now s
 | Capability                        | Gateway (iHub as server)                     | Outbound (iHub as client)          |
 | --------------------------------- | -------------------------------------------- | ---------------------------------- |
 | Protocol 2026-07-28               | yes, stateless, next to the 2025 revisions   | yes, over Streamable HTTP          |
-| Skills (`io.modelcontextprotocol/skills`) | yes: `skills/list`, `skill://` files | no                                 |
+| Skills (`io.modelcontextprotocol/skills`) | yes: `skills/list`, `skill://` files | yes: approved per installation     |
 | Tasks (`io.modelcontextprotocol/tasks`)   | yes: apps and workflows              | no                                 |
 | Elicitation                       | yes: approval of gated tools                 | yes: form and URL mode, in the chat |
 | File Uploads (experimental)       | no                                           | no                                 |
@@ -91,6 +91,21 @@ when the run is aborted, and report `statusMessage` as tool progress.
 
 ## 3. Skills from external servers
 
+**Status: implemented** (see
+[MCP Integration → Skills from the server](../docs/mcp-integration.md#skills-from-the-server)).
+As built, the approval stores the skill's entry, and every read is verified
+against that stored entry (the SDK's `SkillsClient.read` checks a file against
+the entry it is given), so nothing is cached on disk: verified files are kept
+in memory by digest. An activation also compares the server's current listing
+(at most a minute old) with the approval, so a changed `SKILL.md` that a cached
+copy would cover is refused too. Per-user servers needed no special case: the
+admin lists through their own connection, a user reads through theirs, and a
+user whose server serves something else than was approved does not get the
+skill. Not done: `/name` does not pick a server skill (only its id does), and
+the `/` picker does not list them.
+
+The original plan follows.
+
 **What it gives:** a connected server ships its own playbooks (how to use its tools well), loaded
 only when the model needs them.
 
@@ -119,6 +134,6 @@ chat files to servers instead of passing base64 through the model.
 ## Order
 
 1. Elicitation — done (form and URL mode).
-2. Skills (server-side only, no SDK gap).
+2. Skills — done.
 3. Tasks (blocked on SDK client extensions).
 4. File Uploads (blocked on the spec).

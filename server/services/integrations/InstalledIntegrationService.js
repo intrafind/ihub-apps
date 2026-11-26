@@ -11,6 +11,8 @@ import {
   actionOverrideSchema,
   boundedLocalizedSchema,
   installedApprovalSchema,
+  SKILL_NAME_PATTERN,
+  skillApprovalSchema,
   validateIntegrationsConfig,
   validateInstalledIntegration
 } from '../../validators/integrationsConfigSchema.js';
@@ -203,6 +205,9 @@ function parseInstancePayload(fields, existing) {
   // know it keeps it; `elicitation: null` returns to the definition's default.
   const keepsElicitation = !Object.hasOwn(fields, 'elicitation') && existing?.elicitation;
   if (fields.elicitation === null) delete fields.elicitation;
+  // The approved skills of an MCP server are the skills tab's alone
+  // (`setSkillApproval`): a save never sets or drops them.
+  delete fields.skills;
   // The accepted action fingerprints (#2916) are the server's: a baseline
   // or "Mark reviewed" writes them, a save keeps the stored ones (`update`).
   if (fields.actions && typeof fields.actions === 'object') {
@@ -215,7 +220,8 @@ function parseInstancePayload(fields, existing) {
     health: existing?.health,
     ...(existing?.migrationLog ? { migrationLog: existing.migrationLog } : {}),
     ...(keepsApproval ? { approval: existing.approval } : {}),
-    ...(keepsElicitation ? { elicitation: existing.elicitation } : {})
+    ...(keepsElicitation ? { elicitation: existing.elicitation } : {}),
+    ...(existing?.skills ? { skills: existing.skills } : {})
   });
   if (!parsed.success) {
     throw new IntegrationError('Invalid installed integration', {
@@ -892,6 +898,50 @@ export class InstalledIntegrationService {
       });
       await this._afterChange(instance.id, { before, after: instance });
       return { instance, override: overrides[actionName] || null };
+    });
+  }
+
+  /**
+   * Approve one skill of an MCP server, or withdraw the approval (`null`).
+   * Only this skill's approval changes.
+   *
+   * @param {string} id
+   * @param {string} skillName
+   * @param {Object|null} approval - See `skillApprovalSchema`
+   * @returns {Promise<Object>} the stored installation
+   * @throws {IntegrationError} 404 `NOT_FOUND`; 400 `INVALID_SKILL_APPROVAL`
+   */
+  setSkillApproval(id, skillName, approval) {
+    return this._serialize(async () => {
+      if (typeof skillName !== 'string' || !SKILL_NAME_PATTERN.test(skillName)) {
+        throw new IntegrationError('Invalid skill name', { code: 'INVALID_SKILL_APPROVAL' });
+      }
+      let cleaned = null;
+      if (approval !== null) {
+        const parsed = skillApprovalSchema.safeParse(approval);
+        if (!parsed.success) {
+          throw new IntegrationError('Invalid skill approval', {
+            code: 'INVALID_SKILL_APPROVAL',
+            details: parsed.error.issues
+          });
+        }
+        cleaned = parsed.data;
+      }
+      const { instance, before } = await this._updateConfig(config => {
+        const instance = config.installed.find(inst => inst.id === id);
+        if (!instance)
+          throw new IntegrationError('Integration not found', { status: 404, code: 'NOT_FOUND' });
+        const before = structuredClone(instance);
+        const approved = { ...(instance.skills?.approved || {}) };
+        if (cleaned) approved[skillName] = cleaned;
+        else delete approved[skillName];
+        if (Object.keys(approved).length) instance.skills = { approved };
+        else delete instance.skills;
+        instance.updatedAt = nowIso();
+        return { instance, before };
+      });
+      await this._afterChange(instance.id, { before, after: instance });
+      return instance;
     });
   }
 

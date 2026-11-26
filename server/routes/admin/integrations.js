@@ -36,6 +36,12 @@ import {
 } from '../../services/integrations/actionGuidance.js';
 import { describeAction } from '../../services/integrations/actionDetail.js';
 import {
+  approveInstallationSkill,
+  listInstallationSkills,
+  revokeInstallationSkill
+} from '../../services/mcp/mcpSkills.js';
+import { SKILL_NAME_PATTERN } from '../../validators/integrationsConfigSchema.js';
+import {
   ActionTestError,
   auditArgs,
   testAction
@@ -70,6 +76,9 @@ const ACTION_NAME_PATTERN = /^[A-Za-z0-9_.:-]{1,128}$/;
  *   PUT  /api/admin/integrations/installed/:id/actions/:action  the action's admin override (texts, side effect, data flow)
  *   POST /api/admin/integrations/installed/:id/actions/:action/_test  run the action without a model
  *   PUT  /api/admin/integrations/installed/:id/instructions     the installation's own model guidance
+ *   GET  /api/admin/integrations/installed/:id/skills           an MCP server's skills and their approval
+ *   PUT  /api/admin/integrations/installed/:id/skill-approvals/:skillName   approve a server skill
+ *   DELETE /api/admin/integrations/installed/:id/skill-approvals/:skillName withdraw the approval
  *
  * The `catalog` and `installed` segments keep these routes apart from the
  * older `/api/admin/integrations/ifinder/*` and `.../iassistant/*` endpoints.
@@ -1088,6 +1097,144 @@ export default function registerAdminIntegrationsRoutes(app) {
         summary: `${instance.instructions ? 'Set' : 'Removed'} the model instructions of integration "${id}"`
       });
       res.json(instance);
+    }
+  );
+
+  /**
+   * @swagger
+   * /api/admin/integrations/installed/{id}/skills:
+   *   get:
+   *     summary: The skills an MCP server offers, with their approval
+   *     description: |
+   *       Lists the server's skills (MCP Skills extension) through the admin's own
+   *       connection, with the status of each: `available`, `approved`, `changed` (the
+   *       server serves something else than was approved; it is not loaded until approved
+   *       again), `missing` (approved, no longer offered) or `not_approvable` (with a
+   *       `reason`: `invalid_name`, `duplicate_name`, `dynamic`).
+   *     tags:
+   *       - Admin
+   *       - Integrations
+   *     security:
+   *       - adminAuth: []
+   *     parameters:
+   *       - in: path
+   *         name: id
+   *         required: true
+   *         schema:
+   *           type: string
+   *     responses:
+   *       200:
+   *         description: "`{ items: [{ name, description, uri, status, reason?, files?, size?, approvedAt?, approvedBy? }] }`"
+   *       404:
+   *         description: "`INTEGRATION_NOT_FOUND`"
+   *       409:
+   *         description: "`SKILLS_NOT_SUPPORTED` (no MCP server, or no skills extension), `INTEGRATION_AUTH_REQUIRED` (a per-user server the admin is not connected to)"
+   *       502:
+   *         description: "`UPSTREAM_ERROR`: the server could not be asked"
+   */
+  app.get(
+    buildServerPath('/api/admin/integrations/installed/:id/skills'),
+    adminAuth,
+    async (req, res) => {
+      const id = req.params.id;
+      assertValidId(id, 'integration');
+      res.json(await listInstallationSkills(id, req.user));
+    }
+  );
+
+  /** The skill name of a path, refused unless it is one. */
+  const skillNameParam = req => {
+    const name = req.params.skillName;
+    if (!SKILL_NAME_PATTERN.test(name)) {
+      throw new ServiceError('BAD_REQUEST', 'Invalid skill name', { details: { skillName: name } });
+    }
+    return name;
+  };
+
+  /**
+   * @swagger
+   * /api/admin/integrations/installed/{id}/skill-approvals/{skillName}:
+   *   put:
+   *     summary: Approve a skill of an MCP server
+   *     description: |
+   *       Approves the skill as the server lists it now: its `SKILL.md`, frontmatter and
+   *       every file with its digest. Each file is read and verified first. A chat loads
+   *       the skill only while the server serves exactly what was approved.
+   *     tags:
+   *       - Admin
+   *       - Integrations
+   *     security:
+   *       - adminAuth: []
+   *     parameters:
+   *       - in: path
+   *         name: id
+   *         required: true
+   *         schema:
+   *           type: string
+   *       - in: path
+   *         name: skillName
+   *         required: true
+   *         schema:
+   *           type: string
+   *     responses:
+   *       200:
+   *         description: The skill's item, `status: approved`
+   *       400:
+   *         description: "`BAD_REQUEST`: not a skill name"
+   *       404:
+   *         description: "`INTEGRATION_NOT_FOUND`, `SERVER_SKILL_NOT_FOUND`"
+   *       409:
+   *         description: "`SKILLS_NOT_SUPPORTED`, `SKILL_NOT_APPROVABLE`, `INTEGRATION_AUTH_REQUIRED`"
+   *       502:
+   *         description: "`SKILL_UNREADABLE`, `UPSTREAM_ERROR`"
+   *   delete:
+   *     summary: Withdraw the approval of a server skill
+   *     tags:
+   *       - Admin
+   *       - Integrations
+   *     security:
+   *       - adminAuth: []
+   *     responses:
+   *       204:
+   *         description: Withdrawn
+   *       404:
+   *         description: "`INTEGRATION_NOT_FOUND`, `SERVER_SKILL_NOT_FOUND` (not approved)"
+   */
+  app.put(
+    buildServerPath('/api/admin/integrations/installed/:id/skill-approvals/:skillName'),
+    adminAuth,
+    async (req, res) => {
+      const id = req.params.id;
+      assertValidId(id, 'integration');
+      const name = skillNameParam(req);
+      const item = await approveInstallationSkill(id, name, req.user);
+      logAudit({
+        req,
+        action: 'update',
+        resource: 'integration',
+        resourceId: id,
+        summary: `Approved the skill "${name}" of integration "${id}"`
+      });
+      res.json(item);
+    }
+  );
+
+  app.delete(
+    buildServerPath('/api/admin/integrations/installed/:id/skill-approvals/:skillName'),
+    adminAuth,
+    async (req, res) => {
+      const id = req.params.id;
+      assertValidId(id, 'integration');
+      const name = skillNameParam(req);
+      await revokeInstallationSkill(id, name);
+      logAudit({
+        req,
+        action: 'update',
+        resource: 'integration',
+        resourceId: id,
+        summary: `Withdrew the approval of the skill "${name}" of integration "${id}"`
+      });
+      res.status(204).end();
     }
   );
 

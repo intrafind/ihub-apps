@@ -5744,7 +5744,8 @@
         "tabs": {
           "overview": "Überblick",
           "settings": "Einstellungen",
-          "releases": "Versionen"
+          "releases": "Versionen",
+          "skills": "Skills"
         },
         "remove": "Entfernen",
         "definitionMissing": "Die Definition „{{definition}}“ dieser Installation ist nicht geladen: Sie bietet keine Aktionen und lässt sich nicht bearbeiten. Installieren Sie die Definition erneut aus dem Marketplace oder entfernen Sie die Installation.",
@@ -6660,6 +6661,29 @@
           "approved": "Genehmigt, noch nicht installiert",
           "declined": "Abgelehnt",
           "fulfilled": "Installiert"
+        }
+      },
+      "skills": {
+        "intro": "Skills sind Anleitungen, die der Server mitliefert, damit seine Tools gut genutzt werden. Ein Skill erreicht Chats erst, wenn Sie ihn hier freigeben, und nur in Apps, die Skills einschalten und diese Integration nutzen. Ändert der Server einen freigegebenen Skill, wird er nicht mehr geladen, bis Sie ihn erneut freigeben.",
+        "unsupported": "Dieser Server bietet keine Skills an.",
+        "connectFirst": "Bei diesem Server meldet sich jeder Benutzer selbst an. Verbinden Sie Ihr eigenes Konto, um seine Skills zu sehen.",
+        "none": "Der Server bietet keine Skills an.",
+        "files": "{{count}} Dateien, {{size}}",
+        "approvedAt": "Freigegeben am {{date}}",
+        "approve": "Freigeben",
+        "approveAgain": "Erneut freigeben",
+        "revoke": "Freigabe entziehen",
+        "status": {
+          "approved": "Freigegeben",
+          "changed": "Auf dem Server geändert",
+          "missing": "Nicht mehr angeboten",
+          "notApprovable": "Nicht freigebbar",
+          "available": "Nicht freigegeben"
+        },
+        "reason": {
+          "duplicateName": "Der Server bietet mehrere Skills mit diesem Namen an.",
+          "dynamic": "Der Server nennt die Dateien dieses Skills nicht, daher können sie nicht geprüft werden.",
+          "invalidName": "Der Name des Skills folgt nicht den Namensregeln für Skills."
         }
       }
     },
@@ -13963,6 +13987,11 @@
     "INVALID_REASON": "Die Begründung muss ein Text sein.",
     "REASON_TOO_LONG": "Die Begründung ist zu lang.",
     "INTEGRATION_NOT_FOUND": "Die Integration wurde nicht gefunden.",
+    "SKILLS_NOT_SUPPORTED": "Diese Integration bietet keine Skills an.",
+    "SERVER_SKILL_NOT_FOUND": "Der Server bietet diesen Skill nicht an.",
+    "SKILL_NOT_APPROVABLE": "Dieser Skill kann nicht freigegeben werden.",
+    "SKILL_UNREADABLE": "Die Dateien des Skills konnten nicht vom Server gelesen werden.",
+    "INVALID_SKILL_APPROVAL": "Die Freigabe des Skills ist ungültig.",
     "INTEGRATION_NOT_CONFIGURED": "Die Integration ist nicht konfiguriert.",
     "INTEGRATION_NOT_GRANTED": "Sie dürfen diese Integration nicht verwenden.",
     "DOCUMENT_DETAILS_UNAVAILABLE": "Diese Integration hat keine Details zu ihren Dokumenten.",

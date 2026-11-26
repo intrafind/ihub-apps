@@ -163,6 +163,45 @@ server goes on without asking. The choice is stored on the installation as
 definition decides (a shipped definition can set
 `protocol.elicitation.enabled: false`). A change reconnects the server.
 
+### Skills from the server
+
+A server that declares the MCP Skills extension (`io.modelcontextprotocol/skills`)
+ships skills: instructions for using its tools well, each a `SKILL.md` with
+files next to it. The installation page of such a server has a **Skills** tab.
+It lists the server's skills with their files and size, and the status of each:
+**Not approved**, **Approved**, **Changed on the server**, **No longer
+offered** or **Cannot be approved** (two skills by one name, or a skill whose
+files the server does not list).
+
+- **Nothing reaches a chat unapproved.** **Approve** reads every file of the
+  skill from the server, checks it against the digest and size the server
+  listed, and stores that entry with the installation
+  (`skills.approved.<name>`). A regular save of the installation never sets or
+  drops an approval.
+- **A changed skill stops loading.** A chat loads a skill only while the server
+  lists exactly the entry that was approved and serves exactly those bytes. If
+  the server changes the skill (another file, other bytes, other frontmatter), it
+  shows as **Changed on the server** and is not loaded until it is approved
+  again. iHub re-reads the server's listing at most once a minute per
+  connection.
+- **In a chat** an approved skill is a skill like iHub's own, named
+  `<installation>:<name>` (`billing:deploy`), so it never stands in for an iHub
+  skill of the same name. The model sees it in its skill list with the server's
+  name in front of the description, and loads it with `activate_skill` and its
+  files with `read_skill_resource`. It is offered in apps that turn skills on
+  (`skillSettings.enabled`) and bind the installation, to users the
+  installation is granted to. `/name` does not pick it, and agents do not get it.
+- **It grants nothing.** `allowed-tools` in a server skill's frontmatter is
+  ignored; the skill can only use the tools the chat offers anyway.
+- **Per-user servers** (`oauth-user`): the tab lists the skills through the
+  admin's own connection, so the admin connects first. A chat reads the files
+  through the user's own connection; when a user's server serves something else
+  than was approved, that user does not get the skill.
+
+Verified files are kept in memory by digest. Nothing is written to the skill
+folders. The routes are `GET /api/admin/integrations/installed/{id}/skills`
+and `PUT` / `DELETE /api/admin/integrations/installed/{id}/skill-approvals/{skillName}`.
+
 ### Transports
 
 | Transport        | When to use                                                                                                                                                                                                         |
