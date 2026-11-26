@@ -885,7 +885,11 @@
       "sheets": "{{count}} Tabellenblätter",
       "open": "Öffnen",
       "share": "Teilen",
-      "shareNamed": "{{name}} teilen"
+      "shareNamed": "{{name}} teilen",
+      "moreNamed": "Weitere Aktionen für {{name}}",
+      "more": "Weitere Aktionen",
+      "useInApp": "In App verwenden…",
+      "copyToProject": "In Projekt kopieren…"
     },
     "readAloud": "Vorlesen",
     "readAloudLoading": "Audio wird geladen… Klicken zum Abbrechen",
@@ -1329,7 +1333,7 @@
           "serverTextOnly": "Nur den Text (der Server extrahiert ihn und verwirft die Datei)",
           "clientTextOnly": "Nur den Text, im Browser extrahiert (Dateien verlassen das Gerät nie)"
         },
-        "storageModeHelp": "Eine App kann dies in ihren Einstellungen überschreiben. Word-, PowerPoint-, Excel- und PDF-Dateien lassen sich nur als Vorlage verwenden oder ausfüllen, solange das Original gespeichert ist.",
+        "storageModeHelp": "Gilt auch für Dateien, die in Projekte hochgeladen werden. Eine App kann dies für ihre Chats überschreiben, nicht für Projekte. Word-, PowerPoint-, Excel- und PDF-Dateien lassen sich nur als Vorlage verwenden oder ausfüllen, solange das Original gespeichert ist.",
         "originalRetentionDays": "Originaldateien aufbewahren (Tage)",
         "originalRetentionDaysHelp": "Nach so vielen Tagen bleibt von einer Chat-Datei nur der Text, bis der Chat selbst gelöscht wird. An geplante Aufgaben angehängte Dateien bleiben, solange die Aufgabe existiert. 0 behält Originale, solange der Chat existiert.",
         "evict": "Platz schaffen durch Entfernen der ältesten Originale",
@@ -13047,7 +13051,8 @@
       "linkFromAppsDetail": "Gehört zu einer Ihrer Apps",
       "nothingToAdd": "Diese Art von Eintrag ist hier nicht verfügbar.",
       "ifinderProfile": "Suchen in",
-      "crawlOtherHosts": "Dateien auf anderen Websites einbeziehen"
+      "crawlOtherHosts": "Dateien auf anderen Websites einbeziehen",
+      "archiveHint": "Ein ZIP-Archiv wird entpackt: Jede unterstützte Datei darin wird ein Dokument."
     },
     "chatBar": {
       "inProject": "Im Projekt: {{name}}",
@@ -13150,7 +13155,9 @@
         "transfer": "Verschieben oder kopieren nach…",
         "openInIFinder": "In iFinder öffnen",
         "edit": "Bearbeiten",
-        "schedule": "Aktualisierung"
+        "schedule": "Aktualisierung",
+        "downloadOriginal": "Original herunterladen",
+        "useInApp": "In App verwenden…"
       },
       "add": "Dokumente hinzufügen",
       "columns": {
@@ -13283,7 +13290,10 @@
       "pickedFrom": "Ausgewählt aus {{site}}",
       "snapshot": "Text vom {{date}}",
       "uploaded": "Hochgeladen",
-      "linkedFrom": "Verknüpft aus {{project}}"
+      "linkedFrom": "Verknüpft aus {{project}}",
+      "fromArchive": "Aus {{archive}}",
+      "fromChat": "Aus einem Chat",
+      "fromShare": "Aus einer geteilten Datei"
     },
     "roles": {
       "admin": "Aus einer App",
@@ -13515,6 +13525,36 @@
       "refreshingNotice_other": "{{count}} veraltete Dokumente werden aktualisiert. Antworten verwenden bis dahin den gespeicherten Text.",
       "outdatedNotice_one": "{{count}} Dokument ist veraltet. Es wird aktualisiert, sobald das Projekt das nächste Mal in einem Chat oder einer Suche genutzt wird; Antworten verwenden bis dahin den gespeicherten Text.",
       "outdatedNotice_other": "{{count}} Dokumente sind veraltet. Sie werden aktualisiert, sobald das Projekt das nächste Mal in einem Chat oder einer Suche genutzt wird; Antworten verwenden bis dahin den gespeicherten Text."
+    },
+    "import": {
+      "title": "In Projekt kopieren",
+      "subtitle": "Eine Kopie von „{{name}}“ wird dem Projekt als Dokument hinzugefügt. Sie bleibt dort, auch wenn dieser Chat gelöscht wird.",
+      "loading": "Ihre Projekte werden geladen…",
+      "noProjects": "Sie haben kein Projekt, dem Sie Dokumente hinzufügen können. Bitten Sie den Eigentümer eines Projekts, Sie zum Bearbeiter zu machen.",
+      "choose": "Projekt",
+      "newProject": "Neues Projekt",
+      "newProjectName": "Name des neuen Projekts",
+      "newProjectHint": "Es bleibt privat, bis Sie es teilen.",
+      "nameRequired": "Geben Sie einen Namen für das neue Projekt ein.",
+      "nameTooLong": "Der Name ist zu lang.",
+      "whoSees": "Wer es sieht: {{audience}}",
+      "skippedEntry": "{{name}}: {{reason}}",
+      "copying": "Wird kopiert…",
+      "submit": "Kopieren",
+      "addedTo_one": "{{count}} Dokument zu {{project}} hinzugefügt.",
+      "addedTo_other": "{{count}} Dokumente zu {{project}} hinzugefügt.",
+      "added_one": "{{count}} Dokument hinzugefügt.",
+      "added_other": "{{count}} Dokumente hinzugefügt.",
+      "skipped_one": "{{count}} übersprungen:",
+      "skipped_other": "{{count}} übersprungen:",
+      "openProject": "Projekt öffnen",
+      "audience": {
+        "everyone": "Alle angemeldeten Personen",
+        "catalog": "Alle angemeldeten Personen (im Katalog veröffentlicht)",
+        "members_one": "{{count}} Mitglied",
+        "members_other": "{{count}} Mitglieder",
+        "private": "Nur Sie"
+      }
     }
   },
   "integrationScopes": {
@@ -13623,7 +13663,9 @@
     "pageNotFound": "Diese Datei wurde nicht gefunden.",
     "promptRequest": "Das Artefakt möchte im Chat fragen:",
     "promptSend": "Senden",
-    "promptBusy": "Eine Antwort wird noch geschrieben. Senden Sie, sobald sie fertig ist."
+    "promptBusy": "Eine Antwort wird noch geschrieben. Senden Sie, sobald sie fertig ist.",
+    "useInApp": "In App verwenden…",
+    "copyToProject": "In Projekt kopieren…"
   },
   "chatFiles": {
     "deleted": "{{name}} wurde gelöscht.",
@@ -14441,6 +14483,21 @@
       "userApps": "Sie dürfen keine persönlichen Apps anlegen.",
       "share": "Sie dürfen persönliche Apps nicht teilen.",
       "ownerMayNotShare": "Der Besitzer dieser App darf sie nicht teilen, deshalb kann sie nicht geteilt werden."
+    }
+  },
+  "useInApp": {
+    "title": "In App verwenden",
+    "subtitle": "Ein neuer Chat der gewählten App beginnt mit einer Kopie von „{{name}}“ als Anhang.",
+    "search": "Apps durchsuchen",
+    "loading": "Apps werden geladen…",
+    "loadFailed": "Die Apps konnten nicht geladen werden. Bitte versuchen Sie es erneut.",
+    "noApps": "Keine Ihrer Apps nimmt diese Art von Datei an.",
+    "noMatch": "Keine App passt zu Ihrer Suche.",
+    "attach": {
+      "modelCannot": "Die Datei konnte nicht angehängt werden: Das gewählte Modell kann diese Art von Datei nicht verarbeiten.",
+      "noServerFiles": "Das Dokument konnte nicht angehängt werden: Diese Installation speichert keine Chat-Dateien.",
+      "refused": "Die Datei konnte nicht angehängt werden: {{detail}}",
+      "failed": "Die Datei konnte nicht angehängt werden. Bitte versuchen Sie es erneut."
     }
   }
 }

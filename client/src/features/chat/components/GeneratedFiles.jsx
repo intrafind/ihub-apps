@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
-import { useState } from 'react';
+import { useId, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
 import { fetchChatArtifact } from '../../../api';
@@ -10,6 +10,9 @@ import { usePlatformConfig } from '../../../shared/contexts/platformConfigContex
 import { downloadableArtifactBlob, libraryKitOf } from '../utils/artifactLibraryKit';
 import { useArtifactFetcher } from '../contexts/ArtifactFetchContext';
 import { useArtifactViewer } from '../contexts/ArtifactViewerContext';
+import PaneMenu, { PaneMenuItem } from '../../workspace/components/PaneMenu';
+import { canCopyArtifactToProject } from '../../projects/utils/projectImport';
+import { canUseArtifactInApp } from '../utils/useInApp';
 import {
   artifactBadge,
   blobOfBase64,
@@ -42,9 +45,18 @@ function GeneratedFileCard({ file, chatId }) {
   // archives) keep the download button as their only action.
   const openable = Boolean(viewer && canFetch && state !== 'missing' && isOpenable(file));
   // Only a file the chat has stored can be shared; a live one has no id yet.
-  const shareable = Boolean(
-    viewer?.shareArtifact && file.stored && file.id && chatId && state !== 'missing'
+  const storedHere = Boolean(file.stored && file.id && chatId && state !== 'missing');
+  const shareable = Boolean(viewer?.shareArtifact && storedHere);
+  // "Use in app…" and "Copy to project…" copy the stored file on the server, so they
+  // need its id too. A chat takes no pictures and no ZIP archives; a project takes
+  // ZIP archives (it unpacks them) but no pictures.
+  const usableInApp = Boolean(viewer?.openArtifactInApp && storedHere && canUseArtifactInApp(file));
+  const copyableToProject = Boolean(
+    viewer?.copyArtifactToProject && storedHere && canCopyArtifactToProject(file)
   );
+  const hasMore = usableInApp || copyableToProject;
+  const menuId = useId();
+  const [menuOpen, setMenuOpen] = useState(false);
 
   const download = async () => {
     setState('loading');
@@ -135,7 +147,11 @@ function GeneratedFileCard({ file, chatId }) {
           data-testid="generated-file-open"
           aria-current={active ? 'true' : undefined}
           className={`flex min-w-0 flex-1 cursor-pointer items-center gap-3 rounded-lg px-3 py-2 text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 ${
-            shareable || canDownload ? 'pr-20' : ''
+            hasMore && (shareable || canDownload)
+              ? 'pr-28'
+              : shareable || canDownload || hasMore
+                ? 'pr-20'
+                : ''
           }`}
         >
           {info}
@@ -183,6 +199,54 @@ function GeneratedFileCard({ file, chatId }) {
               className={state === 'loading' ? 'animate-spin' : ''}
             />
           </button>
+        )}
+        {hasMore && (
+          <PaneMenu
+            id={`${menuId}-more`}
+            open={menuOpen}
+            onToggle={setMenuOpen}
+            label={t('chatMessage.generatedFiles.moreNamed', 'More actions for {{name}}', {
+              name: file.name
+            })}
+            align="right"
+            trigger={props => (
+              <button
+                type="button"
+                {...props}
+                data-testid="generated-file-more"
+                className={ACTION}
+                aria-label={t('chatMessage.generatedFiles.moreNamed', 'More actions for {{name}}', {
+                  name: file.name
+                })}
+                title={t('chatMessage.generatedFiles.more', 'More actions')}
+              >
+                <Icon name="ellipsis-vertical" size="sm" />
+              </button>
+            )}
+          >
+            {usableInApp && (
+              <PaneMenuItem
+                icon="chat-bubble-left-right"
+                label={t('chatMessage.generatedFiles.useInApp', 'Use in app…')}
+                data-testid="generated-file-use-in-app"
+                onClick={() => {
+                  setMenuOpen(false);
+                  viewer.openArtifactInApp(file);
+                }}
+              />
+            )}
+            {copyableToProject && (
+              <PaneMenuItem
+                icon="folder"
+                label={t('chatMessage.generatedFiles.copyToProject', 'Copy to project…')}
+                data-testid="generated-file-copy-to-project"
+                onClick={() => {
+                  setMenuOpen(false);
+                  viewer.copyArtifactToProject(file);
+                }}
+              />
+            )}
+          </PaneMenu>
         )}
       </div>
     </div>

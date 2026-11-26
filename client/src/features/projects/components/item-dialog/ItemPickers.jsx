@@ -6,6 +6,7 @@ import { useTranslation } from 'react-i18next';
 import Icon from '../../../../shared/components/Icon';
 import { formatBytes } from '../../../admin/utils/systemResourcesFormat';
 import { localizedText, textOf, uploadAccept } from '../../utils/projectItems';
+import { withZipAccept } from '../../utils/projectImport';
 import { HINT_CLASS, INPUT_CLASS, LABEL_CLASS, SECONDARY_BUTTON } from './dialogStyles';
 import SiteCrawlPanel from './SiteCrawlPanel';
 import UrlPreviewPanel from './UrlPreviewPanel';
@@ -26,9 +27,17 @@ import UrlPreviewPanel from './UrlPreviewPanel';
  * @param {(files: Array<File>) => void} props.onFilesChange
  * @param {Object|null} props.config - `_config` (accept list, limits).
  * @param {boolean} [props.multiple=false]
+ * @param {boolean} [props.acceptArchives=false] - ZIP archives are taken too (the project
+ *   unpacks them into one document per entry, `…/items/_import`).
  * @returns {JSX.Element}
  */
-export function UploadPicker({ files, onFilesChange, config, multiple = false }) {
+export function UploadPicker({
+  files,
+  onFilesChange,
+  config,
+  multiple = false,
+  acceptArchives = false
+}) {
   const { t } = useTranslation();
   const [dragging, setDragging] = useState(false);
   const maxBytes = config?.limits?.maxFileBytes;
@@ -64,7 +73,7 @@ export function UploadPicker({ files, onFilesChange, config, multiple = false })
         id="project-item-file"
         type="file"
         multiple={multiple}
-        accept={uploadAccept(config)}
+        accept={acceptArchives ? withZipAccept(uploadAccept(config)) : uploadAccept(config)}
         onChange={e => take(e.target.files)}
         className="block w-full text-sm text-gray-700 dark:text-gray-300"
       />
@@ -76,6 +85,14 @@ export function UploadPicker({ files, onFilesChange, config, multiple = false })
           {t('projects.addItem.accepted', 'Accepted: {{types}}', {
             types: config.upload.summary
           })}
+        </p>
+      )}
+      {acceptArchives && (
+        <p className={HINT_CLASS}>
+          {t(
+            'projects.addItem.archiveHint',
+            'A ZIP archive is unpacked: each supported file in it becomes a document.'
+          )}
         </p>
       )}
       {Number.isFinite(maxBytes) && maxBytes > 0 && (

@@ -8,6 +8,25 @@ import { formatSnapshotDate, provenanceView } from '../utils/projectProvenance';
 const ICONS = { uploaded: 'upload', picked: 'cloud', linked: 'link' };
 
 /**
+ * The label of an uploaded document, with where it was copied from when it came
+ * from a chat (`provenance.from`, set by `…/items/_import`): an entry of a ZIP
+ * archive names the archive, a generated file says whether it came from a chat
+ * or from a file shared with the user.
+ *
+ * @param {{type?: string, archive?: string}|undefined} from
+ * @param {Function} t
+ * @returns {string}
+ */
+function uploadedLabel(from, t) {
+  if (from?.archive) {
+    return t('projects.provenance.fromArchive', 'From {{archive}}', { archive: from.archive });
+  }
+  if (from?.type === 'chat') return t('projects.provenance.fromChat', 'From a chat');
+  if (from?.type === 'share') return t('projects.provenance.fromShare', 'From a shared file');
+  return t('projects.provenance.uploaded', 'Uploaded');
+}
+
+/**
  * The "uploaded" / "picked" / "linked" marker of a project item or of a
  * citation that came from one (spec 2 §5): *Uploaded*, *Picked from
  * SharePoint · text taken 12 Oct 2026*, *Linked*. Renders nothing for a
@@ -20,7 +39,7 @@ const ICONS = { uploaded: 'upload', picked: 'cloud', linked: 'link' };
  * @returns {JSX.Element|null}
  */
 function provenanceLabel(view, t, item, provenance) {
-  if (view.marker === 'uploaded') return t('projects.provenance.uploaded', 'Uploaded');
+  if (view.marker === 'uploaded') return uploadedLabel(provenance?.from, t);
   // A document of another project: name the project it is read from.
   const linkedFrom =
     item?.kind === 'project-item' && (item.link?.projectName || provenance?.source?.site);

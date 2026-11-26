@@ -69,6 +69,8 @@ import useChatFilePreUpload from '../../chat/hooks/useChatFilePreUpload';
 import ChatFilesContext from '../../chat/contexts/ChatFilesContext';
 import { attachStoredFileToMail, mailAttachState } from '../../chat/utils/attachToMail';
 import { consumePendingChatStart } from '../../chat/startChatHandoff';
+import useSourceFileAttachment from '../hooks/useSourceFileAttachment';
+import useArtifactReuse from '../../chat/hooks/useArtifactReuse';
 import useMagicPrompt from '../../../shared/hooks/useMagicPrompt';
 import { useConnectResume } from '../../integrations/connect/useConnectResume';
 import useNextcloudEmbedAttachments from '../../nextcloud-embed/hooks/useNextcloudEmbedAttachments';
@@ -370,6 +372,9 @@ function AppChat({
   // durable chat.
   const [showShare, setShowShare] = useState(false);
   const [sharingArtifact, setSharingArtifact] = useState(null);
+  // A file "Use in app…" handed to this chat (`startChatHandoff`'s `attachment`), waiting
+  // to be copied into it (`useSourceFileAttachment`). `key` tells two hand-overs apart.
+  const [pendingSourceAttachment, setPendingSourceAttachment] = useState(null);
   const auth = useOptionalAuth();
   // A short link belongs to the signed-in user who creates it.
   const signedOut = auth ? auth.isAuthenticated !== true : false;
@@ -645,6 +650,9 @@ function AppChat({
     if (!handoff) return;
     if (handoff.files) {
       fileUploadHandler.setSelectedFile(handoff.files);
+    }
+    if (handoff.attachment?.source) {
+      setPendingSourceAttachment({ key: Date.now(), attachment: handoff.attachment });
     }
     const settings = handoff.settings;
     if (!settings) return;
@@ -1494,6 +1502,26 @@ function AppChat({
     }
   });
 
+  // Copy the file "Use in app…" handed over into this new chat and show it in the composer
+  // like a picked cloud file; nothing is sent.
+  useSourceFileAttachment({
+    pending: pendingSourceAttachment,
+    ready: isChatReadyForDocument({
+      app,
+      appId,
+      modelsLoading,
+      settingsInitializedFor,
+      model: currentModelObject
+    }),
+    chatId,
+    app,
+    currentModel: currentModelObject,
+    fileUploadHandler,
+    addSystemMessage,
+    serverFiles: { enabled: chatFileUploads.enabled, ephemeral },
+    onDone: () => setPendingSourceAttachment(null)
+  });
+
   // Auto-start conversation if app.autoStart is enabled
   const autoStartTriggered = useRef(false);
 
@@ -2030,6 +2058,23 @@ function AppChat({
     },
     [navigate, embedded, openInNewTab]
   );
+
+  // "Use in app…" and "Copy to project…" on a generated file of this chat. Another app
+  // opens through the handoff; this same app starts a new chat here and attaches the
+  // copy at once. Not from an embedded chat: another app's chat opens through the router.
+  const useFileInThisApp = useCallback(
+    attachment => {
+      startNewChat();
+      setPendingSourceAttachment({ key: Date.now(), attachment });
+    },
+    [startNewChat]
+  );
+  const artifactReuse = useArtifactReuse({
+    owner: chatId ? { chatId } : null,
+    enabled: !embedded,
+    currentAppId: appId,
+    onUseInCurrentApp: useFileInThisApp
+  });
 
   const clearChat = () => {
     if (
@@ -3205,6 +3250,8 @@ function AppChat({
             ? artifact => setSharingArtifact(artifact)
             : null
         }
+        onUseInApp={artifactReuse.onUseInApp}
+        onCopyToProject={artifactReuse.onCopyToProject}
         newTabUrl={artifact =>
           chatId
             ? `/artifacts/${encodeURIComponent(chatId)}/${encodeURIComponent(artifact.id)}`
@@ -3630,6 +3677,7 @@ function AppChat({
               />
             </Suspense>
           )}
+          {artifactReuse.elements}
           {sharingArtifact && (
             <ArtifactShareDialog
               isOpen

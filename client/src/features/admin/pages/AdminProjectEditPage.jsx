@@ -11,6 +11,7 @@ import {
   createAdminProject,
   deleteAdminProjectItem,
   fetchAdminProjectConfig,
+  fetchAdminProjectItemOriginal,
   fetchAdminProjectItemText,
   fetchAdminProjectKinds,
   getAdminApiErrorMessage,
@@ -51,6 +52,7 @@ import {
 } from '../utils/projectAdmin';
 import { localizedText } from '../../projects/utils/projectItems';
 import { removeItemsInTurn, withoutItems } from '../../projects/utils/removeItems';
+import { saveItemOriginal } from '../../projects/utils/itemOriginal';
 import UnsavedChangesDialog from '../components/UnsavedChangesDialog';
 
 // The chat pulls in the whole chat page: load it when an admin opens it.
@@ -125,6 +127,8 @@ function AdminProjectEditPageContent({ id }) {
   const [editTarget, setEditTarget] = useState(null);
   const documentActions = useProjectItemDocumentActions(id);
   const [busyItemId, setBusyItemId] = useState(null);
+  // Why the last "Download original" failed.
+  const [downloadError, setDownloadError] = useState(null);
   const [removeItem, setRemoveItem] = useState(null);
   const [historyOpen, setHistoryOpen] = useState(false);
   // The scratch chat beside the page (Try in chat).
@@ -278,6 +282,19 @@ function AdminProjectEditPageContent({ id }) {
       replaceItem(await refreshAdminProjectItem(id, item.id));
       await reload();
     });
+
+  /** Save the original file of a document that kept one (`item.hasOriginal`). */
+  const handleDownloadOriginal = async item => {
+    setDownloadError(null);
+    setBusyItemId(item.id);
+    try {
+      await saveItemOriginal(fetchAdminProjectItemOriginal, id, item);
+    } catch (err) {
+      setDownloadError(adminErrorMessage(err));
+    } finally {
+      setBusyItemId(null);
+    }
+  };
 
   const handleRemove = async () => {
     const item = removeItem;
@@ -470,7 +487,13 @@ function AdminProjectEditPageContent({ id }) {
         onTransfer={item => setTransfer({ mode: 'move', items: [item] })}
         onRemove={setRemoveItem}
         onDocumentAction={documentActions.onDocumentAction}
+        onDownloadOriginal={handleDownloadOriginal}
       />
+      {downloadError && (
+        <p role="alert" className="mt-2 text-sm text-red-600 dark:text-red-400">
+          {downloadError}
+        </p>
+      )}
       {documentActions.error && (
         <p role="alert" className="mt-2 text-sm text-red-600 dark:text-red-400">
           {documentActions.error}
@@ -616,6 +639,7 @@ function AdminProjectEditPageContent({ id }) {
             item={previewItem}
             onClose={() => setPreviewItem(null)}
             fetchText={fetchAdminItemText}
+            onDownloadOriginal={handleDownloadOriginal}
             onSave={async text => {
               const updated = await updateAdminProjectItemText(id, previewItem.id, text);
               clearEstimate();

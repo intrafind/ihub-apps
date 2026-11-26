@@ -52,6 +52,8 @@ import {
   storedCounterpart
 } from '../utils/artifactFiles';
 import { downloadableArtifactBlob, libraryKitOf } from '../utils/artifactLibraryKit';
+import { canCopyArtifactToProject } from '../../projects/utils/projectImport';
+import { canUseArtifactInApp } from '../utils/useInApp';
 import ArtifactsPanel from './ArtifactsPanel';
 import ArtifactViewer from './ArtifactViewer';
 import UploadedFileDetail from './UploadedFilesTab';
@@ -134,6 +136,10 @@ function focusRegion(name, element) {
  * @param {(artifact: Object) => Promise<Blob>} [props.fetchBlob] - Bytes of a stored artifact;
  *   by default the owner's route (or the fetcher an `ArtifactFetchContext` supplies).
  * @param {(artifact: Object) => void} [props.onShare] - Adds Share to stored artifacts.
+ * @param {(artifact: Object) => void} [props.onUseInApp] - Adds "Use in app…" to stored
+ *   artifacts (the cards' menu and the pane's ⋯ menu); called with the stored descriptor.
+ * @param {(artifact: Object) => void} [props.onCopyToProject] - Adds "Copy to project…" to
+ *   stored artifacts that are not pictures; called with the stored descriptor.
  * @param {(artifact: Object) => string|null} [props.newTabUrl] - Route of a standalone page
  *   for an artifact; adds "Open in new tab".
  * @param {Object} [props.files] - What the Files index lists.
@@ -160,6 +166,8 @@ export default function ArtifactViewerHost({
   chatId,
   fetchBlob = null,
   onShare = null,
+  onUseInApp = null,
+  onCopyToProject = null,
   newTabUrl = null,
   files = null,
   inline = false,
@@ -562,9 +570,21 @@ export default function ArtifactViewerHost({
       openSource,
       sourcesInPane: split,
       activeId,
-      shareArtifact: onShare || null
+      shareArtifact: onShare || null,
+      openArtifactInApp: onUseInApp || null,
+      copyArtifactToProject: onCopyToProject || null
     }),
-    [openArtifact, openFile, openFiles, openSource, split, activeId, onShare]
+    [
+      openArtifact,
+      openFile,
+      openFiles,
+      openSource,
+      split,
+      activeId,
+      onShare,
+      onUseInApp,
+      onCopyToProject
+    ]
   );
 
   // ---- width ----
@@ -747,19 +767,53 @@ export default function ArtifactViewerHost({
       const stored = !isLiveArtifact(descriptor);
       // Share is always offered where the page allows it. A live item is shared
       // through its stored copy; until the answer is stored there is none yet.
-      const shareArtifact = onShare
-        ? artifact => {
-            const copy = storedCounterpart(artifact, generatedItems);
-            if (copy) onShare(copy);
-            else
-              announce(
-                t(
-                  'chatArtifacts.shareNotStored',
-                  'This file is still being saved to the chat. Try again in a moment.'
-                )
-              );
-          }
-        : null;
+      // Share, "Use in app…" and "Copy to project…" work on the stored copy.
+      const withStoredCopy = handler =>
+        handler
+          ? artifact => {
+              const copy = storedCounterpart(artifact, generatedItems);
+              if (copy) handler(copy);
+              else
+                announce(
+                  t(
+                    'chatArtifacts.shareNotStored',
+                    'This file is still being saved to the chat. Try again in a moment.'
+                  )
+                );
+            }
+          : null;
+      const shareArtifact = withStoredCopy(onShare);
+      // Judged by type only here: a live file is resolved to its stored copy on click.
+      const typeOnly = { ...descriptor, id: descriptor.id || 'live' };
+      const toApp = onUseInApp && canUseArtifactInApp(typeOnly) ? withStoredCopy(onUseInApp) : null;
+      const copyToProject =
+        onCopyToProject && canCopyArtifactToProject(typeOnly)
+          ? withStoredCopy(onCopyToProject)
+          : null;
+      const reuseMenu = [
+        ...(toApp
+          ? [
+              {
+                key: 'use-in-app',
+                icon: 'chat-bubble-left-right',
+                label: t('chatArtifacts.useInApp', 'Use in app…'),
+                onClick: () => toApp(descriptor),
+                testId: 'artifact-viewer-use-in-app'
+              }
+            ]
+          : []),
+        ...(copyToProject
+          ? [
+              {
+                key: 'copy-to-project',
+                icon: 'folder',
+                label: t('chatArtifacts.copyToProject', 'Copy to project…'),
+                onClick: () => copyToProject(descriptor),
+                testId: 'artifact-viewer-copy-to-project'
+              }
+            ]
+          : [])
+      ];
       const newTab = stored && newTabUrl ? newTabUrl(descriptor) : null;
       const mailAttach = files?.mailAttach?.available ? files.mailAttach : null;
       const attachToMail = mailAttach
@@ -784,6 +838,7 @@ export default function ArtifactViewerHost({
           getBlob={getBlob}
           chrome={chrome}
           onShare={shareArtifact}
+          extraMore={reuseMenu}
           onShowInFiles={() => show({ kind: 'files', tab: 'generated' })}
           onOpenInNewTab={
             newTab

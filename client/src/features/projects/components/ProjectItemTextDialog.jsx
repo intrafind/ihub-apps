@@ -33,9 +33,19 @@ const NOT_EDITING = { draft: null, loading: false, saving: false, error: null };
  * @param {(text: string) => Promise<Object|undefined>} [props.onSave] - Stores the
  *   new text; rejects with the error to show. Without it the dialog is read-only.
  * @param {(error: Error) => string} props.errorMessage
+ * @param {(item: Object) => void} [props.onDownloadOriginal] - Adds "Download original" to the
+ *   header of a document that kept its original file (`item.hasOriginal`).
  * @returns {JSX.Element|null}
  */
-function ProjectItemTextDialog({ projectId, item, onClose, fetchText, onSave, errorMessage }) {
+function ProjectItemTextDialog({
+  projectId,
+  item,
+  onClose,
+  fetchText,
+  onSave,
+  errorMessage,
+  onDownloadOriginal
+}) {
   const { t } = useTranslation();
   const [state, setState] = useState(EMPTY_STATE);
   const [editing, setEditing] = useState(NOT_EDITING);
@@ -107,11 +117,22 @@ function ProjectItemTextDialog({ projectId, item, onClose, fetchText, onSave, er
         >
           {t('projects.preview.title', 'Text of "{{name}}"', { name: item?.name ?? '' })}
         </h3>
+        {typeof onDownloadOriginal === 'function' && item?.hasOriginal === true && (
+          <button
+            type="button"
+            onClick={() => onDownloadOriginal(item)}
+            className="ml-auto inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium text-gray-700 dark:text-gray-200 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600"
+            data-testid="project-item-download-original"
+          >
+            <Icon name="download" size="sm" />
+            {t('projects.items.actions.downloadOriginal', 'Download original')}
+          </button>
+        )}
         {editable && !isEditing && !state.loading && !state.error && (
           <button
             type="button"
             onClick={() => void startEditing()}
-            className="ml-auto inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium text-gray-700 dark:text-gray-200 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600"
+            className={`${item?.hasOriginal === true && onDownloadOriginal ? '' : 'ml-auto '}inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium text-gray-700 dark:text-gray-200 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600`}
           >
             <Icon name="pencil" size="sm" />
             {t('projects.preview.edit', 'Edit text')}
@@ -121,7 +142,12 @@ function ProjectItemTextDialog({ projectId, item, onClose, fetchText, onSave, er
           type="button"
           onClick={onClose}
           aria-label={t('common.close', 'Close')}
-          className={`${editable && !isEditing && !state.loading && !state.error ? '' : 'ml-auto '}text-gray-500 hover:text-gray-600 dark:hover:text-gray-200`}
+          className={`${
+            (editable && !isEditing && !state.loading && !state.error) ||
+            (item?.hasOriginal === true && typeof onDownloadOriginal === 'function')
+              ? ''
+              : 'ml-auto '
+          }text-gray-500 hover:text-gray-600 dark:hover:text-gray-200`}
         >
           <Icon name="x" className="h-5 w-5" />
         </button>

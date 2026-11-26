@@ -1,7 +1,8 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
-import { useCallback, useMemo, useState } from 'react';
+import { Suspense, useCallback, useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
 import ConfirmDialog from '../../../shared/components/ConfirmDialog';
@@ -19,8 +20,14 @@ import {
   previewPickerUrl,
   searchPickerIFinder,
   fetchPickerIFinderProfiles,
+  fetchProjectItemOriginal,
+  importProjectItems,
   uploadProjectItem
 } from '../../../api';
+import lazyWithRetry from '../../../utils/lazyWithRetry';
+import { openAppWithAttachment } from '../../chat/openAppWithAttachment';
+import { projectItemAttachment } from '../../chat/utils/useInApp';
+import { saveItemOriginal } from '../utils/itemOriginal';
 import { useProjectEstimate } from '../hooks/useProjectEstimate';
 import { useProjectItemActions } from '../hooks/useProjectItemActions';
 import { projectErrorMessage } from '../utils/projectErrors';
@@ -41,6 +48,9 @@ import ProjectUsageBar from './ProjectUsageBar';
 import RefreshTtlDialog from './RefreshTtlDialog';
 import { isAwaitingRefresh } from '../utils/projectItems';
 
+// The app picker of "Use in app…": loaded when first opened.
+const UseInAppDialog = lazyWithRetry(() => import('../../chat/components/UseInAppDialog'));
+
 /**
  * What the shared "Add item" dialog calls for a user project.
  *
@@ -51,6 +61,8 @@ function userItemApi(errorMessage) {
   return {
     addItem: (...args) => addProjectItem(...args),
     uploadItem: (...args) => uploadProjectItem(...args),
+    // A ZIP archive goes to `…/items/_import`, which unpacks it.
+    importItem: (projectId, upload) => importProjectItems(projectId, upload),
     fetchPages: () => fetchPickerPages(),
     searchIFinder: (query, options) => searchPickerIFinder(query, options),
     fetchIFinderProfiles: () => fetchPickerIFinderProfiles(),
@@ -187,6 +199,12 @@ function ProjectItemsSection({ project, config, editable, setProject, reload }) 
   // The ticked items a removal waits to be confirmed for (none: no dialog), and whether it runs.
   const [bulkRemove, setBulkRemove] = useState([]);
   const [bulkRemoving, setBulkRemoving] = useState(false);
+  // "Use in app…": the attachment the app picker is open for.
+  const [useInAppAttachment, setUseInAppAttachment] = useState(null);
+  // "Download original": the item being fetched, and why the last one failed.
+  const [downloadingId, setDownloadingId] = useState(null);
+  const [downloadError, setDownloadError] = useState(null);
+  const navigate = useNavigate();
   const actions = useProjectItemActions({ projectId: project.id, setProject, reload });
   const documentActions = useProjectItemDocumentActions(project.id);
   // Stable for the dialogs' effects as long as the language does not change.
@@ -213,6 +231,18 @@ function ProjectItemsSection({ project, config, editable, setProject, reload }) 
   // someone else, or found gone by the poll) is not selected any more. The table
   // offers ticking only to those who may change the items.
   const selectedItems = (project.items || []).filter(item => selectedIds.has(item.id));
+
+  const downloadOriginal = async item => {
+    setDownloadError(null);
+    setDownloadingId(item.id);
+    try {
+      await saveItemOriginal(fetchProjectItemOriginal, project.id, item);
+    } catch (err) {
+      setDownloadError(messageOf(err));
+    } finally {
+      setDownloadingId(null);
+    }
+  };
   const bulkTexts = bulkRemoveTexts(t, isIFinder, bulkRemove.length);
 
   const handleBulkRemove = async () => {
@@ -331,10 +361,15 @@ function ProjectItemsSection({ project, config, editable, setProject, reload }) 
             {documentActions.error}
           </p>
         )}
+        {downloadError && (
+          <p role="alert" className="mb-2 text-sm text-red-600 dark:text-red-400">
+            {downloadError}
+          </p>
+        )}
         <ProjectItemsTable
           items={project.items || []}
           kinds={config?.kinds || []}
-          busyItemId={actions.busyItemId || documentActions.busyId}
+          busyItemId={actions.busyItemId || documentActions.busyId || downloadingId}
           readOnly={!editable}
           estimates={estimate ? estimateByItem : undefined}
           onPreview={setPreviewItem}
@@ -350,6 +385,14 @@ function ProjectItemsSection({ project, config, editable, setProject, reload }) 
           onSchedule={isIFinder ? undefined : setScheduling}
           onEdit={isIFinder ? undefined : setEditing}
           onRemove={setRemoving}
+          // A copy of the document goes into a new chat of another app; a smart collection
+          // from iFinder keeps no documents of its own to copy.
+          onUseInApp={
+            isIFinder
+              ? undefined
+              : item => setUseInAppAttachment(projectItemAttachment(project.id, item))
+          }
+          onDownloadOriginal={isIFinder ? undefined : downloadOriginal}
           selectedIds={new Set(selectedItems.map(item => item.id))}
           onSelectionChange={setSelectedIds}
         />
@@ -390,7 +433,22 @@ function ProjectItemsSection({ project, config, editable, setProject, reload }) 
             : undefined
         }
         errorMessage={messageOf}
+        onDownloadOriginal={isIFinder ? undefined : downloadOriginal}
       />
+      {useInAppAttachment && (
+        <Suspense fallback={null}>
+          <UseInAppDialog
+            isOpen
+            attachment={useInAppAttachment}
+            onClose={() => setUseInAppAttachment(null)}
+            onSelect={app => {
+              const attachment = useInAppAttachment;
+              setUseInAppAttachment(null);
+              openAppWithAttachment({ navigate, appId: app.id, attachment });
+            }}
+          />
+        </Suspense>
+      )}
       {editing && (
         <EditItemDialog
           item={editing}

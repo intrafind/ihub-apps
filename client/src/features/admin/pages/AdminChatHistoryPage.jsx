@@ -1069,7 +1069,7 @@ function AdminChatHistoryPage() {
               <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
                 {t(
                   'admin.chatHistory.uploads.storageModeHelp',
-                  'An app can override this in its settings. Word, PowerPoint, Excel and PDF files can only be used as templates or filled in while the original is kept.'
+                  'Also applies to files uploaded to projects. An app can override this for its chats, not for projects. Word, PowerPoint, Excel and PDF files can only be used as templates or filled in while the original is kept.'
                 )}
               </p>
             </div>
