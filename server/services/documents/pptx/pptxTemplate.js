@@ -243,6 +243,33 @@ async function readLayout(zip, { layoutId, rels, master, matchers }) {
 }
 
 /**
+ * One slide master with its theme and its layouts; null when its part is
+ * missing.
+ */
+async function readMaster(zip, { masterId, relTarget, matchers }) {
+  const path = relTarget(masterId.getAttributeNS(NS_R, 'id') || masterId.getAttribute('r:id'));
+  const doc = path ? await readXmlPart(zip, path) : null;
+  if (!doc) return null;
+  const rels = await readRels(zip, path);
+  const themeRel = rels.find(r => r.type === REL_TYPES.theme);
+  const master = {
+    path,
+    placeholders: placeholdersOf(doc, matchers),
+    theme: themeRel
+      ? themeOf(await readXmlPart(zip, resolveTarget(path, themeRel.target)))
+      : themeOf(null),
+    bodySizes: bodySizes(doc),
+    titleSize: titleSize(doc)
+  };
+  const layouts = await Promise.all(
+    descendants(doc.documentElement, 'sldLayoutId').map(layoutId =>
+      readLayout(zip, { layoutId, rels, master, matchers })
+    )
+  );
+  return { master, layouts: layouts.filter(Boolean) };
+}
+
+/**
  * Open and read a template.
  *
  * @param {Buffer|Uint8Array} buffer
@@ -260,32 +287,14 @@ export async function loadPresentationTemplate(buffer) {
     return rel ? resolveTarget(PRESENTATION, rel.target) : null;
   };
   const slideSize = slideSizeOf(presentation);
-  const masters = [];
-  const layouts = [];
-  const masterIds = descendants(presentation.documentElement, 'sldMasterId');
-  for (const masterId of masterIds) {
-    const path = relTarget(masterId.getAttributeNS(NS_R, 'id') || masterId.getAttribute('r:id'));
-    const doc = path ? await readXmlPart(zip, path) : null;
-    if (!doc) continue;
-    const rels = await readRels(zip, path);
-    const themeRel = rels.find(r => r.type === REL_TYPES.theme);
-    const master = {
-      path,
-      placeholders: placeholdersOf(doc, matchers),
-      theme: themeRel
-        ? themeOf(await readXmlPart(zip, resolveTarget(path, themeRel.target)))
-        : themeOf(null),
-      bodySizes: bodySizes(doc),
-      titleSize: titleSize(doc)
-    };
-    masters.push(master);
-    const read = await Promise.all(
-      descendants(doc.documentElement, 'sldLayoutId').map(layoutId =>
-        readLayout(zip, { layoutId, rels, master, matchers })
-      )
-    );
-    layouts.push(...read.filter(Boolean));
-  }
+  const read = await Promise.all(
+    descendants(presentation.documentElement, 'sldMasterId').map(masterId =>
+      readMaster(zip, { masterId, relTarget, matchers })
+    )
+  );
+  const found = read.filter(Boolean);
+  const masters = found.map(entry => entry.master);
+  const layouts = found.flatMap(entry => entry.layouts);
   if (!layouts.length) throw new Error('The template has no slide layouts.');
   const notesRel = presRels.find(r => r.type === REL_TYPES.notesMaster);
   return {
