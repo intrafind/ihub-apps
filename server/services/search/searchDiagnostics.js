@@ -162,6 +162,33 @@ export function diagnoseSearchError(error, provider) {
         retryable: false
       };
 
+    case 'SEARXNG_TARGET_BLOCKED':
+      return {
+        status: 'blocked',
+        code,
+        title: `${label} address is refused by the SSRF check`,
+        detail: message,
+        remediation: [
+          'Company-internal addresses (10.x, 172.16-31.x, 192.168.x) are allowed. A loopback address such as localhost, a link-local or metadata address, or a name this server cannot resolve is not.',
+          'If the instance really is there, add its host to ssrf.allowedHosts (Admin → Security); a name that only a proxy resolves needs the same.'
+        ],
+        blockedBy: null,
+        retryable: false
+      };
+
+    case 'SEARXNG_REDIRECT':
+      return {
+        status: 'error',
+        code,
+        title: `${label} answered a redirect`,
+        detail: message,
+        remediation: [
+          'Enter the URL the redirect leads to (often the https:// address) as the instance URL.'
+        ],
+        blockedBy: null,
+        retryable: false
+      };
+
     case 'SEARXNG_FORBIDDEN':
       return {
         status: 'blocked',

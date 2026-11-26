@@ -552,7 +552,9 @@ docker run -d --name searxng -p 127.0.0.1:8080:8080 -v ./searxng:/etc/searxng do
 This binds the port to the local host, for an iHub server on the same machine. SearXNG has no
 sign-in and the example turns its limiter off, so do not publish the port to a network you do not
 trust: put the instance on a container network shared with iHub (and omit `-p`), or behind a
-reverse proxy that asks for a sign-in (see **Authorization** below).
+reverse proxy that asks for a sign-in (see **Authorization** below). An iHub server on the same
+machine reaches it as `localhost`, which the address check below refuses until `localhost` is on
+`ssrf.allowedHosts`.
 
 If you switch the limiter on (it is off unless `server.limiter: true`), put the iHub server's
 address under `pass_ip` in `[botdetection.ip_lists]` of `limiter.toml`, and make sure a reverse
@@ -579,7 +581,15 @@ client address.
    Brave and Staan, so an install that also has one of those on Auto keeps using it. Name
    `searxng` in the apps that must use your gateway.
 
-The instance is a normal outbound connection of iHub: it follows `HTTPS_PROXY` / `NO_PROXY` and
+The address of the instance is checked like any other URL an admin enters (the SSRF guard). A
+company-internal address (10.x, 172.16-31.x, 192.168.x, or a name that resolves to one) is accepted
+without further setup, and the connection goes to the address that was checked. A loopback address
+such as `localhost`, a link-local or cloud-metadata address, or a name this server cannot resolve is
+refused (`SEARXNG_TARGET_BLOCKED`) unless the host is on `ssrf.allowedHosts` (Admin → Security) or
+`ssl.domainWhitelist`. A redirect from the instance is not followed: iHub reports it
+(`SEARXNG_REDIRECT`) and you enter the URL it leads to, for example the `https://` address.
+
+The instance is also a normal outbound connection of iHub: it follows `HTTPS_PROXY` / `NO_PROXY` and
 `proxy.urlPatterns`, so an instance on the internal network needs a proxy bypass when a corporate
 proxy is configured; and for a self-signed or private-CA certificate it follows
 `ssl.ignoreInvalidCertificates` with the host in `ssl.domainWhitelist` (see
@@ -616,6 +626,8 @@ the upstream one.
 | ------------------------------ | ------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------- |
 | `SEARXNG_FORBIDDEN` (HTTP 403) | `json` is not in `search.formats` (the default); or the proxy or the limiter refuses this server | Add `json` to `search.formats`, restart the instance; check the proxy and `pass_ip`                                       |
 | `SEARXNG_UNAUTHORIZED` (401)   | The proxy in front of SearXNG wants a credential                                                 | Pick a secret in **Authorization** (`Basic …` for Basic auth)                                                             |
+| `SEARXNG_TARGET_BLOCKED`       | The address is loopback, link-local, a metadata address or does not resolve here                 | Add the host to `ssrf.allowedHosts` (Admin → Security); company-internal addresses need nothing                            |
+| `SEARXNG_REDIRECT` (3xx)       | The instance redirects (often `http://` to `https://`)                                           | Enter the URL the redirect leads to                                                                                         |
 | `SEARXNG_NOT_FOUND` (404)      | The URL does not lead to SearXNG                                                                 | Use the base URL; add the path an instance runs under                                                                     |
 | `SEARXNG_RATE_LIMITED` (429)   | The instance's limiter throttles iHub                                                            | `pass_ip` for the iHub server, or limiter off for a private instance                                                      |
 | `SEARXNG_INVALID_RESPONSE`     | HTML or another service answered                                                                 | Open the URL in a browser; check for a login page or proxy notice                                                         |

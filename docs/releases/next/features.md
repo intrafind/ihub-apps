@@ -84,6 +84,10 @@ search traffic of iHub then goes to a gateway under your control instead of a se
 - SearXNG forwards each query to the engines enabled in it. Queries leave your network if those
   are external engines: the control is yours, the engines' view of the query is decided in the
   instance.
+- The instance address is checked like any other admin-entered URL: company-internal addresses
+  work as they are, while `localhost`, link-local and cloud-metadata addresses need the host on
+  `ssrf.allowedHosts` (Admin → Security). The connection goes to the checked address and a
+  redirect is reported, not followed.
 - Its hits are listed in the chat but stay private (a shared chat does not keep them), because an
   instance may search an intranet as well.
 - SearXNG is AGPL-licensed software you operate; iHub only calls its HTTP API and does not bundle

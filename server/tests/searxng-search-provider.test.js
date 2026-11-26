@@ -24,6 +24,7 @@ import https from 'node:https';
 import {
   SearxngSearchProvider,
   buildSearxngSearchUrl,
+  checkSearxngTarget,
   parseSearxngError,
   parseSearxngResults,
   resolveSearxngLanguage,
@@ -82,6 +83,7 @@ function provider({ responses, settings = { baseUrl: BASE }, ...deps } = {}) {
       return typeof next === 'function' ? next() : next;
     },
     settingsResolver: () => settings,
+    targetGuard: async () => ({}),
     languageResolver: language => language || 'en',
     retryBackoffMs: 1,
     ...deps
@@ -251,6 +253,8 @@ describe('error classification', () => {
   it('has a diagnosis for every code', () => {
     for (const c of [
       'SEARXNG_NOT_CONFIGURED',
+      'SEARXNG_TARGET_BLOCKED',
+      'SEARXNG_REDIRECT',
       'SEARXNG_UNAUTHORIZED',
       'SEARXNG_FORBIDDEN',
       'SEARXNG_NOT_FOUND',
@@ -381,6 +385,80 @@ describe('SearxngSearchProvider', () => {
   });
 });
 
+describe('the SSRF check of the instance address', () => {
+  const setPlatform = platform => configCache.setCacheEntry('config/platform.json', platform);
+  after(() => setPlatform({}));
+
+  it('lets company-internal addresses through and pins the connection to them', async () => {
+    setPlatform({});
+    for (const url of ['http://10.1.2.3:8080', 'http://192.168.0.7', 'https://172.20.0.5/searx']) {
+      const { lookup } = await checkSearxngTarget(url);
+      assert.equal(typeof lookup, 'function', url);
+    }
+    const { lookup } = await checkSearxngTarget('http://10.1.2.3:8080');
+    const address = await new Promise((resolve, reject) =>
+      lookup('searxng', {}, (err, found) => (err ? reject(err) : resolve(found)))
+    );
+    assert.equal(address, '10.1.2.3');
+  });
+
+  it('refuses loopback, link-local and metadata addresses and localhost', async () => {
+    setPlatform({});
+    for (const url of [
+      'http://127.0.0.1:8080',
+      'http://localhost:8080',
+      'http://169.254.169.254',
+      'http://[::1]:8080'
+    ]) {
+      await assert.rejects(checkSearxngTarget(url), { code: 'SEARXNG_TARGET_BLOCKED' }, url);
+    }
+  });
+
+  it('trusts a host the admin put on ssrf.allowedHosts or the SSL whitelist', async () => {
+    setPlatform({ ssrf: { allowedHosts: ['127.0.0.1'] } });
+    assert.deepEqual(await checkSearxngTarget('http://127.0.0.1:8080'), {});
+    setPlatform({ ssl: { ignoreInvalidCertificates: true, domainWhitelist: ['localhost'] } });
+    assert.deepEqual(await checkSearxngTarget('http://localhost:8080'), {});
+    await assert.rejects(checkSearxngTarget('http://127.0.0.1:8080'), {
+      code: 'SEARXNG_TARGET_BLOCKED'
+    });
+  });
+
+  it('is applied before every request, and the refusal is not a network error', async () => {
+    const { instance, calls } = provider({
+      responses: [jsonResponse({ results: [hit(1)] })],
+      targetGuard: async () => {
+        throw Object.assign(new Error('refused'), { code: 'SEARXNG_TARGET_BLOCKED' });
+      }
+    });
+    await assert.rejects(instance.search('q'), { code: 'SEARXNG_TARGET_BLOCKED' });
+    assert.equal(calls.length, 0);
+  });
+
+  it('passes the pinned lookup to the transport and never follows a redirect', async () => {
+    const lookup = () => {};
+    const { instance, calls } = provider({
+      responses: [jsonResponse({ results: [hit(1)] })],
+      targetGuard: async () => ({ lookup })
+    });
+    await instance.search('q');
+    assert.equal(calls[0].options.lookup, lookup);
+    assert.equal(calls[0].options.redirect, 'manual');
+  });
+
+  it('reports a redirect with where it leads', async () => {
+    const { instance, calls } = provider({
+      responses: [jsonResponse(null, { status: 301, headers: { location: 'https://s.example/' } })]
+    });
+    await assert.rejects(instance.search('q'), err => {
+      assert.equal(err.code, 'SEARXNG_REDIRECT');
+      assert.match(err.message, /https:\/\/s\.example\//);
+      return true;
+    });
+    assert.equal(calls.length, 1);
+  });
+});
+
 describe('the default transport honours the SSL whitelist', () => {
   let certificate;
   let server;
@@ -413,12 +491,24 @@ describe('the default transport honours the SSL whitelist', () => {
     certificate?.remove();
   });
 
-  const setSsl = ssl => configCache.setCacheEntry('config/platform.json', { ssl });
+  // The instance is on loopback, which the SSRF check refuses unless the host is allowed.
+  const setSsl = ssl =>
+    configCache.setCacheEntry('config/platform.json', {
+      ssl,
+      ssrf: { allowedHosts: ['127.0.0.1'] }
+    });
   const live = baseUrl =>
     new SearxngSearchProvider({
       settingsResolver: () => ({ baseUrl, authorization: 'Bearer t0k3n' }),
       languageResolver: () => 'en'
     });
+
+  it('refuses a loopback instance the admin did not allow', async () => {
+    configCache.setCacheEntry('config/platform.json', {});
+    await assert.rejects(live(`http://127.0.0.1:${plainPort}`).search('q', { skipCache: true }), {
+      code: 'SEARXNG_TARGET_BLOCKED'
+    });
+  });
 
   it('talks plain http to an internal instance and sends the credential', async () => {
     setSsl({ ignoreInvalidCertificates: false, domainWhitelist: [] });

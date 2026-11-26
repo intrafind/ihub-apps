@@ -18,6 +18,13 @@
  *  - **No API key exists.** SearXNG has no authentication. When a reverse proxy
  *    in front of it asks for one, the installation references a credential that
  *    is sent as the `Authorization` header (`websearchConfig.js`).
+ *  - **The address is checked.** The URL comes from an admin, so every request
+ *    goes through the SSRF guard (`utils/ssrfGuard.js`, REVIEW.md A01) with
+ *    `allowPrivate`: an instance on the company network just works, while a
+ *    loopback, link-local or cloud-metadata address is refused unless the host
+ *    is trusted (`ssrf.allowedHosts` or `ssl.domainWhitelist`). The connection
+ *    is pinned to the checked address, and a redirect is never followed (a
+ *    3xx is reported as an error), since each hop would need its own check.
  *  - **JSON is off by default.** An instance only answers `format=json` when
  *    its `settings.yml` lists `json` under `search.formats`; otherwise it
  *    answers HTTP 403. That is by far the most common failure, so it has its
@@ -42,6 +49,8 @@ import config from '../../config.js';
 import { throttledFetch } from '../../requestThrottler.js';
 import { makeSearchCacheKey, getCachedSearch, setCachedSearch } from '../searchCache.js';
 import logger from '../../utils/logger.js';
+import { isSsrfTrustedHost } from '../../utils/httpConfig.js';
+import { assertPublicTarget, createPinnedLookup } from '../../utils/ssrfGuard.js';
 
 /** Most results one search returns (a SearXNG page usually holds more; the cap keeps the tool honest). */
 export const SEARXNG_MAX_WEB_RESULTS = 20;
@@ -154,9 +163,16 @@ export function unresponsiveEngines(payload) {
  *
  * @param {Object|null} payload - parsed body (`null` when it was not JSON)
  * @param {number} [httpStatus]
+ * @param {string|null} [location] - the `Location` header of a redirect
  * @returns {{code: string, message: string}|null}
  */
-export function parseSearxngError(payload, httpStatus) {
+export function parseSearxngError(payload, httpStatus, location) {
+  if (httpStatus >= 300 && httpStatus < 400) {
+    return {
+      code: 'SEARXNG_REDIRECT',
+      message: `The SearXNG instance answered a redirect (HTTP ${httpStatus}${location ? ` to ${location}` : ''}). iHub does not follow redirects for an engine, so use the URL it leads to as the instance URL.`
+    };
+  }
   if (httpStatus === 401) {
     return {
       code: 'SEARXNG_UNAUTHORIZED',
@@ -263,6 +279,33 @@ export function parseSearxngResults(payload) {
 }
 
 /**
+ * The SSRF check of the instance the admin configured, before a request.
+ *
+ * A host on `ssrf.allowedHosts` or `ssl.domainWhitelist` is the admin's own
+ * decision and passes unchecked. Any other host must resolve to addresses the
+ * guard accepts with `allowPrivate` (company-internal ranges pass; loopback,
+ * link-local, reserved and cloud-metadata addresses do not), and the connection
+ * is then pinned to those addresses.
+ *
+ * @param {string} baseUrl - the normalized instance URL
+ * @returns {Promise<{ lookup?: Function }>} the DNS lookup that pins the connection (none for a trusted host)
+ * @throws {Error} with code `SEARXNG_TARGET_BLOCKED` when the address is refused
+ */
+export async function checkSearxngTarget(baseUrl) {
+  const url = new URL(baseUrl);
+  if (isSsrfTrustedHost(url.hostname)) return {};
+  const verdict = await assertPublicTarget(url, { allowPrivate: true });
+  if (!verdict.ok) {
+    const error = new Error(
+      `The SearXNG instance address ${url.hostname} is refused: ${verdict.reason}. A loopback, link-local or metadata address, or a name that does not resolve, needs the host on ssrf.allowedHosts (Admin → Security).`
+    );
+    error.code = 'SEARXNG_TARGET_BLOCKED';
+    throw error;
+  }
+  return { lookup: createPinnedLookup(verdict.addresses, { allowPrivate: true }) };
+}
+
+/**
  * SearXNG search provider: no vendor, no API key, the customer's own gateway.
  */
 class SearxngSearchProvider extends SearchProvider {
@@ -275,10 +318,19 @@ class SearxngSearchProvider extends SearchProvider {
    * @param {() => Object} [deps.settingsResolver] - the installation's settings
    *   ({@link resolveSearxngSettings}), injected by tests
    * @param {(language?: string) => string} [deps.languageResolver]
+   * @param {(baseUrl: string) => Promise<{lookup?: Function}>} [deps.targetGuard] - the
+   *   SSRF check ({@link checkSearxngTarget}), injected by tests
    * @param {number} [deps.retryBackoffMs=1200]
    */
-  constructor({ fetchImpl, settingsResolver, languageResolver, retryBackoffMs = 1200 } = {}) {
+  constructor({
+    fetchImpl,
+    settingsResolver,
+    languageResolver,
+    targetGuard,
+    retryBackoffMs = 1200
+  } = {}) {
     super();
+    this.targetGuard = targetGuard || checkSearxngTarget;
     this.fetchImpl = fetchImpl || ((url, options) => throttledFetch('searxngSearch', url, options));
     this.settingsResolver = settingsResolver || resolveSearxngSettings;
     this.languageResolver = languageResolver || resolveSearchLanguage;
@@ -372,7 +424,7 @@ class SearxngSearchProvider extends SearchProvider {
     while (true) {
       const res = await this.fetchOnce(url, settings);
       const payload = await readJsonBody(res);
-      const error = parseSearxngError(payload, res.status);
+      const error = parseSearxngError(payload, res.status, res.headers?.get?.('location'));
 
       if (!error) {
         const result = { results: parseSearxngResults(payload).slice(0, wanted) };
@@ -411,8 +463,14 @@ class SearxngSearchProvider extends SearchProvider {
   async fetchOnce(url, settings) {
     const headers = { Accept: 'application/json', 'User-Agent': SEARXNG_USER_AGENT };
     if (settings.authorization) headers.Authorization = settings.authorization;
+    // A refusal is the answer, not a network failure: it is thrown as it is.
+    const { lookup } = await this.targetGuard(settings.baseUrl);
     try {
-      return await this.fetchImpl(url, { headers });
+      return await this.fetchImpl(url, {
+        headers,
+        redirect: 'manual',
+        ...(lookup ? { lookup } : {})
+      });
     } catch (error) {
       throw networkFailure({
         error,
