@@ -241,3 +241,17 @@ what a template needs.
   the user and never to invent a value. `edit_docx` changes one field and keeps the others.
 - **Author:** the author of a Word document is the person who asked for it, unless the model names
   one.
+
+## Word Files Uploaded in the Chat: Fill Their Own Placeholders
+
+A Word file the user uploads and asks the model to build on can hold placeholders of its own, such
+as `{{project}}` or `{{client}}`. The model now fills them.
+
+- The model passes the values in `fields`; until now only the built-in placeholders (`{{title}}`,
+  `{{date}}`, `{{year}}`, `{{page}}` …) were filled and the others printed as written.
+- A placeholder that is still without a value after the document is made is reported to the model,
+  which asks the user and creates the document again. A placeholder in an old body that
+  `styles_only` clears is not reported.
+- The `fields` parameter of `create_docx` is offered whenever users may upload a Word file, not only
+  when a document template declares fields.
+

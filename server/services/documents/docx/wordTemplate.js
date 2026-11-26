@@ -337,6 +337,13 @@ function tocNodes(doc, title) {
   );
 }
 
+/** Add the placeholders under a root that are not built in (a field of the template) to a set. */
+function noteUnresolved(into, root) {
+  for (const name of placeholdersIn(root)) {
+    if (!BUILT_IN_PLACEHOLDERS.includes(name)) into.add(name);
+  }
+}
+
 function placeholdersIn(root) {
   const found = new Set();
   for (const paragraph of descendants(root, 'p')) {
@@ -704,6 +711,9 @@ async function enableFieldUpdate(ctx) {
  *   `styles_only` clears it (styles, headers/footers and section setup stay),
  *   `fill_placeholders` and `append` (the default) put the content after it.
  *   A `{{content}}` marker always wins.
+ * @param {(names: string[]) => void} [options.onUnresolved] - Called with the
+ *   placeholders of the template's own text (body that stays, headers, footers)
+ *   that are not built in and had no value, so they stay as written.
  * @returns {Promise<Buffer>}
  */
 export async function mergeIntoWordTemplate(generated, template, options = {}) {
@@ -796,20 +806,25 @@ export async function mergeIntoWordTemplate(generated, template, options = {}) {
   // Place the content.
   const marker = findMarker(tplBody, CONTENT_MARKER);
   const sectPr = lastSectPr(tplBody);
+  if (!marker && (options.mode === 'styles_only' || !hasContent(tplBody))) {
+    // An empty body, or `styles_only` (an uploaded document used only for
+    // its look): drop the old body, but not the paragraphs that end a
+    // section (their page setup and headers would be lost).
+    for (const child of childElements(tplBody)) {
+      if (child === sectPr || firstChild(firstChild(child, 'pPr'), 'sectPr')) continue;
+      // The table of contents put at `{{toc}}` is not the old body.
+      if (toc.includes(child)) continue;
+      tplBody.removeChild(child);
+    }
+  }
+  // What is left of the template's own text, before the content goes in: a
+  // placeholder in it that is not built in had no value. Text of the content
+  // (which may hold "{{…}}" itself) does not count.
+  const unresolved = new Set();
+  noteUnresolved(unresolved, tplBody);
   if (marker) {
     placeAtMarker(marker, nodes);
   } else {
-    if (options.mode === 'styles_only' || !hasContent(tplBody)) {
-      // An empty body, or `styles_only` (an uploaded document used only for
-      // its look): drop the old body, but not the paragraphs that end a
-      // section (their page setup and headers would be lost).
-      for (const child of childElements(tplBody)) {
-        if (child === sectPr || firstChild(firstChild(child, 'pPr'), 'sectPr')) continue;
-        // The table of contents put at `{{toc}}` is not the old body.
-        if (toc.includes(child)) continue;
-        tplBody.removeChild(child);
-      }
-    }
     for (const node of nodes) {
       if (sectPr) tplBody.insertBefore(node, sectPr);
       else tplBody.appendChild(node);
@@ -820,8 +835,10 @@ export async function mergeIntoWordTemplate(generated, template, options = {}) {
     const partDoc = await readXmlPart(tpl, part);
     if (!partDoc) continue;
     fillPlaceholders(partDoc, partDoc.documentElement, values);
+    noteUnresolved(unresolved, partDoc.documentElement);
     writeXmlPart(tpl, part, partDoc);
   }
+  options.onUnresolved?.([...unresolved]);
 
   if (options.updateFields) await enableFieldUpdate(ctx);
   writeRels(tpl, tplMain, ctx.tplRels);

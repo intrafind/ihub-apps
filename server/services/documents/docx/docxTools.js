@@ -91,7 +91,13 @@ export async function createDocx(
     // The user's own document: its styles, headers/footers and page setup win
     // over the admin template; the content mode decides about its old body.
     applied.assets = { wordTemplate: templateFile.buffer };
-    applied.spec = { ...applied.spec, templateMode: templateFile.mode || 'auto' };
+    applied.spec = {
+      ...applied.spec,
+      // The uploaded file has no declared fields: the values the model gives
+      // fill its other placeholders, and what has no value is reported.
+      fields: spec.fields || {},
+      templateMode: templateFile.mode || 'auto'
+    };
     applied.templateId = null;
   }
   const started = Date.now();

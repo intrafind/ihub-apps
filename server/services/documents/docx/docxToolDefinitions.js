@@ -67,7 +67,7 @@ export const CREATE_DOCX_TOOL = {
         type: 'object',
         additionalProperties: { type: 'string' },
         description:
-          'Values of the template\'s own fields, as {"name": "value"}. The fields a template has, and which of them are required, are listed in this tool\'s description. Ask the user for a required value you do not know; do not invent one.'
+          'Values of the template\'s own fields, as {"name": "value"}. The fields a template has, and which of them are required, are listed in this tool\'s description. Ask the user for a required value you do not know; do not invent one. For a Word file the user uploaded (templateFileId): values for its {{placeholders}} that are not built in (the tool reports the ones left without a value).'
       },
       header: {
         type: 'string',
@@ -88,7 +88,7 @@ export const CREATE_DOCX_TOOL = {
       templateFileId: {
         type: 'string',
         description:
-          'Optional id of a .docx the user uploaded in this chat (the id attribute of its <content> tag, only when can_use_as_template="true"). Its styles, headers/footers and page setup are used for the new document.'
+          'Optional id of a .docx the user uploaded in this chat (the id attribute of its <content> tag, only when can_use_as_template="true"). Its styles, headers/footers and page setup are used for the new document. Its own {{placeholders}} that are not built in ({{project}} …) are filled from "fields".'
       },
       templateMode: {
         type: 'string',

@@ -518,6 +518,29 @@ describe('what the model is told about the brand', () => {
   });
 });
 
+describe('the fields parameter of the Word tool', () => {
+  it('is offered when a template has fields or an uploaded Word file can bring its own', async () => {
+    const { systemSkillToolsFor } = await import('../services/systemSkillTools.js');
+    const skills = [{ name: 'docx', isSystem: true, providedTools: ['create_docx'] }];
+    const offered = async app => {
+      const context = await templates.documentTemplateContext({ app });
+      const tool = systemSkillToolsFor(skills, { language: 'en', templates: context }).find(
+        t => t.id === 'create_docx'
+      );
+      return Boolean(tool.parameters.properties.fields);
+    };
+    // No template of this installation declares fields.
+    assert.equal(await offered({}), true, 'users may upload a Word file');
+    assert.equal(await offered({ allowUserTemplateUploads: false }), false);
+    assert.equal(
+      await offered({ documentTemplate: 'bare' }),
+      false,
+      'a pinned template, no uploads'
+    );
+    assert.equal(await offered({ documentTemplate: 'bare', allowUserTemplateUploads: true }), true);
+  });
+});
+
 describe('the PDF page of a stored template', () => {
   it("comes from the Word template's last section: margins, format and orientation", async () => {
     await templates.saveTemplate('margins', { ...BASE, id: 'margins' }, { create: true });

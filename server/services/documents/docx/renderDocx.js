@@ -10,6 +10,21 @@ function yearOf(date) {
   return /\b(?:19|20)\d{2}\b/.exec(String(date))?.[0] || String(new Date().getFullYear());
 }
 
+/** What the model is told about placeholders of an uploaded file that had no value. */
+function unfilledWarning(names) {
+  const list = names.map(name => `{{${name}}}`).join(', ');
+  return `The uploaded file has placeholders that are not built in and had no value, so they stay as written: ${list}. Ask the user for their values if you do not know them, then create the document again with "fields" set, for example {"${names[0]}": "…"}.`;
+}
+
+/**
+ * How the content goes into the template: `auto` (an uploaded file, `spec.templateMode`)
+ * fills `{{content}}` when the file has the marker, else uses the file for its look only.
+ */
+function mergeModeOf(spec, layout) {
+  if (spec.templateMode !== 'auto') return spec.templateMode;
+  return layout.placeholders.has('content') ? 'fill_placeholders' : 'styles_only';
+}
+
 /**
  * Render a Word document spec, in the current thread (the render worker
  * calls this; see `../renderService.js`).
@@ -58,15 +73,14 @@ export async function renderDocx(spec, assets = {}) {
     // An uploaded document (`spec.templateMode` is set by `templateFileId`)
     // that has no `{{content}}` marker is used for its look only: its old body
     // is cleared instead of having the new content appended to it.
-    const mode =
-      spec.templateMode === 'auto'
-        ? layout.placeholders.has('content')
-          ? 'fill_placeholders'
-          : 'styles_only'
-        : spec.templateMode;
+    const mode = mergeModeOf(spec, layout);
     const date = spec.date || new Date().toISOString().slice(0, 10);
+    let unresolved = [];
     buffer = await mergeIntoWordTemplate(built.buffer, template, {
       mode,
+      onUnresolved: names => {
+        unresolved = names;
+      },
       values: {
         // The template's own fields first: a built-in placeholder wins.
         ...spec.fields,
@@ -88,6 +102,9 @@ export async function renderDocx(spec, assets = {}) {
         language: spec.language
       }
     });
+    // An uploaded file's own placeholders get their values from `fields`; what is left is reported.
+    if (spec.templateMode && unresolved.length)
+      warnings = [...warnings, unfilledWarning(unresolved)];
   } else {
     ({ buffer, warnings } = await buildDocx(spec));
   }

@@ -279,7 +279,7 @@ export async function slideGuideFor(
  * @returns {Promise<{ pinned: { id: string, name: string } | null, choices: Array<Object>,
  *   defaultName: string|null, guides: { pptx: string, docx: string }, fieldsApply: boolean,
  *   brand: Object|null, brands: { docx: Object|null } }>} `guides.docx` describes the fields of the templates that can apply,
- *   `fieldsApply` says whether there are any, and `brand` is what the template that applies
+ *   `fieldsApply` says whether there are any (or an uploaded Word file can bring its own), and `brand` is what the template that applies
  *   gives its documents (null when it takes all of it from the neutral default); `brands.docx` is
  *   the brand of a Word document, which follows the Word theme first.
  */
@@ -308,7 +308,8 @@ export async function documentTemplateContext({ app, language = 'en' } = {}) {
     pinned: pinned ? { id: pinned.id, name: pinned.name } : null,
     choices,
     defaultName: choices.find(c => c.default)?.name || null,
-    fieldsApply: Boolean(docxGuide),
+    // Also for a Word file the user uploads: its own placeholders are filled from `fields`.
+    fieldsApply: Boolean(docxGuide) || userTemplateUploadsAllowed(app),
     brand: shown(brand),
     brands: { docx: shown(wordBrand) },
     guides: {
