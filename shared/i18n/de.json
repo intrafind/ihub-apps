@@ -14151,7 +14151,10 @@
     "QUOTA_USER_APPS": "Die Obergrenze für persönliche Apps ist erreicht.",
     "QUOTA_USER_APP_OFFERS": "Zu viele offene Angebote.",
     "USER_APP_CAPABILITY_DENIED": "Die App kann das nicht nutzen. Entfernen Sie es und speichern Sie erneut.",
-    "USER_APP_ACCESS_CHANGED": "Ihr Zugriff auf diese App hat sich geändert. Laden Sie die Seite neu."
+    "USER_APP_ACCESS_CHANGED": "Ihr Zugriff auf diese App hat sich geändert. Laden Sie die Seite neu.",
+    "OCR_UNAVAILABLE": "Die Texterkennung ist nicht verfügbar. Ein Administrator muss ein Texterkennungsmodell oder eine OCR-Integration einrichten.",
+    "OCR_FAILED": "Der Text konnte nicht erkannt werden. Versuchen Sie es später erneut.",
+    "OCR_NO_TEXT": "Im Bild oder auf den gescannten Seiten wurde kein Text gefunden."
   },
   "workspace": {
     "backTo": "Zurück zu {{name}}",

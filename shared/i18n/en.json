@@ -14152,7 +14152,10 @@
     "QUOTA_USER_APPS": "The limit of personal apps is reached.",
     "QUOTA_USER_APP_OFFERS": "Too many open offers.",
     "USER_APP_CAPABILITY_DENIED": "The app cannot use this. Remove it and save again.",
-    "USER_APP_ACCESS_CHANGED": "Your access to this app changed. Reload the page."
+    "USER_APP_ACCESS_CHANGED": "Your access to this app changed. Reload the page.",
+    "OCR_UNAVAILABLE": "Text recognition is not available. An administrator needs to set up a text recognition model or OCR integration.",
+    "OCR_FAILED": "The text could not be recognized. Try again later.",
+    "OCR_NO_TEXT": "No text was found in the image or the scanned pages."
   },
   "workspace": {
     "backTo": "Back to {{name}}",

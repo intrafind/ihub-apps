@@ -24,7 +24,6 @@
  *
  * @module services/integrations/protocols/native/connectors/ifinderOcr
  */
-import { PNG } from 'pngjs';
 import credentialService from '../../../../../CredentialService.js';
 import { httpFetch, isSsrfTrustedHost } from '../../../../../../utils/httpConfig.js';
 import { assertPublicTarget, createPinnedLookup } from '../../../../../../utils/ssrfGuard.js';
@@ -364,11 +363,15 @@ function hintsFor(error) {
   return [];
 }
 
-/** A small white PNG: enough for the service to run a recognition, with no text on it. */
+/**
+ * A small white PNG (64 × 32): enough for the service to run a recognition,
+ * with no text on it. A constant, so this module needs no image library.
+ */
+const BLANK_TEST_PNG_BASE64 =
+  'iVBORw0KGgoAAAANSUhEUgAAAEAAAAAgCAYAAACinX6EAAAAR0lEQVR4AeXBAQEAAAiAIPP/5+qHMPsIkziJkziJkziJkziJkziJkziJkziJkziJkziJkziJkziJkziJkziJkziJkziJk7gDIWYEPMz9We4AAAAASUVORK5CYII=';
+
 function blankTestImage() {
-  const png = new PNG({ width: 64, height: 32 });
-  png.data.fill(255);
-  return PNG.sync.write(png);
+  return Buffer.from(BLANK_TEST_PNG_BASE64, 'base64');
 }
 
 export default createIfinderOcrConnector();
