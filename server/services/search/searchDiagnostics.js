@@ -29,7 +29,7 @@
  */
 
 /** Human labels for the providers this test covers. */
-const PROVIDER_LABELS = { brave: 'Brave Search', staan: 'Staan' };
+const PROVIDER_LABELS = { brave: 'Brave Search', staan: 'Staan', searxng: 'SearXNG' };
 
 /**
  * Label a provider for a message, falling back to its id.
@@ -146,6 +146,130 @@ export function diagnoseSearchError(error, provider) {
           'Check whether an outbound proxy or filtering appliance is rewriting the response.',
           'Verify that the configured endpoint still points at the provider’s API.'
         ],
+        retryable: true
+      };
+
+    case 'SEARXNG_NOT_CONFIGURED':
+      return {
+        status: 'unconfigured',
+        code,
+        title: `${label} has no instance URL`,
+        detail: `${label} searches through an instance you run, and none is configured. ${message}`,
+        remediation: [
+          'Enter the base URL of your SearXNG instance, e.g. https://search.example.org'
+        ],
+        blockedBy: null,
+        retryable: false
+      };
+
+    case 'SEARXNG_TARGET_BLOCKED':
+      return {
+        status: 'blocked',
+        code,
+        title: `${label} address is refused by the SSRF check`,
+        detail: message,
+        remediation: [
+          'Company-internal addresses (10.x, 172.16-31.x, 192.168.x) are allowed. A loopback address such as localhost, a link-local or metadata address, or a name this server cannot resolve is not.',
+          'If the instance really is there, add its host to ssrf.allowedHosts (Admin → Security); a name that only a proxy resolves needs the same.'
+        ],
+        blockedBy: null,
+        retryable: false
+      };
+
+    case 'SEARXNG_REDIRECT':
+      return {
+        status: 'error',
+        code,
+        title: `${label} answered a redirect`,
+        detail: message,
+        remediation: [
+          'Enter the URL the redirect leads to (often the https:// address) as the instance URL.'
+        ],
+        blockedBy: null,
+        retryable: false
+      };
+
+    case 'SEARXNG_FORBIDDEN':
+      return {
+        status: 'blocked',
+        code,
+        title: `${label} refused the request (HTTP 403)`,
+        detail: `The instance was reached but did not answer. ${message}`,
+        remediation: [
+          'Most often: the JSON output is off. Add json to search.formats in the instance’s settings.yml (formats: [html, json]) and restart it.',
+          'If json is enabled: check whether the reverse proxy in front of the instance denies this server, or whether the instance’s bot limiter bans it (pass_ip under [botdetection.ip_lists] in limiter.toml).'
+        ],
+        blockedBy: null,
+        retryable: false
+      };
+
+    case 'SEARXNG_UNAUTHORIZED':
+      return {
+        status: 'unconfigured',
+        code,
+        title: `${label} wants a credential this server did not send`,
+        detail: `The instance (or the reverse proxy in front of it) was reached, so connectivity is fine. ${message}`,
+        remediation: [
+          'Pick a credential of type secret in the Authorization field. A secret is sent as Bearer <secret>; a secret that starts with "Basic " (e.g. Basic dXNlcjpwYXNz) is sent as it is.',
+          'Check the secret is still the one the proxy expects.'
+        ],
+        blockedBy: null,
+        retryable: false
+      };
+
+    case 'SEARXNG_NOT_FOUND':
+      return {
+        status: 'error',
+        code,
+        title: `${label} was not found at this URL`,
+        detail: message,
+        remediation: [
+          'Use the base URL of the instance, e.g. https://search.example.org (a trailing /search is removed).',
+          'If the instance runs under a path behind a reverse proxy, include that path.'
+        ],
+        blockedBy: null,
+        retryable: false
+      };
+
+    case 'SEARXNG_RATE_LIMITED':
+      return {
+        status: 'rate_limited',
+        code,
+        title: `${label} is rate-limiting this server`,
+        detail: `The instance accepted the request but its limiter asked us to slow down. ${message}`,
+        remediation: [
+          'Allow this server’s address in the instance’s limiter (pass_ip under [botdetection.ip_lists] in limiter.toml), or switch the limiter off for a private instance.',
+          'Behind a reverse proxy the instance needs X-Forwarded-For and X-Real-IP to see the real client address.'
+        ],
+        blockedBy: null,
+        retryable: true
+      };
+
+    case 'SEARXNG_INVALID_RESPONSE':
+      return {
+        status: 'error',
+        code,
+        title: `${label} did not return search results`,
+        detail: message,
+        remediation: [
+          'Open the URL in a browser: it should show the SearXNG search page.',
+          'Check that no login page, proxy notice or other service answers at this address.'
+        ],
+        blockedBy: null,
+        retryable: true
+      };
+
+    case 'SEARXNG_ENGINES_UNAVAILABLE':
+      return {
+        status: 'error',
+        code,
+        title: `${label} is running, but its search engines did not answer`,
+        detail: message,
+        remediation: [
+          'Open the instance’s own search page and look at the engines it marks as failed (CAPTCHA, timeout, access denied).',
+          'Engines such as Google or Bing block many data-centre addresses; enable engines that answer from this host, or route the instance through another egress.'
+        ],
+        blockedBy: null,
         retryable: true
       };
 

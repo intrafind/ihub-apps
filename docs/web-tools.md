@@ -1,5 +1,5 @@
 ---
-description: "Search the web and read web pages from chats, with the supported search engines."
+description: 'Search the web and read web pages from chats, with the supported search engines.'
 audience: admin
 type: reference
 adminPage: /admin/integrations
@@ -13,25 +13,26 @@ This document describes the web tools available in the iHub Apps platform for se
 
 iHub Apps provides a unified web search system that automatically selects the best search provider based on the active model. Web search is configured per-app through the `websearch` configuration object rather than through individual tool IDs.
 
-Each search engine is an integration of its own, of type `web-search`, installed under **Admin → Integrations** (group **Web search**, see [Integrations](integrations.md)): **Brave Search** (`com.intrafind/brave-search`, installation `brave`) and **Staan** (`com.intrafind/staan-search`, `staan`). An engine installation holds what that engine needs (Brave and Staan: the API key); a third party can ship its own engine (see [Writing your own engine](#writing-your-own-engine)). Apps switch web search on in their own settings and pick an engine or **Auto**.
+Each search engine is an integration of its own, of type `web-search`, installed under **Admin → Integrations** (group **Web search**, see [Integrations](integrations.md)): **Brave Search** (`com.intrafind/brave-search`, installation `brave`) **Staan** (`com.intrafind/staan-search`, `staan`) and **SearXNG** (`com.intrafind/searxng-search`, `searxng`, a metasearch gateway you run yourself). An engine installation holds what that engine needs (Brave and Staan: the API key; SearXNG: the URL of your instance); a third party can ship its own engine (see [Writing your own engine](#writing-your-own-engine)). Apps switch web search on in their own settings and pick an engine or **Auto**.
 
 **No engine is needed for native search.** A fresh install ships no engine: an app with web search on searches with the model's own search on Google, OpenAI Responses and Anthropic models, and gets no web search on other models until an engine is installed. The page reader `read_url` belongs to the web search feature, not to an engine.
 
 ### Search Providers
 
-| Provider | Type | Best For |
-|----------|------|----------|
-| **Google Search** | Native (Gemini models) | Grounded answers with Google Search citations |
-| **OpenAI Web Search** | Native (GPT models via Responses API) | Web-augmented responses with inline citations |
-| **Anthropic Web Search** | Native (Claude models) | Web-augmented responses with inline citations |
-| **Brave Search** | Engine (installation `brave`) | Privacy-focused search, any model (needs an API key) |
-| **Staan Search** | Engine (installation `staan`) | European search index, any model, works from cloud hosting (needs an API key) |
-| Your own | Engine (any `web-search` installation) | A `script` or `openapi` definition of type `web-search` |
+| Provider                 | Type                                   | Best For                                                                                                                                                       |
+| ------------------------ | -------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Google Search**        | Native (Gemini models)                 | Grounded answers with Google Search citations                                                                                                                  |
+| **OpenAI Web Search**    | Native (GPT models via Responses API)  | Web-augmented responses with inline citations                                                                                                                  |
+| **Anthropic Web Search** | Native (Claude models)                 | Web-augmented responses with inline citations                                                                                                                  |
+| **Brave Search**         | Engine (installation `brave`)          | Privacy-focused search, any model (needs an API key)                                                                                                           |
+| **Staan Search**         | Engine (installation `staan`)          | European search index, any model, works from cloud hosting (needs an API key)                                                                                  |
+| **SearXNG**              | Engine (installation `searxng`)        | Search through your own metasearch gateway, any model; needs the URL of an instance with JSON output enabled (see [SearXNG](#searxng-your-own-search-gateway)) |
+| Your own                 | Engine (any `web-search` installation) | A `script` or `openapi` definition of type `web-search`                                                                                                        |
 
 ### Additional Web Tools
 
-| Tool | Purpose |
-|------|---------|
+| Tool         | Purpose                                                                                                                                                                                  |
+| ------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **read_url** | Open a web page or PDF by URL and read its main content as Markdown (offered automatically with web search, with any engine and next to native search on Anthropic and OpenAI Responses) |
 
 ## Unified Web Search Configuration
@@ -62,19 +63,19 @@ Add a `websearch` object to your app configuration:
 
 ### Configuration Properties
 
-| Property | Type | Default | Description |
-|----------|------|---------|-------------|
-| `enabled` | Boolean | `false` | Enable web search for this app |
-| `provider` | String | `"auto"` | Engine used when native search does not apply: `"auto"` or the id of an engine installation (`"brave"`, `"staan"`, a third-party engine's id). `"auto"` takes the first engine that is enabled and that the user's groups grant, in the order Brave, Staan, then any other engine by id. A named engine that is missing, disabled or not granted means no tool-based search (native search still works); it never falls back to another engine |
-| `required` | Boolean | `false` | Hide the app while its engine is not available: on `"auto"` while no engine is installed and enabled, on a named engine while that one is missing or disabled. Off, the app stays available and searches natively where the model can |
-| `useNativeSearch` | Boolean | `true` | Prefer native search (Google Search for Gemini, OpenAI Web Search for GPT, Anthropic Web Search for Claude) when available |
-| `maxResults` | Number | `5` | Maximum number of search results (1-20) |
-| `extractContent` | Boolean | `true` | Extract full page content from search results |
-| `contentMaxLength` | Number | `3000` | Maximum extracted content length per page (500-50,000 characters) |
-| `enabledByDefault` | Boolean | `false` | Whether web search is active by default (users can toggle it in the chat) |
-| `maxSearches` | Number | `5` | Cap on provider-run searches per model call when native search is used (sent to Anthropic as `max_uses`; 1-50). Anthropic bills each search separately |
-| `researchGuidance` | Boolean or String | `true` | Guidance added to the system prompt when web search is on, telling the model to research in several steps. `true` uses the built-in text, `false` turns it off, a string replaces the built-in text. See [Multi-Step Research](#multi-step-research) |
-| `maxPageReads` | Number | `5` | Cap on pages the model opens with the page reader (`read_url`) in one chat answer (1-50). Pages the search tool fetches for its own excerpts (`extractContent`) do not count. See [Page read limit](#page-read-limit) |
+| Property           | Type              | Default  | Description                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| ------------------ | ----------------- | -------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `enabled`          | Boolean           | `false`  | Enable web search for this app                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| `provider`         | String            | `"auto"` | Engine used when native search does not apply: `"auto"` or the id of an engine installation (`"brave"`, `"staan"`, `"searxng"`, a third-party engine's id). `"auto"` takes the first engine that is enabled and that the user's groups grant, in the order Brave, Staan, SearXNG, then any other engine by id. A named engine that is missing, disabled or not granted means no tool-based search (native search still works); it never falls back to another engine |
+| `required`         | Boolean           | `false`  | Hide the app while its engine is not available: on `"auto"` while no engine is installed and enabled, on a named engine while that one is missing or disabled. Off, the app stays available and searches natively where the model can                                                                                                                                                                                                                                |
+| `useNativeSearch`  | Boolean           | `true`   | Prefer native search (Google Search for Gemini, OpenAI Web Search for GPT, Anthropic Web Search for Claude) when available                                                                                                                                                                                                                                                                                                                                           |
+| `maxResults`       | Number            | `5`      | Maximum number of search results (1-20)                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| `extractContent`   | Boolean           | `true`   | Extract full page content from search results                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| `contentMaxLength` | Number            | `3000`   | Maximum extracted content length per page (500-50,000 characters)                                                                                                                                                                                                                                                                                                                                                                                                    |
+| `enabledByDefault` | Boolean           | `false`  | Whether web search is active by default (users can toggle it in the chat)                                                                                                                                                                                                                                                                                                                                                                                            |
+| `maxSearches`      | Number            | `5`      | Cap on provider-run searches per model call when native search is used (sent to Anthropic as `max_uses`; 1-50). Anthropic bills each search separately                                                                                                                                                                                                                                                                                                               |
+| `researchGuidance` | Boolean or String | `true`   | Guidance added to the system prompt when web search is on, telling the model to research in several steps. `true` uses the built-in text, `false` turns it off, a string replaces the built-in text. See [Multi-Step Research](#multi-step-research)                                                                                                                                                                                                                 |
+| `maxPageReads`     | Number            | `5`      | Cap on pages the model opens with the page reader (`read_url`) in one chat answer (1-50). Pages the search tool fetches for its own excerpts (`extractContent`) do not count. See [Page read limit](#page-read-limit)                                                                                                                                                                                                                                                |
 
 ### How Provider Resolution Works
 
@@ -99,7 +100,8 @@ The system automatically selects the best search tool at runtime based on the mo
 │  Otherwise → the engine of `provider`:           │
 │    "auto"  → the first engine that is enabled    │
 │              and granted to the user: Brave,     │
-│              Staan, then any other engine by id  │
+│              Staan, SearXNG, then any other      │
+│              engine by id                        │
 │                                                  │
 │    an id   → that engine, if it is installed,    │
 │              enabled and granted                 │
@@ -130,7 +132,7 @@ or one engine's installation id), names the page reader in `systemTools`
 workflows do) and may set `webSearch: true`. An engine's tool is served while
 its engine is installed, enabled and granted. A node's `webSearch: true` resolves to native search where the model runs it, and
 otherwise to the search tool of the first engine the user may use (`auto`);
-with no engine it adds nothing. Web search for an *app*, though, is configured
+with no engine it adds nothing. Web search for an _app_, though, is configured
 in `websearch` as above.
 
 Whenever an engine's search tool is offered — including when a provider turns
@@ -235,7 +237,7 @@ The default **Web Chat** app's prompt was reworded to match. Migration V124 upda
 `contents/apps/web-chat.json` only in the languages whose prompt is still exactly the old shipped
 default; a prompt an admin changed is left as is (the added guidance applies to it anyway).
 
-The prompt used to say *"Always cite your sources with URLs"*. Smaller and local models read that
+The prompt used to say _"Always cite your sources with URLs"_. Smaller and local models read that
 as "add a sources section" and ended their answers with a **Sources:** / **Quellen:** list, which
 repeats **Cited in this answer** under the answer. It now asks for the source right after each
 statement; migration V233 updates `web-chat.json` the same way, again only in languages whose
@@ -247,7 +249,7 @@ URLs" or a list of sources: the chat lists them.
 How the answer searched stays above it, one segment per place it looked: **Web 10 results · 3
 opened · via Brave Search**, which unfolds into each search and the pages it opened. Everything about the sources is at
 the answer's end: the list of the sources it cites, then one row with an **N results** entry, with
-the icons of the sites it found, and the **Based on web search** badge. *Results*, not *sources*:
+the icons of the sites it found, and the **Based on web search** badge. _Results_, not _sources_:
 the count includes everything the searches found, and only what the answer cites is a source of
 it. The entry appears once the answer is complete; while it streams, the numbered badges in the
 text open the panel.
@@ -272,7 +274,7 @@ Each source card shows the site's favicon (as the search provider returned it;
 iHub fetches none from a third-party service, sites without one get their
 initial), the site, the title (opening the page), the snippet or
 the cited passage, the published date when known, and whether the page was
-**Read** or **Not readable**, with the words read and a *truncated* hint. Its
+**Read** or **Not readable**, with the words read and a _truncated_ hint. Its
 menu copies the link.
 
 In the answer, each citation is a numbered superscript badge. Hovering or
@@ -287,12 +289,12 @@ the order the answer first links them. **A link to a URL that the turn's searche
 and page reads did not return is never shown as a citation**, only as an
 ordinary link. How the links get into the answer depends on the search path:
 
-| Path | Citations come from |
-|------|---------------------|
-| Brave, Staan, your own engine | The model, which the source guidance (below) asks to cite with `[n](url)` links |
-| Anthropic | Claude's `citations`: a marker follows each cited text block. Uncited search results are listed under *Also considered*, the `cited_text` on the card |
-| Google | The grounding supports: markers go after the passage each one backs. A grounding chunk no support rests on is listed under *Also considered* |
-| OpenAI Responses | The links OpenAI writes into the text. A `url_citation` annotation whose range does not link its source gets a marker after the range. Streamed annotations and `web_search_call` items are read into the same grounding metadata as the other providers |
+| Path                          | Citations come from                                                                                                                                                                                                                                      |
+| ----------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Brave, Staan, your own engine | The model, which the source guidance (below) asks to cite with `[n](url)` links                                                                                                                                                                          |
+| Anthropic                     | Claude's `citations`: a marker follows each cited text block. Uncited search results are listed under _Also considered_, the `cited_text` on the card                                                                                                    |
+| Google                        | The grounding supports: markers go after the passage each one backs. A grounding chunk no support rests on is listed under _Also considered_                                                                                                             |
+| OpenAI Responses              | The links OpenAI writes into the text. A `url_citation` annotation whose range does not link its source gets a marker after the range. Streamed annotations and `web_search_call` items are read into the same grounding metadata as the other providers |
 
 The queries and sources are stored with the saved answer (`sources` on the
 message), so a reopened chat shows the same panel and badges, and a shared one
@@ -315,7 +317,7 @@ the display depends on it — and it covers:
   truncated.
 - **No list of sources at the end** (every search path, last in the prompt): no
   closing list of sources, references or links, named as models write it
-  (*Sources:*, *Quellen:*, *References*), because the chat lists the cited
+  (_Sources:_, _Quellen:_, _References_), because the chat lists the cited
   sources under the answer.
 
 When a model writes such a list anyway, the chat leaves it out of the finished
@@ -332,8 +334,8 @@ not find, a table or a list in the middle of the answer stay. The stored answer,
 `websearch.maxPageReads` (default 5, **Admin → Apps → Web Search → Max Page
 Reads per Answer**) caps how many pages the model opens with the page reader in
 one chat answer. Past the cap, the read is not made and the model is told:
-*page read limit reached for this turn, answer with what you have, and tell the
-user they can continue in the next message*. The chat shows the refused read as
+_page read limit reached for this turn, answer with what you have, and tell the
+user they can continue in the next message_. The chat shows the refused read as
 **Not read** with the same explanation. The pages the search tool fetches for
 its own excerpts (`extractContent`) do not count; they stay capped by
 `maxResults`. The cap applies to chats. An app invoked as a tool from a chat
@@ -363,7 +365,7 @@ Migration V195 then moved the engines into one installation, `websearch` (in 5.6
 - Removes `braveSearch`, `staanSearch` and `qwantSearch` from every app's
   `tools` array. An app that had web search only through such a reference (no
   `websearch.enabled: true`) gets `websearch: { enabled: true,
-  enabledByDefault: true, provider }` with the engine it named — the
+enabledByDefault: true, provider }` with the engine it named — the
   installation's default engine when several were listed, else the first — so
   it keeps searching with that engine; the change is logged per app. A
   `read_url` reference stays
@@ -391,7 +393,7 @@ Migration V264 removes the Qwant engine, which was blocked from most
 data-centre IP addresses: the `qwant` installation is deleted, apps with
 `websearch.provider: "qwant"` are set to `auto`, and grants of `qwant` (or
 `com.intrafind/qwant-search`) are dropped from the groups. Nothing replaces it —
-install Brave Search or Staan under **Admin → Integrations**; until then an app
+install Brave Search, Staan or SearXNG under **Admin → Integrations**; until then an app
 searches only on models with native search.
 
 No manual action is required — the migrations run automatically. Check the
@@ -408,16 +410,16 @@ removed, and why.
 Under each finished answer, one outlined chip says what the answer is based on. It names only the
 **kinds** of source the answer used, and no more than two of them, then **+N**:
 
-| Chip | Meaning |
-|------|---------|
-| Model knowledge | The model's own knowledge: nothing was retrieved |
-| Web | Web search results, or the provider's own search (Google Search grounding) |
-| Project | Documents of a project that went into the prompt or came back from a search |
-| iFinder, iAssistant | Documents found by an iFinder search, or iAssistant's knowledge base |
-| Documents | Knowledge base sources an admin configured |
-| Jira, Munich AD, … | An installed integration, an MCP server or a remote agent, under its own name |
+| Chip                   | Meaning                                                                                            |
+| ---------------------- | -------------------------------------------------------------------------------------------------- |
+| Model knowledge        | The model's own knowledge: nothing was retrieved                                                   |
+| Web                    | Web search results, or the provider's own search (Google Search grounding)                         |
+| Project                | Documents of a project that went into the prompt or came back from a search                        |
+| iFinder, iAssistant    | Documents found by an iFinder search, or iAssistant's knowledge base                               |
+| Documents              | Knowledge base sources an admin configured                                                         |
+| Jira, Munich AD, …     | An installed integration, an MCP server or a remote agent, under its own name                      |
 | Email, File, Recording | The open or added email or meeting (Outlook add-in), an uploaded file or image, an audio recording |
-| Workflow | The answer was produced by a workflow run |
+| Workflow               | The answer was produced by a workflow run                                                          |
 
 Opening the chip shows **About this answer**: the AI-generated statement, each source by name, the
 projects that were in scope but not used, and the provenance details.
@@ -478,10 +480,11 @@ way for both:
 Each provider then maps that language onto whatever its own API expects, and
 falls back to its own default only when the engine does not serve that language:
 
-| Provider | Sends | Falls back to |
-|----------|-------|---------------|
-| Brave | `search_lang` (ISO 639-1) and `country` (2-letter), when the language is one Brave lists | no language parameters — an untargeted search |
-| Staan | `market` (`de-de`, `en-gb`, …) | `en-us` |
+| Provider | Sends                                                                                    | Falls back to                                 |
+| -------- | ---------------------------------------------------------------------------------------- | --------------------------------------------- |
+| Brave    | `search_lang` (ISO 639-1) and `country` (2-letter), when the language is one Brave lists | no language parameters — an untargeted search |
+| Staan    | `market` (`de-de`, `en-gb`, …)                                                           | `en-us`                                       |
+| SearXNG  | `language` (`de`, `en-GB`, …), as given                                                  | SearXNG's own default                         |
 
 Step 2 is what makes a German install behave correctly in the places where no
 user language exists — a workflow or agent run, which has no browser request
@@ -497,9 +500,145 @@ edited directly in `contents/config/platform.json`.
 A model can still override the language for one search by passing the tool's
 `language` parameter, which beats both of the above.
 
+### SearXNG: Your Own Search Gateway
+
+[SearXNG](https://docs.searxng.org/) is a metasearch engine you run yourself. It has no index of its
+own: it forwards each query to the search engines you enable in it (Google, Bing, Brave, DuckDuckGo
+and others) and merges their answers. The **SearXNG** engine (`com.intrafind/searxng-search`,
+installation `searxng`) makes iHub a client of such an instance, so the search traffic of iHub goes
+to a gateway under your control and not to a search vendor's API.
+
+**What this gives you, and what it does not.**
+
+- iHub sends your SearXNG instance the query and the language, and no user name, address or other
+  identity data. The query itself can contain personal information (a user may type a name into the
+  question), and the instance and the engines behind it receive it. The engines see the instance's
+  address, not iHub's and not the user's.
+- The instance decides which engines see a query, and you can log, filter or block there. That is
+  the control.
+- **The queries still leave your network** if the instance forwards them to Google, Bing or another
+  external engine. Only an instance whose engines are all hosted by you keeps a query inside. Do not
+  describe SearXNG as "searching on-premise"; describe it as "search under your control".
+- SearXNG is not a search engine with an index. It answers as well as the engines behind it do, and
+  those engines can block it (CAPTCHA, rate limits), especially from data-centre addresses.
+
+#### Set up the instance
+
+SearXNG's own [installation guide](https://docs.searxng.org/admin/installation.html) is the
+reference. iHub needs two things from the instance:
+
+1. **JSON output.** SearXNG answers `format=json` only when `json` is listed under
+   `search.formats` in its `settings.yml`; otherwise it answers **HTTP 403**. This is the most
+   common reason a new setup fails.
+2. **Being reachable from the iHub server**, without a bot limiter that blocks it.
+
+A minimal `settings.yml` for a private instance, mounted into the container as `/etc/searxng/`:
+
+```yaml
+use_default_settings: true
+search:
+  formats:
+    - html
+    - json
+server:
+  secret_key: '<a long random string, e.g. from: openssl rand -hex 32>'
+  limiter: false
+```
+
+```bash
+docker run -d --name searxng -p 127.0.0.1:8080:8080 -v ./searxng:/etc/searxng docker.io/searxng/searxng
+```
+
+This binds the port to the local host, for an iHub server on the same machine. SearXNG has no
+sign-in and the example turns its limiter off, so do not publish the port to a network you do not
+trust: put the instance on a container network shared with iHub (and omit `-p`), or behind a
+reverse proxy that asks for a sign-in (see **Authorization** below). An iHub server on the same
+machine reaches it as `localhost`, which the address check below refuses until `localhost` is on
+`ssrf.allowedHosts`.
+
+If you switch the limiter on (it is off unless `server.limiter: true`), put the iHub server's
+address under `pass_ip` in `[botdetection.ip_lists]` of `limiter.toml`, and make sure a reverse
+proxy in front of SearXNG passes `X-Forwarded-For` and `X-Real-IP`, or SearXNG does not see the real
+client address.
+
+#### Install it in iHub
+
+1. **Admin → Integrations**, group **Web search**, install **SearXNG**.
+2. **Instance URL** (required): the base URL of the instance, e.g. `https://search.example.org` or
+   `http://searxng:8080`. A trailing `/search` is removed; an instance running under a path needs
+   that path (`https://host/searx`). A URL with a user name and password in it is refused: use the
+   authorization field.
+3. **Authorization** (optional): SearXNG has no sign-in of its own. If a reverse proxy in front of
+   it asks for one, pick a credential of type **secret**. It is sent as
+   `Authorization: Bearer <secret>`; a secret that already starts with `Basic ` or `Bearer ` is sent
+   as it is, which is how a proxy that wants HTTP Basic is served (`Basic dXNlcjpwYXNz`). Use an
+   `https://` instance URL with it: over plain `http://` the secret crosses the network in clear
+   text, and **Test connection** warns about that (it is allowed for a loopback address).
+4. **Test connection** checks the URL and the credential as entered and runs one live search. It
+   tells the usual causes apart: JSON output off (403), wrong URL or path (404), the limiter (429),
+   a credential the proxy rejects (401), and an instance whose engines all failed.
+5. Apps pick it with `websearch.provider: "searxng"`, or take it on **Auto**: SearXNG comes after
+   Brave and Staan, so an install that also has one of those on Auto keeps using it. Name
+   `searxng` in the apps that must use your gateway.
+
+The address of the instance is checked like any other URL an admin enters (the SSRF guard). A
+company-internal address (10.x, 172.16-31.x, 192.168.x, or a name that resolves to one) is accepted
+without further setup, and the connection goes to the address that was checked. A loopback address
+such as `localhost`, a link-local or cloud-metadata address, or a name this server cannot resolve is
+refused (`SEARXNG_TARGET_BLOCKED`) unless the host is on `ssrf.allowedHosts` (Admin → Security) or
+`ssl.domainWhitelist`. When an outbound proxy carries the request, the proxy resolves the name
+itself and is the trust boundary, as for every outbound connection of iHub: the check runs, but the
+connection cannot be pinned to the checked address. A redirect from the instance is not followed: iHub reports it
+(`SEARXNG_REDIRECT`) and you enter the URL it leads to, for example the `https://` address.
+
+The instance is also a normal outbound connection of iHub: it follows `HTTPS_PROXY` / `NO_PROXY` and
+`proxy.urlPatterns`, so an instance on the internal network needs a proxy bypass when a corporate
+proxy is configured; and for a self-signed or private-CA certificate it follows
+`ssl.ignoreInvalidCertificates` with the host in `ssl.domainWhitelist` (see
+[Proxy configuration](proxy-configuration.md)).
+
+#### How a search behaves
+
+|                  |                                                                                                                                                                                                   |
+| ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Request          | `GET <instance>/search?q=…&format=json&categories=general&language=…`                                                                                                                             |
+| Language         | The user's language (`de`, `de-CH`, …), else `platform.defaultLanguage`; SearXNG applies its own default for one it does not know                                                                 |
+| Results          | One page, the first `maxResults` (default 10, at most 20); SearXNG has no result count                                                                                                            |
+| `freshness`      | Sent as `time_range`. SearXNG has `day`, `month` and `year` only, so `week` is sent as `month`; engines that ignore the range are covered by dropping dated results outside the window afterwards |
+| `includeDomains` | `site:` operators in the query                                                                                                                                                                    |
+| Cache            | Per instance, query, language, range and count (`SEARCH_CACHE_TTL_MS`)                                                                                                                            |
+| Throttle         | At most two searches at a time                                                                                                                                                                    |
+| Sources          | Hits are listed in the chat and stay **private**: an instance can search an intranet too, so a shared chat does not keep them                                                                     |
+
+#### Licence
+
+SearXNG is licensed under the GNU AGPL v3. iHub does not contain, bundle, link or copy any SearXNG
+code: it calls the instance's documented HTTP API, as it would call any web service, and you run the
+instance yourself. Using SearXNG this way puts no licence obligation on iHub. Your own obligations
+as the operator are those of the AGPL: if you **modify** SearXNG and others use the modified
+instance over a network (the people searching through iHub do), section 13 requires you to offer
+them the corresponding source of your modified version. An unmodified instance needs nothing beyond
+what the AGPL already says about redistribution. This is a description, not legal advice; have your
+counsel confirm it for your setup. IntraFind does not ship a SearXNG image; the commands above pull
+the upstream one.
+
+#### Troubleshooting
+
+| Test says                      | Cause                                                                                            | What to do                                                                                                                |
+| ------------------------------ | ------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------- |
+| `SEARXNG_FORBIDDEN` (HTTP 403) | `json` is not in `search.formats` (the default); or the proxy or the limiter refuses this server | Add `json` to `search.formats`, restart the instance; check the proxy and `pass_ip`                                       |
+| `SEARXNG_UNAUTHORIZED` (401)   | The proxy in front of SearXNG wants a credential                                                 | Pick a secret in **Authorization** (`Basic …` for Basic auth)                                                             |
+| `SEARXNG_TARGET_BLOCKED`       | The address is loopback, link-local, a metadata address or does not resolve here                 | Add the host to `ssrf.allowedHosts` (Admin → Security); company-internal addresses need nothing                            |
+| `SEARXNG_REDIRECT` (3xx)       | The instance redirects (often `http://` to `https://`)                                           | Enter the URL the redirect leads to                                                                                         |
+| `SEARXNG_NOT_FOUND` (404)      | The URL does not lead to SearXNG                                                                 | Use the base URL; add the path an instance runs under                                                                     |
+| `SEARXNG_RATE_LIMITED` (429)   | The instance's limiter throttles iHub                                                            | `pass_ip` for the iHub server, or limiter off for a private instance                                                      |
+| `SEARXNG_INVALID_RESPONSE`     | HTML or another service answered                                                                 | Open the URL in a browser; check for a login page or proxy notice                                                         |
+| `SEARXNG_ENGINES_UNAVAILABLE`  | The instance is up, but no engine answered                                                       | Open the instance's own search page and see which engines fail (CAPTCHA, timeout); use engines that answer from that host |
+| Network error                  | DNS, port, TLS or proxy                                                                          | See `ssl.domainWhitelist` and the proxy settings above                                                                    |
+
 ### Connectivity Test (Admin UI)
 
-Whether a search provider *can be reached from this server* is a separate
+Whether a search provider _can be reached from this server_ is a separate
 question from whether it is configured correctly. The **Test** button of an engine
 installation — on its tile under **Admin → Integrations**, on its page and in
 its editor (with the values as entered, unsaved) — answers it directly. It
@@ -514,11 +653,11 @@ The search **bypasses the result cache**, so it reports the engine's behaviour
 right now rather than replaying an earlier success. The verdict names what to
 do next, with remediation hints:
 
-| Result | Means | Next step |
-|--------|-------|-----------|
-| **OK** | The engine answered with results | Nothing — search works from this server |
-| **Warning** | It answered, but returned nothing, or rate-limited the request | Try again later, or retest |
-| **Failed** | No API key, a rejected key, or the request never arrived | Fix the credential, or check proxy/TLS settings |
+| Result      | Means                                                          | Next step                                       |
+| ----------- | -------------------------------------------------------------- | ----------------------------------------------- |
+| **OK**      | The engine answered with results                               | Nothing — search works from this server         |
+| **Warning** | It answered, but returned nothing, or rate-limited the request | Try again later, or retest                      |
+| **Failed**  | No API key, a rejected key, or the request never arrived       | Fix the credential, or check proxy/TLS settings |
 
 The same check is available without the UI:
 
@@ -551,7 +690,8 @@ Three safeguards apply to every native search call:
 
 #### Native Search Needs No Engine
 
-Native search is run by the model's provider and is the app's own feature: `resolveAppNativeWebSearch` resolves it from the app's `websearch` settings and the model alone. It needs no engine installation and no integration grant (`permissions.integrations` decides who may use an *engine*, not who gets web search). An app with web search on therefore searches natively on Gemini, OpenAI Responses and Anthropic models on an install without any engine. Workflow nodes that list the generic `webSearch` marker resolve native search per node the same way; their fallback to the first engine the user may use, and any `braveSearch` they list directly, follows the engine's enabled state and grant.
+Native search is run by the model's provider and is the app's own feature: `resolveAppNativeWebSearch` resolves it from the app's `websearch` settings and the model alone. It needs no engine installation and no integration grant (`permissions.integrations` decides who may use an _engine_, not who gets web search). An app with web search on therefore searches natively on Gemini, OpenAI Responses and Anthropic models on an install without any engine. Workflow nodes that list the generic `webSearch` marker resolve native search per node the same way; their fallback to the first engine the user may use, and any `braveSearch` they list directly, follows the engine's enabled state and grant.
+
 - **Paused turns.** A long Anthropic search turn can end with `stop_reason: pause_turn`. iHub replays the paused assistant message verbatim on a follow-up request (up to three times per call) so the answer is completed instead of truncated.
 
 The billable search count (`server_tool_use.web_search_requests`) is recorded as `webSearchRequests` on the call's usage, in the run log and in the admin usage statistics (`webSearch` totals per app, model and user).
@@ -613,6 +753,26 @@ request carrying both, so `includeDomains` wins when both are given.
 
 **Returns**: Search results with title, URL, description, `hostname` and the site's favicon (Staan's `favicon_url`), and optionally extracted page content.
 
+### SearXNG Search (`searxngSearch`)
+
+**Purpose**: Search the web through your own [SearXNG](#searxng-your-own-search-gateway) instance.
+
+The same result shape and parameters as the other engines, so an app can switch `websearch.provider`
+without the model seeing a different contract.
+
+**Parameters**:
+
+- `query` (string, required): Search query
+- `extractContent` (boolean, optional): Extract full content from top results (default: configured by app)
+- `maxResults` (number, optional): Maximum results to return (default: configured by app, max: 20)
+- `contentMaxLength` (number, optional): Maximum content length per page (default: configured by app)
+- `focus` (string, optional): The question being researched; see [Focused reading](#focused-reading-focus)
+- `language` (string, optional): Language or locale for the results, e.g. `en`, `de`, `de-CH` (default: the user's language)
+- `freshness` (string, optional): Only results from the last `day`, `week`, `month` or `year` (sent as `time_range`; dated results outside the window are dropped as well, undated ones kept)
+- `includeDomains` (string[], optional): Only results from these domains (max 10; sent as `site:` operators)
+
+**Returns**: Search results with title, URL, description, hostname and an optional `publishedDate`, and optionally extracted page content.
+
 ### Result Shape and Filters
 
 All three shipped engines share one result shape (`tools/lib/searchWithExtraction.js`),
@@ -660,7 +820,7 @@ id). The contract:
   parameters (`language`, `freshness`, `includeDomains`) are passed through as
   the model sends them.
 - It returns the result shape of the shipped engines: `{ results: [{ title,
-  url, description, hostname, publishedDate?, favicon? }] }`, optionally with
+url, description, hostname, publishedDate?, favicon? }] }`, optionally with
   `extractedContent: [{ url, contentExtracted, content }]`. The chat's sources
   panel reads the hits from it. A third-party engine's hits are kept
   **private** (not shared with a chat share), because iHub cannot know that it
@@ -712,11 +872,11 @@ definition file and how to publish it.
 
 Google Search grounding, OpenAI Web Search, and Anthropic Web Search are **not** tools — there is no `googleSearch`, `webSearch`, or `anthropicWebSearch` entry in `contents/tools/`. Each is a provider capability resolved automatically from the app's `websearch` config (see [Unified Web Search Configuration](#unified-web-search-configuration) above) and injected directly into the request by the model adapter:
 
-| Provider | Native capability | How it works |
-|----------|--------------------|--------------|
-| Google Gemini | Google Search grounding | Mutually exclusive with function calling (Gemini API limitation) — function tools are dropped when native search is active for that request |
-| OpenAI (Responses API) | OpenAI Web Search | Combinable with function tools in the same request |
-| Anthropic Claude | Anthropic's server-side [web search tool](https://platform.claude.com/docs/en/agents-and-tools/tool-use/web-search-tool) | Combinable with function tools; Claude runs the search itself and returns results and citations in the same response, without a round trip through iHub; billed separately by Anthropic per search |
+| Provider               | Native capability                                                                                                        | How it works                                                                                                                                                                                       |
+| ---------------------- | ------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Google Gemini          | Google Search grounding                                                                                                  | Mutually exclusive with function calling (Gemini API limitation) — function tools are dropped when native search is active for that request                                                        |
+| OpenAI (Responses API) | OpenAI Web Search                                                                                                        | Combinable with function tools in the same request                                                                                                                                                 |
+| Anthropic Claude       | Anthropic's server-side [web search tool](https://platform.claude.com/docs/en/agents-and-tools/tool-use/web-search-tool) | Combinable with function tools; Claude runs the search itself and returns results and citations in the same response, without a round trip through iHub; billed separately by Anthropic per search |
 
 None of these take any parameters — they're automatically enabled when `websearch.useNativeSearch` is on and the app's model supports them (Anthropic additionally receives the app's search cap as `max_uses`). Search queries, results and citations are surfaced as grounding metadata, which powers the "Grounding" answer-source badge and the [sources panel and inline citations](#sources-and-citations). For OpenAI this includes streamed answers: the `url_citation` annotations and `web_search_call` items of the stream are read into the grounding metadata (before, only a non-streamed response's annotations were parsed, and nothing read them).
 
@@ -740,7 +900,7 @@ None of these take any parameters — they're automatically enabled when `websea
 - `content`: one window of the page as Markdown — headings, lists, tables, links (absolute) and code are kept; images are reduced to their alt text. PDFs are returned as text
 - `title`, `description`, `author`, and `siteName` / `publishedDate` when the page declares them. A PDF's title and author come from its metadata (the file name when it has no title)
 - `truncated`, `totalLength`, `offset` and `nextOffset`: whether the page has more than this window, how long it is, and where the next window starts. A `note` repeats it in words, with the call to make to read on
-- `incomplete` (only when true): the document is longer than the reader keeps (400 000 characters, or 500 PDF pages), so the rest cannot be read at any offset. The `note` says so, and the chat shows the page as *truncated*
+- `incomplete` (only when true): the document is longer than the reader keeps (400 000 characters, or 500 PDF pages), so the rest cannot be read at any offset. The `note` says so, and the chat shows the page as _truncated_
 - `wordCount` (words in this window), `contentType` (`html` or `pdf`), `format` (`markdown` or `text`), and `pageCount` / `pagesRead` for PDFs
 - a `note` when the page returned little readable text (it may need JavaScript to render, or block automated access)
 - If an error occurs, an exception is thrown with a `code` property for translation
@@ -755,7 +915,7 @@ None of these take any parameters — they're automatically enabled when `websea
 - Returned errors include a `code` field so applications can translate messages and the UI automatically shows a localized error when possible
 - **SSRF protection**: Blocks access to private/internal IP addresses. Domains listed in the SSL whitelist configuration bypass this check (added in v5.2.12)
 
-In the chat's tool activity, a page read shows the page's title, its site, the words read and a *truncated* hint.
+In the chat's tool activity, a page read shows the page's title, its site, the words read and a _truncated_ hint.
 
 #### Focused reading (`focus`)
 
@@ -828,12 +988,12 @@ The page reader uses the following approach:
 
 Every read of a web page goes through the page reader (`services/pageReader/pageReader.js`), whoever asks:
 
-| Caller | Entry |
-| --- | --- |
-| The model's `read_url` tool | `readUrl` (`tools/readUrl.js`): checks what the model passed, then calls `readWebPage` |
-| A search result's `extractContent` excerpt | `readWebPage` (via `tools/lib/searchWithExtraction.js`) |
-| A project's web page item (`url` kind, the `url` source handler) | `readWebPage` (via `sources/URLHandler.js`) |
-| A project's site crawl and its linked-file download | `fetchWebPage` (the same guarded fetch; the response is read as a file, not as a page) |
+| Caller                                                           | Entry                                                                                  |
+| ---------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
+| The model's `read_url` tool                                      | `readUrl` (`tools/readUrl.js`): checks what the model passed, then calls `readWebPage` |
+| A search result's `extractContent` excerpt                       | `readWebPage` (via `tools/lib/searchWithExtraction.js`)                                |
+| A project's web page item (`url` kind, the `url` source handler) | `readWebPage` (via `sources/URLHandler.js`)                                            |
+| A project's site crawl and its linked-file download              | `fetchWebPage` (the same guarded fetch; the response is read as a file, not as a page) |
 
 So they share one fetch (SSRF guard on every redirect hop, DNS pinning, proxy, `ssl.domainWhitelist`), one extraction (Readability and Turndown, `services/pageReader/pageContent.js`), one page cache and one bot-protection memory. An HTML file in a project is turned into Markdown by the same `extractHtmlPage`, so a saved page and a live one read alike. The only other HTML-to-text converter is the one for e-mail bodies (`.eml`, `.msg`), which are fragments, not pages.
 
@@ -906,17 +1066,17 @@ The page reader includes protection against Server-Side Request Forgery (SSRF):
      why)
    - Verify the app has `websearch.enabled: true` in its configuration
 
-6. **Native search not activating for Gemini/GPT/Claude models**
+5. **Native search not activating for Gemini/GPT/Claude models**
    - Ensure `useNativeSearch` is `true` (default)
    - Verify the model's provider is correctly identified as `google`, `openai-responses`, or `anthropic`
    - Check the model configuration: `nativeWebSearch.enabled: false` switches that model to the app's engine
 
-7. **Answers on a Claude model come from an engine although native search is on** (log line `Native web search unavailable — falling back to a search tool`)
+6. **Answers on a Claude model come from an engine although native search is on** (log line `Native web search unavailable — falling back to a search tool`)
    - The provider rejected the native search request. On Anthropic, check that web search is enabled for your organisation in the Claude Console and that the model supports the configured `nativeWebSearch.toolVersion` (the basic `web_search_20250305` works everywhere)
    - Gateways or proxies that do not implement the server tool: set `nativeWebSearch.enabled: false` on that model so it uses the app's engine without the failed attempt
    - The rejection is remembered for 15 minutes per model; restart the server to reset it earlier
 
-8. **Brave Search requests hang or time out**
+7. **Brave Search requests hang or time out**
    - A search that works when called directly (e.g. from a browser or Postman on your own machine) but times out from iHub is usually the server's outbound proxy — either not configured when the network requires it, or configured but blocking/excluding Brave's domain
    - See [Proxy Configuration → Reproduce a failing request outside iHub](proxy-configuration.md#4-reproduce-a-failing-request-outside-ihub) for Linux/macOS and Windows commands that reproduce the exact request iHub sends, with and without the proxy, so you can tell which side is failing
 

@@ -28,7 +28,8 @@ import {
 /** The shipped engine definitions by installation id. */
 export const ENGINE_DEFINITIONS = Object.freeze({
   brave: 'com.intrafind/brave-search',
-  staan: 'com.intrafind/staan-search'
+  staan: 'com.intrafind/staan-search',
+  searxng: 'com.intrafind/searxng-search'
 });
 
 /** A third-party engine (`type: web-search`, installation `acme`, tool `acme__search`) used by the tests. */

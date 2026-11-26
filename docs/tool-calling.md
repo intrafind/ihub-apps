@@ -1210,7 +1210,7 @@ iHub Apps ships with a set of pre-configured built-in tools that cover the most 
 - **Gemini models** + `useNativeSearch: true` → Google Search grounding
 - **OpenAI Responses models** + `useNativeSearch: true` → OpenAI Web Search
 - **Anthropic models** + `useNativeSearch: true` → Anthropic Web Search
-- **Otherwise** → the engine named by `provider` (an engine installation id), if it is installed, enabled and granted to the user; for `"auto"`, the first engine that is, in the order Brave, Staan, then any other engine by id; no engine means no web search on that model
+- **Otherwise** → the engine named by `provider` (an engine installation id), if it is installed, enabled and granted to the user; for `"auto"`, the first engine that is, in the order Brave, Staan, SearXNG, then any other engine by id; no engine means no web search on that model
 
 **Key properties**:
 

@@ -252,11 +252,28 @@ const BRAVE_DETAIL = engineDetail('brave', 'Brave Search', { apiKeyRef: 'brave-k
 ]);
 const KEYLESS_ENGINE_DETAIL = engineDetail('staan', 'Staan', {}, []);
 
+const SEARXNG_DETAIL = engineDetail('searxng', 'SearXNG', { instanceUrl: 'http://searxng:8080' }, [
+  {
+    key: 'instanceUrl',
+    type: 'url',
+    required: true,
+    title: { en: 'Instance URL' }
+  },
+  {
+    key: 'authorizationRef',
+    type: 'credential',
+    scope: 'admin',
+    credentialTypes: ['secret'],
+    title: { en: 'Authorization (optional)' }
+  }
+]);
+
 const DETAILS = {
   ifinder: IFINDER_DETAIL,
   govdata: CKAN_DETAIL,
   brave: BRAVE_DETAIL,
-  staan: KEYLESS_ENGINE_DETAIL
+  staan: KEYLESS_ENGINE_DETAIL,
+  searxng: SEARXNG_DETAIL
 };
 
 const APPS = [
@@ -466,6 +483,31 @@ describe('installation page: settings', () => {
       within(editor).queryByTestId('credential-web-search-engine-api-key')
     ).not.toBeInTheDocument();
     expect(within(editor).queryByTestId('web-search-engine-env-hint')).not.toBeInTheDocument();
+    expectNoMissingKeys();
+  });
+
+  test('SearXNG gets the engine editor with its instance URL, no API key and the JSON hint', async () => {
+    renderAt('/admin/integrations/searxng?tab=settings');
+    const editor = await screen.findByTestId('web-search-engine-editor');
+    expect(within(editor).getByLabelText(/Instance URL/)).toHaveValue('http://searxng:8080');
+    expect(editor).toHaveTextContent('Authorization (optional)');
+    expect(within(editor).queryByTestId('web-search-engine-no-key')).not.toBeInTheDocument();
+    expect(
+      within(editor).queryByTestId('credential-web-search-engine-api-key')
+    ).not.toBeInTheDocument();
+    expect(within(editor).getByTestId('web-search-engine-searxng-hint')).toHaveTextContent(
+      'search.formats'
+    );
+
+    // The test is run with the unsaved URL.
+    fireEvent.change(within(editor).getByLabelText(/Instance URL/), {
+      target: { value: 'https://search.example.org' }
+    });
+    fireEvent.click(within(editor).getByRole('button', { name: 'Test connection' }));
+    await waitFor(() => expect(mockApi.testInstalledIntegration).toHaveBeenCalledTimes(1));
+    const [testedId, tested] = mockApi.testInstalledIntegration.mock.calls[0];
+    expect(testedId).toBe('searxng');
+    expect(tested.values.instanceUrl).toBe('https://search.example.org');
     expectNoMissingKeys();
   });
 

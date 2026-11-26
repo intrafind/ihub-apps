@@ -10,6 +10,7 @@ import { getBraveApiKey } from './search/braveApiKey.js';
 import { SearchProvider } from './search/SearchProvider.js';
 import { resolveSearchLanguage } from './search/searchLanguage.js';
 import { StaanSearchProvider } from './search/staanProvider.js';
+import { SearxngSearchProvider } from './search/searxngProvider.js';
 
 /**
  * Language tags Brave accepts as `search_lang`, mapped onto the exact spelling
@@ -452,9 +453,11 @@ class WebSearchService {
     this.defaultProvider = null;
 
     // Register built-in providers. Brave is registered first and so stays the
-    // default; Staan is the other one.
+    // default; Staan is the other keyed engine, and SearXNG the customer's own
+    // gateway (its URL is an install value).
     this.registerProvider(new BraveSearchProvider());
     this.registerProvider(new StaanSearchProvider());
+    this.registerProvider(new SearxngSearchProvider());
   }
 
   /**
@@ -569,4 +572,10 @@ class WebSearchService {
 const webSearchService = new WebSearchService();
 
 export default webSearchService;
-export { SearchProvider, BraveSearchProvider, StaanSearchProvider, WebSearchService };
+export {
+  SearchProvider,
+  BraveSearchProvider,
+  StaanSearchProvider,
+  SearxngSearchProvider,
+  WebSearchService
+};

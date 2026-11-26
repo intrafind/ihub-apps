@@ -168,6 +168,22 @@ describe('installation facts', () => {
     expect(
       lines(
         installationFacts({
+          definition: 'com.intrafind/searxng-search',
+          values: { instanceUrl: 'http://searxng:8080', authorizationRef: 'proxy-secret' }
+        })
+      )
+    ).toEqual(['Instance: http://searxng:8080', 'Authorization: set']);
+    expect(
+      lines(
+        installationFacts({
+          definition: 'com.intrafind/searxng-search',
+          values: { instanceUrl: 'http://searxng:8080' }
+        })
+      )
+    ).toEqual(['Instance: http://searxng:8080']);
+    expect(
+      lines(
+        installationFacts({
           definition: 'com.intrafind/nextcloud',
           values: { serverUrl: 'https://cloud.example.com' }
         })
@@ -288,6 +304,7 @@ describe('installation facts', () => {
       'com.intrafind/entra-directory',
       'com.intrafind/brave-search',
       'com.intrafind/staan-search',
+      'com.intrafind/searxng-search',
       'com.intrafind/office365',
       'com.intrafind/google-drive',
       'com.intrafind/nextcloud',
