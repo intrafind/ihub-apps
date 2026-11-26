@@ -586,7 +586,9 @@ company-internal address (10.x, 172.16-31.x, 192.168.x, or a name that resolves 
 without further setup, and the connection goes to the address that was checked. A loopback address
 such as `localhost`, a link-local or cloud-metadata address, or a name this server cannot resolve is
 refused (`SEARXNG_TARGET_BLOCKED`) unless the host is on `ssrf.allowedHosts` (Admin → Security) or
-`ssl.domainWhitelist`. A redirect from the instance is not followed: iHub reports it
+`ssl.domainWhitelist`. When an outbound proxy carries the request, the proxy resolves the name
+itself and is the trust boundary, as for every outbound connection of iHub: the check runs, but the
+connection cannot be pinned to the checked address. A redirect from the instance is not followed: iHub reports it
 (`SEARXNG_REDIRECT`) and you enter the URL it leads to, for example the `https://` address.
 
 The instance is also a normal outbound connection of iHub: it follows `HTTPS_PROXY` / `NO_PROXY` and
