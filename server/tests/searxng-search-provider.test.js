@@ -332,6 +332,16 @@ describe('SearxngSearchProvider', () => {
     assert.equal(calls.length, 3);
   });
 
+  it('does not serve a stricter safesearch from a looser one’s cache entry', async () => {
+    const { instance, calls } = provider({ responses: [jsonResponse({ results: [hit(1)] })] });
+    await instance.search('q', { safesearch: 0 });
+    await instance.search('q', { safesearch: 2 });
+    await instance.search('q', { safesearch: 2 });
+    assert.equal(calls.length, 2);
+    assert.equal(new URL(calls[0].url).searchParams.get('safesearch'), '0');
+    assert.equal(new URL(calls[1].url).searchParams.get('safesearch'), '2');
+  });
+
   it('retries throttling, then succeeds', async () => {
     const { instance, calls } = provider({
       responses: [jsonResponse(null, { status: 429 }), jsonResponse({ results: [hit(1)] })]

@@ -136,6 +136,15 @@ describe('the SearXNG test', () => {
     assert.equal(searches.length, 0);
   });
 
+  it('warns when a credential would travel over plain http to another host', async () => {
+    const status = async instanceUrl =>
+      (await connector.test({ values: { instanceUrl, authorizationRef: 'brave-key' } }))[0].status;
+    assert.equal(await status('http://searxng:8080'), 'warn');
+    assert.equal(await status('https://search.example.org'), 'ok');
+    assert.equal(await status('http://127.0.0.1:8080'), 'ok');
+    assert.equal(await status('http://localhost:8080'), 'ok');
+  });
+
   it('searches with the unsaved values, uncached', async () => {
     searches.length = 0;
     const steps = await connector.test({

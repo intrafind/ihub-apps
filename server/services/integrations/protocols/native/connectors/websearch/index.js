@@ -127,6 +127,19 @@ export function apiKeyStep(engineId, values) {
 }
 
 /**
+ * Whether a credential sent to this instance travels in clear text: a plain
+ * `http://` URL whose host is not a loopback address.
+ *
+ * @param {string} baseUrl - the normalized instance URL
+ * @returns {boolean}
+ */
+function sendsCredentialInClear(baseUrl) {
+  const { protocol, hostname } = new URL(baseUrl);
+  if (protocol !== 'http:') return false;
+  return !(hostname === 'localhost' || hostname === '[::1]' || /^127\./.test(hostname));
+}
+
+/**
  * The first step of the SearXNG test: the instance URL and the credential of
  * the values under test.
  *
@@ -158,6 +171,18 @@ export function instanceStep(values) {
         hints: [
           'Pick a credential that holds the secret, or clear the field if the instance needs none'
         ]
+      },
+      settings
+    };
+  }
+  if (settings.authorization && sendsCredentialInClear(settings.baseUrl)) {
+    return {
+      step: {
+        id: 'instance',
+        label,
+        status: 'warn',
+        message: `${settings.baseUrl}: the Authorization header from credential "${settings.ref}" is sent over plain http, so anyone on the network path can read it`,
+        hints: ['Use an https:// instance URL when the instance needs a credential']
       },
       settings
     };

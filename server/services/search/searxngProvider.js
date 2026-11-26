@@ -330,6 +330,7 @@ class SearxngSearchProvider extends SearchProvider {
 
     const lang = resolveSearxngLanguage(this.languageResolver(language));
     const wanted = clampCount(count);
+    const safe = clampSafesearch(safesearch);
     const range = searxngTimeRange(timeRange);
 
     if (chatId) {
@@ -346,7 +347,8 @@ class SearxngSearchProvider extends SearchProvider {
       instance: settings.baseUrl,
       language: lang || '',
       timeRange: range || '',
-      count: wanted
+      count: wanted,
+      safesearch: safe
     });
     if (!skipCache) {
       const cached = getCachedSearch(cacheKey);
@@ -361,7 +363,7 @@ class SearxngSearchProvider extends SearchProvider {
       query,
       language: lang,
       timeRange: range,
-      safesearch
+      safesearch: safe
     });
 
     const MAX_RETRIES = 2;
