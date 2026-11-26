@@ -141,7 +141,7 @@ http {
     # REQUIRED for file uploads: nginx refuses request bodies above 1 MB by default
     # (413 Request Entity Too Large) before iHub sees them. Keep this at or above
     # requestBodyLimitMB in platform.json (default 50). See "Request Body Size" below.
-    client_max_body_size 100M;
+    client_max_body_size 1G;
     
     # Upstream configuration for load balancing and keepalive
     upstream ihub_backend {
@@ -383,13 +383,15 @@ Setting `proxy_request_buffering off` does not lift the limit: nginx counts the 
 
 | Layer | Setting | Default | Set it to |
 | ----- | ------- | ------- | --------- |
-| nginx | `client_max_body_size` (`http`, `server` or `location`) | 1 MB | `100M` (at least `requestBodyLimitMB`; `0` removes the limit) |
-| Kubernetes, ingress-nginx | annotation `nginx.ingress.kubernetes.io/proxy-body-size` | 1m | `"100m"` |
-| Kubernetes, F5 NGINX Ingress Controller | annotation `nginx.org/client-max-body-size` | 1m | `"100m"` |
+| nginx | `client_max_body_size` (`http`, `server` or `location`) | 1 MB | `1G` (at least `requestBodyLimitMB`; `0` removes the limit) |
+| Kubernetes, ingress-nginx | annotation `nginx.ingress.kubernetes.io/proxy-body-size` | 1m | `"1g"` |
+| Kubernetes, F5 NGINX Ingress Controller | annotation `nginx.org/client-max-body-size` | 1m | `"1g"` |
 | Apache | `LimitRequestBody` | 1 GiB from 2.4.54, unlimited before | check the effective value against your largest request; raise it only if it is lower |
 | Traefik | `buffering.maxRequestBodyBytes` (only with the `buffering` middleware) | unlimited | nothing to do unless set |
-| IIS / ARR | `maxAllowedContentLength` (Request Filtering) | about 30 MB | `104857600` |
+| IIS / ARR | `maxAllowedContentLength` (Request Filtering) | about 30 MB | `1073741824` |
 | iHub | `requestBodyLimitMB` in `platform.json` | 50 | see [platform.md](platform.md) |
+
+The examples use 1 GiB on purpose: iHub enforces its own limits with a clear error message (`requestBodyLimitMB`, the per-file and per-chat quotas, and `update.maxUploadSizeMB`, 1024 MB by default, for update archives), so the proxy should not be the narrowest limit in the chain. A proxy limit below iHub's shows up as an unexplained HTML `413`.
 
 A load balancer, API gateway or WAF in front of the proxy may have a body limit of its own; check it too.
 
@@ -551,7 +553,7 @@ metadata:
     # ingress-nginx: its default of 1m refuses image and document uploads (see "Request Body Size").
     # Another controller needs its own setting, e.g. nginx.org/client-max-body-size for the
     # F5 NGINX Ingress Controller.
-    nginx.ingress.kubernetes.io/proxy-body-size: "100m"
+    nginx.ingress.kubernetes.io/proxy-body-size: "1g"
     nginx.ingress.kubernetes.io/configuration-snippet: |
       proxy_set_header X-Forwarded-Prefix /ihub;
 spec:
@@ -788,7 +790,7 @@ app.get('*', (req, res) => {
 
 **Symptom:** Attaching an image, or a document over about 1 MB, fails or the message does not send, while short text messages and small text files work. The browser's network tab shows `413 Request Entity Too Large` with an HTML body from nginx (not a JSON problem document from iHub), and the iHub log has no entry for the request.
 
-**Solution:** The proxy's request body limit is too low; nginx defaults to 1 MB. Set `client_max_body_size 100M;` (nginx), the `nginx.ingress.kubernetes.io/proxy-body-size` annotation (ingress-nginx; `nginx.org/client-max-body-size` for the F5 NGINX Ingress Controller) or the equivalent of your proxy, and keep it at or above `requestBodyLimitMB`. Reload the proxy. See [Request Body Size](#request-body-size).
+**Solution:** The proxy's request body limit is too low; nginx defaults to 1 MB. Set `client_max_body_size 1G;` (nginx), the `nginx.ingress.kubernetes.io/proxy-body-size` annotation (ingress-nginx; `nginx.org/client-max-body-size` for the F5 NGINX Ingress Controller) or the equivalent of your proxy, and keep it at or above `requestBodyLimitMB`. Reload the proxy. See [Request Body Size](#request-body-size).
 
 If the response is a JSON problem document with `code` `PAYLOAD_TOO_LARGE` or `UPLOAD_TOO_LARGE`, the limit is iHub's own: see [File upload size limits](file-upload-feature.md#size-limits).
 
