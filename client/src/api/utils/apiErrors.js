@@ -19,6 +19,24 @@ export const isTimeoutError = error => {
 };
 
 /**
+ * Who refused a request for being too large: `'proxy'` for a 413 that carries no iHub error
+ * (a reverse proxy in front of iHub answered, usually with an HTML page: nginx allows 1 MB by
+ * default), `'server'` for iHub's own `PAYLOAD_TOO_LARGE` (`requestBodyLimitMB`). Any other
+ * 413 (`QUOTA_FILE_BYTES`, `UPLOAD_TOO_LARGE`, ...) names its own cause, so it is neither.
+ *
+ * @param {Object} error - An axios error, an error enhanced by `enhanceApiError`, or anything
+ *   shaped like one (`response.status`, `response.data`)
+ * @returns {'proxy'|'server'|undefined}
+ */
+export function requestTooLargeBy(error) {
+  const response = error?.response ?? error?.originalError?.response;
+  if (response?.status !== 413) return undefined;
+  const code = response.data?.code;
+  if (!code) return 'proxy';
+  return code === 'PAYLOAD_TOO_LARGE' ? 'server' : undefined;
+}
+
+/**
  * The error an API call failed with, as the UI shows it: a friendly message
  * for timeouts, 401, 403, 404 and 5xx, the server's `detail` otherwise, and
  * the flags and `code` callers branch on.
@@ -26,7 +44,8 @@ export const isTimeoutError = error => {
  * @param {Object} error - An axios error, or anything shaped like one
  *   (`message`, `response.status`, `response.data`)
  * @returns {Error} with `status`, `userFriendlyMessage`, `originalMessage`,
- *   `isAccessDenied`, `isAuthRequired`, `isTimeout` and `code`
+ *   `isAccessDenied`, `isAuthRequired`, `isTimeout`, `requestTooLarge` (see
+ *   `requestTooLargeBy`) and `code`
  */
 export function enhanceApiError(error) {
   // Create user-friendly error messages
@@ -48,6 +67,11 @@ export function enhanceApiError(error) {
     }
   } else if (error.response?.status === 404) {
     userFriendlyMessage = 'The requested resource was not found.';
+  } else if (requestTooLargeBy(error) === 'proxy') {
+    userFriendlyMessage =
+      'The request was too large and was refused before it reached iHub. A reverse proxy in front of iHub may limit the request size.';
+  } else if (requestTooLargeBy(error) === 'server') {
+    userFriendlyMessage = 'The request is larger than iHub accepts.';
   } else if (error.response?.status >= 500) {
     userFriendlyMessage = 'A server error occurred. Please try again later.';
   }
@@ -61,6 +85,7 @@ export function enhanceApiError(error) {
   enhancedError.isAccessDenied = error.response?.status === 403;
   enhancedError.isAuthRequired = error.response?.status === 401;
   enhancedError.isTimeout = isTimeoutError(error);
+  enhancedError.requestTooLarge = requestTooLargeBy(error);
   enhancedError.code = error.response?.data?.code; // Extract error code from server response
   return enhancedError;
 }
