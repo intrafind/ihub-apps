@@ -593,7 +593,8 @@ describe('AdminProjectEditPage – items', () => {
       )
     );
     const input = within(dialog).getByLabelText('File');
-    await waitFor(() => expect(input).toHaveAttribute('accept', '.pdf,.docx'));
+    // A ZIP archive is taken too: the admin import route unpacks it.
+    await waitFor(() => expect(input).toHaveAttribute('accept', '.pdf,.docx,.zip'));
 
     const file = new File(['%PDF'], 'guide.pdf', { type: 'application/pdf' });
     fireEvent.change(input, { target: { files: [file] } });

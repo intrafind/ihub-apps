@@ -29,6 +29,13 @@ import { buildServerPath } from '../utils/basePath.js';
 import { ServiceError } from '../utils/ServiceError.js';
 import { assertValidId } from '../utils/pathSecurity.js';
 import { getItemText } from '../services/knowledge/ItemTextService.js';
+import { readOriginal } from '../services/projects/ItemTextStore.js';
+import { importFile } from '../services/projects/itemImport.js';
+import { readChatArtifact } from '../services/artifacts/artifactAccess.js';
+import { sendWithLocation } from '../utils/created.js';
+import { servedMediaType } from '../services/artifacts/artifactPolicy.js';
+import { setUserFileContentType } from '../utils/activeContentHeaders.js';
+import { buildContentDisposition } from '../utils/safeContentDisposition.js';
 import { ProjectError, getProjectService } from '../services/projects/ProjectService.js';
 import { PROJECTS_FEATURE, projectSettings } from '../services/projects/projectSettings.js';
 import { ACCEPTED_TYPES, acceptedTypeOf, sniffBytes } from '../services/projects/extractText.js';
@@ -68,7 +75,7 @@ export function isMultipart(req) {
  * @param {import('express').Response} res
  * @param {Function} next
  */
-export function receiveUpload(req, res, next) {
+export function receiveUpload(req, res, next, { allowArchives = false } = {}) {
   const service = getProjectService();
   const ingest = service.ingest;
   if (!ingest) {
@@ -94,7 +101,9 @@ export function receiveUpload(req, res, next) {
     defParamCharset: 'utf8',
     limits: { fileSize: limits.maxFileBytes, files: 1, fields: 10 },
     fileFilter: (request, file, cb) => {
-      const accepted = acceptedTypeOf({ contentType: file.mimetype, name: file.originalname });
+      const accepted =
+        acceptedTypeOf({ contentType: file.mimetype, name: file.originalname }) ||
+        (allowArchives && declaredZip(file));
       if (!accepted) {
         recordUpload('project', 'rejected_type');
         return cb(
@@ -154,6 +163,23 @@ export function receiveUpload(req, res, next) {
     }
     return next(error);
   });
+}
+
+/**
+ * The multer middleware of `POST …/items/_import`: as {@link receiveUpload},
+ * and a ZIP archive is let through to be unpacked.
+ */
+export function receiveImport(req, res, next) {
+  return receiveUpload(req, res, next, { allowArchives: true });
+}
+
+/** A file declared as a ZIP archive (the bytes are checked after receive). */
+function declaredZip(file) {
+  const name = String(file?.originalname || '').toLowerCase();
+  const type = String(file?.mimetype || '').toLowerCase();
+  return (
+    name.endsWith('.zip') || type === 'application/zip' || type === 'application/x-zip-compressed'
+  );
 }
 
 /** The first bytes of the received file, for the magic-byte check. */
@@ -236,6 +262,69 @@ export async function addUploadedItem(req, res, { project, authorize, admin = fa
     await removeUploadDir(req);
     throw error;
   }
+}
+
+/**
+ * Import a file into a project (`POST …/items/_import`, after
+ * {@link receiveImport}): an uploaded file, or the bytes of a chat artifact
+ * the caller may read (`{ source: { kind: 'chat-artifact', ref } }`, user
+ * projects only). A ZIP archive becomes one document per file it holds; the
+ * answer lists what was added and what was skipped, and why.
+ *
+ * @param {import('express').Request} req
+ * @param {import('express').Response} res
+ * @param {{project: Object, authorize?: Function, admin?: boolean, location: string}} options
+ */
+export async function importItems(req, res, { project, authorize, admin = false, location }) {
+  let file;
+  let from = null;
+  if (req.file) {
+    try {
+      file = {
+        bytes: await fs.readFile(req.file.path),
+        name: req.file.originalname || 'upload',
+        contentType: req.file.mimetype
+      };
+    } finally {
+      await removeUploadDir(req);
+    }
+  } else {
+    const source = req.body?.source;
+    if (admin || !source || typeof source !== 'object' || source.kind !== 'chat-artifact') {
+      throw new ServiceError(
+        'BAD_REQUEST',
+        admin
+          ? `Send the file as multipart in the "${UPLOAD_FIELD}" field`
+          : `Send a file in the "${UPLOAD_FIELD}" field, or { "source": { "kind": "chat-artifact", "ref": { "chatId" | "shareId", "artifactId" } } }`
+      );
+    }
+    const artifact = await readChatArtifact(source.ref, req.user);
+    file = { bytes: artifact.bytes, name: artifact.name, contentType: artifact.mimeType };
+    from = artifact.from;
+  }
+  const pinned = req.body?.pinned === true || req.body?.pinned === 'true';
+  const { limits } = projectSettings(platformOf());
+  const service = getProjectService();
+  const { items, skipped } = await importFile(service, project, file, {
+    user: req.user,
+    authorize,
+    pinned,
+    from,
+    limits
+  });
+  recordUpload('project', 'accepted', file.bytes.length);
+  logAudit({
+    req,
+    action: 'create',
+    resource: 'projectItem',
+    resourceId: project.id,
+    summary: `Imported "${file.name}"${from ? ` from a ${from.type === 'share' ? 'shared ' : ''}chat` : ''} into ${admin ? 'admin ' : ''}project "${projectName(project)}": ${items.length} added, ${skipped.length} skipped`
+  });
+  const stored = (await service.repository.get(project.id)) || project;
+  sendWithLocation(res, 202, location, {
+    items: items.map(item => serializeItem(item, stored)),
+    skipped
+  });
 }
 
 /**
@@ -336,6 +425,49 @@ export async function sendItemText(req, res, { project }) {
       .slice(0, 120);
     res.setHeader('Content-Disposition', `attachment; filename="${base || item.id}.txt"`);
   }
+  res.send(body);
+}
+
+/**
+ * Send the original file of an upload, when the installation kept it
+ * (`platform.uploads.storageMode` is `original_and_text`). Inline by default,
+ * `?download=1` as an attachment. Served like a chat file: under its own
+ * type with `nosniff`, and an HTML, SVG or XML file with a `sandbox` policy,
+ * so it cannot run script on this origin.
+ *
+ * @param {import('express').Request} req
+ * @param {import('express').Response} res
+ * @param {{project: Object}} options
+ */
+export async function sendItemOriginal(req, res, { project }) {
+  const { itemId } = req.params;
+  assertValidId(itemId, 'item');
+  const item = (project.items || []).find(entry => entry.id === itemId);
+  if (!item) throw new ServiceError('NOT_FOUND', 'Item not found');
+  if (!item.originalFile?.blobKey) {
+    throw new ServiceError(
+      'ORIGINAL_DISCARDED',
+      'This document keeps only its text; the original file was not stored'
+    );
+  }
+  const body = await readOriginal(project, item, { platform: platformOf() });
+  if (platformOf().audit?.logReads === true) {
+    logAudit({
+      req,
+      action: 'read',
+      resource: 'projectItem',
+      resourceId: project.id,
+      summary: `Downloaded the original of "${item.name}" of project "${projectName(project)}"`
+    });
+  }
+  const download = req.query?.download === '1' || req.query?.download === 'true';
+  setUserFileContentType(res, servedMediaType(item.originalFile.contentType));
+  res.setHeader('Content-Length', String(body.length));
+  res.setHeader('Cache-Control', 'private, no-cache');
+  res.setHeader(
+    'Content-Disposition',
+    download ? buildContentDisposition(item.originalFile.name || item.name) : 'inline'
+  );
   res.send(body);
 }
 

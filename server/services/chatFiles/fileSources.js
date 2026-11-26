@@ -48,6 +48,14 @@ export const FILE_SOURCE_KINDS = Object.freeze([
   'ifinder-document'
 ]);
 
+/**
+ * Files copied from inside iHub ("Use in app"): a generated file of a chat the
+ * user may read (`{ chatId | shareId, artifactId }`), or a project document
+ * (`{ projectId, itemId }`). A copy, never a link: the chat file stays when
+ * the source chat, share or document goes, and it is never refreshed.
+ */
+export const COPY_SOURCE_KINDS = Object.freeze(['chat-artifact', 'project-item']);
+
 const STATUS_BY_SOURCE_CODE = {
   SOURCE_FORBIDDEN: 403,
   SOURCE_GONE: 404,
@@ -188,6 +196,63 @@ async function fetchIfinderDocument({ ref, user, maxBytes }) {
 }
 
 /**
+ * Read a file from inside iHub for a copy into a chat: a chat artifact or a
+ * project document, with the user's own access to it.
+ *
+ * @returns {Promise<{bytes: Buffer, contentType: string, name: string, lastModified: string|null, ref: Object}>}
+ */
+async function fetchCopySource({ kind, ref, user, maxBytes }) {
+  if (!user?.id || user.id === 'anonymous') {
+    throw new ChatFileError('SOURCE_FORBIDDEN', 'Sign in to use a file in an app', 403);
+  }
+  let file;
+  try {
+    // Loaded on use: the chat and project stores import the chat files.
+    if (kind === 'chat-artifact') {
+      const { readChatArtifact } = await import('../artifacts/artifactAccess.js');
+      const artifact = await readChatArtifact(ref, user);
+      file = {
+        bytes: artifact.bytes,
+        contentType: artifact.mimeType,
+        name: artifact.name,
+        lastModified: null,
+        // What the copy records: never the owner's chat id behind a share.
+        ref:
+          artifact.from.type === 'share'
+            ? { shareId: artifact.from.shareId, artifactId: artifact.from.artifactId }
+            : { chatId: artifact.from.chatId, artifactId: artifact.from.artifactId }
+      };
+    } else {
+      const { readProjectItemFile } = await import('../projects/projectItemFile.js');
+      file = await readProjectItemFile(ref, user);
+    }
+  } catch (error) {
+    if (error?.code === 'NOT_FOUND') {
+      throw new ChatFileError('SOURCE_GONE', 'The file does not exist or is not yours to use', 404);
+    }
+    if (error?.code === 'BAD_REQUEST' || error?.code === 'INVALID_REF') {
+      throw new ChatFileError('SOURCE_INVALID', error.message, 400);
+    }
+    throw failureOf(error, kind);
+  }
+  if (maxBytes > 0 && file.bytes.length > maxBytes) {
+    throw new ChatFileQuotaError(
+      'QUOTA_FILE_BYTES',
+      `The file exceeds the maximum size of ${Math.floor(maxBytes / (1024 * 1024))} MB`,
+      { limit: maxBytes, size: file.bytes.length },
+      413
+    );
+  }
+  return {
+    bytes: file.bytes,
+    contentType: file.contentType || 'application/octet-stream',
+    name: file.name || 'document',
+    lastModified: file.lastModified || null,
+    ref: file.ref
+  };
+}
+
+/**
  * Fetch one file from a connected system.
  *
  * @param {Object} params
@@ -201,10 +266,13 @@ async function fetchIfinderDocument({ ref, user, maxBytes }) {
  */
 export async function fetchSourceFile({ source, user, maxBytes = 0, signal } = {}) {
   const kind = source?.kind;
+  if (COPY_SOURCE_KINDS.includes(kind)) {
+    return fetchCopySource({ kind, ref: source.ref, user, maxBytes });
+  }
   if (!FILE_SOURCE_KINDS.includes(kind)) {
     throw new ChatFileError(
       'SOURCE_INVALID',
-      `"source.kind" must be one of: ${FILE_SOURCE_KINDS.join(', ')}`,
+      `"source.kind" must be one of: ${[...FILE_SOURCE_KINDS, ...COPY_SOURCE_KINDS].join(', ')}`,
       400
     );
   }
@@ -323,7 +391,11 @@ export async function ingestFromSource({
     source: {
       kind: source.kind,
       ref: fetched.ref,
-      ...(source.refreshOnRun === true && scope.type === 'task' ? { refreshOnRun: true } : {}),
+      ...(source.refreshOnRun === true &&
+      scope.type === 'task' &&
+      !COPY_SOURCE_KINDS.includes(source.kind)
+        ? { refreshOnRun: true }
+        : {}),
       lastFetchedAt: new Date().toISOString(),
       ...(fetched.lastModified ? { sourceModified: fetched.lastModified } : {})
     },

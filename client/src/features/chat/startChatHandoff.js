@@ -18,6 +18,11 @@
 // app: there is no URL to carry anything, so the message text itself, the
 // emails the user collected and the edited snapshot of the open email all ride
 // here and OfficeChatPanel sends them on mount (issue #2368).
+//
+// "Use in app…" (a generated file of a chat, a project document) hands over an
+// `attachment`: the server-side source the new chat copies into its own file
+// store (`POST /api/chats/:chatId/files` with `{ source }`) and then shows in
+// the composer — see `features/apps/hooks/useSourceFileAttachment.js`.
 
 let pending = null;
 
@@ -33,10 +38,12 @@ let pending = null;
  *   autoSend?: boolean,
  *   pinnedEmails?: Array<object>,
  *   hostContextOverride?: object|null,
- *   starterPrompt?: object|null
- * }} data - `text` onwards are the Outlook start page's fields: the message,
- *   whether to send it or only prefill it, the collected emails, the edited
- *   snapshot of the open email and the starter prompt it came from, if any.
+ *   starterPrompt?: object|null,
+ *   attachment?: import('./utils/useInApp').SourceAttachment
+ * }} data - `text` to `starterPrompt` are the Outlook start page's fields: the
+ *   message, whether to send it or only prefill it, the collected emails, the
+ *   edited snapshot of the open email and the starter prompt it came from, if
+ *   any. `attachment` is the file "Use in app…" brings along.
  */
 export function setPendingChatStart(data) {
   pending = data || null;
@@ -45,7 +52,7 @@ export function setPendingChatStart(data) {
 /**
  * Consume (and clear) the pending handoff if it matches the given app.
  * @param {string} appId
- * @returns {{ appId: string, files?: any, settings?: Object } | null}
+ * @returns {{ appId: string, files?: any, settings?: Object, attachment?: Object } | null}
  */
 export function consumePendingChatStart(appId) {
   if (pending?.appId === appId) {

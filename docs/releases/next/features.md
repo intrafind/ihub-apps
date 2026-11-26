@@ -93,3 +93,22 @@ search traffic of iHub then goes to a gateway under your control instead of a se
 - SearXNG is AGPL-licensed software you operate; iHub only calls its HTTP API and does not bundle
   it. See [Web tools](../../web-tools.md#searxng-your-own-search-gateway) for the setup, the licence
   notes and the troubleshooting table.
+
+## Use a Generated File in Another App, or Keep It in a Project
+
+A file the assistant generated in a chat, such as a summary, a report or a spreadsheet, can now be
+passed on instead of downloaded and uploaded again.
+
+- **Use in app** opens a new chat of the app you pick with the file attached, as if you had
+  uploaded it there. It works on a generated file and on a project document. The picker lists only
+  apps that take files of that type.
+- **Copy to project** stores the file in one of your projects, or a new one, as if you had uploaded
+  it. Who sees it is decided by the project's members; every app that uses the project can read it.
+- Both make a **copy**: deleting the chat, or the project document, does not affect it. A file
+  shared with you can be used and copied too.
+- **ZIP archives** uploaded to a project, or copied into one, are unpacked into one document per
+  file. Files a project does not take are skipped and listed.
+- A project document marked **Not for AI** cannot be used in an app.
+- **Download original** on a project document returns the file as it was uploaded.
+- Copy to project needs user projects (`userProjects`). Images cannot be copied into a project or
+  used in an app yet.

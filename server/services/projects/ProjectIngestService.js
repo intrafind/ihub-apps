@@ -41,7 +41,13 @@ import {
   extractText,
   normalizeText
 } from './extractText.js';
-import { storeText, evictItemKeys, textSha256 as sha256OfText } from './ItemTextStore.js';
+import {
+  storeOriginal,
+  storeText,
+  evictItemKeys,
+  textSha256 as sha256OfText
+} from './ItemTextStore.js';
+import { chatFileSettings } from '../chatFiles/chatFilePolicy.js';
 import { applyItemInfo, infoFromText } from './itemInfo.js';
 import { scannerFor } from './scan/MalwareScanner.js';
 import { isRefreshDue, isRefreshExpired, refreshesOnSchedule } from './refreshTtl.js';
@@ -518,6 +524,7 @@ export class ProjectIngestService {
     let name = input.name;
     let contentType = input.contentType;
     let storedBlobKey = null;
+    let storedOriginalKey = null;
     const refresh = input.purpose === 'refresh' && Boolean(input.previousBlobKey);
     // A job owns its item only while the item still carries the attempt the
     // service reserved with the item (`addItem`) or the refresh
@@ -785,6 +792,27 @@ export class ProjectIngestService {
         repository: this.repository
       });
       storedBlobKey = block.blobKey;
+      // 5a. The original file of an upload, when the installation keeps
+      //     originals: the same setting as chat uploads
+      //     (`platform.uploads.storageMode`, `original_and_text` by default).
+      //     Only an upload has one to keep; a picked or fetched document has
+      //     its source, and a written text has no file.
+      const originalBlock =
+        input.purpose === 'upload' &&
+        bytes &&
+        chatFileSettings(this._platform()).storageMode === 'original_and_text'
+          ? await storeOriginal({
+              projectId,
+              itemId,
+              bytes,
+              contentType: extracted.contentType || contentType,
+              name,
+              platform: this._platform(),
+              repository: this.repository
+            })
+          : null;
+      if (originalBlock) storedOriginalKey = originalBlock.blobKey;
+      let previousOriginalKey = null;
       const now = new Date().toISOString();
       // Under the project's lock, against what the project holds right now:
       // two uploads cannot both pass on the same free room.
@@ -798,6 +826,12 @@ export class ProjectIngestService {
           delete item.refreshingAt;
           delete item.ingestAttempt;
           item.text = block;
+          // A new text replaces the original it came from: an edited text no
+          // longer matches the file, and a refreshed source never had one.
+          const before = item.originalFile?.blobKey || null;
+          previousOriginalKey = before && before !== originalBlock?.blobKey ? before : null;
+          if (originalBlock) item.originalFile = originalBlock;
+          else delete item.originalFile;
           // What the document is about, read from this text: a new version
           // replaces what the old one said.
           applyItemInfo(item, { title: extracted.title, description: extracted.description });
@@ -834,11 +868,22 @@ export class ProjectIngestService {
       );
       assertOwned(); // The stored blob is dropped on the way out.
       if (!stored) {
-        // Removed while extracting: the blob has no item, drop it.
+        // Removed while extracting: the blobs have no item, drop them.
         await this.repository.blobs
           .delete(PROJECT_FILES_NAMESPACE, block.blobKey)
           .catch(() => false);
+        if (originalBlock) {
+          await this.repository.blobs
+            .delete(PROJECT_FILES_NAMESPACE, originalBlock.blobKey)
+            .catch(() => false);
+        }
         return null;
+      }
+      if (previousOriginalKey) {
+        await this.repository.blobs
+          .delete(PROJECT_FILES_NAMESPACE, previousOriginalKey)
+          .catch(() => false);
+        evictItemKeys(previousOriginalKey);
       }
       if (input.previousBlobKey && input.previousBlobKey !== block.blobKey) {
         await this.repository.blobs
@@ -856,6 +901,11 @@ export class ProjectIngestService {
       if (storedBlobKey) {
         await this.repository.blobs
           .delete(PROJECT_FILES_NAMESPACE, storedBlobKey)
+          .catch(() => false);
+      }
+      if (storedOriginalKey) {
+        await this.repository.blobs
+          .delete(PROJECT_FILES_NAMESPACE, storedOriginalKey)
           .catch(() => false);
       }
       await patch(item => {
@@ -1338,7 +1388,10 @@ export class ProjectIngestService {
     if (!this.repository.hasBlobs() || !complete) return 0;
     const named = new Set();
     for (const project of projects) {
-      for (const item of project.items || []) if (item.text?.blobKey) named.add(item.text.blobKey);
+      for (const item of project.items || []) {
+        if (item.text?.blobKey) named.add(item.text.blobKey);
+        if (item.originalFile?.blobKey) named.add(item.originalFile.blobKey);
+      }
     }
     let removed = 0;
     let busy = [];
