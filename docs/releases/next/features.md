@@ -193,6 +193,5 @@ what a template needs.
 - **The model asks:** the Word tool lists the fields, passes their values in `fields`, and stops
   with `missing_fields` when a required value is missing or not allowed. The model is told to ask
   the user and never to invent a value. `edit_docx` changes one field and keeps the others.
-- **The template decides the design:** the Word tool no longer offers colours, fonts, header,
-  footer, page numbers or page format, and the author of a document is the person who asked for
-  it unless the model names one.
+- **Author:** the author of a Word document is the person who asked for it, unless the model names
+  one.

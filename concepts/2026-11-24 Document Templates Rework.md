@@ -250,10 +250,12 @@ When a template applies, the model gets, read-only: primary, accent and text col
 the heading and body font names, and the fields of the template. It is told that a font is only a
 name, which may not be installed on the reader's computer, so web artifacts use a fallback stack.
 
-Tool arguments that the files now decide are removed from the tools: `primaryColor`, `accentColor`,
-`font`, `header`, `footer`, `pageSize`, `orientation`, `pageNumbers`. Content choices stay (`title`,
-`subtitle`, `author`, `date`, `language`, `markdown`, `toc`, `coverPage`, `filename`, `template`,
-`templateFileId`, `templateMode`) and `fields` is added. The exact list is fixed in the
+The design arguments of the tools (`primaryColor`, `accentColor`, `font`, `header`, `footer`,
+`pageSize`, `orientation`, `pageNumbers`) **stay**. A template already wins wherever it says
+something, and a pinned template already hides the colours and the font; the arguments are what lets
+the model design a document where no template applies or where the template leaves something open,
+for example a landscape page for a wide table. Removing them would take that away and protect
+nothing. `fields` is added. Whether a pinned template should hide more of them is left to the
 implementation, per format.
 
 `templateFileId` (a Word file the user uploaded in the chat) stays as it is and gets the same
@@ -367,13 +369,11 @@ One release, built in this order (as pull requests, or as commits on one branch)
    and footer text of PDFs and of Word without a template still use the single-brace form until
    those settings are removed in step 4.
 3. Tools: arguments, `fields`, the missing-fields error, the skill texts (`docx`, `pdf`, `pptx`,
-   `xlsx`, `web-artifacts`). Done for Word: `create_docx` has `fields`, no longer offers colours,
-   fonts, header, footer, page number and page format arguments, stops with `missing_fields` and
+   `xlsx`, `web-artifacts`). Done for Word: `create_docx` has `fields`, stops with `missing_fields` and
    asks the user, takes the author from the signed-in user, and follows the template for the table
    of contents. `edit_docx` changes one field and keeps the others. Every tool that renders in a
    template is told the template's brand (colours, palette, fonts, read-only). The design arguments
-   of the PDF, PowerPoint, Excel and web artifact tools go in step 4, with the settings they map
-   to.
+   of the tools stay.
 4. PDF without letterhead, fonts and base design; the export dialog.
 5. Admin page, English and German texts, the colour picker fix, `docs/document-templates.md`,
    `docs/powerpoint-template-guide.md`, `docs/pdf-generation.md`, release note, end-to-end test.

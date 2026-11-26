@@ -278,22 +278,17 @@ describe('create_docx as the model is offered it', () => {
     );
   });
 
-  it('does not offer the design: the template decides colours, fonts, header, footer and page', async () => {
-    const context = await templates.documentTemplateContext({ app: {} });
-    const { properties } = docxTool(context).parameters;
-    for (const name of [
-      'primaryColor',
-      'accentColor',
-      'font',
-      'header',
-      'footer',
-      'pageNumbers',
-      'pageSize',
-      'orientation'
-    ]) {
-      assert.equal(properties[name], undefined, name);
-    }
-    assert.ok(properties.markdown && properties.title && properties.coverPage);
+  it('still offers the design where no template is pinned, and hides colours and font where one is', async () => {
+    const design = ['header', 'footer', 'pageNumbers', 'pageSize', 'orientation'];
+    const brand = ['primaryColor', 'accentColor', 'font'];
+    const open = docxTool(await templates.documentTemplateContext({ app: {} })).parameters
+      .properties;
+    for (const name of [...design, ...brand]) assert.ok(open[name], name);
+    const pinned = docxTool(
+      await templates.documentTemplateContext({ app: { documentTemplate: 'corporate' } })
+    ).parameters.properties;
+    for (const name of brand) assert.equal(pinned[name], undefined, name);
+    for (const name of design) assert.ok(pinned[name], name);
   });
 
   it('tells the model the table of contents follows the template', async () => {

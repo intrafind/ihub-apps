@@ -55,11 +55,15 @@ export function docxSpecFromToolArgs(args) {
     // Unset leaves the table of contents to the template: one at `{{toc}}`, none otherwise.
     toc: typeof args.toc === 'boolean' ? args.toc : undefined,
     fields: givenFieldsOf(args.fields),
-    // The design (colours, fonts, header, footer, page setup) comes from the template.
-    pageNumbers: true,
-    page: {},
-    colors: {},
-    fonts: {}
+    header: optionalString(args.header, 300),
+    footer: optionalString(args.footer, 300),
+    pageNumbers: args.pageNumbers !== false,
+    page: { size: args.pageSize, orientation: args.orientation },
+    colors: {
+      primary: optionalString(args.primaryColor, 20),
+      accent: optionalString(args.accentColor, 20)
+    },
+    fonts: { body: optionalString(args.font, 64) }
   };
   assertSpecSize(spec);
   return spec;
