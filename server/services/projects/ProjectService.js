@@ -573,6 +573,7 @@ export class ProjectService {
    *     cleanupDir?: string}}} input
    *   `file.buffer`: the file's bytes when the caller holds them already (a
    *   chat artifact, an entry of a ZIP) instead of a temp file at `file.path`.
+   *   `from`: where an imported file came from, kept as `provenance.from`.
    *   `crawlId`: the site crawl that listed a web page; the page it read is stored
    *   instead of a new fetch (`crawlHandover.js`).
    * @param {{user: Object, authorize?: Function, origin?: string, run?: Object, wait?: boolean}} options
@@ -634,7 +635,10 @@ export class ProjectService {
         at: now,
         run,
         source:
-          described.url || described.site ? { site: described.site, url: described.url } : null
+          described.url || described.site ? { site: described.site, url: described.url } : null,
+        // Where an imported file came from (a chat's artifact, an archive):
+        // a record, never a link the item depends on.
+        ...(input.from && typeof input.from === 'object' ? { from: input.from } : {})
       },
       snapshotAt: null,
       createdAt: now,

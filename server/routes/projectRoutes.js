@@ -42,6 +42,8 @@ import {
   addUploadedItem,
   isMultipart,
   receiveUpload,
+  receiveImport,
+  importItems,
   refreshItem,
   replaceItemText,
   registerProjectPickerRoutes,
@@ -772,6 +774,68 @@ export default function registerProjectRoutes(app) {
         serializeItem(item, stored)
       );
     }
+  );
+
+  /**
+   * @swagger
+   * /api/projects/{projectId}/items/_import:
+   *   post:
+   *     summary: Import a file or a chat artifact into a project
+   *     description: >-
+   *       Adds a file as an upload: multipart with the file in `file`, or JSON
+   *       `{ "source": { "kind": "chat-artifact", "ref": { "chatId", "artifactId" } } }`
+   *       (or `{ "shareId", "artifactId" }` for a chat shared with the caller) to copy a
+   *       generated file of a chat ("Copy to project"). A ZIP archive becomes one document
+   *       per file it holds. The copy does not depend on the chat. Needs the edit role.
+   *     tags:
+   *       - Projects
+   *     parameters:
+   *       - in: path
+   *         name: projectId
+   *         required: true
+   *         schema: { type: string }
+   *     responses:
+   *       202:
+   *         description: >-
+   *           The documents added (being processed, like an upload) and the files skipped,
+   *           each with a `code` and a `message`.
+   *         content:
+   *           application/json:
+   *             schema:
+   *               type: object
+   *               properties:
+   *                 items: { type: array, items: { type: object } }
+   *                 skipped:
+   *                   type: array
+   *                   items:
+   *                     type: object
+   *                     properties:
+   *                       name: { type: string }
+   *                       code: { type: string }
+   *                       message: { type: string }
+   *       400:
+   *         description: A malformed request
+   *       413:
+   *         description: The file or the project is over a limit (`QUOTA_*`)
+   *       415:
+   *         description: >-
+   *           Nothing could be added: an image or another type projects do not take, or an
+   *           archive without one usable file (`UNSUPPORTED_TYPE`, `details.skipped`)
+   *       404:
+   *         description: No such project, or an artifact the caller cannot read (`NOT_FOUND`)
+   */
+  app.post(
+    route('/:projectId/items/_import'),
+    ...gate,
+    authenticatedOnly,
+    projectAccessRequired('edit'),
+    (req, res, next) => (isMultipart(req) ? receiveImport(req, res, next) : next()),
+    async (req, res) =>
+      importItems(req, res, {
+        project: req.project,
+        authorize: req.projectContext.authorize('edit'),
+        location: `/api/projects/${segment(req.project.id)}/items`
+      })
   );
 
   app.get(

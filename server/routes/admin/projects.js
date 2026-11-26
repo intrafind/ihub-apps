@@ -61,6 +61,8 @@ import {
   addUploadedItem,
   isMultipart,
   receiveUpload,
+  receiveImport,
+  importItems,
   refreshItem,
   replaceItemText,
   sendItemText,
@@ -682,6 +684,26 @@ export default function registerAdminProjectsRoutes(app) {
   });
 
   // --- items of admin projects ---------------------------------------------
+
+  // Upload a file or a ZIP archive (one document per file it holds). Before
+  // `/:id/items/:itemId`, so `_import` is never taken for an item id.
+  app.post(
+    route('/:id/items/_import'),
+    ...gate,
+    contentAdminAuth,
+    async (req, res, next) => {
+      const project = await loadAdminProject(req);
+      req.project = project;
+      if (!isMultipart(req)) return next();
+      receiveImport(req, res, next);
+    },
+    async (req, res) =>
+      importItems(req, res, {
+        project: req.project,
+        admin: true,
+        location: `/api/admin/projects/${encodeURIComponent(req.project.id)}/items`
+      })
+  );
 
   app.post(
     route('/:id/items'),
