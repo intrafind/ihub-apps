@@ -377,15 +377,16 @@ Every proxy in front of iHub must let through the largest request iHub accepts. 
 What is large, and why it hits images first:
 
 - **Images, audio and videos sent as they are** travel inside the JSON of the chat request (`POST /api/apps/{appId}/chat/{chatId}`) as base64, which is a third larger than the file. With the default `resizeImages: true` a large photo shrinks to a JPEG of 1024 px (typically 100–400 KB), but the original bytes are kept for an image that is already within 1024 px (up to 4 MB), such as a PNG screenshot, and for every image when an app sets `resizeImages: false`. A 1.5 MB screenshot is a request of 2 MB; several images in one message add up.
-- **Documents** (text files, PDF, Word, …) are read in the browser and only their text goes into the request, which is why small text files pass an untuned proxy. When the server keeps chat files (`platform.uploads`, on by default), the original is also uploaded as `multipart/form-data` to `POST /api/chats/{chatId}/files`; a document over 1 MB fails there.
+- **Documents** (text files, PDF, Word, …) take one of two paths, so check which request failed. Where the server keeps chat files (`platform.uploads`, on by default, storage mode `original_and_text` or `server_text_only`), the browser uploads the original as `multipart/form-data` to `POST /api/chats/{chatId}/files` and the chat request only names the file by id: a document over 1 MB fails at that upload, while the chat request stays small. In storage mode `client_text_only`, or while no chat file store is available, the browser extracts the text and sends only that inside the chat request, which is why small text files pass an untuned proxy.
 
 Setting `proxy_request_buffering off` does not lift the limit: nginx counts the body as it arrives and refuses it all the same. Raise the limit instead:
 
 | Layer | Setting | Default | Set it to |
 | ----- | ------- | ------- | --------- |
 | nginx | `client_max_body_size` (`http`, `server` or `location`) | 1 MB | `100M` (at least `requestBodyLimitMB`; `0` removes the limit) |
-| Kubernetes nginx ingress | annotation `nginx.ingress.kubernetes.io/proxy-body-size` | 1m | `"100m"` |
-| Apache | `LimitRequestBody` | unlimited | nothing to do unless set |
+| Kubernetes, ingress-nginx | annotation `nginx.ingress.kubernetes.io/proxy-body-size` | 1m | `"100m"` |
+| Kubernetes, F5 NGINX Ingress Controller | annotation `nginx.org/client-max-body-size` | 1m | `"100m"` |
+| Apache | `LimitRequestBody` | 1 GiB from 2.4.54, unlimited before | check the effective value against your largest request; raise it only if it is lower |
 | Traefik | `buffering.maxRequestBodyBytes` (only with the `buffering` middleware) | unlimited | nothing to do unless set |
 | IIS / ARR | `maxAllowedContentLength` (Request Filtering) | about 30 MB | `104857600` |
 | iHub | `requestBodyLimitMB` in `platform.json` | 50 | see [platform.md](platform.md) |
@@ -547,7 +548,9 @@ metadata:
   name: ihub-apps-ingress
   annotations:
     nginx.ingress.kubernetes.io/rewrite-target: /$2
-    # The ingress default is 1m, which refuses image and document uploads (see "Request Body Size")
+    # ingress-nginx: its default of 1m refuses image and document uploads (see "Request Body Size").
+    # Another controller needs its own setting, e.g. nginx.org/client-max-body-size for the
+    # F5 NGINX Ingress Controller.
     nginx.ingress.kubernetes.io/proxy-body-size: "100m"
     nginx.ingress.kubernetes.io/configuration-snippet: |
       proxy_set_header X-Forwarded-Prefix /ihub;
@@ -785,7 +788,7 @@ app.get('*', (req, res) => {
 
 **Symptom:** Attaching an image, or a document over about 1 MB, fails or the message does not send, while short text messages and small text files work. The browser's network tab shows `413 Request Entity Too Large` with an HTML body from nginx (not a JSON problem document from iHub), and the iHub log has no entry for the request.
 
-**Solution:** The proxy's request body limit is too low; nginx defaults to 1 MB. Set `client_max_body_size 100M;` (nginx), the `nginx.ingress.kubernetes.io/proxy-body-size` annotation (Kubernetes ingress) or the equivalent of your proxy, and keep it at or above `requestBodyLimitMB`. Reload the proxy. See [Request Body Size](#request-body-size).
+**Solution:** The proxy's request body limit is too low; nginx defaults to 1 MB. Set `client_max_body_size 100M;` (nginx), the `nginx.ingress.kubernetes.io/proxy-body-size` annotation (ingress-nginx; `nginx.org/client-max-body-size` for the F5 NGINX Ingress Controller) or the equivalent of your proxy, and keep it at or above `requestBodyLimitMB`. Reload the proxy. See [Request Body Size](#request-body-size).
 
 If the response is a JSON problem document with `code` `PAYLOAD_TOO_LARGE` or `UPLOAD_TOO_LARGE`, the limit is iHub's own: see [File upload size limits](file-upload-feature.md#size-limits).
 
