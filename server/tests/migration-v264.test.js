@@ -41,7 +41,7 @@ function makeCtx(dir) {
       await fs.writeFile(path.join(dir, rel), JSON.stringify(data, null, 2), 'utf8');
     },
     listFiles: async (directory, pattern) => {
-      const suffix = pattern.replace('*', '');
+      const suffix = pattern.replaceAll('*', '');
       try {
         return (await fs.readdir(path.join(dir, directory))).filter(name => name.endsWith(suffix));
       } catch {
