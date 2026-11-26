@@ -746,8 +746,8 @@ export class ProjectIngestService {
             ...infoFromText(normalized.text)
           };
           if (!extracted.text) throw new ExtractionError('NO_TEXT', 'The text is empty');
-        } else if (ocr.enabled && recognizableImageTypeOf(bytes)) {
-          recognize = { image: recognizableImageTypeOf(bytes) };
+        } else if (ocr.enabled && recognizableImageTypeOf(bytes, ocr)) {
+          recognize = { image: recognizableImageTypeOf(bytes, ocr) };
         } else {
           const started = Date.now();
           try {

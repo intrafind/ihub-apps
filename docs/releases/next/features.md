@@ -148,7 +148,10 @@ reading them again. Set it in **Admin → Chat history → Uploaded files → Te
 - **Use in app** and **Copy to project** now work for images where they can be read as text.
 - Each document records that its text was recognized and by which model or OCR service, and says so
   in the list.
-- At most 50 pages are read per document by default (**Most pages per document**).
+- At most 50 pages are read per document by default (**Most pages per document**). A page that could
+  not be read is counted and named as such, apart from the page limit.
+- A PDF that has text elsewhere never fails because its other pages could not be read: it keeps its
+  text, as before.
 - The pages are sent to the provider of the recognition model when they are added. Pick a model your
   data may go to.
 - **OCR services as the engine:** instead of a model, an installed OCR integration can read the

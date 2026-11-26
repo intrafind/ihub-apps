@@ -68,19 +68,19 @@ export function withZipAccept(accept) {
  * for them. A live file (no id the server knows yet) cannot be copied either.
  *
  * @param {{id?: string, kind?: string, mimeType?: string, name?: string}|null|undefined} artifact
- * @param {{textRecognition?: boolean}} [options] - `textRecognition`: projects recognize the
- *   text of images.
+ * @param {{textRecognition?: boolean, imageTypes?: string[]}} [options] - `textRecognition`:
+ *   projects recognize the text of images; `imageTypes`: the image types their engine reads.
  * @returns {boolean}
  *
  * @example
  * canCopyArtifactToProject({ id: 'a1', mimeType: 'image/png' }); // false
  * canCopyArtifactToProject({ id: 'a1', mimeType: 'image/png' }, { textRecognition: true }); // true
  */
-export function canCopyArtifactToProject(artifact, { textRecognition = false } = {}) {
+export function canCopyArtifactToProject(artifact, { textRecognition = false, imageTypes } = {}) {
   if (!artifact?.id) return false;
   const type = String(artifact.mimeType || '').toLowerCase();
   if (artifact.kind !== 'image' && !type.startsWith('image/')) return true;
-  return textRecognition === true && isRecognizableImage(type, artifact.name);
+  return textRecognition === true && isRecognizableImage(type, artifact.name, imageTypes);
 }
 
 /**

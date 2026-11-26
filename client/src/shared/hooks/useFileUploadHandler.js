@@ -93,7 +93,11 @@ export function useFileUploadHandler() {
   };
 
   // Create unified upload configuration
-  const createUploadConfig = (app, selectedModel, { recognizeImages = false } = {}) => {
+  const createUploadConfig = (
+    app,
+    selectedModel,
+    { recognizeImages = false, recognizedImageTypes = RECOGNIZABLE_IMAGE_TYPES } = {}
+  ) => {
     // New unified upload config structure
     const uploadConfig = app?.upload || {};
 
@@ -235,7 +239,7 @@ export function useFileUploadHandler() {
       // Images whose text the server recognizes: taken as documents, never sent as pictures
       textRecognition: {
         images: recognizedImagesEnabled,
-        formats: recognizedImagesEnabled ? [...RECOGNIZABLE_IMAGE_TYPES] : [],
+        formats: recognizedImagesEnabled ? [...recognizedImageTypes] : [],
         maxFileSizeMB: fileConfig?.maxFileSizeMB || imageConfig?.maxFileSizeMB || 20
       },
       // The storage providers the cloud file picker offers

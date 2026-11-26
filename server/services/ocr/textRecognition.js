@@ -35,6 +35,7 @@
  */
 import configCache from '../../configCache.js';
 import logger from '../../utils/logger.js';
+import { getDefinitionTypes, getOcrImageTypes } from '../integrations/integrationTypes.js';
 
 /**
  * The model call, PDF rendering, key lookup, integration runner and audit,
@@ -45,20 +46,19 @@ import logger from '../../utils/logger.js';
 let heavy = null;
 async function heavyParts() {
   if (!heavy) {
-    const [pages, utils, audit, installed, protocols, usage] = await Promise.all([
+    const [pages, utils, audit, installed, protocols, usage, pool] = await Promise.all([
       import('./pageRecognition.js'),
       import('../../utils.js'),
       import('../AuditLogService.js'),
       import('../integrations/InstalledIntegrationService.js'),
       import('../integrations/protocols/index.js'),
-      import('../integrations/actionUsage.js')
+      import('../integrations/actionUsage.js'),
+      import('../projects/extractionPool.js')
     ]);
     heavy = {
       DEFAULT_OCR_PROMPT: pages.DEFAULT_OCR_PROMPT,
       extractTextFromPageImage: pages.extractTextFromPageImage,
-      loadPdfDocument: pages.loadPdfDocument,
-      pMap: pages.pMap,
-      renderPageToImage: pages.renderPageToImage,
+      renderPdfPagesForRecognition: pool.renderPdfPagesForRecognition,
       resolveModelApiKey: utils.resolveModelApiKey,
       logAudit: audit.logAudit,
       installedIntegrationService: installed.default,
@@ -91,13 +91,22 @@ export const OCR_IMAGE_TYPES = Object.freeze([
   'image/gif'
 ]);
 
+/** The image type of each file extension of {@link OCR_IMAGE_TYPES}. */
+const OCR_IMAGE_TYPE_BY_EXTENSION = new Map([
+  ['.png', 'image/png'],
+  ['.jpg', 'image/jpeg'],
+  ['.jpeg', 'image/jpeg'],
+  ['.gif', 'image/gif'],
+  ['.webp', 'image/webp']
+]);
+
 /** File extensions of {@link OCR_IMAGE_TYPES}, for an upload's accept list. */
 export const OCR_IMAGE_EXTENSIONS = Object.freeze(['.png', '.jpg', '.jpeg', '.gif', '.webp']);
 
 /** Pages recognized per document when the admin set no limit. */
 export const DEFAULT_OCR_MAX_PAGES = 50;
 
-/** Pages sent to the model at the same time. */
+/** Pages rendered and sent to the engine at the same time. */
 const PAGE_CONCURRENCY = 3;
 
 /** `[Page 3: no extractable text]`, as the PDF extraction writes it. */
@@ -117,28 +126,58 @@ export class TextRecognitionError extends Error {
 }
 
 /**
- * Whether an installation exists and is switched on, as far as the config
- * cache knows (a sync check for the upload paths; the recognition itself
- * checks the definition too).
+ * The installation of an OCR integration engine, when it exists, is switched
+ * on and is of type `ocr` as far as the loaded definitions say (a sync check
+ * for the upload paths; the recognition itself checks the definition and its
+ * migration state too).
  * @param {string} instanceId
- * @returns {boolean}
+ * @returns {Object|null} the installation
  */
-function integrationIsOn(instanceId) {
+function readyOcrInstallation(instanceId) {
   const installed = configCache.get?.(INTEGRATIONS_FILE)?.data?.installed;
-  if (!Array.isArray(installed)) return false;
+  if (!Array.isArray(installed)) return null;
   const instance = installed.find(entry => entry?.id === instanceId);
-  return Boolean(instance) && instance.enabled !== false;
+  if (!instance || instance.enabled === false) return null;
+  const types = getDefinitionTypes();
+  if (
+    instance.definition &&
+    Object.hasOwn(types, instance.definition) &&
+    types[instance.definition] !== OCR_INTEGRATION_TYPE
+  ) {
+    return null;
+  }
+  return instance;
+}
+
+/** Whether the model can recognize text: it exists, is enabled and reads images. */
+function modelIsReady(modelId) {
+  const { data: models = [] } = configCache.getModels?.() || {};
+  const model = (models || []).find(entry => entry?.id === modelId);
+  return (
+    Boolean(model) &&
+    model.enabled !== false &&
+    Boolean(model.supportsImages || model.supportsVision)
+  );
+}
+
+/** The image types of an engine: the ones it declares that iHub sends at all. */
+function engineImageTypes(instance) {
+  const declared = instance?.definition ? getOcrImageTypes(instance.definition) : null;
+  return declared ? OCR_IMAGE_TYPES.filter(type => declared.includes(type)) : [...OCR_IMAGE_TYPES];
 }
 
 /**
  * The OCR settings of the installation.
  *
  * `engine` is `model` or the id of an OCR integration; `enabled` says whether
- * that engine can be asked at all: a model is set (`model`), or the
- * integration is installed and switched on.
+ * that engine is ready: the model exists, is enabled and reads images
+ * (`model`), or the integration is installed, switched on and of type `ocr`.
+ * `imageTypes` are the image types the engine reads (an integration declares
+ * them as the `enum` of its `recognize` action's `mimeType`), and
+ * `imageExtensions` their file extensions.
  *
  * @param {Object} [platform]
- * @returns {{engine: string, modelId: string|null, integrationId: string|null, maxPages: number, enabled: boolean}}
+ * @returns {{engine: string, modelId: string|null, integrationId: string|null, maxPages: number, enabled: boolean, imageTypes: string[], imageExtensions: string[]}}
  */
 export function ocrSettings(platform = configCache.getPlatform?.() || {}) {
   const ocr = platform?.ocr || {};
@@ -150,8 +189,13 @@ export function ocrSettings(platform = configCache.getPlatform?.() || {}) {
     Number.isFinite(Number(ocr.maxPages)) && Number(ocr.maxPages) > 0
       ? Math.floor(Number(ocr.maxPages))
       : DEFAULT_OCR_MAX_PAGES;
-  const enabled = integrationId ? integrationIsOn(integrationId) : Boolean(modelId);
-  return { engine, modelId, integrationId, maxPages, enabled };
+  const instance = integrationId ? readyOcrInstallation(integrationId) : null;
+  const enabled = integrationId ? Boolean(instance) : Boolean(modelId) && modelIsReady(modelId);
+  const imageTypes = instance ? engineImageTypes(instance) : [...OCR_IMAGE_TYPES];
+  const imageExtensions = [...OCR_IMAGE_TYPE_BY_EXTENSION]
+    .filter(([, type]) => imageTypes.includes(type))
+    .map(([extension]) => extension);
+  return { engine, modelId, integrationId, maxPages, enabled, imageTypes, imageExtensions };
 }
 
 /**
@@ -169,24 +213,36 @@ export function chatRecognizesText(platform = configCache.getPlatform?.() || {},
   return platform?.uploads?.recognizeText === true;
 }
 
-/** Whether a media type is an image the OCR engines read. */
-export function isRecognizableImage(mimeType) {
-  return OCR_IMAGE_TYPES.includes(
-    String(mimeType || '')
-      .split(';')[0]
-      .trim()
-      .toLowerCase()
-  );
+const baseType = mimeType =>
+  String(mimeType || '')
+    .split(';')[0]
+    .trim()
+    .toLowerCase();
+
+/**
+ * Whether a media type is an image the engine reads.
+ * @param {string} mimeType
+ * @param {{imageTypes: string[]}} [settings] - {@link ocrSettings}; the installation's by default.
+ */
+export function isRecognizableImage(mimeType, settings = ocrSettings()) {
+  return settings.imageTypes.includes(baseType(mimeType));
 }
 
 /**
- * The image type of these bytes, by their signature, when the OCR model reads
- * it: PNG, JPEG, GIF or WebP. The bytes decide, not the declared type.
+ * The image type of these bytes, by their signature, when the engine reads
+ * it (PNG, JPEG, GIF or WebP, as far as the engine declares). The bytes
+ * decide, not the declared type.
  *
  * @param {Buffer|Uint8Array} bytes - The file, or at least its first 12 bytes.
+ * @param {{imageTypes: string[]}} [settings] - {@link ocrSettings}; the installation's by default.
  * @returns {string|null}
  */
-export function recognizableImageTypeOf(bytes) {
+export function recognizableImageTypeOf(bytes, settings = ocrSettings()) {
+  const type = imageTypeBySignature(bytes);
+  return type && settings.imageTypes.includes(type) ? type : null;
+}
+
+function imageTypeBySignature(bytes) {
   if (!bytes || bytes.length < 4) return null;
   const head = Buffer.from(bytes.subarray(0, 12));
   const hex = head.toString('hex');
@@ -203,32 +259,24 @@ export function recognizableImageTypeOf(bytes) {
   return null;
 }
 
-/** Image file extensions the OCR model reads, for a type check by name. */
-const OCR_IMAGE_TYPE_BY_EXTENSION = new Map([
-  ['.png', 'image/png'],
-  ['.jpg', 'image/jpeg'],
-  ['.jpeg', 'image/jpeg'],
-  ['.gif', 'image/gif'],
-  ['.webp', 'image/webp']
-]);
-
 /**
  * The image type a file declares, by its media type or its name, when it is
- * one the OCR model reads (a check before the bytes are there).
+ * one the engine reads (a check before the bytes are there).
  *
  * @param {{contentType?: string, name?: string}} file
+ * @param {{imageTypes: string[]}} [settings] - {@link ocrSettings}; the installation's by default.
  * @returns {string|null}
  */
-export function declaredRecognizableImageType({ contentType, name } = {}) {
-  const declared = String(contentType || '')
-    .split(';')[0]
-    .trim()
-    .toLowerCase();
-  if (isRecognizableImage(declared)) return declared;
+export function declaredRecognizableImageType(
+  { contentType, name } = {},
+  settings = ocrSettings()
+) {
+  const declared = baseType(contentType);
+  if (isRecognizableImage(declared, settings)) return declared;
   const dot = String(name || '').lastIndexOf('.');
-  return dot >= 0
-    ? OCR_IMAGE_TYPE_BY_EXTENSION.get(String(name).slice(dot).toLowerCase()) || null
-    : null;
+  const byName =
+    dot >= 0 ? OCR_IMAGE_TYPE_BY_EXTENSION.get(String(name).slice(dot).toLowerCase()) : null;
+  return byName && settings.imageTypes.includes(byName) ? byName : null;
 }
 
 /**
@@ -450,7 +498,7 @@ async function audit({ user, name, engine, pages }) {
  */
 export async function recognizeImage(bytes, mimeType, { platform, user, name } = {}) {
   const settings = ocrSettings(platform);
-  if (!isRecognizableImage(mimeType)) {
+  if (!isRecognizableImage(mimeType, settings)) {
     throw new TextRecognitionError('OCR_UNAVAILABLE', `Images of type ${mimeType} cannot be read`);
   }
   const engine = await resolveEngine(settings);
@@ -513,11 +561,19 @@ function recognizedPagesText(numPages, recognized) {
 /**
  * Recognize the pages of a PDF that have no text.
  *
- * With `extractedText` (the PDF's text as extracted, with its page markers),
- * the pages it marks as having no extractable text are recognized and their
- * text is put in place of the markers; a PDF with no such page is returned as
- * `null` (nothing to do). Without it (the extraction found no text layer at
- * all), every page is recognized.
+ * With `extractedText` (the PDF's text as extracted, with its page markers;
+ * the extraction passes it only for a PDF that has text elsewhere), the pages
+ * it marks as having no extractable text are recognized and their text is put
+ * in place of the markers; a PDF with no such page is returned as `null`
+ * (nothing to do). That recognition is best effort: when it cannot run or
+ * reads nothing (a blank page, an engine that is down), the document keeps
+ * its extracted text and its markers (`null`), as without recognition.
+ * Without `extractedText` (no text layer at all), every page is recognized,
+ * and a failure fails the document.
+ *
+ * The pages are rendered in the extraction pool's threads, a few at a time,
+ * and sent to the engine as they come; after a refusal (4xx) no further page
+ * is rendered or sent.
  *
  * @param {Buffer} bytes
  * @param {Object} [options]
@@ -525,43 +581,81 @@ function recognizedPagesText(numPages, recognized) {
  * @param {Object} [options.platform]
  * @param {Object} [options.user]
  * @param {string} [options.name]
- * @returns {Promise<{text: string, recognition: {modelId?: string, integrationId?: string, pages: number, truncated?: boolean, at: string}}|null>}
+ * @returns {Promise<{text: string, recognition: {modelId?: string, integrationId?: string, pages: number, truncated?: boolean, failedPages?: number, at: string}}|null>}
  * @throws {TextRecognitionError}
  */
 export async function recognizeScannedPdf(
   bytes,
   { extractedText = null, platform, user, name } = {}
 ) {
-  const settings = ocrSettings(platform);
-  const { loadPdfDocument, pMap, renderPageToImage } = await heavyParts();
-  let wanted;
-  let numPages = 0;
-  if (typeof extractedText === 'string' && extractedText) {
-    wanted = pagesWithoutText(extractedText);
-    if (wanted.length === 0) return null;
-  } else {
-    const doc = await loadPdfDocument(bytes);
-    try {
-      numPages = doc.numPages;
-    } finally {
-      await doc.destroy?.();
-    }
-    wanted = Array.from({ length: numPages }, (_, i) => i + 1);
+  if (typeof extractedText !== 'string' || !extractedText) {
+    return recognizePdfPages(bytes, { wanted: null, extractedText: null, platform, user, name });
   }
+  const wanted = pagesWithoutText(extractedText);
+  if (wanted.length === 0) return null;
+  try {
+    return await recognizePdfPages(bytes, { wanted, extractedText, platform, user, name });
+  } catch (error) {
+    logger.warn('Text recognition of the pages without text failed; the extracted text is kept', {
+      component: COMPONENT,
+      code: error?.code,
+      error: error?.message
+    });
+    return null;
+  }
+}
+
+/** The page numbers of the next batch to render, or an empty list when done. */
+function nextBatch(state, maxPages) {
+  if (state.queue) return state.queue.splice(0, PAGE_CONCURRENCY);
+  const limit = state.numPages ? Math.min(state.numPages, maxPages) : maxPages;
+  const batch = [];
+  while (batch.length < PAGE_CONCURRENCY && state.next <= limit) {
+    batch.push(state.next);
+    state.next += 1;
+  }
+  return batch;
+}
+
+/**
+ * Render and recognize pages batch by batch: `wanted` names them, or `null`
+ * means every page of the document (its count known after the first batch).
+ */
+async function recognizePdfPages(bytes, { wanted, extractedText, platform, user, name }) {
+  const settings = ocrSettings(platform);
   const engine = await resolveEngine(settings);
-  const chosen = wanted.slice(0, settings.maxPages);
+  const { renderPdfPagesForRecognition } = await heavyParts();
+  const state = { queue: wanted ? wanted.slice(0, settings.maxPages) : null, next: 1, numPages: 0 };
   const recognized = new Map();
   let failures = 0;
-  await pMap(
-    chosen,
-    async pageNum => {
-      const base64 = await renderPageToImage(bytes, pageNum - 1);
-      const result = await engine.recognize(base64, 'image/png', { pageNum, name, user });
-      if (result.failed) failures += 1;
-      else if (result.text) recognized.set(pageNum, result.text);
-    },
-    PAGE_CONCURRENCY
-  );
+  for (let batch = nextBatch(state, settings.maxPages); batch.length > 0;) {
+    let rendered;
+    try {
+      rendered = await renderPdfPagesForRecognition(bytes, batch);
+    } catch (error) {
+      logger.warn('Pages could not be rendered for text recognition', {
+        component: COMPONENT,
+        pages: batch,
+        error: error?.message
+      });
+      failures += batch.length;
+      // Without a page count there is no telling where the document ends.
+      if (!state.numPages) break;
+      batch = nextBatch(state, settings.maxPages);
+      continue;
+    }
+    state.numPages = rendered.pages;
+    // A refusal (TextRecognitionError) rejects here and ends the loop: no
+    // further batch is rendered or sent.
+    await Promise.all(
+      rendered.images.map(async ({ page, base64 }) => {
+        const result = await engine.recognize(base64, 'image/png', { pageNum: page, name, user });
+        if (result.failed) failures += 1;
+        else if (result.text) recognized.set(page, result.text);
+      })
+    );
+    batch = nextBatch(state, settings.maxPages);
+  }
   if (recognized.size === 0) {
     throw new TextRecognitionError(
       failures > 0 ? 'OCR_FAILED' : 'OCR_NO_TEXT',
@@ -571,16 +665,17 @@ export async function recognizeScannedPdf(
     );
   }
   await audit({ user, name, engine, pages: recognized.size });
-  const text =
-    typeof extractedText === 'string' && extractedText
-      ? mergeRecognizedPages(extractedText, recognized)
-      : recognizedPagesText(numPages, recognized);
+  const truncated = wanted ? wanted.length > settings.maxPages : state.numPages > settings.maxPages;
+  const text = extractedText
+    ? mergeRecognizedPages(extractedText, recognized)
+    : recognizedPagesText(state.numPages, recognized);
   return {
     text,
     recognition: {
       ...engine.record,
       pages: recognized.size,
-      ...(wanted.length > chosen.length || failures > 0 ? { truncated: true } : {}),
+      ...(truncated ? { truncated: true } : {}),
+      ...(failures > 0 ? { failedPages: failures } : {}),
       at: new Date().toISOString()
     }
   };

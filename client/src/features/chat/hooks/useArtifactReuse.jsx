@@ -110,7 +110,10 @@ export default function useArtifactReuse({
   const menuItems = useCallback(
     (artifact, t) => [
       ...(onUseInApp &&
-      canUseArtifactInApp(artifact, { textRecognition: imageTextRecognition.apps })
+      canUseArtifactInApp(artifact, {
+        textRecognition: imageTextRecognition.apps,
+        imageTypes: imageTextRecognition.appImageTypes
+      })
         ? [
             {
               key: 'use-in-app',
@@ -122,7 +125,10 @@ export default function useArtifactReuse({
           ]
         : []),
       ...(onCopyToProject &&
-      canCopyArtifactToProject(artifact, { textRecognition: imageTextRecognition.projects })
+      canCopyArtifactToProject(artifact, {
+        textRecognition: imageTextRecognition.projects,
+        imageTypes: imageTextRecognition.projectImageTypes
+      })
         ? [
             {
               key: 'copy-to-project',

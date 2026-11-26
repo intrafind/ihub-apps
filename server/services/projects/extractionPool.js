@@ -3,7 +3,10 @@
 
 import { Worker } from 'node:worker_threads';
 import configCache from '../../configCache.js';
-import { renderScannedPdfPagesInProcess } from '../documents/pdf/scannedPages.js';
+import {
+  renderPdfPagesForRecognitionInProcess,
+  renderScannedPdfPagesInProcess
+} from '../documents/pdf/scannedPages.js';
 import { readCrawledPage } from './crawledPage.js';
 import { projectSettings } from './projectSettings.js';
 import { threadResourceLimits } from '../../utils/workerSizing.js';
@@ -304,6 +307,29 @@ export async function renderScannedPdfPages(bytes, maxPages) {
   assertAcceptingJobs();
   if (!extractionThreadsEnabled()) return renderScannedPdfPagesInProcess(bytes, maxPages);
   const { envelope } = await runInThread('renderPdfPages', { maxPages }, { bytes });
+  if (!envelope.ok) throw new Error(envelope.error?.message || 'The PDF could not be rendered');
+  return envelope.result;
+}
+
+/**
+ * Render chosen pages of a PDF as base64 PNGs for text recognition, in a
+ * thread when the pool is on (so a large or crafted PDF does not hold the
+ * event loop).
+ *
+ * @param {Buffer} bytes - Not moved: the caller renders further batches from it.
+ * @param {number[]} pageNumbers - 1-based.
+ * @returns {Promise<{images: Array<{page: number, base64: string}>, pages: number}>}
+ */
+export async function renderPdfPagesForRecognition(bytes, pageNumbers) {
+  assertAcceptingJobs();
+  if (!extractionThreadsEnabled()) {
+    return renderPdfPagesForRecognitionInProcess(bytes, pageNumbers);
+  }
+  const { envelope } = await runInThread(
+    'renderPdfPagesForRecognition',
+    { pageNumbers },
+    { bytes }
+  );
   if (!envelope.ok) throw new Error(envelope.error?.message || 'The PDF could not be rendered');
   return envelope.result;
 }

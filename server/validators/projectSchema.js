@@ -200,7 +200,10 @@ export const itemTextSchema = z
         modelId: z.string().max(200).optional(),
         integrationId: z.string().max(200).optional(),
         pages: z.number().int().nonnegative(),
+        // The page limit cut the document.
         truncated: z.boolean().optional(),
+        // Pages the engine could not read (an error, a timeout).
+        failedPages: z.number().int().positive().optional(),
         at: z.string()
       })
       .strict()

@@ -44,6 +44,10 @@ import {
 } from '../services/ocr/textRecognition.js';
 import { discoverIntegrationTools } from '../services/integrations/integrationTools.js';
 import {
+  getDefinitionTypes,
+  publishDefinitionTypes
+} from '../services/integrations/integrationTypes.js';
+import {
   fixtureIntegrations,
   fixtureTool,
   registerFixtureTools,
@@ -182,20 +186,28 @@ after(async () => {
 
 describe('text recognition helpers', () => {
   it('reads the settings, with no model meaning no recognition', () => {
-    assert.deepEqual(ocrSettings({}), {
-      engine: 'model',
-      modelId: null,
-      integrationId: null,
-      maxPages: 50,
-      enabled: false
-    });
-    assert.deepEqual(ocrSettings({ ocr: { engine: 'model', modelId: ' m ', maxPages: 3 } }), {
-      engine: 'model',
-      modelId: 'm',
-      integrationId: null,
-      maxPages: 3,
-      enabled: true
-    });
+    const off = ocrSettings({});
+    assert.equal(off.engine, 'model');
+    assert.equal(off.modelId, null);
+    assert.equal(off.integrationId, null);
+    assert.equal(off.maxPages, 50);
+    assert.equal(off.enabled, false);
+    assert.deepEqual(off.imageTypes, ['image/png', 'image/jpeg', 'image/webp', 'image/gif']);
+    const on = ocrSettings({ ocr: { engine: 'model', modelId: ' ocr-vision ', maxPages: 3 } });
+    assert.equal(on.modelId, 'ocr-vision');
+    assert.equal(on.maxPages, 3);
+    assert.equal(on.enabled, true);
+  });
+
+  it('counts the model engine as ready only while the model exists, is on and reads images', () => {
+    assert.equal(ocrSettings({ ocr: { modelId: 'text-only' } }).enabled, false, 'no vision');
+    assert.equal(ocrSettings({ ocr: { modelId: 'gone-model' } }).enabled, false, 'not configured');
+    configCache.setCacheEntry('config/models.json', [{ ...OCR_MODEL, enabled: false }, TEXT_MODEL]);
+    try {
+      assert.equal(ocrSettings({ ocr: { modelId: 'ocr-vision' } }).enabled, false, 'switched off');
+    } finally {
+      configCache.setCacheEntry('config/models.json', [OCR_MODEL, TEXT_MODEL]);
+    }
   });
 
   it('reads an OCR integration as the engine, ready only while it is installed and on', () => {
@@ -232,8 +244,8 @@ describe('text recognition helpers', () => {
   });
 
   it('recognizes in chats only where it is switched on, the app over the installation', () => {
-    const on = { ocr: { modelId: 'm' }, uploads: { recognizeText: true } };
-    const off = { ocr: { modelId: 'm' }, uploads: { recognizeText: false } };
+    const on = { ocr: { modelId: 'ocr-vision' }, uploads: { recognizeText: true } };
+    const off = { ocr: { modelId: 'ocr-vision' }, uploads: { recognizeText: false } };
     assert.equal(chatRecognizesText(on, null), true);
     assert.equal(chatRecognizesText(off, null), false);
     assert.equal(chatRecognizesText(off, { uploads: { recognizeText: true } }), true);
@@ -333,12 +345,71 @@ describe('projects: text recognition at upload', () => {
     assert.equal(error?.code, 'OCR_FAILED');
   });
 
-  it('refuses a model that cannot read images', async () => {
+  it('with a model that cannot read images, refuses an image as without recognition', async () => {
     setPlatform({ ocr: { modelId: 'text-only' } });
     await createProject('ocr-text-model');
     const { error } = await upload('ocr-text-model', 'no-vision.png', png(30), 'image/png');
-    assert.equal(error?.code, 'OCR_UNAVAILABLE');
+    assert.equal(error?.code, 'UNSUPPORTED_TYPE');
     assert.equal(calls.length, 0);
+  });
+
+  it('keeps the text of a text PDF when its pages without text cannot be read', async () => {
+    await createProject('ocr-best-effort');
+    // The engine refuses: before recognition this PDF was stored with its text.
+    answer = 400;
+    const refused = await upload(
+      'ocr-best-effort',
+      'refused-mixed.pdf',
+      await pdfOf([TEXT_PAGE, null]),
+      'application/pdf'
+    );
+    assert.equal(refused.item.status, 'ready', JSON.stringify(refused.item.error));
+    const text = await readText(refused.project, refused.item);
+    assert.match(text, /real text layer/);
+    assert.match(text, /\[Page 2: no extractable text\]/);
+    assert.equal(refused.item.text.recognized, undefined);
+
+    // A blank page: the engine reads nothing.
+    answer = () => '';
+    const blank = await upload(
+      'ocr-best-effort',
+      'blank-mixed.pdf',
+      await pdfOf([TEXT_PAGE, null]),
+      'application/pdf'
+    );
+    assert.equal(blank.item.status, 'ready', JSON.stringify(blank.item.error));
+    assert.match(await readText(blank.project, blank.item), /\[Page 2: no extractable text\]/);
+  });
+
+  it('sends no further page once the engine has refused one', async () => {
+    answer = 400;
+    await createProject('ocr-stop');
+    const { error } = await upload(
+      'ocr-stop',
+      'scan-refused.pdf',
+      await pdfOf([null, null, null, null, null, null, null]),
+      'application/pdf'
+    );
+    assert.equal(error?.code, 'OCR_FAILED');
+    assert.ok(calls.length <= 3, `${calls.length} pages were sent after the refusal`);
+  });
+
+  it('counts the pages that failed apart from the page limit', async () => {
+    answer = n => {
+      if (n === 2) throw Object.assign(new Error('upstream timeout'), { status: 504 });
+      return `Recognized text of call ${n}.`;
+    };
+    await createProject('ocr-failed-page');
+    const { item } = await upload(
+      'ocr-failed-page',
+      'flaky-scan.pdf',
+      await pdfOf([null, null, null]),
+      'application/pdf'
+    );
+    assert.equal(item.status, 'ready', JSON.stringify(item.error));
+    assert.equal(item.text.recognized.pages, 2);
+    assert.equal(item.text.recognized.failedPages, 1);
+    assert.equal(item.text.recognized.truncated, undefined, 'no page limit was hit');
   });
 
   it('without a model, behaves as before: a scanned PDF has no text, nothing is sent', async () => {
@@ -511,6 +582,52 @@ describe('an OCR integration as the engine', () => {
     const { error } = await upload('ocr-engine-off', 'off.png', png(6), 'image/png');
     assert.ok(error, 'an image is not accepted without a ready engine');
     assert.equal(received.length, 0);
+  });
+
+  it('takes only the image types the engine declares', async () => {
+    // An engine whose recognize action declares PNG only.
+    const loaded = Object.entries(getDefinitionTypes()).map(([id, type]) => ({
+      definition: { id, type }
+    }));
+    publishDefinitionTypes([
+      ...loaded,
+      {
+        definition: {
+          id: 'test.ocr/png-only',
+          type: 'ocr',
+          actions: [
+            {
+              name: 'recognize',
+              parameters: {
+                type: 'object',
+                properties: { mimeType: { type: 'string', enum: ['image/PNG'] } }
+              }
+            }
+          ]
+        }
+      }
+    ]);
+    configCache.setCacheEntry('config/integrations.json', {
+      installed: [{ id: 'png-ocr', definition: 'test.ocr/png-only' }]
+    });
+    setPlatform({ ocr: { engine: 'png-ocr' } });
+    try {
+      const settings = ocrSettings();
+      assert.equal(settings.enabled, true);
+      assert.deepEqual(settings.imageTypes, ['image/png']);
+      assert.deepEqual(settings.imageExtensions, ['.png']);
+      const webp = Buffer.concat([Buffer.from('RIFF'), Buffer.alloc(4), Buffer.from('WEBPVP8 ')]);
+      assert.equal(recognizableImageTypeOf(webp), null);
+      assert.equal(recognizableImageTypeOf(png()), 'image/png');
+      assert.equal(declaredRecognizableImageType({ name: 'photo.webp' }), null);
+
+      await createProject('ocr-engine-types');
+      const refused = await upload('ocr-engine-types', 'photo.webp', webp, 'image/webp');
+      assert.equal(refused.error?.code, 'UNSUPPORTED_TYPE');
+      assert.equal(received.length, 0);
+    } finally {
+      publishDefinitionTypes(loaded);
+    }
   });
 
   it('is no tool for a model', async () => {

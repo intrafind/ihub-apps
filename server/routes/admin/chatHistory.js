@@ -369,18 +369,26 @@ export default function registerAdminChatHistoryRoutes(app) {
       uploads,
       ocr
     } = parsed.data;
-    // The OCR model has to exist and read images: a wrong one would fail every upload.
-    if (ocr?.modelId && !ocrModelOptions().some(model => model.id === ocr.modelId)) {
+    // The OCR model has to exist and read images, and the engine has to be the
+    // model or an installed OCR integration: a wrong one would fail every
+    // upload. Only a value that changes is checked: the page sends its whole
+    // form, so a model or integration that went away since it was picked must
+    // not block saving the other settings.
+    const stored = ocrSettings(configCache.getPlatform?.() || {});
+    if (
+      ocr?.modelId &&
+      ocr.modelId !== stored.modelId &&
+      !ocrModelOptions().some(model => model.id === ocr.modelId)
+    ) {
       throw new ServiceError(
         'BAD_REQUEST',
         `Invalid chat history settings: ocr.modelId must name an enabled model that reads images`
       );
     }
-    // The engine is the model or an installed OCR integration; anything else
-    // would leave every upload without recognition.
     if (
       ocr?.engine &&
       ocr.engine !== MODEL_ENGINE &&
+      ocr.engine !== stored.engine &&
       !(await ocrEngineOptions()).some(engine => engine.id === ocr.engine)
     ) {
       throw new ServiceError(

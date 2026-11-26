@@ -22,6 +22,7 @@ import { appUploadAccepts } from '../../upload/utils/uploadFormats';
 import {
   appRecognizesImages,
   isRecognizableImage,
+  recognizableImageTypes,
   textRecognitionAvailable
 } from '../../upload/utils/textRecognition';
 
@@ -60,18 +61,19 @@ const ARCHIVE_TYPES = new Set([
  * the apps whose chats recognize the text of images (`appsAcceptingFile`).
  *
  * @param {{id?: string, kind?: string, mimeType?: string, name?: string}|null|undefined} artifact
- * @param {{textRecognition?: boolean}} [options] - `textRecognition`: a text recognition model
- *   is set (`platformConfig.uploads.textRecognition.available`).
+ * @param {{textRecognition?: boolean, imageTypes?: string[]}} [options] - `textRecognition`: a
+ *   text recognition engine is ready (`platformConfig.uploads.textRecognition.available`);
+ *   `imageTypes`: the image types it reads (`recognizableImageTypes`).
  * @returns {boolean}
  */
-export function canUseArtifactInApp(artifact, { textRecognition = false } = {}) {
+export function canUseArtifactInApp(artifact, { textRecognition = false, imageTypes } = {}) {
   if (!artifact?.id) return false;
   const type = String(artifact.mimeType || '')
     .split(';')[0]
     .trim()
     .toLowerCase();
   if (artifact.kind === 'image' || type.startsWith('image/')) {
-    return textRecognition === true && isRecognizableImage(type, artifact.name);
+    return textRecognition === true && isRecognizableImage(type, artifact.name, imageTypes);
   }
   if (ARCHIVE_TYPES.has(type)) return false;
   return !/\.zip$/i.test(String(artifact.name || ''));
@@ -210,6 +212,16 @@ export function appsAcceptingFile(apps, file, { uploads = null } = {}) {
   const list = Array.isArray(apps) ? apps : [];
   if (isRecognizableImage(file?.mimeType, file?.name)) {
     if (!textRecognitionAvailable(uploads)) return [];
+    // An image the engine in use does not read (a WebP for the iFinder OCR service).
+    if (
+      !isRecognizableImage(
+        file?.mimeType,
+        file?.name,
+        recognizableImageTypes(uploads?.textRecognition)
+      )
+    ) {
+      return [];
+    }
     return list.filter(app => isChatApp(app) && appRecognizesImages(app, uploads));
   }
   return list.filter(app => isChatApp(app) && appUploadAccepts(app, file));

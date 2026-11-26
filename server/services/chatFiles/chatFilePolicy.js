@@ -229,11 +229,13 @@ export function uploadsClientConfig(platformConfig = {}, { storageAvailable = tr
     storageMode: settings.storageMode,
     originalRetentionDays: settings.originalRetentionDays,
     quotas: settings.quotas,
-    // Text recognition (#3986): whether an OCR model is set, and whether chat
-    // uploads use it (an app's `uploads.recognizeText` overrides the latter).
+    // Text recognition (#3986): whether an OCR engine is ready, whether chat
+    // uploads use it (an app's `uploads.recognizeText` overrides the latter),
+    // and the image types the engine reads.
     textRecognition: {
       available: ocrSettings(platformConfig).enabled,
-      chats: chatRecognizesText(platformConfig, null)
+      chats: chatRecognizesText(platformConfig, null),
+      imageTypes: ocrSettings(platformConfig).imageTypes
     }
   };
 }

@@ -110,7 +110,8 @@
           },
           "mimeType": {
             "type": "string",
-            "description": "The media type of the image, e.g. image/png."
+            "description": "The media type of the image. The service reads these types; iHub sends no other.",
+            "enum": ["image/png", "image/jpeg", "image/gif", "image/bmp", "image/tiff"]
           },
           "name": {
             "type": "string",

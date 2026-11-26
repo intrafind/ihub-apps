@@ -14559,6 +14559,7 @@
     "recognized": "Text erkannt",
     "recognizedPages": "Text aus {{count}} Seite(n) erkannt",
     "recognizedPagesTruncated": "Text nur aus den ersten {{count}} Seite(n) erkannt",
+    "recognizedPagesFailed": "Text aus {{count}} Seite(n) erkannt; {{failed}} Seite(n) konnten nicht gelesen werden",
     "recognizedBy": "Erkannt von {{model}}"
   }
 }

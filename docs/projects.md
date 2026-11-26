@@ -248,17 +248,24 @@ images, and no question pays for reading it again.
   A PDF with some scanned pages keeps the text of the others and gets the recognized text in place
   of the scanned ones.
 - **Page limit:** at most `platform.ocr.maxPages` pages (50 by default) are read per document. Pages
-  past it keep the marker "no extractable text", and the document says it was cut.
+  past it keep the marker "no extractable text", and the document says it was cut. A page the
+  engine could not read (an error, a timeout) keeps its marker too, and the document says how many
+  pages could not be read (`failedPages`).
 - **Marked as recognized:** the document records the model or the OCR integration (`modelId` or
   `integrationId`), the number of pages and the date (`text.recognized`), and its row says "Text recognized from N pages". Recognized text can contain
   errors: check what matters.
 - **The original** (the image or the PDF) is kept per `platform.uploads.storageMode` like any
   upload, and **Download original** returns it.
-- **When it fails:** an engine that refuses or cannot be reached fails the document (`OCR_FAILED`,
-  **Retry** reads it again); a model that is not set up for images, or an OCR integration that is
-  switched off or removed, fails it with `OCR_UNAVAILABLE`.
-- **Without an engine** (no model, or the OCR integration switched off) nothing is read: images are
-  refused and a scanned PDF fails with `NO_TEXT`, as before.
+- **When it fails:** for an image or a PDF without any text layer, an engine that refuses or cannot
+  be reached fails the document (`OCR_FAILED`, **Retry** reads it again), and an engine that is
+  not usable when the document is read fails it with `OCR_UNAVAILABLE`. A PDF that has text
+  elsewhere never fails because of recognition: it keeps its text and the markers of the pages
+  that could not be read, as without recognition.
+- **Which images:** the types the engine reads: PNG, JPEG, GIF and WebP with a model; an OCR
+  integration may read fewer (the iFinder OCR service reads no WebP).
+- **Without an engine** (no model, a model that is switched off or cannot read images, or the OCR
+  integration switched off) nothing is read: images are refused and a scanned PDF fails with
+  `NO_TEXT`, as before.
 - **Where the pages go:** the pages are sent to the engine when the document is added: the provider
   of the model, or the service the OCR integration calls. Pick an engine your data may go to.
 

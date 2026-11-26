@@ -5344,7 +5344,8 @@
         "storageMode": "string",
         "textRecognition": {
           "available": "boolean",
-          "chats": "boolean"
+          "chats": "boolean",
+          "imageTypes": "array"
         }
       },
       "userPrompts": {
@@ -6316,6 +6317,7 @@
       },
       "textRecognition": {
         "enabled": "boolean",
+        "imageTypes": ["string"],
         "maxPages": "number"
       },
       "tierPolicy": "string",

@@ -40,7 +40,8 @@ as `ifinder-ocr`): the OCR service of iFinder (`if-ocr`, Tesseract).
   and queues the rest.
 - **Test connection** checks the address and sends a small blank image.
 - iHub sends it one image at a time: an uploaded image, or a scanned PDF page rendered as PNG. It
-  reads PNG, JPEG, GIF, BMP and TIFF; a WebP image fails with `OCR_FAILED`.
+  reads PNG, JPEG, GIF, BMP and TIFF and declares so; while it is the engine, a WebP image is not
+  accepted for recognition (projects refuse it, chats send it to the model as a picture).
 - The recognition languages are set on the service (`intrafind.ocr.engine.tesseract.languages`,
   German and English by default), not in iHub.
 

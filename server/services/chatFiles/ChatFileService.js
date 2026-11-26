@@ -30,6 +30,7 @@ import { CHAT_ERROR_CODES } from '../../../shared/apiErrors.js';
 import {
   TextRecognitionError,
   chatRecognizesText,
+  ocrSettings,
   recognizableImageTypeOf,
   recognizeImage,
   recognizeScannedPdf
@@ -189,8 +190,9 @@ export async function ingestChatFile({
     // Text recognition (#3986), where it is switched on for chats: an image is
     // read by the OCR model once and stored as a document with its text, so the
     // chat model reads text, not the picture, on every turn.
-    const recognizeText = chatRecognizesText(configCache.getPlatform?.() || {}, appConfig);
-    const imageType = recognizeText ? recognizableImageTypeOf(buf) : null;
+    const platform = configCache.getPlatform?.() || {};
+    const recognizeText = chatRecognizesText(platform, appConfig);
+    const imageType = recognizeText ? recognizableImageTypeOf(buf, ocrSettings(platform)) : null;
     const accepted = imageType || acceptedTypeOf({ contentType: mimeType, name });
     if (!accepted) {
       throw new ChatFileError(
@@ -217,8 +219,10 @@ export async function ingestChatFile({
     }
 
     const recognizeOptions = {
-      platform: configCache.getPlatform?.() || {},
-      name: name || 'upload'
+      platform,
+      name: name || 'upload',
+      // The audit entry names who sent the file to the engine.
+      user: ownerId ? { id: ownerId } : undefined
     };
     const applyRecognition = result => {
       const normalized = normalizeText(result.text, { maxChars: MAX_TEXT_CHARS });

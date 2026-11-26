@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
-import { useCallback, useEffect, useRef } from 'react';
+import { useCallback, useEffect, useMemo, useRef } from 'react';
 import { deleteChatFile, uploadChatFile } from '../../../api';
 import { usePlatformConfig } from '../../../shared/contexts/PlatformConfigContext';
 import {
@@ -14,7 +14,10 @@ import {
   uploadErrorCode,
   withStoredFile
 } from '../utils/chatFileUpload';
-import { composerRecognizesImages } from '../../upload/utils/textRecognition';
+import {
+  composerRecognizesImages,
+  recognizableImageTypes
+} from '../../upload/utils/textRecognition';
 
 const BUSY_ID = 'chat-file-upload';
 
@@ -40,10 +43,11 @@ const BUSY_ID = 'chat-file-upload';
  * @param {(id: string, busy: boolean) => void} [params.setAttachmentProcessing]
  * @param {boolean} [params.ephemeral] - Whether the chat is temporary (creates it as such).
  * @returns {{ handleFileSelect: (next: Object|Object[]|null) => void, enabled: boolean, mode: string,
- *   recognizesImages: boolean }}
+ *   recognizesImages: boolean, recognizedImageTypes: string[] }}
  *   `handleFileSelect` replaces the composer's own `onFileSelect`. `recognizesImages`: an image
- *   attached here goes to the server, which recognizes its text (#3986); pass it to
- *   `createUploadConfig(app, model, { recognizeImages })`.
+ *   attached here goes to the server, which recognizes its text (#3986);
+ *   `recognizedImageTypes`: the image types its engine reads. Pass both to
+ *   `createUploadConfig(app, model, { recognizeImages, recognizedImageTypes })`.
  */
 export default function useChatFilePreUpload({
   chatId,
@@ -179,5 +183,10 @@ export default function useChatFilePreUpload({
     [reportBusy, setSelectedFile]
   );
 
-  return { handleFileSelect, enabled, mode, recognizesImages };
+  const recognizedImageTypes = useMemo(
+    () => recognizableImageTypes(uploads?.textRecognition),
+    [uploads?.textRecognition]
+  );
+
+  return { handleFileSelect, enabled, mode, recognizesImages, recognizedImageTypes };
 }

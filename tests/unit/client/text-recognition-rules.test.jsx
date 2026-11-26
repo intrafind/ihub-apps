@@ -16,6 +16,7 @@ import {
   recognitionLabel,
   recognitionOf,
   recognitionTitle,
+  recognizableImageTypes,
   recognizedImageAttachment,
   recognizedImageUploadAllowed
 } from '../../../client/src/features/upload/utils/textRecognition';
@@ -89,6 +90,17 @@ describe('isRecognizableImage', () => {
     expect(isRecognizableImage('image/svg+xml')).toBe(false);
     expect(isRecognizableImage('image/tiff')).toBe(false);
     expect(isRecognizableImage('application/pdf')).toBe(false);
+  });
+
+  it('takes only the types the engine in use reads, when the server names them', () => {
+    const ifinder = recognizableImageTypes({
+      imageTypes: ['image/png', 'image/jpeg', 'image/gif']
+    });
+    expect(ifinder).toEqual(['image/png', 'image/jpeg', 'image/jpg', 'image/gif']);
+    expect(isRecognizableImage('image/webp', 'photo.webp', ifinder)).toBe(false);
+    expect(isRecognizableImage('', 'scan.JPG', ifinder)).toBe(true);
+    // A server that names none: every type the client knows
+    expect(recognizableImageTypes(undefined)).toContain('image/webp');
   });
 });
 
@@ -184,6 +196,14 @@ describe('what a recognized file says', () => {
       text: { recognized: { modelId: 'm', pages: 50, truncated: true } }
     });
     expect(recognitionLabel(cut, t)).toBe('Text recognized from the first 50 page(s) only');
+    // Pages the engine could not read are not the page limit
+    const failed = recognitionOf({
+      text: { recognized: { integrationId: 'ifinder-ocr', pages: 4, failedPages: 1 } }
+    });
+    expect(recognitionLabel(failed, t)).toBe(
+      'Text recognized from 4 page(s); 1 page(s) could not be read'
+    );
+    expect(recognitionTitle(failed, t)).toBe('Recognized by ifinder-ocr');
     expect(recognitionOf({ text: { chars: 10 } })).toBeNull();
     expect(recognitionLabel(null, t)).toBeNull();
   });
@@ -247,6 +267,15 @@ describe('"Use in app…" for pictures', () => {
     // No model: no app takes a picture
     expect(appsAcceptingFile(apps, file, { uploads: NO_MODEL })).toEqual([]);
     expect(appsAcceptingFile(apps, file)).toEqual([]);
+    // An engine that reads no WebP: no app takes a WebP picture
+    const pngOnly = {
+      ...ON,
+      textRecognition: { ...ON.textRecognition, imageTypes: ['image/png'] }
+    };
+    expect(
+      appsAcceptingFile(apps, { mimeType: 'image/webp', name: 'a.webp' }, { uploads: pngOnly })
+    ).toEqual([]);
+    expect(appsAcceptingFile(apps, file, { uploads: pngOnly }).length).toBeGreaterThan(0);
   });
 
   it('judges documents as before', () => {
@@ -276,6 +305,12 @@ describe('"Copy to project…" for pictures', () => {
     expect(canCopyArtifactToProject({ mimeType: 'image/png' }, { textRecognition: true })).toBe(
       false
     );
+    expect(
+      canCopyArtifactToProject(
+        { id: 'a4', mimeType: 'image/webp' },
+        { textRecognition: true, imageTypes: ['image/png'] }
+      )
+    ).toBe(false);
   });
 });
 

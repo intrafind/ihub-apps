@@ -791,12 +791,19 @@ export default function ArtifactViewerHost({
       // Judged by type only here: a live file is resolved to its stored copy on click.
       const typeOnly = { ...descriptor, id: descriptor.id || 'live' };
       const toApp =
-        onUseInApp && canUseArtifactInApp(typeOnly, { textRecognition: imageTextRecognition.apps })
+        onUseInApp &&
+        canUseArtifactInApp(typeOnly, {
+          textRecognition: imageTextRecognition.apps,
+          imageTypes: imageTextRecognition.appImageTypes
+        })
           ? withStoredCopy(onUseInApp)
           : null;
       const copyToProject =
         onCopyToProject &&
-        canCopyArtifactToProject(typeOnly, { textRecognition: imageTextRecognition.projects })
+        canCopyArtifactToProject(typeOnly, {
+          textRecognition: imageTextRecognition.projects,
+          imageTypes: imageTextRecognition.projectImageTypes
+        })
           ? withStoredCopy(onCopyToProject)
           : null;
       const reuseMenu = [

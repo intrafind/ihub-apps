@@ -54,12 +54,18 @@ function GeneratedFileCard({ file, chatId }) {
   const usableInApp = Boolean(
     viewer?.openArtifactInApp &&
     storedHere &&
-    canUseArtifactInApp(file, { textRecognition: recognition?.apps === true })
+    canUseArtifactInApp(file, {
+      textRecognition: recognition?.apps === true,
+      imageTypes: recognition?.appImageTypes
+    })
   );
   const copyableToProject = Boolean(
     viewer?.copyArtifactToProject &&
     storedHere &&
-    canCopyArtifactToProject(file, { textRecognition: recognition?.projects === true })
+    canCopyArtifactToProject(file, {
+      textRecognition: recognition?.projects === true,
+      imageTypes: recognition?.projectImageTypes
+    })
   );
   const hasMore = usableInApp || copyableToProject;
   const menuId = useId();

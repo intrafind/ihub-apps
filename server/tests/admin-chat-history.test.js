@@ -329,6 +329,31 @@ describe('text recognition settings (platform.ocr)', () => {
     ]);
   });
 
+  test('a stored model or engine that went away does not block saving the other settings', async () => {
+    state.stored.ocr = { engine: 'model', modelId: 'text-model', maxPages: 50 };
+    const unchanged = await request(createTestApp())
+      .put('/api/admin/chat-history/settings')
+      .send({
+        ocr: { engine: 'model', modelId: 'text-model', maxPages: 50 },
+        chats: { retentionDays: 30 }
+      });
+    expect(unchanged.status).toBe(200);
+    expect(state.stored.chats.retentionDays).toBe(30);
+
+    state.stored.ocr = { engine: 'uninstalled-ocr', modelId: null, maxPages: 50 };
+    const stale = await request(createTestApp())
+      .put('/api/admin/chat-history/settings')
+      .send({ ocr: { engine: 'uninstalled-ocr', maxPages: 20 } });
+    expect(stale.status).toBe(200);
+    expect(state.stored.ocr.maxPages).toBe(20);
+
+    // A change to a value that cannot work is still refused.
+    const changed = await request(createTestApp())
+      .put('/api/admin/chat-history/settings')
+      .send({ ocr: { engine: 'another-missing-ocr' } });
+    expect(changed.status).toBe(400);
+  });
+
   test('picks an installed OCR integration as the engine, and refuses any other', async () => {
     const picked = await request(createTestApp())
       .put('/api/admin/chat-history/settings')

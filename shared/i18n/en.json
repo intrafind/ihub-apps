@@ -14560,6 +14560,7 @@
     "recognized": "Text recognized",
     "recognizedPages": "Text recognized from {{count}} page(s)",
     "recognizedPagesTruncated": "Text recognized from the first {{count}} page(s) only",
+    "recognizedPagesFailed": "Text recognized from {{count}} page(s); {{failed}} page(s) could not be read",
     "recognizedBy": "Recognized by {{model}}"
   }
 }

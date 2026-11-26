@@ -70,6 +70,15 @@ describe('iFinder OCR definition', () => {
     assert.equal(result.data.type, 'ocr');
     assert.equal(result.data.protocol.module, 'ifinderOcr');
     assert.ok(result.data.actions.some(action => action.name === 'recognize'));
+    // The image types it reads, so iHub offers it no other (no WebP).
+    const recognize = result.data.actions.find(action => action.name === 'recognize');
+    assert.deepEqual(recognize.parameters.properties.mimeType.enum, [
+      'image/png',
+      'image/jpeg',
+      'image/gif',
+      'image/bmp',
+      'image/tiff'
+    ]);
   });
 });
 

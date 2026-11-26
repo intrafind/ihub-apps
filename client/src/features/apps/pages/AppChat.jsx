@@ -3076,7 +3076,8 @@ function AppChat({
       onAttachmentProcessingChange: fileUploadHandler.setAttachmentProcessing,
       // An image goes to the server for text recognition where the app's chats use it (#3986)
       uploadConfig: fileUploadHandler.createUploadConfig(app, currentModel, {
-        recognizeImages: chatFileUploads.recognizesImages
+        recognizeImages: chatFileUploads.recognizesImages,
+        recognizedImageTypes: chatFileUploads.recognizedImageTypes
       }),
       // While recording, Send stops the recording and sends it — with or
       // without anything typed.
@@ -3217,7 +3218,10 @@ function AppChat({
             uploadConfig={fileUploadHandler.createUploadConfig(
               app,
               models.find(m => m.id === selectedModel),
-              { recognizeImages: chatFileUploads.recognizesImages }
+              {
+                recognizeImages: chatFileUploads.recognizesImages,
+                recognizedImageTypes: chatFileUploads.recognizedImageTypes
+              }
             )}
             selectedFile={fileUploadHandler.selectedFile}
             onFileSelect={chatFileUploads.handleFileSelect}

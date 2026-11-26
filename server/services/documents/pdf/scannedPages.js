@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
-import { renderPagePreview } from './PdfService.js';
+import { renderPagePreview, renderPagesForRecognition } from './PdfService.js';
 
 /**
  * Render up to `maxPages` pages of a scanned PDF as base64 PNG images with
@@ -23,4 +23,17 @@ export async function renderScannedPdfPagesInProcess(bytes, maxPages) {
     pageImages.push(rendered.png.toString('base64'));
   }
   return { pageImages, pages: totalPages };
+}
+
+/**
+ * Render chosen pages of a PDF as base64 PNGs for text recognition
+ * (`services/ocr/textRecognition.js`). CPU-bound WASM like the above: callers
+ * go through `renderPdfPagesForRecognition` of the extraction pool.
+ *
+ * @param {Buffer|Uint8Array} bytes - PDF bytes.
+ * @param {number[]} pageNumbers - 1-based; numbers past the end are skipped.
+ * @returns {Promise<{images: Array<{page: number, base64: string}>, pages: number}>}
+ */
+export async function renderPdfPagesForRecognitionInProcess(bytes, pageNumbers) {
+  return renderPagesForRecognition(bytes, pageNumbers);
 }

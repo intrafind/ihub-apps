@@ -28,9 +28,10 @@ import { fileTypeOf } from './uploadFormats';
 import { ORIGINAL_FILE } from '../../chat/utils/chatFileUpload';
 
 /**
- * The image types the text recognition model reads (server:
- * `services/ocr/textRecognition.js` → `OCR_IMAGE_TYPES`). `image/jpg` is listed
- * beside `image/jpeg` because apps and browsers use both names.
+ * The image types text recognition can read at most (server:
+ * `services/ocr/textRecognition.js` → `OCR_IMAGE_TYPES`); the engine in use may
+ * read fewer (see {@link recognizableImageTypes}). `image/jpg` is listed beside
+ * `image/jpeg` because apps and browsers use both names.
  */
 export const RECOGNIZABLE_IMAGE_TYPES = Object.freeze([
   'image/png',
@@ -41,21 +42,45 @@ export const RECOGNIZABLE_IMAGE_TYPES = Object.freeze([
 ]);
 
 /**
- * Whether a file is an image the text recognition model reads, by its type or,
- * when the type is missing or generic, by its extension.
+ * The image types the installation's engine reads, from the `imageTypes` the
+ * server sends with `textRecognition` (`platformConfig.uploads` or the
+ * projects configuration): an OCR integration may read fewer than a model
+ * (the iFinder OCR service reads no WebP). All of
+ * {@link RECOGNIZABLE_IMAGE_TYPES} when the server names none.
+ *
+ * @param {{imageTypes?: string[]}|null|undefined} textRecognition
+ * @returns {string[]}
+ *
+ * @example
+ * recognizableImageTypes({ imageTypes: ['image/png', 'image/jpeg'] });
+ * // → ['image/png', 'image/jpeg', 'image/jpg']
+ */
+export function recognizableImageTypes(textRecognition) {
+  const declared = textRecognition?.imageTypes;
+  if (!Array.isArray(declared)) return [...RECOGNIZABLE_IMAGE_TYPES];
+  return RECOGNIZABLE_IMAGE_TYPES.filter(
+    type => declared.includes(type) || (type === 'image/jpg' && declared.includes('image/jpeg'))
+  );
+}
+
+/**
+ * Whether a file is an image text recognition reads, by its type or, when the
+ * type is missing or generic, by its extension.
  *
  * @param {string} [mimeType]
  * @param {string} [name]
+ * @param {string[]} [types] - The engine's types ({@link recognizableImageTypes}); all by default.
  * @returns {boolean}
  *
  * @example
  * isRecognizableImage('image/png'); // true
  * isRecognizableImage('', 'scan.JPG'); // true
  * isRecognizableImage('image/svg+xml'); // false
+ * isRecognizableImage('image/webp', 'a.webp', ['image/png']); // false
  */
-export function isRecognizableImage(mimeType, name) {
+export function isRecognizableImage(mimeType, name, types = RECOGNIZABLE_IMAGE_TYPES) {
   const type = fileTypeOf(mimeType, name);
-  return Boolean(type) && RECOGNIZABLE_IMAGE_TYPES.includes(type);
+  return Boolean(type) && types.includes(type);
 }
 
 /**
@@ -202,7 +227,7 @@ export function awaitsRecognition(entry) {
  * integration the installation uses instead.
  *
  * @param {Object|null|undefined} source
- * @returns {{modelId: string, integrationId: string, engine: string, pages: number, truncated: boolean, at?: string}|null}
+ * @returns {{modelId: string, integrationId: string, engine: string, pages: number, truncated: boolean, failedPages: number, at?: string}|null}
  */
 export function recognitionOf(source) {
   const recognized = source?.recognized || source?.meta?.recognized || source?.text?.recognized;
@@ -217,6 +242,10 @@ export function recognitionOf(source) {
     engine: modelId || integrationId,
     pages: Number.isFinite(pages) && pages > 0 ? Math.floor(pages) : 0,
     truncated: recognized.truncated === true,
+    failedPages:
+      Number.isFinite(Number(recognized.failedPages)) && Number(recognized.failedPages) > 0
+        ? Math.floor(Number(recognized.failedPages))
+        : 0,
     ...(typeof recognized.at === 'string' ? { at: recognized.at } : {})
   };
 }
@@ -233,6 +262,13 @@ export function recognitionLabel(recognized, t) {
   if (!recognized) return null;
   if (recognized.pages <= 0) {
     return t('textRecognition.recognized', 'Text recognized');
+  }
+  if (recognized.failedPages > 0) {
+    return t(
+      'textRecognition.recognizedPagesFailed',
+      'Text recognized from {{count}} page(s); {{failed}} page(s) could not be read',
+      { count: recognized.pages, failed: recognized.failedPages }
+    );
   }
   return recognized.truncated
     ? t(
