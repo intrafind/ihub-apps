@@ -18,12 +18,8 @@
  */
 import { describe, it, beforeEach, before, after } from 'node:test';
 import assert from 'node:assert/strict';
-import { spawnSync } from 'node:child_process';
-import fs from 'node:fs';
 import http from 'node:http';
 import https from 'node:https';
-import os from 'node:os';
-import path from 'node:path';
 
 import {
   SearxngSearchProvider,
@@ -43,6 +39,7 @@ import {
 import { diagnoseSearchError } from '../services/search/searchDiagnostics.js';
 import { _clearSearchCache } from '../services/searchCache.js';
 import configCache from '../configCache.js';
+import { createSelfSignedCertificate, opensslAvailable } from './helpers/selfSignedCertificate.js';
 
 function jsonResponse(body, { status = 200, headers = {} } = {}) {
   const lower = Object.fromEntries(Object.entries(headers).map(([k, v]) => [k.toLowerCase(), v]));
@@ -375,8 +372,7 @@ describe('SearxngSearchProvider', () => {
 });
 
 describe('the default transport honours the SSL whitelist', () => {
-  const opensslAvailable = spawnSync('openssl', ['version']).status === 0;
-  let dir;
+  let certificate;
   let server;
   let port;
   let plain;
@@ -394,28 +390,8 @@ describe('the default transport honours the SSL whitelist', () => {
     await new Promise(resolve => plain.listen(0, '127.0.0.1', resolve));
     plainPort = plain.address().port;
     if (!opensslAvailable) return;
-    dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ihub-searxng-tls-'));
-    const key = path.join(dir, 'key.pem');
-    const cert = path.join(dir, 'cert.pem');
-    const made = spawnSync('openssl', [
-      'req',
-      '-x509',
-      '-newkey',
-      'rsa:2048',
-      '-nodes',
-      '-keyout',
-      key,
-      '-out',
-      cert,
-      '-days',
-      '1',
-      '-subj',
-      '/CN=127.0.0.1',
-      '-addext',
-      'subjectAltName=IP:127.0.0.1'
-    ]);
-    if (made.status !== 0) throw new Error(`openssl failed: ${made.stderr}`);
-    server = https.createServer({ key: fs.readFileSync(key), cert: fs.readFileSync(cert) }, serve);
+    certificate = createSelfSignedCertificate('ihub-searxng-tls-');
+    server = https.createServer({ key: certificate.key, cert: certificate.cert }, serve);
     await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
     port = server.address().port;
   });
@@ -424,7 +400,7 @@ describe('the default transport honours the SSL whitelist', () => {
     configCache.setCacheEntry('config/platform.json', {});
     await new Promise(resolve => plain.close(resolve));
     if (server) await new Promise(resolve => server.close(resolve));
-    if (dir) fs.rmSync(dir, { recursive: true, force: true });
+    certificate?.remove();
   });
 
   const setSsl = ssl => configCache.setCacheEntry('config/platform.json', { ssl });
