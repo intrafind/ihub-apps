@@ -218,23 +218,34 @@ export function elicitationContent(form, data) {
   for (const [name, field] of Object.entries(form.properties)) {
     const value = values[name];
     if (value === undefined || value === null || value === '') continue;
-    const typed = typedValue(field.type, value);
+    const convert = Object.hasOwn(VALUE_CONVERTERS, field.type)
+      ? VALUE_CONVERTERS[field.type]
+      : VALUE_CONVERTERS.string;
+    const typed = convert(value);
     if (typed !== undefined) content[name] = typed;
   }
   return content;
 }
 
-/** A submitted value as the type its field names; `undefined` drops it. */
-function typedValue(type, value) {
-  if (type === 'number' || type === 'integer') {
-    const number = typeof value === 'number' ? value : Number(value);
-    if (!Number.isFinite(number)) return undefined;
-    return type === 'integer' ? Math.trunc(number) : number;
-  }
-  if (type === 'boolean') return value === true || value === 'true';
-  if (type === 'array') return Array.isArray(value) ? value.filter(isString) : undefined;
-  return String(value);
+function toNumber(value) {
+  const number = typeof value === 'number' ? value : Number(value);
+  return Number.isFinite(number) ? number : undefined;
 }
+
+/**
+ * A submitted value as the type its field names, one converter per type;
+ * `undefined` drops the value.
+ */
+const VALUE_CONVERTERS = {
+  number: toNumber,
+  integer: value => {
+    const number = toNumber(value);
+    return number === undefined ? undefined : Math.trunc(number);
+  },
+  boolean: value => value === true || value === 'true',
+  array: value => (Array.isArray(value) ? value.filter(isString) : undefined),
+  string: value => String(value)
+};
 
 /** Wait for the answer, or for the turn to stop. */
 function waitForAnswerOrAbort(interactionService, id, signal) {
