@@ -14506,5 +14506,19 @@
       "refused": "The file could not be attached: {{detail}}",
       "failed": "The file could not be attached. Please try again."
     }
+  },
+  "mcpElicitation": {
+    "title": "{{server}} asks",
+    "titleUnknown": "A connected system asks",
+    "notice": "Your answer goes to {{server}}, not into the conversation. The request waits until you answer.",
+    "theServer": "the server",
+    "choose": "Choose…",
+    "submit": "Submit",
+    "decline": "Decline",
+    "required": "Required",
+    "invalid": "Check this value",
+    "sent": "Answer sent to {{server}}.",
+    "declined": "You declined. {{server}} was told no.",
+    "failed": "The answer could not be sent."
   }
 }

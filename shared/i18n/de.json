@@ -14505,5 +14505,19 @@
       "refused": "Die Datei konnte nicht angehängt werden: {{detail}}",
       "failed": "Die Datei konnte nicht angehängt werden. Bitte versuchen Sie es erneut."
     }
+  },
+  "mcpElicitation": {
+    "title": "{{server}} fragt",
+    "titleUnknown": "Ein verbundenes System fragt",
+    "notice": "Ihre Antwort geht an {{server}}, nicht in die Unterhaltung. Die Anfrage wartet, bis Sie antworten.",
+    "theServer": "den Server",
+    "choose": "Auswählen…",
+    "submit": "Senden",
+    "decline": "Ablehnen",
+    "required": "Pflichtfeld",
+    "invalid": "Bitte prüfen Sie diesen Wert",
+    "sent": "Antwort an {{server}} gesendet.",
+    "declined": "Sie haben abgelehnt. {{server}} wurde abgesagt.",
+    "failed": "Die Antwort konnte nicht gesendet werden."
   }
 }

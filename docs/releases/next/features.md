@@ -157,3 +157,19 @@ as before.
   handshake to all others.
 
 Details: [MCP Integration](../../mcp-integration.md#protocol-revisions).
+
+## Chat: Connected MCP Servers Can Ask You Mid-Call
+
+An MCP server can now ask the chat user for something while one of its tools runs: to confirm a
+paid action, to type the name of what it is about to delete, or to fill in a missing value. The
+question appears in the chat as a form card with the server's name; **Submit** sends the answer to
+the server, **Decline** tells it no, and the tool call goes on.
+
+- The answer goes to the server only, not into the conversation. The call's own timeout stands
+  still while you answer; an unanswered question is cancelled after 10 minutes or when you stop the
+  turn.
+- Where nobody can answer (workflows, scheduled runs, the inference API, the MCP gateway), the
+  server is told the question was dismissed, as before.
+- On for every MCP server; a shipped definition can switch it off.
+
+Details: [MCP Integration](../../mcp-integration.md#questions-from-the-server-elicitation).

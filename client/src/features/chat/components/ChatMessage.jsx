@@ -20,6 +20,7 @@ import {
 import CustomResponseRenderer from '../../../shared/components/CustomResponseRenderer';
 import ClarificationCard from './ClarificationCard';
 import ApprovalCard from './ApprovalCard';
+import McpElicitationCard from './McpElicitationCard';
 import GeneratedImage from './GeneratedImage';
 import AnswerSources, { CitedSources, ReadSources, hasAnswerResults } from './AnswerSources';
 import { findTrailingSourceList, resolveCitations } from '../../../../../shared/sources/index.js';
@@ -980,6 +981,14 @@ function ChatMessage({
           <ChatCheckpoint
             executionId={message.workflowCheckpoint.executionId}
             checkpoint={message.workflowCheckpoint.checkpoint}
+          />
+        )}
+        {/* A question an MCP server asked in the middle of a tool call */}
+        {!isUser && message.mcpElicitation?.interaction && (
+          <McpElicitationCard
+            key={message.mcpElicitation.interaction.id}
+            interaction={message.mcpElicitation.interaction}
+            runId={message.mcpElicitation.runId}
           />
         )}
         {/* Show just the question for answered clarifications (at top of bubble) */}

@@ -61,9 +61,25 @@ const PERMISSION_FEATURES = Object.freeze({
  * @param {boolean} appsEnabled - Whether MCP Apps are enabled for the server
  * @returns {Object} ClientCapabilities
  */
-export function buildClientCapabilities(appsEnabled) {
-  if (!appsEnabled) return {};
-  return { extensions: { [MCP_UI_EXTENSION]: { mimeTypes: [MCP_APP_MIME_TYPE] } } };
+export function buildClientCapabilities(appsEnabled, { elicitation = false } = {}) {
+  return {
+    // Form questions a server asks mid-call (`mcpElicitation.js`).
+    ...(elicitation ? { elicitation: { form: {} } } : {}),
+    ...(appsEnabled
+      ? { extensions: { [MCP_UI_EXTENSION]: { mimeTypes: [MCP_APP_MIME_TYPE] } } }
+      : {})
+  };
+}
+
+/**
+ * Whether a server may ask the chat user questions mid-call (MCP
+ * elicitation). On unless the server config switches it off.
+ *
+ * @param {Object} serverConfig
+ * @returns {boolean}
+ */
+export function elicitationEnabledFor(serverConfig) {
+  return serverConfig?.elicitation?.enabled !== false;
 }
 
 /**

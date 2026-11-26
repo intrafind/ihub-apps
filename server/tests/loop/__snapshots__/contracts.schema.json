@@ -1501,6 +1501,25 @@
                         "required": ["appId", "viewToolId", "serverId", "name"],
                         "additionalProperties": false
                       },
+                      "mcpElicitation": {
+                        "type": "object",
+                        "properties": {
+                          "serverId": {
+                            "type": "string",
+                            "maxLength": 200
+                          },
+                          "serverName": {
+                            "type": "string",
+                            "maxLength": 200
+                          },
+                          "toolId": {
+                            "type": "string",
+                            "maxLength": 400
+                          }
+                        },
+                        "required": ["serverId"],
+                        "additionalProperties": false
+                      },
                       "scheduledTaskId": {
                         "type": "string"
                       },
@@ -2858,6 +2877,25 @@
             "required": ["appId", "viewToolId", "serverId", "name"],
             "additionalProperties": false
           },
+          "mcpElicitation": {
+            "type": "object",
+            "properties": {
+              "serverId": {
+                "type": "string",
+                "maxLength": 200
+              },
+              "serverName": {
+                "type": "string",
+                "maxLength": 200
+              },
+              "toolId": {
+                "type": "string",
+                "maxLength": 400
+              }
+            },
+            "required": ["serverId"],
+            "additionalProperties": false
+          },
           "scheduledTaskId": {
             "type": "string"
           },
@@ -4061,6 +4099,25 @@
                   }
                 },
                 "required": ["appId", "viewToolId", "serverId", "name"],
+                "additionalProperties": false
+              },
+              "mcpElicitation": {
+                "type": "object",
+                "properties": {
+                  "serverId": {
+                    "type": "string",
+                    "maxLength": 200
+                  },
+                  "serverName": {
+                    "type": "string",
+                    "maxLength": 200
+                  },
+                  "toolId": {
+                    "type": "string",
+                    "maxLength": 400
+                  }
+                },
+                "required": ["serverId"],
                 "additionalProperties": false
               },
               "scheduledTaskId": {
@@ -6376,6 +6433,25 @@
                           }
                         },
                         "required": ["appId", "viewToolId", "serverId", "name"],
+                        "additionalProperties": false
+                      },
+                      "mcpElicitation": {
+                        "type": "object",
+                        "properties": {
+                          "serverId": {
+                            "type": "string",
+                            "maxLength": 200
+                          },
+                          "serverName": {
+                            "type": "string",
+                            "maxLength": 200
+                          },
+                          "toolId": {
+                            "type": "string",
+                            "maxLength": 400
+                          }
+                        },
+                        "required": ["serverId"],
                         "additionalProperties": false
                       },
                       "scheduledTaskId": {

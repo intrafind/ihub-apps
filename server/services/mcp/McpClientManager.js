@@ -974,13 +974,21 @@ class McpClientManager {
    *   of a tool of a server with MCP Apps enabled: a tool that declares a view,
    *   or one whose result may embed a view page (see `findEmbeddedView`)
    */
-  async callTool(prefixedName, params, { onRawResult } = {}) {
+  async callTool(prefixedName, params, { onRawResult, signal } = {}) {
     const found = await this.findTool(prefixedName);
     if (!found) throw new Error(`MCP tool not found: ${prefixedName}`);
     const { conn, tool } = found;
     const args = toMcpArguments(params, tool.parameters);
-    const callOptions =
-      appsEnabledFor(conn.config) && typeof onRawResult === 'function' ? { onRawResult } : {};
+    const callOptions = {
+      ...(appsEnabledFor(conn.config) && typeof onRawResult === 'function' ? { onRawResult } : {}),
+      // Where a question the server asks mid-call goes (MCP elicitation).
+      context: {
+        chatId: typeof params?.chatId === 'string' ? params.chatId : undefined,
+        user: params?.user,
+        toolId: prefixedName,
+        signal
+      }
+    };
     if (!isUserOAuthServer(conn.config)) {
       return conn.callTool(tool._mcp.originalName, args, callOptions);
     }

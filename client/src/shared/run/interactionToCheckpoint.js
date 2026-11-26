@@ -31,7 +31,24 @@ const KIND_TO_CHECKPOINT_TYPE = Object.freeze({
  * @returns {boolean}
  */
 export function isCheckpointInteraction(interaction) {
-  return !!(interaction && interaction.source && interaction.source.checkpointId);
+  return !!(
+    interaction &&
+    interaction.source &&
+    interaction.source.checkpointId &&
+    !isMcpElicitationInteraction(interaction)
+  );
+}
+
+/**
+ * True when an interaction is a question an MCP server asked in the middle of
+ * a tool call (MCP elicitation): answered with its own form card while the
+ * turn keeps running, not with the next chat message.
+ *
+ * @param {Object|null} interaction
+ * @returns {boolean}
+ */
+export function isMcpElicitationInteraction(interaction) {
+  return !!interaction?.source?.mcpElicitation;
 }
 
 /**
@@ -45,7 +62,8 @@ export function isClarificationInteraction(interaction) {
     interaction &&
     interaction.kind === 'question' &&
     interaction.prompt &&
-    !isCheckpointInteraction(interaction)
+    !isCheckpointInteraction(interaction) &&
+    !isMcpElicitationInteraction(interaction)
   );
 }
 

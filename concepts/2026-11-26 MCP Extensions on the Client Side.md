@@ -13,7 +13,7 @@ iHub talks MCP in two directions. The **gateway** (`/mcp`, iHub as server) now s
 | Protocol 2026-07-28               | yes, stateless, next to the 2025 revisions   | yes, over Streamable HTTP          |
 | Skills (`io.modelcontextprotocol/skills`) | yes: `skills/list`, `skill://` files | no                                 |
 | Tasks (`io.modelcontextprotocol/tasks`)   | yes: apps and workflows              | no                                 |
-| Elicitation                       | yes: approval of gated tools                 | no                                 |
+| Elicitation                       | yes: approval of gated tools                 | yes: form mode, in the chat        |
 | File Uploads (experimental)       | no                                           | no                                 |
 
 Outbound, iHub declares none of the extensions, so every server answers it as it answers any
@@ -22,6 +22,17 @@ broken; iHub just does not use what servers like Supabase, GitHub or Atlassian n
 document plans the three client-side pieces and says what blocks File Uploads.
 
 ## 1. Elicitation from external servers
+
+**Status: form mode implemented** (see
+[MCP Integration → Questions from the server](../docs/mcp-integration.md#questions-from-the-server-elicitation)).
+As built, the question is a `question` interaction on a child run of the chat
+run (the chat-launched workflow pattern), shown by its own form card and
+answered on the runs endpoint; a per-call AsyncLocalStorage scope finds the
+chat on the shared connection. Still open: URL mode, and an admin switch in the
+installation form (today `protocol.elicitation.enabled` in a definition or
+`elicitationEnabled` in the generic definition's values).
+
+The original plan follows.
 
 **What it gives:** a server can ask the chat user mid-call: confirm a paid action (Supabase), type
 a repository name before deleting it (GitHub), fill in a missing parameter.
@@ -96,7 +107,7 @@ chat files to servers instead of passing base64 through the model.
 
 ## Order
 
-1. Elicitation (biggest user value, needs the chat UI change).
+1. Elicitation — form mode done; URL mode open.
 2. Skills (server-side only, no SDK gap).
 3. Tasks (blocked on SDK client extensions).
 4. File Uploads (blocked on the spec).

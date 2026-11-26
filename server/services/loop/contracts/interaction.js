@@ -149,6 +149,18 @@ export const interactionSourceSchema = z.object({
       name: z.string().max(200)
     })
     .optional(),
+  /**
+   * A question an MCP server asked the chat user in the middle of a tool call
+   * (MCP elicitation): the server it came from. The tool call waits for the
+   * answer while the turn goes on streaming (`services/mcp/mcpElicitation.js`).
+   */
+  mcpElicitation: z
+    .object({
+      serverId: z.string().max(200),
+      serverName: z.string().max(200).optional(),
+      toolId: z.string().max(400).optional()
+    })
+    .optional(),
   /** The scheduled task and run an approval of an unattended run belongs to. */
   scheduledTaskId: z.string().optional(),
   scheduledRunId: z.string().optional(),

@@ -89,9 +89,39 @@ to be configured. The other transports (`sse`, `websocket`, `stdio`) keep the
 2025 handshake: a probe over `stdio` would start a second copy of the server
 process.
 
-On either revision iHub declares no elicitation, Tasks or Skills support as a
-client, so servers answer it the way they answer any client without them:
-synchronously, without asking the user anything mid-call.
+On either revision iHub may be asked questions mid-call
+([Questions from the server](#questions-from-the-server-elicitation)). It
+declares no Tasks or Skills support as a client, so servers answer its tool
+calls synchronously and offer it no skills.
+
+### Questions from the server (elicitation)
+
+A server can ask the chat user for something in the middle of a tool call:
+to confirm a paid action, to type the name of what it is about to delete, to
+fill in a value it is missing (MCP elicitation, form mode). The question shows
+in the chat as a card with the server's name, its message and the form it
+asked for; the turn keeps running and the tool call waits.
+
+- **Submit** sends the form to the server, **Decline** tells it no. The answer
+  goes to the server only, not into the conversation, and the model never sees
+  it; it sees the tool's result once the server has finished.
+- The call's own timeout (`timeoutMs`) stands still while the person answers.
+  A question nobody answers within 10 minutes is cancelled, and so is a
+  question left open when the user stops the turn.
+- Only the user whose chat it is may answer.
+- Where nobody can answer — a workflow, a scheduled run, the inference API, the
+  MCP gateway, an MCP App view's own call, an anonymous user — iHub answers
+  `cancel` at once, and the server goes on as it does when a person dismisses
+  the question.
+- URL-mode questions (a link to open) are not declared and are declined.
+
+The forms carry what MCP elicitation allows: text (with the formats e-mail,
+URL, date and date-time), numbers, yes/no, a single choice and a multiple
+choice. Other field types are left out of the form.
+
+Elicitation is on for every MCP server. A shipped definition switches it off
+with `protocol.elicitation.enabled: false`; the generic MCP server definition
+reads `elicitationEnabled` from the installation's values.
 
 ### Transports
 
@@ -1829,8 +1859,7 @@ Discovery: `/mcp/.well-known` advertises `a2a_endpoint` when enabled.
   currently run the LLM call synchronously without iHub's tool
   executor; an MCP-side tool loop is a follow-up.
 - **mTLS** for service-to-service — additive layer; optional.
-- **The MCP extensions as a client** — iHub does not yet answer an external
-  server's elicitation in the chat, poll its tasks, or load its skills. Servers
-  answer iHub as a client without those extensions (synchronously, without
-  asking mid-call). The plan is in
+- **Tasks and Skills as a client** — iHub does not yet poll an external
+  server's tasks or load its skills; servers answer its calls synchronously.
+  URL-mode questions are declined. The plan is in
   `concepts/2026-11-26 MCP Extensions on the Client Side.md`.

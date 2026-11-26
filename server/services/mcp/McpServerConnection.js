@@ -12,6 +12,7 @@ import { safeFetch, assertSafeHost } from './safeFetch.js';
 import {
   appsEnabledFor,
   buildClientCapabilities,
+  elicitationEnabledFor,
   extractUiResource,
   isAppCallable,
   isAppOnly,
@@ -32,6 +33,18 @@ import {
   staticAuthHeaders
 } from '../integrations/auth/ServiceAccountAuth.js';
 import { reportToolCallSources } from '../sources/toolCallScope.js';
+import {
+  ELICITATION_ANSWER_TIMEOUT_MS,
+  createElicitationHandler,
+  runWithElicitationScope
+} from './mcpElicitation.js';
+
+/**
+ * Questions (MCP elicitation) a call may wait on before the SDK gives up on
+ * it. The call's own timeout is paused while a person answers; this bounds
+ * the whole call so a server cannot keep it open forever.
+ */
+const MAX_ELICITATION_ROUNDS = 3;
 
 /** How long a fetched MCP App UI resource is reused before re-reading it. */
 const UI_RESOURCE_TTL_MS = 5 * 60 * 1000;
@@ -316,10 +329,21 @@ export class McpServerConnection {
         this.client = new Client(
           { name: 'ihub-apps', version: '1.0.0' },
           {
-            capabilities: buildClientCapabilities(appsEnabledFor(this.config)),
+            capabilities: buildClientCapabilities(appsEnabledFor(this.config), {
+              elicitation: elicitationEnabledFor(this.config)
+            }),
             versionNegotiation: versionNegotiationFor(this.config.transport)
           }
         );
+        if (elicitationEnabledFor(this.config)) {
+          this.client.setRequestHandler(
+            'elicitation/create',
+            createElicitationHandler({
+              serverId: this.config.id,
+              serverName: this.config.name || this.config.id
+            })
+          );
+        }
         this.transport = await this._buildTransport();
         await this.client.connect(this.transport);
         // The server's own model guidance from `initialize` (MCP
@@ -558,11 +582,20 @@ export class McpServerConnection {
    * Wraps the SDK call in the server's hard timeout. This is what an MCP App
    * view receives; the model-facing `callTool` builds on it.
    *
+   * The call's timeout is paused while the server waits for a person to
+   * answer one of its questions (MCP elicitation): the person must not race
+   * the server's timeout.
+   *
    * @param {string} originalName - The server's own tool name
    * @param {Object} [args]
+   * @param {Object} [context] - Where a question the server asks goes
+   * @param {string} [context.chatId]
+   * @param {Object} [context.user]
+   * @param {string} [context.toolId]
+   * @param {AbortSignal} [context.signal] - The turn's abort signal
    * @returns {Promise<Object>} CallToolResult
    */
-  async callToolRaw(originalName, args) {
+  async callToolRaw(originalName, args, context = {}) {
     if (this.catalogOnly) throw new McpAuthRequiredError(this.config.id);
     if (this.unhealthy) {
       throw new Error(`MCP server ${this.config.id} is unhealthy: ${this.lastError}`);
@@ -574,14 +607,51 @@ export class McpServerConnection {
 
     const timeoutMs = this.config.timeoutMs ?? 30000;
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    // A timeout that stands still while a person answers a question.
+    let timer = null;
+    let remaining = timeoutMs;
+    let startedAt = 0;
+    let waiting = 0;
+    const arm = () => {
+      startedAt = Date.now();
+      timer = setTimeout(() => controller.abort(), remaining);
+    };
+    const pause = () => {
+      if (waiting++ > 0 || !timer) return;
+      clearTimeout(timer);
+      timer = null;
+      remaining = Math.max(0, remaining - (Date.now() - startedAt));
+    };
+    const resume = () => {
+      if (--waiting > 0 || controller.signal.aborted) return;
+      arm();
+    };
+    const onTurnAbort = () => controller.abort(context.signal?.reason);
+    if (context.signal?.aborted) onTurnAbort();
+    context.signal?.addEventListener?.('abort', onTurnAbort, { once: true });
+    arm();
+    const sdkTimeout = elicitationEnabledFor(this.config)
+      ? timeoutMs + MAX_ELICITATION_ROUNDS * ELICITATION_ANSWER_TIMEOUT_MS
+      : timeoutMs;
     try {
-      return await this.client.callTool(
-        { name: originalName, arguments: args || {} },
-        { signal: controller.signal, timeout: timeoutMs }
+      return await runWithElicitationScope(
+        {
+          chatId: context.chatId,
+          user: context.user,
+          toolId: context.toolId,
+          signal: controller.signal,
+          onWaitStart: pause,
+          onWaitEnd: resume
+        },
+        () =>
+          this.client.callTool(
+            { name: originalName, arguments: args || {} },
+            { signal: controller.signal, timeout: sdkTimeout }
+          )
       );
     } finally {
       clearTimeout(timer);
+      context.signal?.removeEventListener?.('abort', onTurnAbort);
     }
   }
 
@@ -596,9 +666,11 @@ export class McpServerConnection {
    * @param {Object} [options]
    * @param {Function} [options.onRawResult] - Receives the raw CallToolResult
    *   before it is normalised or turned into an error (MCP Apps views need it)
+   * @param {Object} [options.context] - Chat, user and abort signal of the call
+   *   ({@link McpServerConnection#callToolRaw})
    */
-  async callTool(originalName, args, { onRawResult } = {}) {
-    const result = await this.callToolRaw(originalName, args);
+  async callTool(originalName, args, { onRawResult, context } = {}) {
+    const result = await this.callToolRaw(originalName, args, context);
     if (typeof onRawResult === 'function') onRawResult(result);
 
     // Critical: MCP returns tool-level failures as a successful JSON-RPC
