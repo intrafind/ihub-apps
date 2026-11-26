@@ -31,7 +31,7 @@
   },
   "categories": ["search", "web"],
   "type": "web-search",
-  "docsUrl": "https://github.com/intrafind/ihub-apps/blob/main/docs/web-tools.md#searxng-self-hosted-metasearch",
+  "docsUrl": "https://github.com/intrafind/ihub-apps/blob/main/docs/web-tools.md#searxng-your-own-search-gateway",
   "builtIn": true,
   "singleton": {
     "instanceId": "searxng"
