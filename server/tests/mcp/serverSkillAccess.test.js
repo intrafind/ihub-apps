@@ -161,6 +161,57 @@ describe('a server skill an admin approved', () => {
     }
   });
 
+  test("never stands in for the app's auto-activated skill of the same name", async () => {
+    const getSkills = configCache.getSkills;
+    const getSkillsForApp = configCache.getSkillsForApp;
+    const global = [{ name: 'deploy', description: 'Our own deploy skill' }];
+    configCache.getSkills = () => ({ data: global, etag: 'g' });
+    configCache.getSkillsForApp = async () => global;
+    try {
+      const resolved = await skillAccess.resolveSkillsForTurn({
+        text: '/billing:deploy',
+        app: {
+          ...app,
+          skills: ['deploy'],
+          skillSettings: { enabled: true, autoActivate: true }
+        },
+        user
+      });
+      assert.deepEqual(
+        resolved.map(entry => [entry.name, entry.origin]),
+        [
+          ['billing:deploy', 'message'],
+          ['deploy', 'app']
+        ]
+      );
+    } finally {
+      configCache.getSkills = getSkills;
+      configCache.getSkillsForApp = getSkillsForApp;
+    }
+  });
+
+  test('leaves /<name>:<word> to the skill before the colon when no server skill has that id', async () => {
+    const getSkills = configCache.getSkills;
+    const getSkillsForApp = configCache.getSkillsForApp;
+    const global = [{ name: 'translate', description: 'Translate a text' }];
+    configCache.getSkills = () => ({ data: global, etag: 'g' });
+    configCache.getSkillsForApp = async () => global;
+    try {
+      const resolved = await skillAccess.resolveSkillsForTurn({
+        text: '/translate:german the text below',
+        app: { ...app, skills: ['translate'] },
+        user
+      });
+      assert.deepEqual(
+        resolved.map(entry => [entry.name, entry.origin]),
+        [['translate', 'message']]
+      );
+    } finally {
+      configCache.getSkills = getSkills;
+      configCache.getSkillsForApp = getSkillsForApp;
+    }
+  });
+
   test('gives way to an iHub skill of the same name; a name two servers share picks neither', async () => {
     const getSkills = configCache.getSkills;
     const getSkillsForApp = configCache.getSkillsForApp;

@@ -34,7 +34,10 @@ import { createHash } from 'node:crypto';
 import { SkillVerificationError } from '@modelcontextprotocol/client/ext/skills';
 import { ServiceError } from '../../utils/ServiceError.js';
 import { isAuthRequiredError } from './McpUserOAuthProvider.js';
-import { SKILL_NAME_PATTERN } from '../../validators/integrationsConfigSchema.js';
+import {
+  SKILL_NAME_PATTERN,
+  skillApprovalSchema
+} from '../../validators/integrationsConfigSchema.js';
 import logger from '../../utils/logger.js';
 
 const COMPONENT = 'McpSkills';
@@ -193,7 +196,20 @@ function notApprovableReason(skill, nameCounts) {
   if (nameCounts.get(name) > 1) return 'duplicate_name';
   // A "dynamic" skill has no file list to approve or to verify against.
   if (!Array.isArray(skill.resources)) return 'dynamic';
+  // Said before any file is read: an entry the stored approval cannot hold
+  // (too many files, a long description or URI) would only fail on saving.
+  const stored = { ...approvalEntryOf(skill), approvedAt: new Date(0).toISOString() };
+  if (!skillApprovalSchema.safeParse(stored).success) return 'exceeds_limits';
   return null;
+}
+
+/** What an approval of `skill` stores, before who approved it and when. */
+function approvalEntryOf(skill) {
+  return {
+    uri: skill.uri,
+    frontmatter: skill.frontmatter,
+    resources: skill.resources.map(({ uri, digest, size }) => ({ uri, digest, size }))
+  };
 }
 
 /** The admin's view of one skill: what it is and where its approval stands. */
@@ -354,9 +370,7 @@ export async function approveInstallationSkill(instanceId, name, user, deps = {}
   }
   const skill = matches[0];
   const approval = {
-    uri: skill.uri,
-    frontmatter: skill.frontmatter,
-    resources: skill.resources.map(({ uri, digest, size }) => ({ uri, digest, size })),
+    ...approvalEntryOf(skill),
     approvedAt: new Date().toISOString(),
     ...(user?.id ? { approvedBy: String(user.id).slice(0, 200) } : {})
   };
@@ -471,6 +485,10 @@ export async function revokeInstallationSkill(instanceId, name, deps = {}) {
 function remember(key, text) {
   const size = Buffer.byteLength(text, 'utf8');
   if (size > CACHE_MAX_BYTES) return;
+  // Stored again (an approval reads past the cache, two chats miss at once):
+  // the bytes it replaces leave the count with it.
+  const replaced = fileCache.get(key);
+  if (replaced !== undefined) cacheBytes -= Buffer.byteLength(replaced, 'utf8');
   fileCache.delete(key);
   fileCache.set(key, text);
   cacheBytes += size;
@@ -504,6 +522,11 @@ async function readVerified(conn, instanceId, approval, path, { useCache = true 
 export function clearServerSkillCache() {
   fileCache.clear();
   cacheBytes = 0;
+}
+
+/** Test seam: what the file cache holds, as it counts it. */
+export function serverSkillCacheSizeForTests() {
+  return { entries: fileCache.size, bytes: cacheBytes };
 }
 
 /**

@@ -17,6 +17,7 @@ import {
   parseServerSkillId,
   readInstallationSkillFile,
   revokeInstallationSkill,
+  serverSkillCacheSizeForTests,
   serverSkillId,
   usableServerSkills
 } from '../../services/mcp/mcpSkills.js';
@@ -195,6 +196,35 @@ describe.each([
         expect(report).toMatchObject({ status: 'not_approvable', reason: 'duplicate_name' });
       }
       await expect(approve(h, 'report')).rejects.toMatchObject({ code: 'SKILL_NOT_APPROVABLE' });
+    } finally {
+      await h.conn.disconnect();
+    }
+  });
+
+  it('says a skill larger than an approval can hold cannot be approved, before reading it', async () => {
+    // The SDK sets no limit on the number of files; a stored approval holds 512.
+    files.wide = { 'SKILL.md': '---\nname: wide\ndescription: Many files\n---\nW\n' };
+    for (let n = 0; n < 512; n++) files.wide[`references/${n}.md`] = `${n}`;
+    try {
+      const { items } = await listInstallationSkills('billing', admin, h.deps);
+      expect(items.find(item => item.name === 'wide')).toMatchObject({
+        status: 'not_approvable',
+        reason: 'exceeds_limits'
+      });
+      await expect(approve(h, 'wide')).rejects.toMatchObject({ code: 'SKILL_NOT_APPROVABLE' });
+    } finally {
+      await h.conn.disconnect();
+    }
+  });
+
+  it('counts a cached file once when an approval stores it again', async () => {
+    try {
+      await approve(h, 'deploy');
+      const once = serverSkillCacheSizeForTests();
+      expect(once.entries).toBe(2);
+      // "Approve again" reads past the cache and stores every file anew.
+      await approve(h, 'deploy');
+      expect(serverSkillCacheSizeForTests()).toEqual(once);
     } finally {
       await h.conn.disconnect();
     }

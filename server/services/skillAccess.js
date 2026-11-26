@@ -669,9 +669,13 @@ export async function resolveSkillsForTurn({ requested = [], text = '', earlier 
     if (isServerSkillId(id)) return serverById.get(id);
     return globalByName.get(id);
   };
+  const plainByName = name =>
+    personalByName.get(name) || globalByName.get(name) || serverByName.get(name);
+  // `/translate:german` meant `/translate` before server skills had ids: a
+  // token no server skill answers to still names the skill before the colon.
   const byName = name => {
-    if (isServerSkillId(name)) return serverById.get(name);
-    return personalByName.get(name) || globalByName.get(name) || serverByName.get(name);
+    if (!isServerSkillId(name)) return plainByName(name);
+    return serverById.get(name) || plainByName(name.slice(0, name.indexOf(':')));
   };
 
   const asEntry = (skill, origin) =>
@@ -703,8 +707,12 @@ export async function resolveSkillsForTurn({ requested = [], text = '', earlier 
   // A skill of the user's own by the same name, picked with `/name` now or in
   // an earlier turn, stands in for the app's; one already active in the chat
   // is not announced again.
+  // A server skill shares only its bare name with the app's skill and never
+  // stands in for it.
   for (const name of automatic) {
-    if (resolved.some(entry => entry.displayName === name)) continue;
+    if (resolved.some(entry => entry.displayName === name && !isServerSkillId(entry.name))) {
+      continue;
+    }
     const earlier = carried.find(skill => skill.name === name);
     if (earlier && isUserSkillId(earlier.id)) continue;
     add(globalByName.get(name), earlier ? 'chat' : 'app');

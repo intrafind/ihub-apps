@@ -6162,7 +6162,8 @@
         "unsupported": "This server offers no skills.",
         "connectFirst": "Each user signs in to this server. Connect your own account to see the skills it offers.",
         "none": "The server lists no skills.",
-        "files": "{{count}} files, {{size}}",
+        "files_one": "{{count}} file, {{size}}",
+        "files_other": "{{count}} files, {{size}}",
         "approvedAt": "Approved {{date}}",
         "approve": "Approve",
         "approveAgain": "Approve again",
@@ -6177,6 +6178,7 @@
         "reason": {
           "duplicateName": "The server offers more than one skill by this name.",
           "dynamic": "The server does not list this skill’s files, so they cannot be checked.",
+          "exceedsLimits": "The skill is larger than an approval can hold: more than 512 files, or a file address over 2,048 characters.",
           "invalidName": "The skill’s name does not follow the skill naming rules."
         },
         "loading": "Loading the skills…",

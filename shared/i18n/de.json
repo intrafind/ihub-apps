@@ -6668,7 +6668,8 @@
         "unsupported": "Dieser Server bietet keine Skills an.",
         "connectFirst": "Bei diesem Server meldet sich jeder Benutzer selbst an. Verbinden Sie Ihr eigenes Konto, um seine Skills zu sehen.",
         "none": "Der Server bietet keine Skills an.",
-        "files": "{{count}} Dateien, {{size}}",
+        "files_one": "{{count}} Datei, {{size}}",
+        "files_other": "{{count}} Dateien, {{size}}",
         "approvedAt": "Freigegeben am {{date}}",
         "approve": "Freigeben",
         "approveAgain": "Erneut freigeben",
@@ -6683,6 +6684,7 @@
         "reason": {
           "duplicateName": "Der Server bietet mehrere Skills mit diesem Namen an.",
           "dynamic": "Der Server nennt die Dateien dieses Skills nicht, daher können sie nicht geprüft werden.",
+          "exceedsLimits": "Der Skill ist größer, als eine Freigabe fassen kann: mehr als 512 Dateien oder eine Dateiadresse über 2.048 Zeichen.",
           "invalidName": "Der Name des Skills folgt nicht den Namensregeln für Skills."
         },
         "loading": "Skills werden geladen…",

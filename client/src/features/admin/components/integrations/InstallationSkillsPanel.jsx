@@ -48,6 +48,11 @@ function reasonText(t, reason) {
         'admin.integrations.skills.reason.dynamic',
         'The server does not list this skill’s files, so they cannot be checked.'
       );
+    case 'exceeds_limits':
+      return t(
+        'admin.integrations.skills.reason.exceedsLimits',
+        'The skill is larger than an approval can hold: more than 512 files, or a file address over 2,048 characters.'
+      );
     default:
       return t(
         'admin.integrations.skills.reason.invalidName',
