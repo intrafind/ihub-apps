@@ -27,6 +27,7 @@ import { extractionOptionsOf } from '../utils/extractionOptions';
 import { isAbortError } from '../../../utils/abortable';
 import { ORIGINAL_FILE } from '../../chat/utils/chatFileUpload';
 import { capabilityRefusal } from '../utils/uploadGate';
+import { recognizedImageAttachment } from '../utils/textRecognition';
 
 /**
  * Unified uploader component that handles both images and files in a single interface.
@@ -136,12 +137,20 @@ const UnifiedUploader = ({
     ? fileConfig.supportedFormats || config.supportedFormats || SUPPORTED_TEXT_FORMATS
     : [];
 
+  // Text recognition (#3986): images the server reads the text of, taken as documents. They are
+  // checked before the image formats, so such an image never goes to the model as a picture.
+  const recognitionConfig = config.textRecognition || {};
+  const RECOGNIZED_IMAGE_FORMATS = recognitionConfig.images ? recognitionConfig.formats || [] : [];
+
   // All supported formats combined - include both MIME types and file extensions for better OS compatibility
   const ALL_FORMATS = formatAcceptAttribute([
-    ...IMAGE_FORMATS,
-    ...AUDIO_FORMATS,
-    ...VIDEO_FORMATS,
-    ...TEXT_FORMATS
+    ...new Set([
+      ...IMAGE_FORMATS,
+      ...RECOGNIZED_IMAGE_FORMATS,
+      ...AUDIO_FORMATS,
+      ...VIDEO_FORMATS,
+      ...TEXT_FORMATS
+    ])
   ]);
 
   // "Any text file" (text/*) opts into content-based acceptance: the picker is
@@ -309,6 +318,8 @@ const UnifiedUploader = ({
   const refuseFile = file => {
     const mimeType = canonicalMimeType(file.type, file.name);
     const isListed = formats => formats.includes(file.type) || formats.includes(mimeType);
+    // Its text is recognized on the server: the model's vision does not matter
+    if (isListed(RECOGNIZED_IMAGE_FORMATS)) return null;
     return capabilityRefusal(isListed, {
       image: {
         enabled: isImageUploadEnabled,
@@ -338,6 +349,20 @@ const UnifiedUploader = ({
     // Check if file upload is disabled
     if (!isFileUploadEnabled && isListed(TEXT_FORMATS)) {
       throw new Error('file-upload-disabled');
+    }
+
+    // An image whose text the server recognizes: attached as a document with the file itself,
+    // which the chat's pre-upload sends to the server
+    if (isListed(RECOGNIZED_IMAGE_FORMATS)) {
+      const limitMB = recognitionConfig.maxFileSizeMB;
+      if (limitMB && file.size > limitMB * 1024 * 1024) {
+        throw Object.assign(new Error('file-too-large'), { params: { maxSizeMB: limitMB } });
+      }
+      return recognizedImageAttachment(
+        file,
+        mimeType,
+        mimeType.replace('image/', '').toUpperCase()
+      );
     }
 
     // The Uploader let the file in against the largest limit of all types
@@ -406,7 +431,13 @@ const UnifiedUploader = ({
   };
 
   const formatList = (() => {
-    const imageFormats = IMAGE_FORMATS.map(format => format.replace('image/', '').toUpperCase());
+    const imageFormats = [
+      ...new Set(
+        [...IMAGE_FORMATS, ...RECOGNIZED_IMAGE_FORMATS].map(format =>
+          format.replace('image/', '').toUpperCase()
+        )
+      )
+    ];
     // audio/mp4 covers .m4a files; name it so users looking for M4A find it
     const audioFormats = AUDIO_FORMATS.map(format =>
       format === 'audio/mp4' ? 'M4A, MP4' : format.replace('audio/', '').toUpperCase()

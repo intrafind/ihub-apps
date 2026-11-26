@@ -49,6 +49,12 @@ import { collectChatStats } from '../../services/chat/chatAdminStats.js';
 import { getRunSummaryRepository } from '../../services/runtime/RunSummaryRepository.js';
 import { STORAGE_MODES, chatFileSettings } from '../../services/chatFiles/chatFilePolicy.js';
 import { updatePlatform, SKIP } from '../../utils/platformConfigStore.js';
+import {
+  MODEL_ENGINE,
+  OCR_INTEGRATION_TYPE,
+  ocrSettings
+} from '../../services/ocr/textRecognition.js';
+import installedIntegrationService from '../../services/integrations/InstalledIntegrationService.js';
 
 const COMPONENT = 'AdminChatHistory';
 
@@ -136,6 +142,7 @@ const uploadsSettingsSchema = z
     storageMode: z.enum(STORAGE_MODES),
     originalRetentionDays: z.number().int(),
     evictOldestOriginalsOnQuota: z.boolean(),
+    recognizeText: z.boolean(),
     quotas: z
       .object({
         maxFileBytes: z.number().int(),
@@ -152,8 +159,24 @@ const uploadsSettingsSchema = z
   .partial()
   .strict();
 
+// Text recognition at upload (`platform.ocr`, #3986): the engine that reads
+// images and scanned PDF pages (`model`, the vision-capable model `modelId`,
+// or an installed OCR integration), and the most pages per document.
+const ocrSettingsSchema = z
+  .object({
+    engine: z.string().trim().min(1).max(200),
+    modelId: z.string().trim().max(200).nullable(),
+    maxPages: z.number().int().positive().max(10000),
+    // Which pages of a PDF with text are read besides those without text.
+    pages: z.enum(['scanned', 'smart', 'all']),
+    minFigurePercent: z.number().int().min(1).max(100)
+  })
+  .partial()
+  .strict();
+
 const settingsBodySchema = z
   .object({
+    ocr: ocrSettingsSchema.optional(),
     chats: chatsSettingsSchema.optional(),
     titles: titlesSettingsSchema.optional(),
     compaction: compactionSettingsSchema.optional(),
@@ -163,6 +186,41 @@ const settingsBodySchema = z
     uploads: uploadsSettingsSchema.optional()
   })
   .strict();
+
+/**
+ * The models an admin may pick for text recognition: enabled and able to read images.
+ *
+ * @returns {Array<{id: string, name: Object|string}>}
+ */
+function ocrModelOptions() {
+  const { data: models = [] } = configCache.getModels?.() || {};
+  return (models || [])
+    .filter(model => model.enabled !== false && (model.supportsImages || model.supportsVision))
+    .map(model => ({ id: model.id, name: model.name || model.id }));
+}
+
+/**
+ * The OCR integrations an admin may pick as the text recognition engine: the
+ * installed integrations of type `ocr` (switched off ones included, marked).
+ *
+ * @returns {Promise<Array<{id: string, name: string, definition: string, enabled: boolean}>>}
+ */
+async function ocrEngineOptions() {
+  const resolved = await Promise.all(
+    installedIntegrationService
+      .list()
+      .map(instance => installedIntegrationService.resolve(instance, 'en').catch(() => null))
+  );
+  return resolved
+    .filter(entry => entry?.definition?.type === OCR_INTEGRATION_TYPE)
+    .map(entry => ({
+      id: entry.instance.id,
+      name: entry.label || entry.instance.id,
+      definition: entry.definition.id,
+      enabled: entry.instance.enabled !== false
+    }))
+    .sort((a, b) => a.id.localeCompare(b.id));
+}
 
 /** Most shares the admin listing returns. */
 const ADMIN_SHARES_LIMIT = 200;
@@ -195,7 +253,18 @@ function resolveSettings(platform) {
     uploads: (() => {
       const { enabled, storageMode, originalRetentionDays, evictOldestOriginalsOnQuota, quotas } =
         chatFileSettings(platform);
-      return { enabled, storageMode, originalRetentionDays, evictOldestOriginalsOnQuota, quotas };
+      return {
+        enabled,
+        storageMode,
+        originalRetentionDays,
+        evictOldestOriginalsOnQuota,
+        recognizeText: platform?.uploads?.recognizeText === true,
+        quotas
+      };
+    })(),
+    ocr: (() => {
+      const { engine, modelId, maxPages, pages, minFigurePercent } = ocrSettings(platform);
+      return { engine, modelId, maxPages, pages, minFigurePercent };
     })(),
     runLog: {
       enabled: ledger.enabled !== false,
@@ -260,14 +329,19 @@ export default function registerAdminChatHistoryRoutes(app) {
     const platform = configCache.getPlatform?.() || {};
     const features = configCache.getFeatures?.() || {};
     const settings = resolveSettings(platform);
-    const [chats, ledger, shares] = await Promise.all([
+    const [chats, ledger, shares, ocrEngines] = await Promise.all([
       collectChatStats({ repository: getChatRepository(), settings: settings.chats }),
       getRunSummaryRepository().stats(),
-      getChatShareRepository().collectStats()
+      getChatShareRepository().collectStats(),
+      ocrEngineOptions()
     ]);
     res.json({
       settings,
       status: resolveStatus(platform, features),
+      // The models the OCR setting may name: enabled and able to read images.
+      ocrModels: ocrModelOptions(),
+      // The OCR integrations the engine setting may name besides `model`.
+      ocrEngines,
       stats: { chats, ledger, shares },
       generatedAt: new Date().toISOString()
     });
@@ -288,7 +362,43 @@ export default function registerAdminChatHistoryRoutes(app) {
           .join('; ')}`
       );
     }
-    const { chats, runLog: ledger, titles, compaction, evidence, sharing, uploads } = parsed.data;
+    const {
+      chats,
+      runLog: ledger,
+      titles,
+      compaction,
+      evidence,
+      sharing,
+      uploads,
+      ocr
+    } = parsed.data;
+    // The OCR model has to exist and read images, and the engine has to be the
+    // model or an installed OCR integration: a wrong one would fail every
+    // upload. Only a value that changes is checked: the page sends its whole
+    // form, so a model or integration that went away since it was picked must
+    // not block saving the other settings.
+    const stored = ocrSettings(configCache.getPlatform?.() || {});
+    if (
+      ocr?.modelId &&
+      ocr.modelId !== stored.modelId &&
+      !ocrModelOptions().some(model => model.id === ocr.modelId)
+    ) {
+      throw new ServiceError(
+        'BAD_REQUEST',
+        `Invalid chat history settings: ocr.modelId must name an enabled model that reads images`
+      );
+    }
+    if (
+      ocr?.engine &&
+      ocr.engine !== MODEL_ENGINE &&
+      ocr.engine !== stored.engine &&
+      !(await ocrEngineOptions()).some(engine => engine.id === ocr.engine)
+    ) {
+      throw new ServiceError(
+        'BAD_REQUEST',
+        `Invalid chat history settings: ocr.engine must be "${MODEL_ENGINE}" or the id of an installed OCR integration`
+      );
+    }
     // Computed from the stored file under the update lock; reruns on conflict, so
     // everything it needs is derived from the body it is handed.
     let changed = [];
@@ -362,6 +472,14 @@ export default function registerAdminChatHistoryRoutes(app) {
           platformConfig.uploads = { ...platformConfig.uploads, [key]: value };
           changed.push(`uploads.${key}`);
         }
+      }
+
+      // `platform.ocr`: an empty model id switches recognition off.
+      for (const [key, rawValue] of Object.entries(ocr || {})) {
+        const value = key === 'modelId' ? rawValue || null : rawValue;
+        if (current.ocr[key] === value) continue;
+        platformConfig.ocr = { ...platformConfig.ocr, [key]: value };
+        changed.push(`ocr.${key}`);
       }
 
       if (changed.length === 0) return SKIP;

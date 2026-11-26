@@ -139,6 +139,39 @@ context on blank space.
   or put data from the conversation into an address. The note is in the `read_url` result
   (`sourceNotice`), once per web search, and in the description of the `read_url` tool.
 
+## Read Images and Scanned PDFs as Text, Once
+
+A vision-capable **text recognition model** can now read images and scanned PDF pages when they are
+added, so every app can use them, also apps whose model cannot read images, and no answer pays for
+reading them again. Set it in **Admin → Chat history → Uploaded files → Text recognition**.
+
+- **Projects** use it whenever a model is set: images (PNG, JPEG, GIF, WebP) can be uploaded, picked
+  from a cloud drive, unpacked from a ZIP archive and copied from a chat, and scanned PDFs no longer
+  fail. Which pages of a PDF with text are read besides the scanned ones is up to the admin
+  (**Pages of PDFs with text**): only pages without text, **smart** (the default: also pages where
+  pictures, charts, diagrams or tables cover at least 20% of the page, so a chart next to its text is
+  read too), or all pages.
+- **Chats** use it only when **Read images and scanned PDFs in chats as text** is switched on (per
+  app too). Then an attached image or scanned PDF is read once and the model gets its text; switched
+  off, chats send them as images, as before.
+- **Use in app** and **Copy to project** now work for images where they can be read as text.
+- Each document records that its text was recognized and by which model or OCR service, and says so
+  in the list.
+- At most 50 pages are read per document by default (**Most pages per document**). A page that could
+  not be read is counted and named as such, apart from the page limit.
+- A PDF that has text elsewhere never fails because its other pages could not be read: it keeps its
+  text, as before.
+- The pages are sent to the provider of the recognition model when they are added. Pick a model your
+  data may go to.
+- **OCR services as the engine:** instead of a model, an installed OCR integration can read the
+  pages (**Engine**), so they stay on your servers. iHub ships the **iFinder OCR service**
+  integration (**Admin → Integrations → Text recognition**): enter the address of your `if-ocr`
+  service, test it, and pick it as the engine. Other OCR services can be connected as integrations
+  of type `ocr`.
+
+**Before upgrading:** nothing to do. Migration V266 adds the settings with the model engine and no
+model set, so nothing is read until an administrator picks one.
+
 ## MCP Gateway: Skills, Long Runs as Tasks and Approval Through the Client
 
 The MCP gateway (`/mcp`) now speaks the MCP revision 2026-07-28 next to the 2025 revisions, and

@@ -26,6 +26,15 @@ import { createHash } from 'node:crypto';
 import logger from '../../utils/logger.js';
 import { ServiceError } from '../../utils/ServiceError.js';
 import configCache from '../../configCache.js';
+import { CHAT_ERROR_CODES } from '../../../shared/apiErrors.js';
+import {
+  TextRecognitionError,
+  chatRecognizesText,
+  ocrSettings,
+  recognizableImageTypeOf,
+  recognizeImage,
+  recognizeScannedPdf
+} from '../ocr/textRecognition.js';
 import {
   ACCEPTED_TYPES,
   ExtractionError,
@@ -161,6 +170,8 @@ export async function ingestChatFile({
   let resolvedPages = pages;
   let resolvedPageImages = Array.isArray(pageImages) ? pageImages : null;
   let truncated = false;
+  // What the OCR model read of the file (#3986): recorded on the file's `meta`.
+  let recognized = null;
 
   if (hasBinary) {
     const buf = Buffer.isBuffer(rawBytes)
@@ -176,7 +187,13 @@ export async function ingestChatFile({
       );
     }
 
-    const accepted = acceptedTypeOf({ contentType: mimeType, name });
+    // Text recognition (#3986), where it is switched on for chats: an image is
+    // read by the OCR model once and stored as a document with its text, so the
+    // chat model reads text, not the picture, on every turn.
+    const platform = configCache.getPlatform?.() || {};
+    const recognizeText = chatRecognizesText(platform, appConfig);
+    const imageType = recognizeText ? recognizableImageTypeOf(buf, ocrSettings(platform)) : null;
+    const accepted = imageType || acceptedTypeOf({ contentType: mimeType, name });
     if (!accepted) {
       throw new ChatFileError(
         'UNSUPPORTED_TYPE',
@@ -201,17 +218,70 @@ export async function ingestChatFile({
       }
     }
 
+    const recognizeOptions = {
+      platform,
+      name: name || 'upload',
+      // The audit entry names who sent the file to the engine.
+      user: ownerId ? { id: ownerId } : undefined
+    };
+    const applyRecognition = result => {
+      const normalized = normalizeText(result.text, { maxChars: MAX_TEXT_CHARS });
+      extractedText = normalized.text;
+      truncated = truncated || normalized.truncated === true;
+      recognized = result.recognition;
+    };
     try {
-      const extracted = await extractText(
-        { bytes: buf, contentType: accepted, name: name || 'upload' },
-        { maxChars: MAX_TEXT_CHARS, ...extractOptions }
-      );
-      extractedText = extracted.text || '';
-      resolvedMime = extracted.contentType || accepted;
-      if (Number.isFinite(extracted.pages)) resolvedPages = extracted.pages;
-      truncated = extracted.truncated === true;
+      if (imageType) {
+        applyRecognition(await recognizeImage(buf, imageType, recognizeOptions));
+        resolvedMime = imageType;
+        resolvedPages = 1;
+      } else {
+        const extracted = await extractText(
+          { bytes: buf, contentType: accepted, name: name || 'upload' },
+          { maxChars: MAX_TEXT_CHARS, ...extractOptions }
+        );
+        extractedText = extracted.text || '';
+        resolvedMime = extracted.contentType || accepted;
+        if (Number.isFinite(extracted.pages)) resolvedPages = extracted.pages;
+        truncated = extracted.truncated === true;
+        // A PDF with some scanned pages: those are recognized, the rest kept.
+        if (recognizeText && resolvedMime === PDF_MIME) {
+          const result = await recognizeScannedPdf(buf, {
+            ...recognizeOptions,
+            extractedText
+          });
+          if (result) applyRecognition(result);
+        }
+      }
     } catch (error) {
-      if (error instanceof ExtractionError && error.code === 'NO_TEXT' && accepted === PDF_MIME) {
+      if (error instanceof TextRecognitionError) {
+        throw new ChatFileError(error.code, error.message, CHAT_ERROR_CODES[error.code] || 400);
+      }
+      if (
+        recognizeText &&
+        error instanceof ExtractionError &&
+        error.code === 'NO_TEXT' &&
+        accepted === PDF_MIME
+      ) {
+        // A scanned PDF: its pages are read once instead of sent as images.
+        try {
+          applyRecognition(await recognizeScannedPdf(buf, recognizeOptions));
+          resolvedMime = PDF_MIME;
+        } catch (recognitionError) {
+          if (recognitionError instanceof TextRecognitionError) {
+            throw new ChatFileError(
+              recognitionError.code,
+              recognitionError.message,
+              CHAT_ERROR_CODES[recognitionError.code] || 400
+            );
+          }
+          throw recognitionError;
+        }
+      } else if (
+        error instanceof ExtractionError &&
+        error.code === 'NO_TEXT' &&
+        accepted === PDF_MIME
+      ) {
         // Scanned PDF fallback: render page images via pdfium (PM-06).
         try {
           const rendered = await renderScannedPdfPages(buf);
@@ -255,7 +325,7 @@ export async function ingestChatFile({
       pages: resolvedPages,
       truncated,
       origin,
-      meta,
+      meta: recognized ? { ...(meta || {}), recognized } : meta,
       source,
       ...(id ? { id } : {}),
       storageMode: settings.storageMode,
@@ -435,7 +505,12 @@ export function describeStored(stored) {
       ? { textBytes: stored.textBytes }
       : {}),
     ...(stored.pageImageCount > 0 ? { pageImageCount: stored.pageImageCount } : {}),
-    ...(stored.truncated === true ? { truncated: true } : {})
+    ...(stored.truncated === true ? { truncated: true } : {}),
+    // The text was read by the OCR model (#3986): an image stored this way is a
+    // document the model got as text, not a picture it saw.
+    ...(stored.meta?.recognized && typeof stored.meta.recognized === 'object'
+      ? { recognized: stored.meta.recognized }
+      : {})
   };
 }
 

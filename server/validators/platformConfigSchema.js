@@ -704,6 +704,10 @@ export const platformConfigSchema = z
           .prefault('original_and_text'),
         originalRetentionDays: z.number().prefault(14),
         evictOldestOriginalsOnQuota: z.boolean().prefault(true),
+        // Opt-in (#3986): an image or a scanned PDF attached to a chat is read by
+        // the OCR model (`ocr.modelId`) once, and the chat model gets its text
+        // instead of page images. Overridable per app (`app.uploads.recognizeText`).
+        recognizeText: z.boolean().prefault(false),
         quotas: z
           .object({
             maxFileBytes: z.number().prefault(25 * 1024 * 1024),
@@ -717,6 +721,26 @@ export const platformConfigSchema = z
           })
           .passthrough()
           .prefault({})
+      })
+      .passthrough()
+      .prefault({}),
+    // Text recognition at upload (#3986): the engine that reads images and the
+    // scanned pages of PDFs once, when they are uploaded or picked
+    // (`services/ocr/textRecognition.js`): a vision-capable model (`engine:
+    // "model"`, `modelId`; no model, no recognition) or an installed OCR
+    // integration. `maxPages` caps the pages recognized per document.
+    ocr: z
+      .object({
+        // `model` (the vision model below) or the id of an installed
+        // integration of type `ocr` (e.g. the iFinder OCR service).
+        engine: z.string().min(1).max(200).prefault('model'),
+        modelId: z.string().nullable().prefault(null),
+        maxPages: z.number().int().positive().prefault(50),
+        // Which pages of a PDF with a text layer are recognized: `scanned`
+        // (only pages without text), `smart` (also pages where pictures or
+        // drawings cover at least `minFigurePercent` of the page) or `all`.
+        pages: z.enum(['scanned', 'smart', 'all']).prefault('smart'),
+        minFigurePercent: z.number().int().min(1).max(100).prefault(20)
       })
       .passthrough()
       .prefault({}),

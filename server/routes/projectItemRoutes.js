@@ -31,6 +31,11 @@ import { assertValidId } from '../utils/pathSecurity.js';
 import { getItemText } from '../services/knowledge/ItemTextService.js';
 import { readOriginal } from '../services/projects/ItemTextStore.js';
 import { importFile } from '../services/projects/itemImport.js';
+import {
+  declaredRecognizableImageType,
+  ocrSettings,
+  recognizableImageTypeOf
+} from '../services/ocr/textRecognition.js';
 import { readChatArtifact } from '../services/artifacts/artifactAccess.js';
 import { sendWithLocation } from '../utils/created.js';
 import { servedMediaType } from '../services/artifacts/artifactPolicy.js';
@@ -103,6 +108,9 @@ export function receiveUpload(req, res, next, { allowArchives = false } = {}) {
     fileFilter: (request, file, cb) => {
       const accepted =
         acceptedTypeOf({ contentType: file.mimetype, name: file.originalname }) ||
+        // An image, when the OCR model reads it (#3986); its bytes are checked after receive.
+        (ocrSettings(platformOf()).enabled &&
+          declaredRecognizableImageType({ contentType: file.mimetype, name: file.originalname })) ||
         (allowArchives && declaredZip(file));
       if (!accepted) {
         recordUpload('project', 'rejected_type');
@@ -220,7 +228,9 @@ export async function addUploadedItem(req, res, { project, authorize, admin = fa
     // `fileFilter` saw only the declared type; the bytes decide what the
     // file is. An image, media, archive or executable is refused here,
     // before the item exists, whatever the client declared.
-    if (sniffBytes(await headOf(file.path)) === 'refused') {
+    const head = await headOf(file.path);
+    const readableImage = ocrSettings(platformOf()).enabled && recognizableImageTypeOf(head);
+    if (sniffBytes(head) === 'refused' && !readableImage) {
       recordUpload('project', 'rejected_type', file.size);
       throw new ProjectError(
         'UNSUPPORTED_TYPE',

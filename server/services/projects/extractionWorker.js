@@ -53,6 +53,44 @@ const TASKS = {
     }
   },
 
+  async analyzePdfPageFigures({ bytes }) {
+    const { analyzePageFigures } = await import('../documents/pdf/pageFigures.js');
+    const started = performance.now();
+    try {
+      const result = await analyzePageFigures(
+        Buffer.from(bytes.buffer, bytes.byteOffset, bytes.byteLength)
+      );
+      return { ok: true, result, format: 'pdf', durationMs: performance.now() - started };
+    } catch (error) {
+      return {
+        ok: false,
+        error: describeError(error),
+        format: 'pdf',
+        durationMs: performance.now() - started
+      };
+    }
+  },
+
+  async renderPdfPagesForRecognition({ bytes, pageNumbers }) {
+    const { renderPdfPagesForRecognitionInProcess } =
+      await import('../documents/pdf/scannedPages.js');
+    const started = performance.now();
+    try {
+      const result = await renderPdfPagesForRecognitionInProcess(
+        Buffer.from(bytes.buffer, bytes.byteOffset, bytes.byteLength),
+        pageNumbers
+      );
+      return { ok: true, result, format: 'pdf', durationMs: performance.now() - started };
+    } catch (error) {
+      return {
+        ok: false,
+        error: describeError(error),
+        format: 'pdf',
+        durationMs: performance.now() - started
+      };
+    }
+  },
+
   async renderPdfPages({ bytes, maxPages }) {
     const { renderScannedPdfPagesInProcess } = await import('../documents/pdf/scannedPages.js');
     const started = performance.now();

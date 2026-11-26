@@ -115,6 +115,78 @@ const UPLOAD_TYPE_CONFIGS = {
   }
 };
 
+/** The choices of the app's text recognition override, and what each writes. */
+const RECOGNIZE_TEXT_CHOICES = [
+  ['default', undefined, 'admin.apps.edit.recognizeTextDefault', 'Installation default'],
+  ['on', true, 'admin.apps.edit.recognizeTextOn', 'On'],
+  ['off', false, 'admin.apps.edit.recognizeTextOff', 'Off']
+];
+
+/**
+ * The choice an app's `uploads.recognizeText` stands for: `default` while it sets none.
+ *
+ * @param {Object} app
+ * @returns {'default'|'on'|'off'}
+ */
+export function recognizeTextChoiceOf(app) {
+  const value = app?.uploads?.recognizeText;
+  if (value === true) return 'on';
+  if (value === false) return 'off';
+  return 'default';
+}
+
+/**
+ * The app's `uploads` block with the text recognition override set to a choice. "Installation
+ * default" removes the key, and an `uploads` block left empty goes too (`undefined`), so an app
+ * that sets nothing is written without it.
+ *
+ * @param {Object|undefined} uploads - `app.uploads`
+ * @param {'default'|'on'|'off'} choice
+ * @returns {Object|undefined}
+ */
+export function withRecognizeTextChoice(uploads, choice) {
+  const entry = RECOGNIZE_TEXT_CHOICES.find(([value]) => value === choice);
+  const { recognizeText: _previous, ...rest } = uploads || {};
+  const next = entry && entry[1] !== undefined ? { ...rest, recognizeText: entry[1] } : rest;
+  return Object.keys(next).length > 0 ? next : undefined;
+}
+
+/**
+ * "Text recognition in chats" of one app (#3986): whether images and scanned PDFs attached in
+ * its chats are read as text by the installation's text recognition model — as the installation
+ * says (Admin → Chat history → Uploaded files), or on or off for this app (`uploads.recognizeText`).
+ */
+function RecognizeTextSetting({ app, onChange, t }) {
+  return (
+    <div>
+      <label
+        htmlFor="app-uploads-recognize-text"
+        className="block text-sm font-medium text-gray-900 dark:text-gray-100"
+      >
+        {t('admin.apps.edit.recognizeText', 'Text recognition in chats')}
+      </label>
+      <select
+        id="app-uploads-recognize-text"
+        value={recognizeTextChoiceOf(app)}
+        onChange={e => onChange('uploads', withRecognizeTextChoice(app.uploads, e.target.value))}
+        className={`${INPUT_CLASS} mt-1 max-w-sm`}
+      >
+        {RECOGNIZE_TEXT_CHOICES.map(([value, , key, fallback]) => (
+          <option key={value} value={value}>
+            {t(key, fallback)}
+          </option>
+        ))}
+      </select>
+      <p className="mt-1 text-xs text-gray-600 dark:text-gray-400">
+        {t(
+          'admin.apps.edit.recognizeTextHelp',
+          "Whether images and scanned PDFs attached in this app's chats are read as text by the text recognition model (Admin → Chat history → Uploaded files) and stored with that text, instead of being sent to the chat model as pictures. Has no effect while no text recognition model is set."
+        )}
+      </p>
+    </div>
+  );
+}
+
 function UploadTypeCard({ app, onChange, uploadKey, t, parseNumberOrUndefined }) {
   const config = UPLOAD_TYPE_CONFIGS[uploadKey];
   const typeConfig = app.upload?.[uploadKey] || {};
@@ -328,6 +400,8 @@ export default function UploadConfigSection({ app, onChange, t, parseNumberOrUnd
                   t={t}
                   parseNumberOrUndefined={parseNumberOrUndefined}
                 />
+
+                <RecognizeTextSetting app={app} onChange={onChange} t={t} />
 
                 <p className="text-xs text-gray-500 dark:text-gray-400">
                   {t(

@@ -14,6 +14,7 @@
 
 import { isIFinderProject, memberCountOf } from './projectView';
 import { projectErrorDetails, projectErrorMessage } from './projectErrors';
+import { isRecognizableImage } from '../../upload/utils/textRecognition';
 
 /** Types a browser reports for a ZIP archive. */
 const ZIP_TYPES = new Set([
@@ -60,19 +61,26 @@ export function withZipAccept(accept) {
 
 /**
  * Whether a generated file may be copied into a project. Projects take
- * documents, not pictures: the server refuses images (`UNSUPPORTED_TYPE`), so
- * Copy to project is not offered for them. A live file (no id the server
- * knows yet) cannot be copied either.
+ * documents, and pictures only while a text recognition model is set
+ * (`GET /api/projects/_config` → `textRecognition.enabled`, #3986): the server
+ * then stores the text it recognizes in a PNG, JPEG, GIF or WebP image. Without
+ * one it refuses images (`UNSUPPORTED_TYPE`), so Copy to project is not offered
+ * for them. A live file (no id the server knows yet) cannot be copied either.
  *
- * @param {{id?: string, kind?: string, mimeType?: string}|null|undefined} artifact
+ * @param {{id?: string, kind?: string, mimeType?: string, name?: string}|null|undefined} artifact
+ * @param {{textRecognition?: boolean, imageTypes?: string[]}} [options] - `textRecognition`:
+ *   projects recognize the text of images; `imageTypes`: the image types their engine reads.
  * @returns {boolean}
+ *
+ * @example
+ * canCopyArtifactToProject({ id: 'a1', mimeType: 'image/png' }); // false
+ * canCopyArtifactToProject({ id: 'a1', mimeType: 'image/png' }, { textRecognition: true }); // true
  */
-export function canCopyArtifactToProject(artifact) {
+export function canCopyArtifactToProject(artifact, { textRecognition = false, imageTypes } = {}) {
   if (!artifact?.id) return false;
-  if (artifact.kind === 'image') return false;
-  return !String(artifact.mimeType || '')
-    .toLowerCase()
-    .startsWith('image/');
+  const type = String(artifact.mimeType || '').toLowerCase();
+  if (artifact.kind !== 'image' && !type.startsWith('image/')) return true;
+  return textRecognition === true && isRecognizableImage(type, artifact.name, imageTypes);
 }
 
 /**

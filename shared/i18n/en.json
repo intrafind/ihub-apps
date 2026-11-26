@@ -34,7 +34,16 @@
       "unsupportedType": "This file type cannot be saved to the chat; the file is sent with the message only",
       "unreadable": "The server could not read this file, so it was not saved to the chat; the file is sent with the message only",
       "scanRejected": "Rejected by the security scan, so it was not saved to the chat; the file is sent with the message only",
-      "notSaved": "Could not be saved to the chat; the file is sent with the message only"
+      "notSaved": "Could not be saved to the chat; the file is sent with the message only",
+      "recognition": {
+        "unavailable": "Text recognition is not available right now; this image is not sent",
+        "failed": "The text of this image could not be recognized; it is not sent. Please try again later",
+        "noText": "No text was found in this image; it is not sent",
+        "notSaved": "Could not be saved to the chat, so its text was not recognized; this image is not sent"
+      },
+      "ocrUnavailable": "Text recognition is not available right now; the file is sent with the message only",
+      "ocrFailed": "The text of the scanned pages could not be recognized; the file is sent with the message only",
+      "ocrNoText": "No text was found on the scanned pages; the file is sent with the message only"
     },
     "stored": "Saved to this chat",
     "templateReady": "can be used as a template",
@@ -53,7 +62,9 @@
       "audio": "Audio sent to the model",
       "truncated": "shortened to fit",
       "textOnly": "only the text is kept in this chat",
-      "textServer": "Text extracted on the server: {{size}}"
+      "textServer": "Text extracted on the server: {{size}}",
+      "recognizing": "Its text is recognized when it is saved to the chat",
+      "recognitionFailed": "Not sent with the message"
     },
     "downloadDiscarded": "The original file is no longer stored; only its text is kept.",
     "downloadFailed": "The download failed. Please try again."
@@ -874,7 +885,35 @@
         "maxApiFiles": "Inference API: files per user",
         "maxApiFilesHelp": "The most files one user may keep through the Inference API (/v1/files). 0 removes the limit.",
         "maxApiBytes": "Inference API: size per user",
-        "maxApiBytesHelp": "All files one user keeps through the Inference API together. 0 removes the limit."
+        "maxApiBytesHelp": "All files one user keeps through the Inference API together. 0 removes the limit.",
+        "ocr": {
+          "title": "Text recognition",
+          "description": "The text of an image (PNG, JPEG, GIF, WebP) or of the PDF pages without a text layer is read once, when the file is uploaded; every model then works with that text. Projects use it whenever an engine is ready; chats only when switched on below. The images and pages are sent to the engine when they are uploaded: the provider of the model, or the OCR service.",
+          "modelId": "Text recognition model",
+          "off": "Off",
+          "unavailable": "{{model}} (not available)",
+          "modelIdHelp": "Only enabled models that read images are offered. \"Off\" stops text recognition: images are then refused and scanned PDFs are handled as before.",
+          "maxPages": "Most pages per document",
+          "maxPagesHelp": "Pages beyond this are not read; the document then says that only the first pages were recognized. Each page is one request to the engine.",
+          "pages": "Pages of PDFs with text",
+          "pagesScanned": "Only pages without text",
+          "pagesSmart": "Smart: also pages with large pictures or drawings",
+          "pagesAll": "All pages",
+          "pagesHelp": "Pages without a text layer are always read. A page with text that is read gets the recognized text in place of its own, so a chart or diagram next to the text is read too; if reading it fails, the page keeps its text.",
+          "minFigurePercent": "Smart: least picture or drawing share of a page (%)",
+          "minFigurePercentHelp": "A page with text is read when pictures, charts, diagrams or tables cover at least this much of it. A logo or a line covers a few percent; a chart over half the page about 30 to 50.",
+          "recognizeText": "Read images and scanned PDFs in chats as text",
+          "recognizeTextHelp": "An image or a scanned PDF attached to a chat is then stored with its recognized text instead of being sent to the chat model as pictures, so models without vision can use it too. Not where only the text extracted in the browser is kept. An app can override this.",
+          "recognizeTextNoModel": "Choose a text recognition model or a ready OCR integration first.",
+          "engine": "Engine",
+          "engineModel": "A model that reads images",
+          "engineOff": "{{name}} (switched off)",
+          "engineHelp": "An OCR integration reads the pages on its own servers instead of a model; set it up under Admin → Integrations.",
+          "engineNone": "To use an OCR service instead of a model, install an OCR integration (such as the iFinder OCR service) under Admin → Integrations.",
+          "integrationsLink": "Open Integrations",
+          "engineReady": "Images and scanned pages go to {{name}}. Its own settings (address, languages) decide how well it reads them.",
+          "engineNotReady": "This integration is switched off or no longer installed, so nothing is recognized: images are refused and scanned PDFs are handled as before."
+        }
       }
     },
     "voiceInput": {
@@ -4470,7 +4509,12 @@
           "use": "Use this text",
           "close": "Close",
           "noChange": "No new text was suggested."
-        }
+        },
+        "recognizeText": "Text recognition in chats",
+        "recognizeTextDefault": "Installation default",
+        "recognizeTextOn": "On",
+        "recognizeTextOff": "Off",
+        "recognizeTextHelp": "Whether images and scanned PDFs attached in this app's chats are read as text by the text recognition model (Admin → Chat history → Uploaded files) and stored with that text, instead of being sent to the chat model as pictures. Has no effect while no text recognition model is set."
       },
       "reorder": "Reorder",
       "reorderHelp": "Drag a row or use the arrows to set the order apps appear in for users — in the apps browser, on the start page and in the sidebar. Every app is listed, so search and filters do not apply here. Nothing is saved until you save the new order at the bottom of the page.",
@@ -5285,6 +5329,7 @@
         "secretSet": "set",
         "secretNotSet": "not set",
         "instanceUrl": "Instance",
+        "serviceUrl": "Service URL",
         "authorization": "Authorization",
         "yes": "yes",
         "no": "no",
@@ -5310,6 +5355,10 @@
         "storage": {
           "title": "Storage providers",
           "description": "Cloud storage users browse and attach files from in the chat and in projects."
+        },
+        "ocr": {
+          "title": "Text recognition",
+          "description": "OCR services that read uploaded images and scanned PDF pages; pick one under Chat history → Text recognition."
         },
         "mcp": {
           "title": "MCP servers",
@@ -13024,7 +13073,8 @@
       "nothingToAdd": "This kind of item is not available here.",
       "ifinderProfile": "Search in",
       "crawlOtherHosts": "Include files on other websites",
-      "archiveHint": "A ZIP archive is unpacked: each supported file in it becomes a document."
+      "archiveHint": "A ZIP archive is unpacked: each supported file in it becomes a document.",
+      "recognitionHint": "The text of images and of scanned PDF pages is recognized when they are added: the pages are sent to the provider of the text recognition model."
     },
     "chatBar": {
       "inProject": "In project: {{name}}",
@@ -13149,7 +13199,10 @@
         "scanRejected": "Rejected by the malware scanner.",
         "sourceForbidden": "Connect the integration again; the document could not be read with your account.",
         "sourceGone": "The source document was removed.",
-        "unsupportedType": "This file type is not supported."
+        "unsupportedType": "This file type is not supported.",
+        "ocrUnavailable": "Text recognition is not available right now, so the text of this image or scan could not be read. Ask an administrator, or upload a file with a text layer.",
+        "ocrFailed": "The text of this image or scan could not be recognized. Upload it again later.",
+        "ocrNoText": "No text was found in this image or scan."
       },
       "full": "This project holds as many items as it may.",
       "pinItem": "Pin {{name}}",
@@ -14073,7 +14126,10 @@
     "QUOTA_USER_APPS": "The limit of personal apps is reached.",
     "QUOTA_USER_APP_OFFERS": "Too many open offers.",
     "USER_APP_CAPABILITY_DENIED": "The app cannot use this. Remove it and save again.",
-    "USER_APP_ACCESS_CHANGED": "Your access to this app changed. Reload the page."
+    "USER_APP_ACCESS_CHANGED": "Your access to this app changed. Reload the page.",
+    "OCR_UNAVAILABLE": "Text recognition is not available. An administrator needs to set up a text recognition model or OCR integration.",
+    "OCR_FAILED": "The text could not be recognized. Try again later.",
+    "OCR_NO_TEXT": "No text was found in the image or the scanned pages."
   },
   "workspace": {
     "backTo": "Back to {{name}}",
@@ -14487,5 +14543,12 @@
     "sent": "Answer sent to {{server}}.",
     "declined": "You declined. {{server}} was told no.",
     "failed": "The answer could not be sent."
+  },
+  "textRecognition": {
+    "recognized": "Text recognized",
+    "recognizedPages": "Text recognized from {{count}} page(s)",
+    "recognizedPagesTruncated": "Text recognized from the first {{count}} page(s) only",
+    "recognizedPagesFailed": "Text recognized from {{count}} page(s); {{failed}} page(s) could not be read",
+    "recognizedBy": "Recognized by {{model}}"
   }
 }

@@ -15,6 +15,7 @@ import { refreshSummary, takesRefreshTtl } from '../utils/refreshTtl';
 import { canUseProjectItemInApp } from '../../chat/utils/useInApp';
 import ItemEstimate from './ItemEstimate';
 import ItemProvenance from './ItemProvenance';
+import ItemRecognition from './ItemRecognition';
 import ProjectItemStatus from './ProjectItemStatus';
 
 /**
@@ -199,6 +200,7 @@ function ProjectItemsTable({
           )}
           <AiAccessBadge item={item} />
           <ItemProvenance provenance={item.provenance} item={item} className="mt-0.5" />
+          <ItemRecognition item={item} className="mt-0.5 block" />
           {item.refresh && (
             <div className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
               {refreshSummary(item, t, language)}

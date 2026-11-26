@@ -20,6 +20,7 @@ import ldapDirectory from './ldapDirectory/index.js';
 import ldapBrowser from './ldapBrowser/index.js';
 import ihub from './ihub/index.js';
 import websiteCorpus from './websiteCorpus/index.js';
+import ifinderOcr from './ifinderOcr/index.js';
 import {
   googleDriveConnector,
   nextcloudConnector,
@@ -37,6 +38,7 @@ registerConnector(ldapDirectory);
 registerConnector(ldapBrowser);
 registerConnector(ihub);
 registerConnector(websiteCorpus);
+registerConnector(ifinderOcr);
 registerConnector(office365Connector);
 registerConnector(googleDriveConnector);
 registerConnector(nextcloudConnector);

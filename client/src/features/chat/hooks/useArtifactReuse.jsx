@@ -14,6 +14,7 @@ import {
   artifactRef,
   canUseArtifactInApp
 } from '../utils/useInApp';
+import useImageTextRecognition from './useImageTextRecognition';
 
 // Loaded when first opened: most chats never use them.
 const UseInAppDialog = lazyWithRetry(() => import('../components/UseInAppDialog'));
@@ -27,12 +28,14 @@ const CopyToProjectDialog = lazyWithRetry(
  * handlers the workspace pane and the cards call, and the dialogs
  * they open. Every page that shows artifacts mounts the same flow through it.
  *
- * - **Use in app**: never for pictures or ZIP archives (`canUseArtifactInApp`); the app picker; the chosen app opens a new chat with a copy
+ * - **Use in app**: never for ZIP archives, for pictures only while the server recognizes their
+ *   text (`canUseArtifactInApp`); the app picker; the chosen app opens a new chat with a copy
  *   of the file attached (`openAppWithAttachment`). `onUseInCurrentApp` lets the
  *   page that *is* that app start the new chat itself.
  * - **Copy to project**: the project dialog, which then says how many documents
  *   were added, what was skipped and why, and links to the project. Offered only
- *   where user projects are on, never for pictures.
+ *   where user projects are on, for pictures only while projects
+ *   recognize their text (`canCopyArtifactToProject`).
  *
  * @param {Object} options
  * @param {{chatId?: string, shareId?: string}|null} options.owner - Where the artifacts live
@@ -60,6 +63,7 @@ export default function useArtifactReuse({
 }) {
   const navigate = useNavigate();
   const { userProjectsEnabled } = useProjectsAvailability();
+  const imageTextRecognition = useImageTextRecognition();
   const [attachment, setAttachment] = useState(null);
   const [copyTarget, setCopyTarget] = useState(null);
   const chatId = owner?.chatId || null;
@@ -105,7 +109,11 @@ export default function useArtifactReuse({
 
   const menuItems = useCallback(
     (artifact, t) => [
-      ...(onUseInApp && canUseArtifactInApp(artifact)
+      ...(onUseInApp &&
+      canUseArtifactInApp(artifact, {
+        textRecognition: imageTextRecognition.apps,
+        imageTypes: imageTextRecognition.appImageTypes
+      })
         ? [
             {
               key: 'use-in-app',
@@ -116,7 +124,11 @@ export default function useArtifactReuse({
             }
           ]
         : []),
-      ...(onCopyToProject && canCopyArtifactToProject(artifact)
+      ...(onCopyToProject &&
+      canCopyArtifactToProject(artifact, {
+        textRecognition: imageTextRecognition.projects,
+        imageTypes: imageTextRecognition.projectImageTypes
+      })
         ? [
             {
               key: 'copy-to-project',
@@ -128,7 +140,7 @@ export default function useArtifactReuse({
           ]
         : [])
     ],
-    [onUseInApp, onCopyToProject]
+    [onUseInApp, onCopyToProject, imageTextRecognition]
   );
 
   const elements = (

@@ -46,7 +46,7 @@ export const ALL_INTEGRATIONS_OPTIONS = Object.freeze([
 ]);
 
 /** Installation types that `"*"` never covers (they have panels of their own). */
-const UNCOVERED_TYPES = new Set(['web-search', 'storage']);
+const UNCOVERED_TYPES = new Set(['web-search', 'storage', 'ocr']);
 
 /** Installation ids that `"*"` never covers: iAssistant is reached through the model. */
 const UNCOVERED_INSTANCE_IDS = new Set(['iassistant']);
@@ -84,7 +84,7 @@ function keysOfInstallation(installation) {
 
 /**
  * Whether `"*"` can cover an installation at all: anything but a web search
- * engine, a storage provider and iAssistant.
+ * engine, a storage provider, an OCR engine and iAssistant.
  *
  * @param {{ id?: string, type?: string|null }} installation
  * @returns {boolean}

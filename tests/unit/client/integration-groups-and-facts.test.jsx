@@ -37,6 +37,7 @@ describe('integration groups', () => {
     expect(integrationGroupOf({ type: 'storage', builtIn: true, protocol: 'native' })).toBe(
       'storage'
     );
+    expect(integrationGroupOf({ type: 'ocr', builtIn: true, protocol: 'native' })).toBe('ocr');
     // The type wins over the protocol, the protocol over "built-in".
     expect(integrationGroupOf({ protocol: 'mcp', builtIn: true })).toBe('mcp');
     expect(integrationGroupOf({ protocol: 'a2a', builtIn: true })).toBe('agents');
@@ -85,6 +86,7 @@ describe('integration groups', () => {
       'people-directories',
       'web-search',
       'storage',
+      'ocr',
       'mcp',
       'agents',
       'custom',
@@ -181,6 +183,14 @@ describe('installation facts', () => {
         })
       )
     ).toEqual(['Instance: http://searxng:8080']);
+    expect(
+      lines(
+        installationFacts({
+          definition: 'com.intrafind/ifinder-ocr',
+          values: { serviceUrl: 'http://if-ocr:9618/ocr-api', authorizationRef: 'ocr-jwt' }
+        })
+      )
+    ).toEqual(['Service URL: http://if-ocr:9618/ocr-api', 'Authorization: set']);
     expect(
       lines(
         installationFacts({
@@ -363,7 +373,7 @@ describe('apps binding an installation', () => {
     expect(appsBindingInstallation(APPS, { id: 'lonely', definition: 'x/y' }, 'en')).toEqual([]);
   });
 
-  test('"*" binds every integration it does not exclude, never storage', () => {
+  test('"*" binds every integration it does not exclude, never storage or OCR', () => {
     const apps = [
       { id: 'all', name: { en: 'All' }, integrations: { '*': {} } },
       { id: 'all-but', name: { en: 'All but' }, integrations: { '*': { exclude: ['drawio'] } } }
@@ -373,6 +383,8 @@ describe('apps binding an installation', () => {
     );
     const nextcloud = { id: 'nc', definition: 'com.intrafind/nextcloud', type: 'storage' };
     expect(appsBindingInstallation(apps, nextcloud, 'en')).toEqual([]);
+    const ocr = { id: 'ifinder-ocr', definition: 'com.intrafind/ifinder-ocr', type: 'ocr' };
+    expect(appsBindingInstallation(apps, ocr, 'en')).toEqual([]);
   });
 
   test('a web search engine: the apps that name it, and the apps on Auto', () => {

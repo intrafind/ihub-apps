@@ -191,6 +191,23 @@ export const itemTextSchema = z
     tenant: z.string().max(100).optional(),
     extractedAt: z.string(),
     truncated: z.boolean().optional(),
+    /**
+     * The text, or part of it, was recognized by the OCR engine (#3986): the
+     * vision model (`modelId`) or an OCR integration (`integrationId`).
+     */
+    recognized: z
+      .object({
+        modelId: z.string().max(200).optional(),
+        integrationId: z.string().max(200).optional(),
+        pages: z.number().int().nonnegative(),
+        // The page limit cut the document.
+        truncated: z.boolean().optional(),
+        // Pages the engine could not read (an error, a timeout).
+        failedPages: z.number().int().positive().optional(),
+        at: z.string()
+      })
+      .strict()
+      .optional(),
     original: z
       .object({
         contentType: z.string().max(200).optional(),

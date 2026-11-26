@@ -64,6 +64,42 @@ async function getPdfium() {
   return pdfiumLibrary;
 }
 
+/** Longest edge of a page rendered for text recognition, in pixels. */
+const RECOGNITION_MAX_EDGE = 2400;
+
+/**
+ * Render chosen pages of a PDF to PNG for text recognition: scale 2 (about
+ * 1190 px wide for A4), the longest edge capped so an oversized page cannot
+ * take the memory of the process. The document is loaded once for all of them.
+ * Page numbers past the end are skipped.
+ *
+ * @param {Buffer|Uint8Array} buffer - PDF bytes.
+ * @param {number[]} pageNumbers - 1-based.
+ * @returns {Promise<{ images: Array<{ page: number, base64: string }>, pages: number }>}
+ */
+export async function renderPagesForRecognition(buffer, pageNumbers) {
+  const library = await getPdfium();
+  const document = await library.loadDocument(new Uint8Array(buffer));
+  try {
+    const pages = document.getPageCount();
+    const images = [];
+    for (const pageNumber of pageNumbers) {
+      const number = Math.floor(pageNumber);
+      if (!(number >= 1 && number <= pages)) continue;
+      const page = document.getPage(number - 1);
+      const { originalWidth, originalHeight } = page.getOriginalSize();
+      const scale = Math.min(2, RECOGNITION_MAX_EDGE / Math.max(originalWidth, originalHeight, 1));
+      const image = await page.render({ scale, render: 'bitmap' });
+      const png = new PNG({ width: image.width, height: image.height });
+      png.data = Buffer.from(image.data);
+      images.push({ page: number, base64: PNG.sync.write(png).toString('base64') });
+    }
+    return { images, pages };
+  } finally {
+    document.destroy();
+  }
+}
+
 /** Longest edge of a preview image, in pixels. */
 const PREVIEW_MAX_EDGE = 1400;
 

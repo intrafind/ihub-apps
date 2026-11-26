@@ -11,6 +11,10 @@ import {
   DEFAULT_IMAGE_FORMATS,
   DEFAULT_VIDEO_FORMATS
 } from '../../features/upload/utils/uploadFormats';
+import {
+  RECOGNIZABLE_IMAGE_TYPES,
+  recognizedImageUploadAllowed
+} from '../../features/upload/utils/textRecognition';
 
 /**
  * Whether the uploader takes a kind of file (image, audio, video) now, and whether the model alone
@@ -35,10 +39,14 @@ function uploadGateOf(kindConfig, modelTakesIt) {
  * @returns {boolean} returns.showUploader - Whether uploader UI is visible
  * @returns {Function} returns.handleFileSelect - Handle file selection (fileData) => void
  * @returns {Function} returns.toggleUploader - Toggle uploader visibility () => void
- * @returns {Function} returns.createUploadConfig - Create upload config from app settings (app, modelObject) => Object;
+ * @returns {Function} returns.createUploadConfig - Create upload config from app settings
+ *   (app, modelObject, options?) => Object;
  *   its `cloudStorage` is `{ enabled, providers }`: the storage providers the app binds
  *   (`app.integrations`, see `shared/storageBindings.js`) among those the user's groups grant
- *   (`/api/auth/status` → `cloudStorage.providers`)
+ *   (`/api/auth/status` → `cloudStorage.providers`). With `options.recognizeImages` (the chat
+ *   sends images to the server for text recognition, `composerRecognizesImages`), its
+ *   `textRecognition` is `{ images: true, formats, maxFileSizeMB }`: the uploader then takes
+ *   those images as documents whatever the app's image upload and the model's vision say
  * @returns {Function} returns.clearSelectedFile - Clear the selected file () => void
  * @returns {Function} returns.hideUploader - Hide the uploader UI () => void
  * @returns {Function} returns.setSelectedFile - Direct state setter for selected file
@@ -85,7 +93,11 @@ export function useFileUploadHandler() {
   };
 
   // Create unified upload configuration
-  const createUploadConfig = (app, selectedModel) => {
+  const createUploadConfig = (
+    app,
+    selectedModel,
+    { recognizeImages = false, recognizedImageTypes = RECOGNIZABLE_IMAGE_TYPES } = {}
+  ) => {
     // New unified upload config structure
     const uploadConfig = app?.upload || {};
 
@@ -153,6 +165,11 @@ export function useFileUploadHandler() {
     const audioUploadEnabled = audio.enabled;
     const videoUploadEnabled = video.enabled;
     const fileUploadEnabled = fileConfig?.enabled !== false && !transcriptionModel;
+    // Text recognition (#3986): an image goes to the server, which stores its recognized text
+    // as a document. The chat model reads that text, so neither the app's image upload nor the
+    // model's vision is asked; a transcription model takes no documents at all.
+    const recognizedImagesEnabled =
+      recognizeImages === true && !transcriptionModel && recognizedImageUploadAllowed(uploadConfig);
 
     return {
       enabled: true,
@@ -219,6 +236,12 @@ export function useFileUploadHandler() {
       supportedFormats: fileUploadEnabled
         ? fileConfig?.supportedFormats || [...DEFAULT_FILE_FORMATS]
         : [],
+      // Images whose text the server recognizes: taken as documents, never sent as pictures
+      textRecognition: {
+        images: recognizedImagesEnabled,
+        formats: recognizedImagesEnabled ? [...recognizedImageTypes] : [],
+        maxFileSizeMB: fileConfig?.maxFileSizeMB || imageConfig?.maxFileSizeMB || 20
+      },
       // The storage providers the cloud file picker offers
       cloudStorage
     };

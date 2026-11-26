@@ -5,6 +5,7 @@ import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import Modal from '../../../shared/components/Modal';
 import Icon from '../../../shared/components/Icon';
+import ItemRecognition from './ItemRecognition';
 import {
   ITEM_TEXT_EDIT_CHARS,
   ITEM_TEXT_PREVIEW_CHARS,
@@ -172,6 +173,8 @@ function ProjectItemTextDialog({
         </button>
       </div>
       <div className="p-6 overflow-y-auto">
+        {/* The text was read by the text recognition model (#3986) */}
+        <ItemRecognition item={item} className="mb-3" />
         {showDownloadError && (
           <p role="alert" className="mb-3 text-sm text-red-600 dark:text-red-400">
             {downloadError}

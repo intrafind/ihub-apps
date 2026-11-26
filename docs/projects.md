@@ -209,9 +209,10 @@ users pick cloud files from their own projects.
 
 Uploads accept PDF, Word (`.docx`), PowerPoint (`.pptx`), Excel (`.xlsx`), OpenDocument (`.odt`,
 `.ods`, `.odp`), HTML, e-mail (`.eml` and Outlook `.msg`), Markdown, CSV, JSON, XML and other text
-files. Images, audio, video, executables and the legacy Office formats (`.doc`, `.xls`, `.ppt`) are
-refused; save those as `.docx`, `.xlsx`, `.pptx` or PDF first. A ZIP archive is unpacked (see
-[ZIP archives](#zip-archives)). An e-mail is stored as
+files, and images (PNG, JPEG, GIF, WebP) when text recognition is set up (see
+[Images and scanned PDFs](#images-and-scanned-pdfs)). Audio, video, executables, other images and the
+legacy Office formats (`.doc`, `.xls`, `.ppt`) are refused; save those as `.docx`, `.xlsx`, `.pptx`
+or PDF first. A ZIP archive is unpacked (see [ZIP archives](#zip-archives)). An e-mail is stored as
 its headers (subject, sender, recipients, date), the names of its attachments and its body; the
 attachments themselves are not read. Each file is one request, so several files
 upload in parallel and each gets its own status.
@@ -227,8 +228,55 @@ chats only. **Download original** on the document (`GET …/items/:itemId/origin
 Editing the text (below) removes the original, since it no longer matches. A
 PDF of at most 500 pages is read; extracted text longer than 10,000,000 characters (about 10 MB,
 2.5 million tokens) is cut at that length. A file that iHub imports from the server itself, such as
-the shipped documentation, is not cut below 20,000,000. There is no OCR: a scanned PDF without a text layer fails with a message that says so.
-Run it through OCR and upload the result.
+the shipped documentation, is not cut below 20,000,000. Without text recognition, a scanned
+PDF without a text layer fails with a message that says so.
+
+### Images and scanned PDFs
+
+When an administrator sets up **text recognition** (**Admin → Chat history → Uploaded files →
+Text recognition**), its engine reads the text of an image, or of the pages of a PDF that have no
+text layer, **once, when the document is added**. The engine (`platform.ocr.engine`) is a
+vision-capable **model** (`platform.ocr.modelId`), or an installed **OCR integration** such as the
+iFinder OCR service, which reads the pages on your own servers (see
+[OCR → OCR engines](ocr-feature.md#ocr-engines)). The text is stored
+like any other extracted text, so every app can use the document, also one whose model cannot read
+images, and no question pays for reading it again.
+
+- **What is read:** an image (PNG, JPEG, GIF, WebP), uploaded, picked from a cloud drive, unpacked
+  from a ZIP archive or copied from a chat; the pages of a PDF without a text layer (scanned pages);
+  and, per **Pages of PDFs with text** (`platform.ocr.pages`), pages that do have text:
+
+  | Setting | Pages with text that are read |
+  |---|---|
+  | `scanned` | none: only pages without text |
+  | `smart` (default) | those where pictures or drawings (charts, diagrams, tables) cover at least `platform.ocr.minFigurePercent` of the page (20% by default). A logo or a rule line covers a few percent; a chart over half the page about 30 to 50. A picture covering the whole page under a text layer (a scan with its text) does not count |
+  | `all` | every page |
+
+  A page without text gets the recognized text in place of its marker. A page with text that is
+  read gets it in place of its own lines, since the engine reads the whole page, the text and what
+  the chart or diagram shows; if reading it fails, it keeps its text. Pages that are not read keep
+  their text.
+- **Page limit:** at most `platform.ocr.maxPages` pages (50 by default) are read per document. Pages
+  past it keep the marker "no extractable text", and the document says it was cut. A page the
+  engine could not read (an error, a timeout) keeps its marker too, and the document says how many
+  pages could not be read (`failedPages`).
+- **Marked as recognized:** the document records the model or the OCR integration (`modelId` or
+  `integrationId`), the number of pages and the date (`text.recognized`), and its row says "Text recognized from N pages". Recognized text can contain
+  errors: check what matters.
+- **The original** (the image or the PDF) is kept per `platform.uploads.storageMode` like any
+  upload, and **Download original** returns it.
+- **When it fails:** for an image or a PDF without any text layer, an engine that refuses or cannot
+  be reached fails the document (`OCR_FAILED`, **Retry** reads it again), and an engine that is
+  not usable when the document is read fails it with `OCR_UNAVAILABLE`. A PDF that has text
+  elsewhere never fails because of recognition: it keeps its text and the markers of the pages
+  that could not be read, as without recognition.
+- **Which images:** the types the engine reads: PNG, JPEG, GIF and WebP with a model; an OCR
+  integration may read fewer (the iFinder OCR service reads no WebP).
+- **Without an engine** (no model, a model that is switched off or cannot read images, or the OCR
+  integration switched off) nothing is read: images are refused and a scanned PDF fails with
+  `NO_TEXT`, as before.
+- **Where the pages go:** the pages are sent to the engine when the document is added: the provider
+  of the model, or the service the OCR integration calls. Pick an engine your data may go to.
 
 A large text costs memory and time. The first search after a start, or after any document of the
 project changed, builds the search index of the project: about 1.5 seconds per 10,000,000
@@ -245,13 +293,17 @@ A ZIP archive uploaded to a project, or copied into one from a chat, becomes one
 it holds, named by its path in the archive (`reports/q1.pdf`). Each goes through the same checks,
 scan and extraction as a single upload, and counts against the same limits.
 
-- Files a project does not take (images, media, executables), archives inside the archive and
-  files over the per-file limit are skipped. The upload reports what was added and what was
+- Files a project does not take (media, executables, and images when no text recognition engine is
+  set), archives inside the archive and files over the per-file limit are skipped. A file that is
+  refused does not use up one of the project's documents. The upload reports what was added and what was
   skipped, and why.
 - Folders and the bookkeeping files of archivers (`__MACOSX/`, `.DS_Store`, `Thumbs.db`) are passed
   over silently.
 - The sizes an archive declares are not trusted: every file is unpacked against the per-file limit
   and the room left in the project, so an archive that would expand without bound stops there.
+- Every file is checked against the checksum the archive records; a damaged one is skipped.
+- When storing fails part-way (the disk is full, say), what was added stays and the rest is listed
+  as not imported, so trying again does not add documents twice.
 - An encrypted or damaged archive, or one with more than 2,000 entries, is refused whole. An archive
   with no file a project takes is refused with the list of what it skipped.
 - Office and OpenDocument files are ZIP packages too; they stay documents and are never unpacked.
@@ -267,7 +319,8 @@ project reads it. Who that is is the project's audience; the dialog shows it.
   document as it is. The document records where it came from (the chat and its app, or the share).
 - A file shared with you (a shared chat or a single shared file) can be copied too, if you are signed
   in. The copy does not record the owner's chat.
-- A ZIP archive is unpacked. Images cannot be copied into a project yet.
+- A ZIP archive is unpacked. An image can be copied when text recognition is set up; its text
+  is read when it is added.
 - Offered when user projects are switched on (`userProjects`); without them there is no Copy to
   project.
 
@@ -282,8 +335,10 @@ from, is deleted.
   file.
 - A document marked **Not for AI** cannot be used in an app, and neither can a link (an iHub page,
   an iFinder document): use those through the project.
-- The app's own upload settings apply. The picker lists only apps that take files of that type;
-  images and ZIP archives cannot be used in an app yet.
+- The app's own upload settings apply. The picker lists only apps that take files of that type.
+  An image can be used in an app that reads images as text (see
+  [Chat files → Text recognition](chat-files.md#text-recognition-in-chats)); ZIP archives cannot be
+  used in an app.
 
 ### Writing and editing text
 
@@ -314,7 +369,10 @@ The reasons a **Failed** item names:
 
 | Code                | Message                                                                     |
 | ------------------- | --------------------------------------------------------------------------- |
-| `NO_TEXT`           | This PDF has no text layer (scanned). Run it through OCR and upload the result. |
+| `NO_TEXT`           | This PDF has no text layer (scanned). Run it through OCR and upload the result. (Only without text recognition.) |
+| `OCR_FAILED`        | The text recognition engine refused the request or could not read the pages; **Retry**. |
+| `OCR_UNAVAILABLE`   | The text recognition engine is not available (a model that cannot read images, an OCR integration switched off); an administrator picks another one. |
+| `OCR_NO_TEXT`       | The text recognition engine found no text in the image or the scanned pages. |
 | `UNSUPPORTED_TYPE`  | This file type is not supported.                                            |
 | `EXTRACTION_FAILED` | The extractor's own message.                                                |
 | `EXTRACTION_TIMEOUT` | The file took longer than `extraction.timeoutMs` to read and was stopped.  |
@@ -1292,8 +1350,6 @@ default, 0, keeps projects until someone deletes them. Admin projects have no re
 
 ### Not available yet
 
-- **Images** in projects: an image cannot be uploaded, copied from a chat or unpacked from an archive
-  ([#3986](https://github.com/intrafind/ihub-apps/issues/3986)).
 - **Linking a whole project** into another (projects in projects): link its documents one by one.
   Documents added to the source later are not linked by themselves.
 - **Linking documents in the admin project editor**: the tab is offered on the project page only.
