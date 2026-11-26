@@ -115,6 +115,29 @@ export function toAdvertisedJsonSchema(jsonSchema) {
 }
 
 /**
+ * The arguments a tool's schema declares at its top level, and nothing else.
+ *
+ * The SDK validates the arguments against the advertised JSON Schema, which
+ * lets an undeclared key through. The handlers behind the gateway read keys
+ * their schema may not offer (an app or workflow run reads `modelId`, a
+ * workflow spreads every argument into its run), so an undeclared key could
+ * pick a model the app pins or the caller may not use. SDK v1's Zod objects
+ * dropped such keys; this keeps it that way.
+ *
+ * @param {Object} args - The arguments as the client sent them
+ * @param {Object} jsonSchema - The tool's parameters
+ * @returns {Object}
+ */
+export function declaredArguments(args, jsonSchema) {
+  const properties = toAdvertisedJsonSchema(jsonSchema).properties;
+  const declared = {};
+  for (const name of Object.keys(properties)) {
+    if (args && Object.hasOwn(args, name)) declared[name] = args[name];
+  }
+  return declared;
+}
+
+/**
  * The config fragment `registerTool(name, config, cb)` takes for a tool's
  * input: the tool's JSON Schema, advertised as it is and validated by the SDK
  * (`fromJsonSchema`).
@@ -414,18 +437,24 @@ export async function buildMcpServer({ user, platform, era = 'legacy' }) {
     }
   );
 
-  // One structured log line per tool call (the audit trail of the gateway;
-  // the ledger records the tool runs of the invoked apps).
-  const registerTool = (name, config, handler) =>
-    server.registerTool(name, config, async (args, ctx) => {
-      logger.info('MCP gateway tool call', {
-        component: 'McpServer',
-        tool: name,
-        userId: user.id,
-        era
-      });
-      return handler(args, ctx);
-    });
+  // Every tool is registered here: the handler gets only the arguments the
+  // tool's schema declares (`declaredArguments`), and each call leaves one
+  // structured log line (the audit trail of the gateway; the ledger records
+  // the tool runs of the invoked apps).
+  const registerTool = (name, { parameters, ...config }, handler) =>
+    server.registerTool(
+      name,
+      { ...config, ...jsonSchemaToInputSchema(parameters) },
+      async (args, ctx) => {
+        logger.info('MCP gateway tool call', {
+          component: 'McpServer',
+          tool: name,
+          userId: user.id,
+          era
+        });
+        return handler(declaredArguments(args, parameters), ctx);
+      }
+    );
 
   // Long runs (apps, workflows) answer with a task handle to a client that
   // takes one (MCP Tasks extension, 2026-07-28); everyone else waits.
@@ -473,7 +502,7 @@ export async function buildMcpServer({ user, platform, era = 'legacy' }) {
         tool.id,
         {
           description: typeof tool.description === 'string' ? tool.description : '',
-          ...jsonSchemaToInputSchema(tool.parameters),
+          parameters: tool.parameters,
           ...(annotations ? { annotations } : {})
         },
         async (args, ctx) => {
@@ -533,7 +562,7 @@ export async function buildMcpServer({ user, platform, era = 'legacy' }) {
         {
           description:
             extractText(app.description) || extractText(app.name) || `iHub app: ${app.id}`,
-          ...jsonSchemaToInputSchema(buildAppInputSchema(app))
+          parameters: buildAppInputSchema(app)
         },
         async (args, ctx) => {
           // Re-check scope + permission at call time so a token that loses the
@@ -588,7 +617,7 @@ export async function buildMcpServer({ user, platform, era = 'legacy' }) {
             extractText(wf.chatIntegration?.toolDescription) ||
             extractText(wf.description) ||
             `iHub workflow: ${wf.id}`,
-          ...jsonSchemaToInputSchema(paramsSchema)
+          parameters: paramsSchema
         },
         async (args, ctx) => {
           // Re-check scope + permission at call time so a token that loses the

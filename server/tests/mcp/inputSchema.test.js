@@ -6,6 +6,7 @@ import { McpServer } from '@modelcontextprotocol/server';
 import { Client } from '@modelcontextprotocol/client';
 import { InMemoryTransport } from '@modelcontextprotocol/client';
 import {
+  declaredArguments,
   jsonSchemaToInputSchema,
   toAdvertisedJsonSchema,
   buildAppInputSchema,
@@ -100,10 +101,9 @@ describe('MCP gateway input schema advertisement', () => {
 
     expect(received.message).toBe('who is daniel manzke?');
     expect(received.tone).toBe('formal');
-    // The schema is advertised and validated as JSON Schema, which lets an
-    // undeclared key through; the handlers drop what they do not read, and
-    // `withTrustedToolContext` strips the identity fields an argument could
-    // try to set.
+    // The SDK validates against the JSON Schema, which lets an undeclared key
+    // through; the gateway drops it before its handlers run
+    // (`declaredArguments`, tested below).
     expect(received.bogus).toBe('x');
   });
 
@@ -305,5 +305,23 @@ describe('MCP gateway input schema advertisement', () => {
       expect(tool.inputSchema.properties.modelId.enum).toEqual(['gpt-4o', 'claude-sonnet-5']);
       expect(tool.inputSchema.required).toEqual(['message']);
     });
+  });
+});
+
+describe('declaredArguments', () => {
+  it('keeps the declared top-level arguments only', () => {
+    const schema = {
+      type: 'object',
+      properties: { message: { type: 'string' }, files: { type: 'array' } },
+      required: ['message']
+    };
+    expect(
+      declaredArguments({ message: 'hi', files: [], modelId: 'x', _agentModelConfig: {} }, schema)
+    ).toEqual({ message: 'hi', files: [] });
+  });
+
+  it('passes nothing to a paramless tool and copes with missing arguments', () => {
+    expect(declaredArguments({ anything: 1 }, null)).toEqual({});
+    expect(declaredArguments(undefined, { type: 'object', properties: { a: {} } })).toEqual({});
   });
 });

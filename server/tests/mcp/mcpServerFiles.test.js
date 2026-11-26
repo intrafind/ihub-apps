@@ -66,7 +66,9 @@ jest.unstable_mockModule('../../services/chatFiles/ChatFileRepository.js', () =>
 
 const { default: configCache } = await import('../../configCache.js');
 configCache.setCacheEntry('config/apps.json', [
-  { id: 'reader', name: { en: 'Reader' }, description: { en: 'Reads files' }, enabled: true }
+  { id: 'reader', name: { en: 'Reader' }, description: { en: 'Reads files' }, enabled: true },
+  // Pins its model: the tool advertises no `modelId`.
+  { id: 'pinned', name: { en: 'Pinned' }, enabled: true, disallowModelSelection: true }
 ]);
 configCache.setCacheEntry('config/workflows.json', [
   {
@@ -86,7 +88,7 @@ const { MCP_SCOPES } = await import('../../services/mcp/scopes.js');
 const user = {
   id: 'alice',
   scopes: [MCP_SCOPES.APPS_INVOKE, MCP_SCOPES.WORKFLOWS_RUN],
-  permissions: { apps: new Set(['reader']), workflows: new Set(['review']) }
+  permissions: { apps: new Set(['reader', 'pinned']), workflows: new Set(['review']) }
 };
 
 let tmpDir;
@@ -135,6 +137,36 @@ beforeEach(() => {
   invokeAppInternal.mockReset();
   invokeAppInternal.mockResolvedValue(answer());
   runTool.mockReset();
+});
+
+describe('arguments the tool schema does not declare', () => {
+  it('do not reach a workflow run: no model override, no run data', async () => {
+    runTool.mockResolvedValue({ status: 'completed', executionId: 'e1', outputText: 'ok' });
+    const client = await connect();
+    await client.callTool({
+      name: 'workflow__review',
+      arguments: {
+        input: 'check it',
+        modelId: 'secret-model',
+        _agentModelConfig: { nodeModels: { start: 'secret-model' } }
+      }
+    });
+    const [, params] = runTool.mock.calls[0];
+    expect(params.input).toBe('check it');
+    expect(params.modelId).toBeUndefined();
+    expect(params._agentModelConfig).toBeUndefined();
+  });
+
+  it('do not pick the model of an app that pins its model', async () => {
+    const client = await connect();
+    await client.callTool({
+      name: 'app__pinned',
+      arguments: { message: 'hi', modelId: 'secret-model', bogus: 'x' }
+    });
+    const call = invokeAppInternal.mock.calls[0][0];
+    expect(JSON.stringify(call)).not.toContain('secret-model');
+    expect(JSON.stringify(call)).not.toContain('bogus');
+  });
 });
 
 describe('the files input of app and workflow tools', () => {
