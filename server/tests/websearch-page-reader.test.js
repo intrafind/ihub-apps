@@ -45,7 +45,7 @@ const READER = JSON.parse(
 
 const webApp = extra => ({
   id: 'research',
-  websearch: { enabled: true, provider: 'qwant', useNativeSearch: false, enabledByDefault: true },
+  websearch: { enabled: true, provider: 'staan', useNativeSearch: false, enabledByDefault: true },
   ...extra
 });
 const nativeApp = () => webApp({ websearch: { ...webApp().websearch, useNativeSearch: true } });
@@ -56,11 +56,11 @@ before(setUpWebSearch);
 after(tearDownWebSearch);
 
 describe('page reader alongside web search', () => {
-  beforeEach(() => useWebSearch({ installed: [engine('qwant')] }));
+  beforeEach(() => useWebSearch({ installed: [engine('staan')] }));
 
   it('is offered next to the engine’s search tool when web search is on', async () => {
     const offered = await getToolsForApp(webApp(), 'en', { modelProvider: 'mistral', user: STAFF });
-    assert.deepEqual(ids(offered), ['qwantSearch', READ_URL_TOOL_ID]);
+    assert.deepEqual(ids(offered), ['staanSearch', READ_URL_TOOL_ID]);
   });
 
   it('is not offered when the user turned web search off', async () => {
@@ -73,7 +73,7 @@ describe('page reader alongside web search', () => {
   });
 
   it('is offered alone next to native search on Anthropic and OpenAI Responses, engine or not', async () => {
-    for (const installed of [[engine('qwant')], []]) {
+    for (const installed of [[engine('staan')], []]) {
       useWebSearch({ installed });
       for (const modelProvider of ['anthropic', 'openai-responses']) {
         const offered = await getToolsForApp(nativeApp(), 'en', { modelProvider, user: STAFF });
@@ -95,7 +95,7 @@ describe('page reader alongside web search', () => {
       modelProvider: 'mistral',
       user: STAFF
     });
-    assert.deepEqual(ids(offered).sort(), ['qwantSearch', READ_URL_TOOL_ID].sort());
+    assert.deepEqual(ids(offered).sort(), ['staanSearch', READ_URL_TOOL_ID].sort());
   });
 
   it('is not offered with web search when no engine and no native search are available', async () => {
@@ -109,7 +109,7 @@ describe('page reader alongside web search', () => {
       { provider: 'anthropic', fallback: 'auto' },
       { app: webApp(), language: 'en', user: STAFF }
     );
-    assert.deepEqual(ids(offered), ['qwantSearch', READ_URL_TOOL_ID]);
+    assert.deepEqual(ids(offered), ['staanSearch', READ_URL_TOOL_ID]);
   });
 });
 

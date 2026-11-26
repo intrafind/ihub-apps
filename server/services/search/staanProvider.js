@@ -5,11 +5,8 @@
  * Staan (staan.ai) web search provider.
  *
  * Staan is a keyed, documented search API — https://docs.staan.ai/docs/web-search
- * — which makes it the third engine behind `WebSearchService`, alongside Brave
- * (keyed) and Qwant (keyless). It is the useful middle ground between the two:
- * unlike Qwant it is a real product with an account behind it, so it answers
- * requests from data-centre IP ranges instead of a DataDome captcha; unlike
- * Brave it takes European market targeting (`fr-fr`, `de-de`) as a first-class
+ * — the second engine behind `WebSearchService`, alongside Brave. Unlike Brave
+ * it takes European market targeting (`fr-fr`, `de-de`) as a first-class
  * request parameter.
  *
  * ## Testability

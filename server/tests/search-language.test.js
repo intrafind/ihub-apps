@@ -25,7 +25,6 @@ import {
   resolveSearchLanguage
 } from '../services/search/searchLanguage.js';
 import { resolveStaanMarket } from '../services/search/staanProvider.js';
-import { resolveQwantLocale } from '../services/search/qwantProvider.js';
 import { resolveBraveSearchParams } from '../services/WebSearchService.js';
 
 /** An install whose configured default language is `lang`. */
@@ -82,10 +81,6 @@ describe('the configured default reaches every provider', () => {
     assert.equal(resolveStaanMarket(resolveSearchLanguage(undefined, german)), 'de-de');
   });
 
-  it('Qwant maps a German install onto the German locale', () => {
-    assert.equal(resolveQwantLocale(resolveSearchLanguage(undefined, german)), 'de_DE');
-  });
-
   it('Brave maps a German install onto German content', () => {
     assert.deepEqual(resolveBraveSearchParams(resolveSearchLanguage(undefined, german)), {
       search_lang: 'de'
@@ -95,7 +90,6 @@ describe('the configured default reaches every provider', () => {
   it("the user's language still wins over the install default everywhere", () => {
     const lang = resolveSearchLanguage('en-GB', german);
     assert.equal(resolveStaanMarket(lang), 'en-gb');
-    assert.equal(resolveQwantLocale(lang), 'en_GB');
     assert.deepEqual(resolveBraveSearchParams(lang), { search_lang: 'en-gb', country: 'GB' });
   });
 });

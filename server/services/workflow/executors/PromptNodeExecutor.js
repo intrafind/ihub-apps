@@ -466,7 +466,7 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
       // Responses, Anthropic) it resolves to that native capability, passed
       // straight to the adapter as `nativeWebSearch`. For everything else it
       // falls back to the search tool of the first web search engine the
-      // user may use (`auto`: Brave, Staan, Qwant, then any other engine),
+      // user may use (`auto`: Brave, Staan, then any other engine),
       // and to no search at all while no engine is available.
       //
       // Gemini API limitation: google_search CANNOT be combined with

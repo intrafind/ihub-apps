@@ -13,7 +13,7 @@
  * documented in Brave's own client. So the one path that could regress a
  * working install was also the one path no test touched.
  *
- * The provider now takes an injectable `fetchImpl`, like Qwant and Staan, and
+ * The provider now takes an injectable `fetchImpl`, like Staan, and
  * these specs drive it against canned responses.
  *
  * Run: node --test server/tests/brave-search-provider.test.js

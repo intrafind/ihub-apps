@@ -397,7 +397,7 @@ function AdminProvidersPage() {
       className: 'whitespace-nowrap',
       render: provider =>
         provider.requiresApiKey === false ? (
-          // Keyless provider (e.g. Qwant): "Not Configured" would read as broken
+          // Keyless provider: "Not Configured" would read as broken
           // when there is nothing to configure.
           <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200">
             {t('admin.providers.noApiKeyRequired', 'No API key required')}

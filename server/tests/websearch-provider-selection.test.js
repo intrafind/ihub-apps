@@ -6,9 +6,9 @@
 /**
  * `websearch.provider` → web search engine.
  *
- * Every engine is an installation of type `web-search` (Brave, Staan, Qwant,
+ * Every engine is an installation of type `web-search` (Brave, Staan,
  * or a third party's). `auto` takes the first engine that is enabled and that
- * the user's groups grant, in the order Brave, Staan, Qwant, then any other
+ * the user's groups grant, in the order Brave, Staan, then any other
  * engine by id; a named engine is that one or nothing — it never falls back to
  * another engine, so an app set to one engine does not silently answer from
  * another. No engine means no tool-based search; native search does not need
@@ -60,32 +60,32 @@ after(async () => {
 });
 
 describe('auto', () => {
-  it('takes Brave, then Staan, then Qwant, whatever order they are installed in', () => {
-    useWebSearch({ installed: [engine('qwant'), engine('staan'), engine('brave')] });
+  it('takes Brave, then Staan, then any other engine, whatever order they are installed in', () => {
+    useWebSearch({ installed: [engine('acme'), engine('staan'), engine('brave')] });
     assert.equal(idOf('auto', { user: STAFF }), 'brave');
-    useWebSearch({ installed: [engine('qwant'), engine('staan')] });
+    useWebSearch({ installed: [engine('acme'), engine('staan')] });
     assert.equal(idOf('auto', { user: STAFF }), 'staan');
-    useWebSearch({ installed: [engine('qwant')] });
-    assert.equal(idOf('auto', { user: STAFF }), 'qwant');
+    useWebSearch({ installed: [engine('acme')] });
+    assert.equal(idOf('auto', { user: STAFF }), 'acme');
   });
 
   it('treats a missing provider value as auto', () => {
-    useWebSearch({ installed: [engine('qwant')] });
-    assert.equal(idOf(undefined, { user: STAFF }), 'qwant');
-    assert.equal(idOf('', { user: STAFF }), 'qwant');
+    useWebSearch({ installed: [engine('staan')] });
+    assert.equal(idOf(undefined, { user: STAFF }), 'staan');
+    assert.equal(idOf('', { user: STAFF }), 'staan');
   });
 
   it('passes over a disabled engine', () => {
     useWebSearch({
-      installed: [engine('brave', { enabled: false }), engine('staan'), engine('qwant')]
+      installed: [engine('brave', { enabled: false }), engine('staan'), engine('acme')]
     });
     assert.equal(idOf('auto', { user: STAFF }), 'staan');
   });
 
   it('passes over an engine the user’s groups do not grant', () => {
     useWebSearch({
-      installed: [engine('brave'), engine('staan'), engine('qwant')],
-      groups: grantResearchOnly('qwant', 'staan')
+      installed: [engine('brave'), engine('staan'), engine('acme')],
+      groups: grantResearchOnly('acme', 'staan')
     });
     assert.equal(idOf('auto', { user: RESEARCHER }), 'staan');
     assert.equal(idOf('auto', { user: STAFF }), null);
@@ -93,9 +93,9 @@ describe('auto', () => {
   });
 
   it('accepts the installation, definition and type grants', () => {
-    const installed = [engine('brave'), engine('staan'), engine('qwant')];
+    const installed = [engine('brave'), engine('staan'), engine('acme')];
     for (const [key, expected] of [
-      ['qwant', 'qwant'],
+      ['acme', 'acme'],
       ['com.intrafind/staan-search', 'staan'],
       ['type:web-search', 'brave'],
       ['*', 'brave']
@@ -106,10 +106,10 @@ describe('auto', () => {
   });
 
   it('takes a third-party engine after the built-ins, by id', () => {
-    useWebSearch({ installed: [engine('zeta'), engine('acme'), engine('qwant')] });
-    assert.equal(idOf('auto', { user: STAFF }), 'qwant');
+    useWebSearch({ installed: [engine('zeta'), engine('acme'), engine('staan')] });
+    assert.equal(idOf('auto', { user: STAFF }), 'staan');
     useWebSearch({
-      installed: [engine('zeta'), engine('acme'), engine('qwant', { enabled: false })]
+      installed: [engine('zeta'), engine('acme'), engine('staan', { enabled: false })]
     });
     assert.equal(idOf('auto', { user: STAFF }), 'acme');
   });
@@ -128,41 +128,41 @@ describe('auto', () => {
     useWebSearch({
       installed: [
         engine('brave', { actions: { enabled: ['*'], disabled: ['search'] } }),
-        engine('qwant')
+        engine('staan')
       ]
     });
     const tools = await loadTools('en');
     assert.equal(idOf('auto', { user: STAFF }), 'brave');
-    assert.equal(idOf('auto', { user: STAFF, tools }), 'qwant');
-    assert.equal(await resolveWebSearchEngineToolId('auto', { user: STAFF }), 'qwantSearch');
+    assert.equal(idOf('auto', { user: STAFF, tools }), 'staan');
+    assert.equal(await resolveWebSearchEngineToolId('auto', { user: STAFF }), 'staanSearch');
   });
 });
 
 describe('a named engine', () => {
   it('is that engine', () => {
-    useWebSearch({ installed: [engine('brave'), engine('staan'), engine('qwant')] });
-    for (const id of ['brave', 'staan', 'qwant']) assert.equal(idOf(id, { user: STAFF }), id);
+    useWebSearch({ installed: [engine('brave'), engine('staan'), engine('acme')] });
+    for (const id of ['brave', 'staan', 'acme']) assert.equal(idOf(id, { user: STAFF }), id);
   });
 
   it('is nothing when missing, disabled or not granted — never another engine', () => {
-    useWebSearch({ installed: [engine('qwant')] });
+    useWebSearch({ installed: [engine('staan')] });
     assert.equal(idOf('brave', { user: STAFF }), null);
-    useWebSearch({ installed: [engine('brave', { enabled: false }), engine('qwant')] });
+    useWebSearch({ installed: [engine('brave', { enabled: false }), engine('staan')] });
     assert.equal(idOf('brave', { user: STAFF }), null);
     useWebSearch({
-      installed: [engine('brave'), engine('qwant')],
-      groups: grantResearchOnly('qwant')
+      installed: [engine('brave'), engine('staan')],
+      groups: grantResearchOnly('staan')
     });
     assert.equal(idOf('brave', { user: RESEARCHER }), null);
     assert.equal(isWebSearchAvailableTo(RESEARCHER, 'brave'), false);
-    assert.equal(isWebSearchAvailableTo(RESEARCHER, 'qwant'), true);
+    assert.equal(isWebSearchAvailableTo(RESEARCHER, 'staan'), true);
   });
 
   it('is nothing when the id is an installation that is no engine', () => {
     useWebSearch({
       installed: [
         { id: 'jira', definition: 'com.intrafind/jira', definitionVersion: '1.0.0', enabled: true },
-        engine('qwant')
+        engine('staan')
       ]
     });
     assert.equal(idOf('jira', { user: STAFF }), null);
@@ -170,7 +170,7 @@ describe('a named engine', () => {
 
   it('can be a third-party engine', async () => {
     useWebSearch({
-      installed: [engine('acme'), engine('qwant')]
+      installed: [engine('acme'), engine('staan')]
     });
     assert.equal(idOf('acme', { user: STAFF }), 'acme');
     assert.equal(await resolveWebSearchEngineToolId('acme', { user: STAFF }), 'acme__search');
@@ -190,7 +190,7 @@ describe('describeWebSearchAvailability', () => {
       native: ['google', 'openai-responses', 'anthropic'],
       script: false
     });
-    useWebSearch({ installed: [engine('qwant')] });
+    useWebSearch({ installed: [engine('acme')] });
     assert.equal((await describeWebSearchAvailability(app('auto'), STAFF)).script, true);
     assert.equal((await describeWebSearchAvailability(app('brave'), STAFF)).script, false);
   });
@@ -203,7 +203,7 @@ describe('describeWebSearchAvailability', () => {
   });
 
   it('follows the user’s grant', async () => {
-    useWebSearch({ installed: [engine('qwant')], groups: grantResearchOnly('qwant') });
+    useWebSearch({ installed: [engine('acme')], groups: grantResearchOnly('acme') });
     assert.equal((await describeWebSearchAvailability(app('auto'), RESEARCHER)).script, true);
     assert.equal((await describeWebSearchAvailability(app('auto'), STAFF)).script, false);
   });
@@ -217,12 +217,10 @@ describe('describeWebSearchAvailability', () => {
 
 describe('sortWebSearchEngines', () => {
   it('puts the built-ins first in their order, then the others by id', () => {
-    const sorted = sortWebSearchEngines(
-      ['zeta', 'qwant', 'acme', 'staan', 'brave'].map(id => ({ id }))
-    );
+    const sorted = sortWebSearchEngines(['zeta', 'acme', 'staan', 'brave'].map(id => ({ id })));
     assert.deepEqual(
       sorted.map(e => e.id),
-      ['brave', 'staan', 'qwant', 'acme', 'zeta']
+      ['brave', 'staan', 'acme', 'zeta']
     );
   });
 
@@ -231,8 +229,7 @@ describe('sortWebSearchEngines', () => {
       BUILT_IN_ENGINES.map(e => [e.id, e.toolId, e.definition]),
       [
         ['brave', 'braveSearch', 'com.intrafind/brave-search'],
-        ['staan', 'staanSearch', 'com.intrafind/staan-search'],
-        ['qwant', 'qwantSearch', 'com.intrafind/qwant-search']
+        ['staan', 'staanSearch', 'com.intrafind/staan-search']
       ]
     );
   });

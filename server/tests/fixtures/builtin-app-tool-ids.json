@@ -81,8 +81,8 @@
       }
     },
     {
-      "id": "qwant",
-      "definition": "com.intrafind/qwant-search",
+      "id": "staan",
+      "definition": "com.intrafind/staan-search",
       "enabled": true,
       "values": {},
       "auth": {
@@ -231,19 +231,19 @@
       "expectedToolIds": ["braveSearch", "read_url"]
     },
     {
-      "name": "web search on Qwant",
+      "name": "web search on Staan",
       "app": {
         "id": "a13",
         "websearch": {
           "enabled": true,
           "enabledByDefault": true,
-          "provider": "qwant"
+          "provider": "staan"
         }
       },
       "context": {
         "modelProvider": "mistral"
       },
-      "expectedToolIds": ["qwantSearch", "read_url"]
+      "expectedToolIds": ["staanSearch", "read_url"]
     },
     {
       "name": "native search on Google: no tools",
