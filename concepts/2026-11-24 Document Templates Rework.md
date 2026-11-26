@@ -278,7 +278,8 @@ black after a colour was picked. That bug is reproduced first (Playwright) and f
 
 ## Migration
 
-`V264__document_templates_rework.js` (next number after `V263`). For every
+`V{NNN}__document_templates_rework.js`, with the next free number when the work starts (`V264` is
+taken on `main` by the removal of Qwant). For every
 `contents/document-templates/<id>/template.json`:
 
 - Move `document.margins` to `pdf.margins`, so a margin an admin set is not lost.
