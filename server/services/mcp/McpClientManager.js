@@ -1237,7 +1237,8 @@ function connectionChanged(a, b) {
   return (
     JSON.stringify(a.transport) !== JSON.stringify(b.transport) ||
     (a.auth?.type || 'none') !== (b.auth?.type || 'none') ||
-    (a.apps?.enabled !== false) !== (b.apps?.enabled !== false)
+    (a.apps?.enabled !== false) !== (b.apps?.enabled !== false) ||
+    (a.elicitation?.enabled !== false) !== (b.elicitation?.enabled !== false)
   );
 }
 

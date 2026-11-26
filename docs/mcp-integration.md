@@ -119,9 +119,14 @@ The forms carry what MCP elicitation allows: text (with the formats e-mail,
 URL, date and date-time), numbers, yes/no, a single choice and a multiple
 choice. Other field types are left out of the form.
 
-Elicitation is on for every MCP server. A shipped definition switches it off
-with `protocol.elicitation.enabled: false`; the generic MCP server definition
-reads `elicitationEnabled` from the installation's values.
+Elicitation is on for every MCP server unless switched off. On the
+installation (**Admin → Integrations → the server**, section **Actions**), the
+switch **Let the server ask chat users questions during a call** turns it off
+for that server: iHub then does not offer elicitation, and a well-behaved
+server goes on without asking. The choice is stored on the installation as
+`elicitation: { enabled }`; while the switch has never been changed, the
+definition decides (a shipped definition can set
+`protocol.elicitation.enabled: false`). A change reconnects the server.
 
 ### Transports
 

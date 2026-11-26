@@ -165,9 +165,14 @@ export function rawServerConfigFor({ definition, instance, values }) {
     deniedTools: policy.disabled || [],
     timeoutMs: instance.timeoutMs ?? protocol.timeoutMs ?? values.timeoutMs,
     apps: { enabled: protocol.apps?.enabled ?? values.appsEnabled ?? true },
-    // Questions the server asks the chat user mid-call (MCP elicitation).
+    // Questions the server asks the chat user mid-call (MCP elicitation):
+    // the admin's switch on the installation, else the definition's.
     elicitation: {
-      enabled: protocol.elicitation?.enabled ?? values.elicitationEnabled ?? true
+      enabled:
+        instance.elicitation?.enabled ??
+        protocol.elicitation?.enabled ??
+        values.elicitationEnabled ??
+        true
     },
     reconnect: reconnectFor(protocol, values)
   });

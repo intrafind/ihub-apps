@@ -5091,7 +5091,9 @@
         "description": "Description",
         "descriptionHelp": "What this installation holds, for admins and — where the integration reads it, like a people directory — for the model: say what is in it and what to search by.",
         "alwaysInstalledHelp": "This integration is always installed and enabled; switch single actions off below instead.",
-        "onePerLine": "One entry per line"
+        "onePerLine": "One entry per line",
+        "elicitation": "Let the server ask chat users questions during a call",
+        "elicitationHelp": "The server can ask for a confirmation or a missing value while one of its tools runs; the chat shows a form. Off: the server is not offered this, and goes on without asking."
       },
       "connections": {
         "title": "Connected users",

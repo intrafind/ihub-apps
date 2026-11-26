@@ -28,9 +28,8 @@ document plans the three client-side pieces and says what blocks File Uploads.
 As built, the question is a `question` interaction on a child run of the chat
 run (the chat-launched workflow pattern), shown by its own form card and
 answered on the runs endpoint; a per-call AsyncLocalStorage scope finds the
-chat on the shared connection. Still open: URL mode, and an admin switch in the
-installation form (today `protocol.elicitation.enabled` in a definition or
-`elicitationEnabled` in the generic definition's values).
+chat on the shared connection. Admins switch it off per installation
+(`elicitation: { enabled }`). Still open: URL mode.
 
 The original plan follows.
 

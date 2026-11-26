@@ -5597,7 +5597,9 @@
         "description": "Beschreibung",
         "descriptionHelp": "Was diese Installation enthält – für Administratoren und, wo die Integration sie liest (ein Personenverzeichnis), für das Modell: sagen, was enthalten ist und wonach gesucht wird.",
         "alwaysInstalledHelp": "Diese Integration ist immer installiert und aktiv; schalten Sie stattdessen unten einzelne Aktionen ab.",
-        "onePerLine": "Ein Eintrag pro Zeile"
+        "onePerLine": "Ein Eintrag pro Zeile",
+        "elicitation": "Dem Server erlauben, Chat-Nutzern während eines Aufrufs Fragen zu stellen",
+        "elicitationHelp": "Der Server kann während eines Tool-Aufrufs um eine Bestätigung oder einen fehlenden Wert bitten; der Chat zeigt dafür ein Formular. Aus: Dem Server wird das nicht angeboten, und er arbeitet ohne Rückfrage weiter."
       },
       "connections": {
         "title": "Verbundene Benutzer",
