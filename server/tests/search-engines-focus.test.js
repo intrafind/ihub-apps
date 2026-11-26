@@ -28,7 +28,7 @@ const PARAMETERS = JSON.parse(
 );
 
 describe('the search engines accept a focus', () => {
-  test.each(['brave', 'staan'])(
+  test.each(['brave', 'staan', 'searxng'])(
     '%s declares it as an optional string next to extractContent',
     engine => {
       const { properties, required } = PARAMETERS[engine].parameters;
@@ -41,7 +41,7 @@ describe('the search engines accept a focus', () => {
     }
   );
 
-  test.each(['braveSearch', 'staanSearch'])(
+  test.each(['braveSearch', 'staanSearch', 'searxngSearch'])(
     '%s hands the focus to the search extraction',
     async file => {
       const { default: search } = await import(`../tools/${file}.js`);

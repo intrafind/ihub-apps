@@ -61,9 +61,12 @@ import {
   addUploadedItem,
   isMultipart,
   receiveUpload,
+  receiveImport,
+  importItems,
   refreshItem,
   replaceItemText,
-  sendItemText
+  sendItemText,
+  sendItemOriginal
 } from '../projectItemRoutes.js';
 import { getItemText } from '../../services/knowledge/ItemTextService.js';
 import { estimateProject } from '../../services/projects/projectEstimate.js';
@@ -682,6 +685,26 @@ export default function registerAdminProjectsRoutes(app) {
 
   // --- items of admin projects ---------------------------------------------
 
+  // Upload a file or a ZIP archive (one document per file it holds). Before
+  // `/:id/items/:itemId`, so `_import` is never taken for an item id.
+  app.post(
+    route('/:id/items/_import'),
+    ...gate,
+    contentAdminAuth,
+    async (req, res, next) => {
+      const project = await loadAdminProject(req);
+      req.project = project;
+      if (!isMultipart(req)) return next();
+      receiveImport(req, res, next);
+    },
+    async (req, res) =>
+      importItems(req, res, {
+        project: req.project,
+        admin: true,
+        location: `/api/admin/projects/${encodeURIComponent(req.project.id)}/items`
+      })
+  );
+
   app.post(
     route('/:id/items'),
     ...gate,
@@ -789,6 +812,11 @@ export default function registerAdminProjectsRoutes(app) {
   app.get(route('/:id/items/:itemId/text'), ...gate, contentAdminAuth, async (req, res) => {
     const project = await loadAdminProject(req);
     return sendItemText(req, res, { project });
+  });
+
+  app.get(route('/:id/items/:itemId/original'), ...gate, contentAdminAuth, async (req, res) => {
+    const project = await loadAdminProject(req);
+    return sendItemOriginal(req, res, { project });
   });
 
   app.put(route('/:id/items/:itemId/text'), ...gate, contentAdminAuth, async (req, res) => {

@@ -22,9 +22,11 @@ import { fetchSharedArtifact } from '../../../api';
  * @param {Object} props - Component properties.
  * @param {Object} props.share - Viewer's view of the share (`artifact`, `title`, …).
  * @param {(value: string, language?: string) => string} props.formatDate - Date formatter.
+ * @param {Array<Object>} [props.extraMore] - ⋯ items the page adds ("Use in app…",
+ *   "Copy to project…" for a signed-in viewer).
  * @returns {JSX.Element}
  */
-export default function SharedArtifactView({ share, formatDate }) {
+export default function SharedArtifactView({ share, formatDate, extraMore = [] }) {
   const { t, i18n } = useTranslation();
   const [searchParams] = useSearchParams();
   const embed = searchParams.get('embed') === '1';
@@ -84,6 +86,7 @@ export default function SharedArtifactView({ share, formatDate }) {
       artifacts={[]}
       getBlob={getBlob}
       toolbarExtra={extra}
+      extraMore={extraMore}
     />
   );
 }

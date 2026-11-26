@@ -186,5 +186,11 @@
       "sideEffect": "write",
       "dataFlow": "internal"
     }
+  },
+  "com.intrafind/searxng-search": {
+    "search": {
+      "sideEffect": "read",
+      "dataFlow": "external"
+    }
   }
 }

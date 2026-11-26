@@ -856,7 +856,7 @@
           "serverTextOnly": "Only the text (the server extracts it and discards the file)",
           "clientTextOnly": "Only the text, extracted in the browser (files never leave the device)"
         },
-        "storageModeHelp": "An app can override this in its settings. Word, PowerPoint, Excel and PDF files can only be used as templates or filled in while the original is kept.",
+        "storageModeHelp": "Also applies to files uploaded to projects. An app can override this for its chats, not for projects. Word, PowerPoint, Excel and PDF files can only be used as templates or filled in while the original is kept.",
         "originalRetentionDays": "Keep original files (days)",
         "originalRetentionDaysHelp": "After this many days only the text of a chat file stays, until the chat itself is deleted. Files attached to scheduled tasks are kept as long as the task exists. 0 keeps originals as long as the chat.",
         "evict": "Make room by removing the oldest originals",
@@ -3409,7 +3409,7 @@
         },
         "WebSearch": {
           "name": "Web Search",
-          "description": "Web search requests to Brave, Staan and other search engines"
+          "description": "Web search requests to Brave, Staan, SearXNG and other search engines"
         },
         "McpClientManager": {
           "name": "MCP Clients",
@@ -3967,7 +3967,7 @@
         "websearchEnabled": "Enable Web Search",
         "websearchProvider": "Search engine",
         "websearchProviderAuto": "Auto",
-        "websearchProviderDesc": "Models with native search (Google, OpenAI, Anthropic) search themselves when Use Native Search is on; no engine is needed for that. On other models the app uses this engine. Auto takes the first engine the user may use: Brave, Staan, then any other engine.",
+        "websearchProviderDesc": "Models with native search (Google, OpenAI, Anthropic) search themselves when Use Native Search is on; no engine is needed for that. On other models the app uses this engine. Auto takes the first engine the user may use: Brave, Staan, SearXNG, then any other engine.",
         "websearchEngineDisabledOption": "{{name}} — disabled",
         "websearchEngineMissingOption": "{{name}} — not installed",
         "websearchEngineMissing": "The engine \"{{engine}}\" is not installed. The app searches natively where the model can and not at all on other models. Install it under Integrations or pick Auto.",
@@ -5282,6 +5282,8 @@
         },
         "secretSet": "set",
         "secretNotSet": "not set",
+        "instanceUrl": "Instance",
+        "authorization": "Authorization",
         "yes": "yes",
         "no": "no",
         "directoryType": "Directory type",
@@ -5343,13 +5345,14 @@
         },
         "webSearch": {
           "engineSection": "Search engine",
-          "engineSectionHelp": "Apps with web search on use this engine when they name it, or on Auto when it is the first engine a user may use (Brave, Staan, then any other engine). Models with native search do not need an engine.",
+          "engineSectionHelp": "Apps with web search on use this engine when they name it, or on Auto when it is the first engine a user may use (Brave, Staan, SearXNG, then any other engine). Models with native search do not need an engine.",
           "apiKey": "API key",
           "apiKeyHelp": "A credential of type secret holding the {{engine}} API key. Add one under Admin → Integrations → Credentials.",
           "envFallback": "Without a credential, the server uses the environment variable {{env}} when it is set. A picked credential always wins.",
           "noKeyNeeded": "{{engine}} needs no API key.",
+          "searxngHint": "SearXNG has no API key. The instance must list json under search.formats in its settings.yml, or it answers HTTP 403. SearXNG forwards each query to the search engines enabled in it; which ones is decided there, not in iHub. Run Test connection to check the URL and the JSON output.",
           "testResults": "Search engine test",
-          "testHelp": "The test checks the API key of the values above (unsaved) and runs one live search from this server."
+          "testHelp": "The test checks the API key or the instance URL of the values above (unsaved) and runs one live search from this server."
         },
         "ifinder": {
           "privateKey": "Private key",
@@ -10445,7 +10448,11 @@
       "sheets": "{{count}} sheets",
       "open": "Open",
       "share": "Share",
-      "shareNamed": "Share {{name}}"
+      "shareNamed": "Share {{name}}",
+      "moreNamed": "More actions for {{name}}",
+      "more": "More actions",
+      "useInApp": "Use in app…",
+      "copyToProject": "Copy to project…"
     },
     "readAloud": "Read aloud",
     "readAloudLoading": "Loading audio… click to cancel",
@@ -13049,7 +13056,8 @@
       "linkFromAppsDetail": "Comes with one of your apps",
       "nothingToAdd": "This kind of item is not available here.",
       "ifinderProfile": "Search in",
-      "crawlOtherHosts": "Include files on other websites"
+      "crawlOtherHosts": "Include files on other websites",
+      "archiveHint": "A ZIP archive is unpacked: each supported file in it becomes a document."
     },
     "chatBar": {
       "inProject": "In project: {{name}}",
@@ -13124,7 +13132,8 @@
       "ifinderWritePartial": "iFinder reported an error after part of the change went through: {{done}} done, {{not}} not. Reload the collection and try again.",
       "ifinderWriteNone": "iFinder reported an error and nothing was changed. Try again in a moment.",
       "ifinderWriteUnknown": "iFinder did not answer, so it is not known whether the change went through. Reload the collection to see.",
-      "kindNotAllowed": "A smart collection from iFinder holds iFinder documents only."
+      "kindNotAllowed": "A smart collection from iFinder holds iFinder documents only.",
+      "downloadNotSaved": "The file arrived, but the browser did not save it. Please try again."
     },
     "form": {
       "description": "Description",
@@ -13152,7 +13161,9 @@
         "transfer": "Move or copy to…",
         "openInIFinder": "Open in iFinder",
         "edit": "Edit",
-        "schedule": "Refresh schedule"
+        "schedule": "Refresh schedule",
+        "downloadOriginal": "Download original",
+        "useInApp": "Use in app…"
       },
       "add": "Add documents",
       "columns": {
@@ -13285,7 +13296,10 @@
       "pickedFrom": "Picked from {{site}}",
       "snapshot": "text taken {{date}}",
       "uploaded": "Uploaded",
-      "linkedFrom": "Linked from {{project}}"
+      "linkedFrom": "Linked from {{project}}",
+      "fromArchive": "From {{archive}}",
+      "fromChat": "From a chat",
+      "fromShare": "From a shared file"
     },
     "roles": {
       "admin": "From an app",
@@ -13517,6 +13531,37 @@
       "refreshingNotice_other": "Refreshing {{count}} outdated documents. Answers use the stored text until they are done.",
       "outdatedNotice_one": "{{count}} document is outdated. It is refreshed the next time the project is used in a chat or a search; answers use the stored text until then.",
       "outdatedNotice_other": "{{count}} documents are outdated. They are refreshed the next time the project is used in a chat or a search; answers use the stored text until then."
+    },
+    "import": {
+      "title": "Copy to project",
+      "subtitle": "A copy of “{{name}}” is added to the project as a document. It stays there when this chat is deleted.",
+      "loading": "Loading your projects…",
+      "noProjects": "You have no project you can add documents to. Ask the owner of a project to make you an editor.",
+      "choose": "Project",
+      "newProject": "New project",
+      "newProjectName": "Name of the new project",
+      "newProjectHint": "It stays private until you share it.",
+      "nameRequired": "Enter a name for the new project.",
+      "nameTooLong": "The name is too long.",
+      "whoSees": "Who sees it: {{audience}}",
+      "skippedEntry": "{{name}}: {{reason}}",
+      "copying": "Copying…",
+      "submit": "Copy",
+      "addedTo_one": "{{count}} document added to {{project}}.",
+      "addedTo_other": "{{count}} documents added to {{project}}.",
+      "added_one": "{{count}} document added.",
+      "added_other": "{{count}} documents added.",
+      "skipped_one": "{{count}} skipped:",
+      "skipped_other": "{{count}} skipped:",
+      "openProject": "Open project",
+      "audience": {
+        "everyone": "Everyone signed in",
+        "catalog": "Everyone signed in (published in the catalog)",
+        "members_one": "Shared with {{count}} person or group",
+        "members_other": "Shared with {{count}} people or groups",
+        "private": "Only you"
+      },
+      "doneTitle": "Copied to project"
     }
   },
   "integrationScopes": {
@@ -13625,7 +13670,9 @@
     "pageNotFound": "This file could not be found.",
     "promptRequest": "The artifact wants to ask in the chat:",
     "promptSend": "Send",
-    "promptBusy": "An answer is still being written. Send once it is done."
+    "promptBusy": "An answer is still being written. Send once it is done.",
+    "useInApp": "Use in app…",
+    "copyToProject": "Copy to project…"
   },
   "chatFiles": {
     "deleted": "{{name}} deleted.",
@@ -14443,6 +14490,21 @@
       "userApps": "You may not create personal apps.",
       "share": "You may not share personal apps.",
       "ownerMayNotShare": "The owner of this app may not share it, so it cannot be shared."
+    }
+  },
+  "useInApp": {
+    "title": "Use in app",
+    "subtitle": "A new chat of the app you pick starts with a copy of “{{name}}” attached.",
+    "search": "Search apps",
+    "loading": "Loading apps…",
+    "loadFailed": "The apps could not be loaded. Please try again.",
+    "noApps": "None of your apps accepts this kind of file.",
+    "noMatch": "No app matches your search.",
+    "attach": {
+      "modelCannot": "The file could not be attached: the selected model cannot take this kind of file.",
+      "noServerFiles": "The document could not be attached: this installation does not keep chat files.",
+      "refused": "The file could not be attached: {{detail}}",
+      "failed": "The file could not be attached. Please try again."
     }
   }
 }

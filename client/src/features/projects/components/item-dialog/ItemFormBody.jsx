@@ -12,6 +12,8 @@ import {
   validateItemCount,
   validateUploads
 } from '../../utils/projectItems';
+import { uploadProjectFiles } from '../../utils/projectImport';
+import ProjectImportSummary from '../ProjectImportSummary';
 import { DisabledTabNotice, LinkKindPicker, TextPicker, UploadPicker } from './ItemPickers';
 import { INPUT_CLASS, LABEL_CLASS, PRIMARY_BUTTON, SECONDARY_BUTTON } from './dialogStyles';
 
@@ -75,36 +77,6 @@ function validationMessage(t, code, config) {
 }
 
 /**
- * Upload the files one by one (each is its own request with its own status,
- * spec 3 §2). A failure does not stop the others.
- *
- * @returns {Promise<{added: Array<Object>, uploaded: Array<File>, failures: string[]}>}
- *   `uploaded`: the files that were added.
- */
-async function uploadAll(api, projectId, files, { name, pinned }) {
-  const added = [];
-  const uploaded = [];
-  const failures = [];
-  for (const file of files) {
-    try {
-      added.push(
-        await api.uploadItem(projectId, {
-          file,
-          name: files.length === 1 ? name || undefined : undefined,
-          pinned
-        })
-      );
-      uploaded.push(file);
-    } catch (err) {
-      failures.push(
-        files.length === 1 ? api.errorMessage(err) : `${file.name}: ${api.errorMessage(err)}`
-      );
-    }
-  }
-  return { added, uploaded, failures };
-}
-
-/**
  * Add the pages picked from a site crawl one by one; a failure does not stop
  * the others.
  *
@@ -165,6 +137,9 @@ function ItemFormBody({
   const [files, setFiles] = useState([]);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState(null);
+  // What the imported ZIP archives did, while one of them skipped entries: the dialog
+  // stays open so the user can read which and why.
+  const [archiveReports, setArchiveReports] = useState([]);
   const [pages, setPages] = useState(null);
   const update = changes => setDraft(prev => ({ ...prev, ...changes }));
   // Pages picked from a site crawl: added instead of the URL in the field.
@@ -200,16 +175,23 @@ function ItemFormBody({
     const uploadError = validateUploads(files, config, usage);
     if (uploadError) return setError(validationMessage(t, uploadError, config));
     markSubmitting(true);
-    const { added, uploaded, failures } = await uploadAll(api, projectId, files, {
-      name: draft.name.trim(),
-      pinned: draft.pinned
-    });
+    setArchiveReports([]);
+    const { added, uploaded, failures, archives } = await uploadProjectFiles(
+      api,
+      projectId,
+      files,
+      { name: draft.name.trim(), pinned: draft.pinned },
+      t
+    );
     if (added.length > 0) onAdded(added.at(-1));
     // The added files leave the selection: after a partial failure, Add
     // retries only the files that failed instead of adding the others again.
     setFiles(prev => prev.filter(file => !uploaded.includes(file)));
     markSubmitting(false);
+    const withSkipped = archives.filter(archive => archive.summary.skipped.length > 0);
+    setArchiveReports(withSkipped);
     if (failures.length > 0) return setError(failures.join('\n'));
+    if (withSkipped.length > 0) return undefined;
     return onClose();
   };
 
@@ -267,6 +249,7 @@ function ItemFormBody({
             onFilesChange={setFiles}
             config={config}
             multiple={multipleUploads}
+            acceptArchives={typeof api.importItem === 'function'}
           />
         );
       case 'text':
@@ -336,6 +319,20 @@ function ItemFormBody({
           <p role="alert" className="text-sm text-red-600 dark:text-red-400 whitespace-pre-line">
             {error}
           </p>
+        )}
+        {archiveReports.length > 0 && (
+          <div
+            role="status"
+            className="space-y-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-100"
+            data-testid="project-archive-report"
+          >
+            {archiveReports.map(report => (
+              <div key={report.name}>
+                <p className="text-xs font-semibold">{report.name}</p>
+                <ProjectImportSummary summary={report.summary} />
+              </div>
+            ))}
+          </div>
         )}
       </div>
 

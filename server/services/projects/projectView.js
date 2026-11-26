@@ -60,12 +60,25 @@ function memberView(member) {
  */
 export function serializeItem(item, project = null, settings = null) {
   // `ingestAttempt` is the server's fencing token of a running ingest job.
-  const { text, ingestAttempt: _attempt, ...rest } = item;
+  // `originalFile` holds the wrapped key of the original: only whether there
+  // is one, and what it is, goes out.
+  const { text, originalFile, ingestAttempt: _attempt, ...rest } = item;
   const refresh = refreshScheduleOf(item, project, settings || currentSettings());
   return {
     ...rest,
     ref: item.ref || {},
     ...(refresh ? { refresh } : {}),
+    hasOriginal: Boolean(originalFile?.blobKey),
+    ...(originalFile?.blobKey
+      ? {
+          original: {
+            name: originalFile.name,
+            contentType: originalFile.contentType,
+            size: originalFile.size,
+            storedAt: originalFile.storedAt
+          }
+        }
+      : {}),
     text: text
       ? {
           chars: text.chars,

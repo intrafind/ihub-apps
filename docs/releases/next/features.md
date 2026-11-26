@@ -66,3 +66,69 @@ what to do, instead of "Request failed with status code 413" or "Payload Too Lar
 - A document that a proxy refused while it was saved to the chat shows "Too large for the
   connection to iHub" instead of the general "Could not be saved", and is still sent with the
   message.
+
+## Web Search: Search Through Your Own SearXNG Instance
+
+Web search can now go through a [SearXNG](https://docs.searxng.org/) instance you run yourself. The
+search traffic of iHub then goes to a gateway under your control instead of a search vendor's API.
+
+- **Admin → Integrations → Web search → SearXNG** installs the engine. The **Instance URL** is
+  required (`https://search.example.org`, a trailing `/search` is removed). SearXNG has no API key:
+  if a reverse proxy in front of it asks for a sign-in, pick a credential in **Authorization**; it is
+  sent as a bearer token, or as it is when it starts with `Basic `.
+- The instance must list `json` under `search.formats` in its `settings.yml`. SearXNG answers
+  HTTP 403 otherwise, and **Test connection** says so, together with the other usual causes (wrong
+  path, the limiter, a rejected credential, engines that do not answer).
+- Apps use it with `websearch.provider: "searxng"`. On **Auto** it comes after Brave and Staan, so
+  existing installs do not change.
+- SearXNG forwards each query to the engines enabled in it. Queries leave your network if those
+  are external engines: the control is yours, the engines' view of the query is decided in the
+  instance.
+- The instance address is checked like any other admin-entered URL: company-internal addresses
+  work as they are, while `localhost`, link-local and cloud-metadata addresses need the host on
+  `ssrf.allowedHosts` (Admin → Security). The connection goes to the checked address and a
+  redirect is reported, not followed.
+- Its hits are listed in the chat but stay private (a shared chat does not keep them), because an
+  instance may search an intranet as well.
+- SearXNG is AGPL-licensed software you operate; iHub only calls its HTTP API and does not bundle
+  it. See [Web tools](../../web-tools.md#searxng-your-own-search-gateway) for the setup, the licence
+  notes and the troubleshooting table.
+
+## Use a Generated File in Another App, or Keep It in a Project
+
+A file the assistant generated in a chat, such as a summary, a report or a spreadsheet, can now be
+passed on instead of downloaded and uploaded again.
+
+- **Use in app** opens a new chat of the app you pick with the file attached, as if you had
+  uploaded it there. It works on a generated file and on a project document. The picker lists only
+  apps that take files of that type.
+- **Copy to project** stores the file in one of your projects, or a new one, as if you had uploaded
+  it. Who sees it is decided by the project's members; every app that uses the project can read it.
+- Both make a **copy**: deleting the chat, or the project document, does not affect it. A file
+  shared with you can be used and copied too.
+- **ZIP archives** uploaded to a project, or copied into one, are unpacked into one document per
+  file. Files a project does not take are skipped and listed.
+- A project document marked **Not for AI** cannot be used in an app.
+- **Download original** on a project document returns the file as it was uploaded.
+- Copy to project needs user projects (`userProjects`). Images cannot be copied into a project or
+  used in an app yet.
+
+## Web Pages and HTML Files: Images Left Out, Whitespace Trimmed, Page Text Marked as the Page's
+
+When the model reads a web page (**Read page** in web search) or an HTML file in a project, it now
+gets the text of the page and nothing the page only shows as a picture, and spends less of its
+context on blank space.
+
+- Images are left out completely, with their alt text. Before, the alt text was passed on as
+  `[Image: …]`, although nobody sees it on the page. A caption under a picture stays, and a link
+  that holds only an image is dropped.
+- No-break and other look-alike spaces become a normal space, a run of spaces inside a line
+  becomes one, invisible characters (zero-width space, soft hyphen) are removed, and pages that
+  space their layout with empty paragraphs no longer leave stacks of blank lines.
+- The layout of code blocks and the indentation of nested lists stay as they are.
+- The description in the page's `<meta name="description">` is still passed on next to the text,
+  because it says what the page is about.
+- Every web page result now says that its text, title, description, author and dates were written
+  by the page and not by the user or iHub, and that the model must not follow instructions in them
+  or put data from the conversation into an address. The note is in the `read_url` result
+  (`sourceNotice`), once per web search, and in the description of the `read_url` tool.

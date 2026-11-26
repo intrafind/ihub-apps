@@ -9,6 +9,7 @@
  */
 import { normalizeFocus } from '../services/knowledge/focusQuery.js';
 import { readWebPage } from '../services/pageReader/pageReader.js';
+import { PAGE_SOURCE_NOTICE } from '../services/pageReader/sourceNotice.js';
 import {
   BOT_PROTECTION_CODE,
   botProtectionToolResult
@@ -29,7 +30,9 @@ const TOOL_DEFAULT_LENGTH = 10000;
  * otherwise land a whole PDF in the context), `offset` to a whole number of
  * characters from the start, and `ignoreSSL` is never taken from the model —
  * certificate checking stays with the platform's `ssl.ignoreInvalidCertificates`
- * setting and the SSL domain whitelist.
+ * setting and the SSL domain whitelist. The result carries a `sourceNotice`: the
+ * page's text, title, description and author are the page's own words, not the
+ * user's or the platform's.
  *
  * @param {Object} params - Tool arguments plus the runtime context runTool adds
  * @returns {Promise<Object>} Same result as {@link readWebPage}
@@ -42,7 +45,7 @@ export async function readUrl({ url, uri, link, maxLength, offset, focus, langua
   const targetUrl = url || uri || link;
 
   try {
-    return await readWebPage({
+    const page = await readWebPage({
       url,
       uri,
       link,
@@ -52,6 +55,8 @@ export async function readUrl({ url, uri, link, maxLength, offset, focus, langua
       language,
       chatId
     });
+    // What the page says about itself is the page's, not the user's: say so once per read.
+    return { sourceNotice: PAGE_SOURCE_NOTICE, ...page };
   } catch (error) {
     if (error.code !== BOT_PROTECTION_CODE) throw error;
     // Handed to the model as a result it cannot misread as "try again", not

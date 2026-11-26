@@ -179,8 +179,10 @@ function linkDestination(href) {
 
 /**
  * Turndown with the rules the reader needs: ATX headings, fenced code, GFM
- * tables, and no images (an image URL is noise to a model; its alt text is
- * kept).
+ * tables, and no images at all: neither the URL nor the alt text reaches the
+ * model (a URL is noise, and alt text is text nobody sees on the page, which
+ * makes it a place to hide instructions). A caption in a `<figcaption>` is
+ * ordinary text and stays.
  * @returns {TurndownService}
  */
 export function createMarkdownConverter() {
@@ -194,13 +196,8 @@ export function createMarkdownConverter() {
 
   service.remove(['script', 'style', 'noscript', 'iframe', 'svg', 'canvas', 'form', 'button']);
 
-  service.addRule('image', {
-    filter: 'img',
-    replacement: (_content, node) => {
-      const alt = (node.getAttribute('alt') || '').replaceAll(/\s+/g, ' ').trim();
-      return alt ? `[Image: ${alt}]` : '';
-    }
-  });
+  // Rules, not `remove`: Turndown's own image rule is an ordinary rule and wins over it.
+  service.addRule('image', { filter: ['img', 'picture'], replacement: () => '' });
 
   // Links keep their text and target, not their tooltip. A link inside the
   // page (`#section`) is only its text — heading anchors, "back to top" — and a
@@ -274,15 +271,113 @@ export function createMarkdownConverter() {
 
 const converter = createMarkdownConverter();
 
+/** Spaces that look like one but are not ASCII: no-break, en/em, thin, ideographic. */
+const UNICODE_SPACES = /[\u00A0\u1680\u2000-\u200A\u202F\u205F\u3000]/g;
+
+/** Characters that render as nothing: soft hyphen, zero-width space, word joiner, BOM. */
+const INVISIBLE = /[\u00AD\u200B\u2060\uFEFF]/g;
+
+const FENCE_MARKER = /^(`{3,}|~{3,})/;
+const LEADING_UNICODE_SPACES = new RegExp(`^(?:${UNICODE_SPACES.source})+`);
+
+const isBlank = char => char === ' ' || char === '\t';
+const isDigit = char => char >= '0' && char <= '9';
+
 /**
- * Tidy converted Markdown: no trailing spaces, at most one blank line in a row.
+ * Where the content of a line starts, after its container prefix: blockquote
+ * markers (`>`), list markers (`-` `*` `+` `1.` `1)`) and indentation. Scanned
+ * by hand: a regular expression for nested, repeated prefixes backtracks.
+ * @param {string} line
+ * @returns {number}
+ */
+function contentStart(line) {
+  let at = 0;
+  for (;;) {
+    let next = at;
+    while (isBlank(line[next])) next++;
+    const char = line[next];
+    if (char === '>' || char === '-' || char === '*' || char === '+') {
+      at = next + 1;
+      continue;
+    }
+    let digitsEnd = next;
+    while (isDigit(line[digitsEnd])) digitsEnd++;
+    if (digitsEnd > next && (line[digitsEnd] === '.' || line[digitsEnd] === ')')) {
+      at = digitsEnd + 1;
+      continue;
+    }
+    return next;
+  }
+}
+
+/**
+ * The fence a line opens or closes, or `null`: Turndown writes fenced code
+ * only, so a line that starts with three backticks or tildes after its
+ * container prefix is a fence, however deeply the block is nested. A list item
+ * that starts with a code block has its opening fence right after the marker
+ * (`- ```).
+ * @param {string} line
+ * @returns {{marker: string, rest: string}|null}
+ */
+function fenceOf(line) {
+  const content = line.slice(contentStart(line));
+  const marker = FENCE_MARKER.exec(content)?.[1];
+  return marker ? { marker, rest: content.slice(marker.length) } : null;
+}
+
+/** A line without its trailing spaces and tabs (linear, unlike `/[ \t]+$/`). */
+function trimTrailingBlanks(line) {
+  let end = line.length;
+  while (end > 0 && isBlank(line[end - 1])) end--;
+  return line.slice(0, end);
+}
+
+/**
+ * Tidy converted Markdown so a page does not spend the model's budget on
+ * whitespace: look-alike spaces become one space and invisible characters
+ * go, a run of spaces inside a line becomes one, no trailing spaces, at most
+ * one blank line in a row. Indentation (nested lists) is kept, and so is
+ * everything inside a fenced code block except trailing spaces and blank-line
+ * runs.
+ *
+ * Zero-width joiners (U+200C, U+200D) stay: scripts such as Persian and
+ * Devanagari need them.
+ *
  * @param {string} markdown
  * @returns {string}
  */
 export function normalizeMarkdown(markdown) {
-  return String(markdown || '')
+  let fence = null;
+  const lines = String(markdown || '')
     .replaceAll(/\r\n?/g, '\n')
-    .replaceAll(/[ \t]+$/gm, '')
+    .split('\n')
+    .map(line => {
+      const found = fenceOf(line);
+      let inCode = fence !== null;
+      if (found) {
+        if (fence === null) {
+          fence = found.marker;
+          inCode = true;
+        } else if (
+          found.marker.startsWith(fence[0]) &&
+          found.marker.length >= fence.length &&
+          found.rest.trim() === ''
+        ) {
+          fence = null;
+        }
+      }
+      if (inCode) return trimTrailingBlanks(line);
+      return trimTrailingBlanks(
+        line
+          // Turndown indents with ASCII spaces: a Unicode space at the start is page noise.
+          .replace(LEADING_UNICODE_SPACES, '')
+          .replaceAll(UNICODE_SPACES, ' ')
+          .replaceAll(INVISIBLE, '')
+          .replaceAll(/(\S)[ \t]{2,}(?=\S)/g, '$1 ')
+      );
+    });
+  return lines
+    .join('\n')
     .replaceAll(/\n{3,}/g, '\n\n')
     .trim();
 }
@@ -327,17 +422,14 @@ function textLength(markdown) {
 }
 
 /**
- * Point every link and image of `element` at its absolute URL (the DOM
- * resolves them against the page's URL), so the Markdown carries links the
- * model can open. Readability does this for its own output.
+ * Point every link of `element` at its absolute URL (the DOM resolves them
+ * against the page's URL), so the Markdown carries links the model can open.
+ * Readability does this for its own output.
  * @param {Element} element - mutated
  */
 function absolutizeLinks(element) {
   for (const link of element.querySelectorAll('a[href]')) {
     if (link.href) link.setAttribute('href', link.href);
-  }
-  for (const image of element.querySelectorAll('img[src]')) {
-    if (image.src) image.setAttribute('src', image.src);
   }
 }
 

@@ -21,6 +21,11 @@ import { createContext, useContext } from 'react';
  * - `activeId` — the id of the item open in the pane, for a card's active state.
  * - `shareArtifact(descriptor)` — the share dialog for one stored artifact; only
  *   present when the chat can be shared.
+ * - `openArtifactInApp(descriptor)` — "Use in app…": the app picker for one
+ *   stored artifact; only present where another app's chat can be opened.
+ * - `copyArtifactToProject(descriptor)` — "Copy to project…" for one stored
+ *   artifact; only present where user projects are on. The card still checks
+ *   `canCopyArtifactToProject` (no pictures).
  *
  * @type {import('react').Context<Object|null>}
  */
@@ -31,7 +36,8 @@ export default ArtifactViewerContext;
 /**
  * @returns {{ openArtifact: Function, openFile?: Function, openFiles?: Function,
  *   openSource?: Function, sourcesInPane?: boolean, activeId?: string|null,
- *   shareArtifact?: Function|null }|null}
+ *   shareArtifact?: Function|null, openArtifactInApp?: Function|null,
+ *   copyArtifactToProject?: Function|null }|null}
  */
 export function useArtifactViewer() {
   return useContext(ArtifactViewerContext);

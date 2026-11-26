@@ -888,7 +888,11 @@
       "sheets": "{{count}} Tabellenblätter",
       "open": "Öffnen",
       "share": "Teilen",
-      "shareNamed": "{{name}} teilen"
+      "shareNamed": "{{name}} teilen",
+      "moreNamed": "Weitere Aktionen für {{name}}",
+      "more": "Weitere Aktionen",
+      "useInApp": "In App verwenden…",
+      "copyToProject": "In Projekt kopieren…"
     },
     "readAloud": "Vorlesen",
     "readAloudLoading": "Audio wird geladen… Klicken zum Abbrechen",
@@ -1332,7 +1336,7 @@
           "serverTextOnly": "Nur den Text (der Server extrahiert ihn und verwirft die Datei)",
           "clientTextOnly": "Nur den Text, im Browser extrahiert (Dateien verlassen das Gerät nie)"
         },
-        "storageModeHelp": "Eine App kann dies in ihren Einstellungen überschreiben. Word-, PowerPoint-, Excel- und PDF-Dateien lassen sich nur als Vorlage verwenden oder ausfüllen, solange das Original gespeichert ist.",
+        "storageModeHelp": "Gilt auch für Dateien, die in Projekte hochgeladen werden. Eine App kann dies für ihre Chats überschreiben, nicht für Projekte. Word-, PowerPoint-, Excel- und PDF-Dateien lassen sich nur als Vorlage verwenden oder ausfüllen, solange das Original gespeichert ist.",
         "originalRetentionDays": "Originaldateien aufbewahren (Tage)",
         "originalRetentionDaysHelp": "Nach so vielen Tagen bleibt von einer Chat-Datei nur der Text, bis der Chat selbst gelöscht wird. An geplante Aufgaben angehängte Dateien bleiben, solange die Aufgabe existiert. 0 behält Originale, solange der Chat existiert.",
         "evict": "Platz schaffen durch Entfernen der ältesten Originale",
@@ -3911,7 +3915,7 @@
         },
         "WebSearch": {
           "name": "Websuche",
-          "description": "Suchanfragen an Brave, Staan und andere Suchmaschinen"
+          "description": "Suchanfragen an Brave, Staan, SearXNG und andere Suchmaschinen"
         },
         "McpClientManager": {
           "name": "MCP-Clients",
@@ -4469,7 +4473,7 @@
         "websearchEnabled": "Websuche aktivieren",
         "websearchProvider": "Suchmaschine",
         "websearchProviderAuto": "Automatisch",
-        "websearchProviderDesc": "Modelle mit eigener Websuche (Google, OpenAI, Anthropic) suchen selbst, wenn „Native Suche verwenden“ an ist; dafür ist keine Suchmaschine nötig. Bei anderen Modellen nutzt die App diese Suchmaschine. „Automatisch“ nimmt die erste Suchmaschine, die der Benutzer nutzen darf: Brave, Staan, dann jede weitere.",
+        "websearchProviderDesc": "Modelle mit eigener Websuche (Google, OpenAI, Anthropic) suchen selbst, wenn „Native Suche verwenden“ an ist; dafür ist keine Suchmaschine nötig. Bei anderen Modellen nutzt die App diese Suchmaschine. „Automatisch“ nimmt die erste Suchmaschine, die der Benutzer nutzen darf: Brave, Staan, SearXNG, dann jede weitere.",
         "websearchEngineDisabledOption": "{{name}} — deaktiviert",
         "websearchEngineMissingOption": "{{name}} — nicht installiert",
         "websearchEngineMissing": "Die Suchmaschine „{{engine}}“ ist nicht installiert. Die App sucht selbst, wo das Modell es kann, und bei anderen Modellen gar nicht. Installieren Sie sie unter Integrationen oder wählen Sie „Automatisch“.",
@@ -5769,6 +5773,8 @@
         "endpoint": "Endpunkt",
         "secretSet": "gesetzt",
         "secretNotSet": "nicht gesetzt",
+        "instanceUrl": "Instanz",
+        "authorization": "Autorisierung",
         "yes": "ja",
         "no": "nein",
         "choices": {
@@ -5845,13 +5851,14 @@
         },
         "webSearch": {
           "engineSection": "Suchmaschine",
-          "engineSectionHelp": "Apps mit eingeschalteter Websuche nutzen diese Suchmaschine, wenn sie sie nennen, oder bei „Automatisch“, wenn sie die erste Suchmaschine ist, die ein Benutzer nutzen darf (Brave, Staan, dann jede weitere). Modelle mit eigener Websuche brauchen keine Suchmaschine.",
+          "engineSectionHelp": "Apps mit eingeschalteter Websuche nutzen diese Suchmaschine, wenn sie sie nennen, oder bei „Automatisch“, wenn sie die erste Suchmaschine ist, die ein Benutzer nutzen darf (Brave, Staan, SearXNG, dann jede weitere). Modelle mit eigener Websuche brauchen keine Suchmaschine.",
           "apiKey": "API-Schlüssel",
           "apiKeyHelp": "Ein Zugangsdaten-Eintrag vom Typ Secret mit dem API-Schlüssel von {{engine}}. Anlegen unter Admin → Integrationen → Zugangsdaten.",
           "envFallback": "Ohne Zugangsdaten nutzt der Server die Umgebungsvariable {{env}}, wenn sie gesetzt ist. Ausgewählte Zugangsdaten haben immer Vorrang.",
           "noKeyNeeded": "{{engine}} braucht keinen API-Schlüssel.",
+          "searxngHint": "SearXNG hat keinen API-Schlüssel. Die Instanz muss json unter search.formats in ihrer settings.yml aufführen, sonst antwortet sie mit HTTP 403. SearXNG leitet jede Anfrage an die in ihm aktivierten Suchmaschinen weiter; welche das sind, wird dort entschieden, nicht in iHub. „Verbindung testen“ prüft die URL und die JSON-Ausgabe.",
           "testResults": "Test der Suchmaschine",
-          "testHelp": "Der Test prüft den API-Schlüssel der Werte oben (ungespeichert) und führt eine echte Suche von diesem Server aus."
+          "testHelp": "Der Test prüft den API-Schlüssel oder die Instanz-URL der Werte oben (ungespeichert) und führt eine echte Suche von diesem Server aus."
         },
         "ifinder": {
           "privateKey": "Privater Schlüssel",
@@ -13048,7 +13055,8 @@
       "linkFromAppsDetail": "Gehört zu einer Ihrer Apps",
       "nothingToAdd": "Diese Art von Eintrag ist hier nicht verfügbar.",
       "ifinderProfile": "Suchen in",
-      "crawlOtherHosts": "Dateien auf anderen Websites einbeziehen"
+      "crawlOtherHosts": "Dateien auf anderen Websites einbeziehen",
+      "archiveHint": "Ein ZIP-Archiv wird entpackt: Jede unterstützte Datei darin wird ein Dokument."
     },
     "chatBar": {
       "inProject": "Im Projekt: {{name}}",
@@ -13123,7 +13131,8 @@
       "ifinderWritePartial": "iFinder meldete einen Fehler, nachdem ein Teil der Änderung durchgelaufen war: {{done}} erledigt, {{not}} nicht. Laden Sie die Collection neu und versuchen Sie es erneut.",
       "ifinderWriteNone": "iFinder meldete einen Fehler, es wurde nichts geändert. Versuchen Sie es gleich noch einmal.",
       "ifinderWriteUnknown": "iFinder hat nicht geantwortet, es ist daher nicht bekannt, ob die Änderung durchgelaufen ist. Laden Sie die Collection neu, um es zu sehen.",
-      "kindNotAllowed": "Eine Smart Collection aus iFinder enthält nur iFinder-Dokumente."
+      "kindNotAllowed": "Eine Smart Collection aus iFinder enthält nur iFinder-Dokumente.",
+      "downloadNotSaved": "Die Datei ist angekommen, aber der Browser hat sie nicht gespeichert. Bitte versuchen Sie es erneut."
     },
     "form": {
       "description": "Beschreibung",
@@ -13151,7 +13160,9 @@
         "transfer": "Verschieben oder kopieren nach…",
         "openInIFinder": "In iFinder öffnen",
         "edit": "Bearbeiten",
-        "schedule": "Aktualisierung"
+        "schedule": "Aktualisierung",
+        "downloadOriginal": "Original herunterladen",
+        "useInApp": "In App verwenden…"
       },
       "add": "Dokumente hinzufügen",
       "columns": {
@@ -13284,7 +13295,10 @@
       "pickedFrom": "Ausgewählt aus {{site}}",
       "snapshot": "Text vom {{date}}",
       "uploaded": "Hochgeladen",
-      "linkedFrom": "Verknüpft aus {{project}}"
+      "linkedFrom": "Verknüpft aus {{project}}",
+      "fromArchive": "Aus {{archive}}",
+      "fromChat": "Aus einem Chat",
+      "fromShare": "Aus einer geteilten Datei"
     },
     "roles": {
       "admin": "Aus einer App",
@@ -13516,6 +13530,37 @@
       "refreshingNotice_other": "{{count}} veraltete Dokumente werden aktualisiert. Antworten verwenden bis dahin den gespeicherten Text.",
       "outdatedNotice_one": "{{count}} Dokument ist veraltet. Es wird aktualisiert, sobald das Projekt das nächste Mal in einem Chat oder einer Suche genutzt wird; Antworten verwenden bis dahin den gespeicherten Text.",
       "outdatedNotice_other": "{{count}} Dokumente sind veraltet. Sie werden aktualisiert, sobald das Projekt das nächste Mal in einem Chat oder einer Suche genutzt wird; Antworten verwenden bis dahin den gespeicherten Text."
+    },
+    "import": {
+      "title": "In Projekt kopieren",
+      "subtitle": "Eine Kopie von „{{name}}“ wird dem Projekt als Dokument hinzugefügt. Sie bleibt dort, auch wenn dieser Chat gelöscht wird.",
+      "loading": "Ihre Projekte werden geladen…",
+      "noProjects": "Sie haben kein Projekt, dem Sie Dokumente hinzufügen können. Bitten Sie den Eigentümer eines Projekts, Sie zum Bearbeiter zu machen.",
+      "choose": "Projekt",
+      "newProject": "Neues Projekt",
+      "newProjectName": "Name des neuen Projekts",
+      "newProjectHint": "Es bleibt privat, bis Sie es teilen.",
+      "nameRequired": "Geben Sie einen Namen für das neue Projekt ein.",
+      "nameTooLong": "Der Name ist zu lang.",
+      "whoSees": "Wer es sieht: {{audience}}",
+      "skippedEntry": "{{name}}: {{reason}}",
+      "copying": "Wird kopiert…",
+      "submit": "Kopieren",
+      "addedTo_one": "{{count}} Dokument zu {{project}} hinzugefügt.",
+      "addedTo_other": "{{count}} Dokumente zu {{project}} hinzugefügt.",
+      "added_one": "{{count}} Dokument hinzugefügt.",
+      "added_other": "{{count}} Dokumente hinzugefügt.",
+      "skipped_one": "{{count}} übersprungen:",
+      "skipped_other": "{{count}} übersprungen:",
+      "openProject": "Projekt öffnen",
+      "audience": {
+        "everyone": "Alle angemeldeten Personen",
+        "catalog": "Alle angemeldeten Personen (im Katalog veröffentlicht)",
+        "members_one": "Geteilt mit {{count}} Person oder Gruppe",
+        "members_other": "Geteilt mit {{count}} Personen oder Gruppen",
+        "private": "Nur Sie"
+      },
+      "doneTitle": "In das Projekt kopiert"
     }
   },
   "integrationScopes": {
@@ -13624,7 +13669,9 @@
     "pageNotFound": "Diese Datei wurde nicht gefunden.",
     "promptRequest": "Das Artefakt möchte im Chat fragen:",
     "promptSend": "Senden",
-    "promptBusy": "Eine Antwort wird noch geschrieben. Senden Sie, sobald sie fertig ist."
+    "promptBusy": "Eine Antwort wird noch geschrieben. Senden Sie, sobald sie fertig ist.",
+    "useInApp": "In App verwenden…",
+    "copyToProject": "In Projekt kopieren…"
   },
   "chatFiles": {
     "deleted": "{{name}} wurde gelöscht.",
@@ -14442,6 +14489,21 @@
       "userApps": "Sie dürfen keine persönlichen Apps anlegen.",
       "share": "Sie dürfen persönliche Apps nicht teilen.",
       "ownerMayNotShare": "Der Besitzer dieser App darf sie nicht teilen, deshalb kann sie nicht geteilt werden."
+    }
+  },
+  "useInApp": {
+    "title": "In App verwenden",
+    "subtitle": "Ein neuer Chat der gewählten App beginnt mit einer Kopie von „{{name}}“ als Anhang.",
+    "search": "Apps durchsuchen",
+    "loading": "Apps werden geladen…",
+    "loadFailed": "Die Apps konnten nicht geladen werden. Bitte versuchen Sie es erneut.",
+    "noApps": "Keine Ihrer Apps nimmt diese Art von Datei an.",
+    "noMatch": "Keine App passt zu Ihrer Suche.",
+    "attach": {
+      "modelCannot": "Die Datei konnte nicht angehängt werden: Das gewählte Modell kann diese Art von Datei nicht verarbeiten.",
+      "noServerFiles": "Das Dokument konnte nicht angehängt werden: Diese Installation speichert keine Chat-Dateien.",
+      "refused": "Die Datei konnte nicht angehängt werden: {{detail}}",
+      "failed": "Die Datei konnte nicht angehängt werden. Bitte versuchen Sie es erneut."
     }
   }
 }

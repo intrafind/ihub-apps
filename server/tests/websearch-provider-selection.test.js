@@ -69,6 +69,30 @@ describe('auto', () => {
     assert.equal(idOf('auto', { user: STAFF }), 'acme');
   });
 
+  it('takes SearXNG after the other built-ins, and alone when it is the only engine', async () => {
+    useWebSearch({ installed: [engine('searxng'), engine('staan')] });
+    assert.equal(idOf('auto', { user: STAFF }), 'staan');
+    useWebSearch({ installed: [engine('searxng', { values: { instanceUrl: 'http://s:8080' } })] });
+    assert.equal(idOf('auto', { user: STAFF }), 'searxng');
+    assert.equal(idOf('searxng', { user: STAFF }), 'searxng');
+    assert.equal(await resolveWebSearchEngineToolId('searxng', { user: STAFF }), 'searxngSearch');
+  });
+
+  it('does not offer SearXNG as available until its URL is set', async () => {
+    useWebSearch({ installed: [engine('searxng')] });
+    const available = await describeWebSearchAvailability(
+      { id: 'a', websearch: { enabled: true, provider: 'searxng' } },
+      STAFF
+    );
+    assert.equal(available.script, false);
+    useWebSearch({ installed: [engine('searxng', { values: { instanceUrl: 'http://s:8080' } })] });
+    const ready = await describeWebSearchAvailability(
+      { id: 'a', websearch: { enabled: true, provider: 'searxng' } },
+      STAFF
+    );
+    assert.equal(ready.script, true);
+  });
+
   it('treats a missing provider value as auto', () => {
     useWebSearch({ installed: [engine('staan')] });
     assert.equal(idOf(undefined, { user: STAFF }), 'staan');
@@ -222,6 +246,12 @@ describe('sortWebSearchEngines', () => {
       sorted.map(e => e.id),
       ['brave', 'staan', 'acme', 'zeta']
     );
+    assert.deepEqual(
+      sortWebSearchEngines(['acme', 'searxng', 'staan', 'brave'].map(id => ({ id }))).map(
+        e => e.id
+      ),
+      ['brave', 'staan', 'searxng', 'acme']
+    );
   });
 
   it('names a tool and a definition for every built-in engine', () => {
@@ -229,7 +259,8 @@ describe('sortWebSearchEngines', () => {
       BUILT_IN_ENGINES.map(e => [e.id, e.toolId, e.definition]),
       [
         ['brave', 'braveSearch', 'com.intrafind/brave-search'],
-        ['staan', 'staanSearch', 'com.intrafind/staan-search']
+        ['staan', 'staanSearch', 'com.intrafind/staan-search'],
+        ['searxng', 'searxngSearch', 'com.intrafind/searxng-search']
       ]
     );
   });

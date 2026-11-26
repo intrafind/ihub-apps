@@ -72,6 +72,7 @@ export async function bootstrapProjects({ reconcile = true } = {}) {
         evictItemText(key);
         evictItemKeys(key);
       }
+      if (item?.originalFile?.blobKey) evictItemKeys(item.originalFile.blobKey);
     });
   }
   service.ingest = ingestService;

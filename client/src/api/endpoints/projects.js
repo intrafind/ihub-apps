@@ -151,6 +151,78 @@ export const uploadProjectItem = async (projectId, { file, name, pinned = false 
 };
 
 /**
+ * Import documents into a project (`POST /api/projects/{projectId}/items/_import`,
+ * needs the `edit` role): a copy of a generated file of a chat
+ * (`source: { kind: 'chat-artifact', ref: { chatId, artifactId } }`), or a file
+ * uploaded directly (multipart, field `file`). A ZIP archive — as an artifact or
+ * an upload — is unpacked into one item per supported entry; images are refused
+ * (`UNSUPPORTED_TYPE`).
+ *
+ * The items come back `pending` like any upload; the project page's polling
+ * shows their extraction.
+ *
+ * @param {string} projectId
+ * @param {{source?: {kind: string, ref: Object}, file?: File|Blob, pinned?: boolean}} body -
+ *   Either `source` or `file`.
+ * @returns {Promise<{items: Array<Object>, skipped: Array<{name: string, code: string,
+ *   message: string}>}>} The server answers `202`.
+ *
+ * @example
+ * await importProjectItems('prj_1', { source: { kind: 'chat-artifact', ref: { chatId, artifactId } } });
+ * await importProjectItems('prj_1', { file: zipFile });
+ */
+export const importProjectItems = async (projectId, { source, file, pinned = false } = {}) => {
+  const path = `${projectPath(projectId)}/items/_import`;
+  let data;
+  if (file) {
+    const formData = new FormData();
+    formData.append('pinned', pinned ? 'true' : 'false');
+    formData.append('file', file);
+    data = await call(() =>
+      apiClient.post(path, formData, {
+        // Let the browser set the multipart boundary (the instance default is JSON).
+        headers: { 'Content-Type': undefined },
+        // A large archive must not hit the default request timeout.
+        timeout: 0
+      })
+    );
+  } else {
+    data = await call(() =>
+      apiClient.post(
+        path,
+        { source, ...(pinned ? { pinned: true } : {}) },
+        // A generated ZIP is unpacked on the server too: no request timeout,
+        // or a slow import reports failure for documents already added.
+        { timeout: 0 }
+      )
+    );
+  }
+  return {
+    items: Array.isArray(data?.items) ? data.items : [],
+    skipped: Array.isArray(data?.skipped) ? data.skipped : []
+  };
+};
+
+/**
+ * The original file of an item that kept one (`item.hasOriginal`), for a download.
+ *
+ * @param {string} projectId
+ * @param {string} itemId
+ * @returns {Promise<{blob: Blob, contentDisposition: string|null}>} `contentDisposition`
+ *   names the file (`filenameFromContentDisposition`).
+ */
+export const fetchProjectItemOriginal = async (projectId, itemId) => {
+  const response = await apiClient.get(`${itemPath(projectId, itemId)}/original`, {
+    params: { download: 1 },
+    responseType: 'blob'
+  });
+  return {
+    blob: response.data,
+    contentDisposition: response.headers?.['content-disposition'] || null
+  };
+};
+
+/**
  * Rename an item, change whether it is pinned, or change what a link item
  * (URL, page, iFinder document or search) points at.
  *

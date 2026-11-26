@@ -5,7 +5,7 @@
  * Web search engines: the installed integrations of type `web-search`.
  *
  * Web search is a feature of the app (`app.websearch`); an **engine** is one
- * integration installation that searches the web for it. iHub ships two
+ * integration installation that searches the web for it. iHub ships three
  * built-in engine definitions, each a singleton whose installation id is the
  * value `app.websearch.provider` always used:
  *
@@ -13,6 +13,12 @@
  * | ------------ | ----------------------------- | ------------- | ---------------------- |
  * | `brave`      | `com.intrafind/brave-search`  | `braveSearch` | `BRAVE_SEARCH_API_KEY` |
  * | `staan`      | `com.intrafind/staan-search`  | `staanSearch` | `STAAN_API_KEY`        |
+ * | `searxng`    | `com.intrafind/searxng-search`| `searxngSearch` | —                    |
+ *
+ * `searxng` is the only engine whose address is an install value
+ * (`instanceUrl`): it searches through the customer's own SearXNG instance.
+ * Its hits are not known to come from the open web (an instance can include
+ * intranet engines), so they stay private (`publicHits: false`).
  *
  * A third party ships its own engine as a `script` or `openapi` definition of
  * `type: "web-search"` with one action named `search` (the **engine
@@ -42,33 +48,53 @@ export const AUTO_ENGINE = 'auto';
 
 /**
  * The shipped engines, in the order `auto` tries them.
- * @type {ReadonlyArray<{ id: string, definition: string, toolId: string, keyEnv: string|null }>}
+ * `publicHits: false` marks an engine whose results are not known to come from
+ * the open web.
+ * @type {ReadonlyArray<{ id: string, definition: string, toolId: string, keyEnv: string|null, publicHits: boolean }>}
  */
 export const BUILT_IN_ENGINES = Object.freeze([
   Object.freeze({
     id: 'brave',
     definition: 'com.intrafind/brave-search',
     toolId: 'braveSearch',
-    keyEnv: 'BRAVE_SEARCH_API_KEY'
+    keyEnv: 'BRAVE_SEARCH_API_KEY',
+    publicHits: true
   }),
   Object.freeze({
     id: 'staan',
     definition: 'com.intrafind/staan-search',
     toolId: 'staanSearch',
-    keyEnv: 'STAAN_API_KEY'
+    keyEnv: 'STAAN_API_KEY',
+    publicHits: true
+  }),
+  Object.freeze({
+    id: 'searxng',
+    definition: 'com.intrafind/searxng-search',
+    toolId: 'searxngSearch',
+    keyEnv: null,
+    publicHits: false
   })
 ]);
 
 /** The install field of a keyed engine that references its API key credential. */
 export const ENGINE_API_KEY_FIELD = 'apiKeyRef';
 
+/** The install field holding the base URL of a self-hosted engine (SearXNG). */
+export const ENGINE_INSTANCE_URL_FIELD = 'instanceUrl';
+
+/** The install field of a self-hosted engine that references the credential its gateway expects. */
+export const ENGINE_AUTHORIZATION_FIELD = 'authorizationRef';
+
 const BUILT_IN_BY_ID = new Map(BUILT_IN_ENGINES.map(engine => [engine.id, engine]));
 const BUILT_IN_DEFINITIONS = new Set(BUILT_IN_ENGINES.map(engine => engine.definition));
+const PUBLIC_HIT_DEFINITIONS = new Set(
+  BUILT_IN_ENGINES.filter(engine => engine.publicHits).map(engine => engine.definition)
+);
 
 /**
  * The shipped engine with this installation id, or null.
  * @param {string} id - e.g. `brave`
- * @returns {{ id: string, definition: string, toolId: string, keyEnv: string|null }|null}
+ * @returns {{ id: string, definition: string, toolId: string, keyEnv: string|null, publicHits: boolean }|null}
  */
 export function builtInEngine(id) {
   return BUILT_IN_BY_ID.get(id) || null;
@@ -113,8 +139,9 @@ export function isWebSearchEngineTool(tool) {
 }
 
 /**
- * Whether a loaded tool is the search action of one of the shipped engines
- * (their hits are known to come from the open web).
+ * Whether a loaded tool is the search action of a shipped engine whose hits
+ * are known to come from the open web (Brave, Staan; not SearXNG, whose
+ * instance may search an intranet).
  * @param {{ _integration?: { action?: string, definition?: string } }|null|undefined} tool
  * @returns {boolean}
  */
@@ -123,13 +150,13 @@ export function isBuiltInWebSearchEngineTool(tool) {
   return (
     Boolean(integration) &&
     integration.action === WEB_SEARCH_ACTION &&
-    BUILT_IN_DEFINITIONS.has(integration.definition)
+    PUBLIC_HIT_DEFINITIONS.has(integration.definition)
   );
 }
 
 /**
- * Engines in the order `auto` tries them: the built-ins (`brave`, `staan`),
- * then every other engine by installation id. Returns a new array.
+ * Engines in the order `auto` tries them: the built-ins (`brave`, `staan`,
+ * `searxng`), then every other engine by installation id. Returns a new array.
  *
  * @template {{ id: string }} T
  * @param {T[]} engines
