@@ -44,6 +44,49 @@ export async function writeInDirectory(dir, write) {
   }
 }
 
+/**
+ * Rename errors Windows returns while another process holds the target open
+ * without FILE_SHARE_DELETE: an antivirus or EDR scanner (Microsoft Defender),
+ * the search indexer, a backup agent. The holder lets go within milliseconds,
+ * so the same rename succeeds when tried again.
+ */
+const TRANSIENT_RENAME_ERRORS = new Set(['EPERM', 'EBUSY', 'EACCES']);
+
+/** Waits between rename attempts on Windows: about one second in all. */
+const RENAME_RETRY_DELAYS_MS = [10, 20, 40, 80, 120, 200, 250, 300];
+
+const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
+
+/**
+ * `fs.rename`, retried on Windows while the target is briefly locked.
+ *
+ * Only Windows retries: elsewhere EPERM, EBUSY and EACCES on a rename are a
+ * real permission or mount problem that a second attempt does not fix, and the
+ * caller should hear about it at once.
+ *
+ * @param {string} from
+ * @param {string} to
+ * @param {{platform?: string, delays?: number[]}} [options] - For tests
+ * @returns {Promise<void>}
+ */
+export async function renameWithRetry(
+  from,
+  to,
+  { platform = process.platform, delays = RENAME_RETRY_DELAYS_MS } = {}
+) {
+  for (let attempt = 0; ; attempt++) {
+    try {
+      // lgtm[js/path-injection] -- caller-validated path; see atomicWriteFile.
+      return await fs.rename(from, to);
+    } catch (error) {
+      const retry =
+        platform === 'win32' && TRANSIENT_RENAME_ERRORS.has(error?.code) && attempt < delays.length;
+      if (!retry) throw error;
+      await sleep(delays[attempt]);
+    }
+  }
+}
+
 /** Flush the directory entry created by a rename; best effort where unsupported. */
 async function syncDirectory(dir) {
   let handle;
@@ -66,6 +109,9 @@ async function syncDirectory(dir) {
  * renamed-but-empty file. That costs two fsyncs per write; every caller here is
  * an admin or state save rather than a per-request hot path, and a small file's
  * fsync is in the millisecond range on SSDs.
+ *
+ * On Windows the rename is retried for about a second while another process
+ * (typically a virus scanner) holds the target open: see {@link renameWithRetry}.
  *
  * NOTE: `filePath` is trusted by this utility. Callers are responsible for
  * validating any user-derived component (e.g. via `assertValidId()` +
@@ -110,8 +156,7 @@ export async function atomicWriteFile(filePath, data, options = 'utf8') {
     }
 
     // Atomically rename temp file to target file
-    // lgtm[js/path-injection] -- caller-validated path; see function doc.
-    await fs.rename(tempPath, filePath);
+    await renameWithRetry(tempPath, filePath);
   } catch (error) {
     // Clean up temp file if it exists
     try {

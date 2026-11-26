@@ -39,3 +39,19 @@ Report 2026").
   title. When the heading is the longer one, its wording is printed once as the title.
 - A different first heading, and a heading further down, stay.
 
+
+## Windows: Startup No Longer Stops When a Virus Scanner Holds a Configuration File
+
+On Windows, startup could stop during the configuration migrations, most often on a fresh install,
+with an error like this:
+
+> Migration V233 (web_chat_inline_citations) failed: EPERM: operation not permitted, rename
+> '…\contents\.tmp_…' -> '…\contents\.migration-history.json'
+
+A virus scanner such as Microsoft Defender, the search indexer or a backup agent held the file
+open for a moment while iHub replaced it.
+
+- iHub now tries again for about a second when Windows reports a file as locked. This covers
+  every configuration and data file iHub saves, not only the migration history.
+- When a migration ran but the history file cannot be written, the error now says so, and the
+  history no longer lists that migration as failed.
