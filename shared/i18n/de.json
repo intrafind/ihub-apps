@@ -6684,7 +6684,12 @@
           "duplicateName": "Der Server bietet mehrere Skills mit diesem Namen an.",
           "dynamic": "Der Server nennt die Dateien dieses Skills nicht, daher können sie nicht geprüft werden.",
           "invalidName": "Der Name des Skills folgt nicht den Namensregeln für Skills."
-        }
+        },
+        "loading": "Skills werden geladen…",
+        "loadingFile": "Datei wird gelesen…",
+        "binaryFile": "Keine Textdatei.",
+        "truncated": "Nur der Anfang der Datei wird angezeigt.",
+        "changedSinceListed": "Der Server hat diesen Skill geändert, seit die Liste geladen wurde. Prüfen Sie ihn erneut, bevor Sie ihn freigeben."
       }
     },
     "sidebar": {
@@ -13992,6 +13997,7 @@
     "SERVER_SKILL_NOT_FOUND": "Der Server bietet diesen Skill nicht an.",
     "SKILL_NOT_APPROVABLE": "Dieser Skill kann nicht freigegeben werden.",
     "SKILL_UNREADABLE": "Die Dateien des Skills konnten nicht vom Server gelesen werden.",
+    "SKILL_LISTING_CHANGED": "Der Skill hat sich auf dem Server geändert, seit er angezeigt wurde. Prüfen Sie ihn erneut.",
     "INVALID_SKILL_APPROVAL": "Die Freigabe des Skills ist ungültig.",
     "INTEGRATION_NOT_CONFIGURED": "Die Integration ist nicht konfiguriert.",
     "INTEGRATION_NOT_GRANTED": "Sie dürfen diese Integration nicht verwenden.",

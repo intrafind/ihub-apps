@@ -143,9 +143,20 @@ export const fetchInstallationSkills = async id =>
 const skillApprovalPath = (id, name) =>
   `${instancePath(id)}/skill-approvals/${encodeURIComponent(name)}`;
 
-/** Approve a server skill as the server lists it now; answers its item. */
-export const approveInstallationSkill = async (id, name) =>
-  (await makeAdminApiCall(skillApprovalPath(id, name), { method: 'PUT', ...json({}) })).data;
+/**
+ * Approve a server skill as the admin reviewed it: `digest` is the item's
+ * `digest` from the listing. Answers its item; `SKILL_LISTING_CHANGED` when
+ * the server changed it since.
+ */
+export const approveInstallationSkill = async (id, name, digest) =>
+  (await makeAdminApiCall(skillApprovalPath(id, name), { method: 'PUT', ...json({ digest }) }))
+    .data;
+
+/** One file of a server skill as the server offers it now: `{ path, size, text?, truncated? }`. */
+export const fetchInstallationSkillFile = async (id, skillName, path) => {
+  const query = new URLSearchParams({ skillName, path });
+  return (await makeAdminApiCall(`${instancePath(id)}/skill-files?${query}`)).data;
+};
 
 /** Withdraw the approval of a server skill. */
 export const revokeInstallationSkill = async (id, name) => {

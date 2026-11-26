@@ -50,9 +50,21 @@ export const LISTING_MAX_AGE_MS = 60 * 1000;
 const CACHE_MAX_ENTRIES = 500;
 const CACHE_MAX_BYTES = 16 * 1024 * 1024;
 
-/** Verified file texts by `<installation>\n<digest>`, oldest first. */
+/**
+ * Verified file texts by connection and digest, oldest first. Keyed by the
+ * connection that read them: a per-user server may refuse a file to one user
+ * that it serves another, so one user's read never answers another's.
+ */
 const fileCache = new Map();
 let cacheBytes = 0;
+
+/** A key per connection object (the shared one, or a user's own). */
+const connectionKeys = new WeakMap();
+let nextConnectionKey = 0;
+function connectionKeyOf(conn) {
+  if (!connectionKeys.has(conn)) connectionKeys.set(conn, String(++nextConnectionKey));
+  return connectionKeys.get(conn);
+}
 
 /**
  * The services this module works with; tests pass their own.
@@ -197,6 +209,8 @@ function skillItem(skill, approval, reason) {
     name: source.frontmatter?.name,
     description: source.frontmatter?.description || '',
     uri: source.uri,
+    // What an approval of this listing names (`approveInstallationSkill`).
+    ...(listed ? { digest: entryDigest(skill) } : {}),
     status,
     ...(reason ? { reason } : {}),
     ...(Array.isArray(source.resources)
@@ -298,16 +312,21 @@ export async function listInstallationSkills(instanceId, user, deps = {}) {
 }
 
 /**
- * Approve the skill `name` as the server lists it now. Every file is read and
- * verified first: a skill the server cannot serve is not approved.
+ * Approve the skill `name` as the admin reviewed it: `options.digest` is the
+ * item's `digest` from their listing, and a skill the server changed since is
+ * refused (`SKILL_LISTING_CHANGED`) rather than approved unseen. Every file is
+ * then read past the cache and verified: a skill the server cannot serve is
+ * not approved.
  *
  * @param {string} instanceId
  * @param {string} name
  * @param {Object} user - The admin
  * @param {Object} [deps]
+ * @param {Object} [options]
+ * @param {string} [options.digest] - The reviewed entry's digest
  * @returns {Promise<Object>} the skill's item, `approved`
  */
-export async function approveInstallationSkill(instanceId, name, user, deps = {}) {
+export async function approveInstallationSkill(instanceId, name, user, deps = {}, options = {}) {
   const d = await depsOf(deps);
   mcpInstallation(instanceId, d);
   const skills = await liveListing(instanceId, user, d);
@@ -316,6 +335,15 @@ export async function approveInstallationSkill(instanceId, name, user, deps = {}
     throw new ServiceError('SERVER_SKILL_NOT_FOUND', `${instanceId} offers no skill "${name}"`, {
       details: { instanceId, name }
     });
+  }
+  // Only what the admin reviewed: a skill the server changed since their
+  // listing is not approved in its place.
+  if (matches.length === 1 && options.digest !== entryDigest(matches[0])) {
+    throw new ServiceError(
+      'SKILL_LISTING_CHANGED',
+      `The skill "${name}" changed since it was listed; review it again`,
+      { details: { instanceId, name } }
+    );
   }
   const nameCounts = new Map([[name, matches.length]]);
   const reason = notApprovableReason(matches[0], nameCounts);
@@ -338,8 +366,11 @@ export async function approveInstallationSkill(instanceId, name, user, deps = {}
     await d.manager.withUserConnection(instanceId, user, conn =>
       approval.resources.reduce(
         (done, resource) =>
+          // Past the cache: the server's bytes are checked against this entry.
           done.then(() =>
-            readVerified(conn, instanceId, approval, skillFilePath(approval, resource.uri))
+            readVerified(conn, instanceId, approval, skillFilePath(approval, resource.uri), {
+              useCache: false
+            })
           ),
         Promise.resolve()
       )
@@ -351,6 +382,52 @@ export async function approveInstallationSkill(instanceId, name, user, deps = {}
   }
   const instance = await d.installations.setSkillApproval(instanceId, name, approval);
   return skillItem(skill, instance.skills?.approved?.[name] || approval, null);
+}
+
+/** Most characters of a file the admin reads before approving. */
+const MAX_REVIEW_CHARS = 512 * 1024;
+
+/**
+ * One file of a skill as the server offers it now, for the admin to read
+ * before approving: verified against the current listing, never cached. A file
+ * the server sends as bytes only comes back without text.
+ *
+ * @param {string} instanceId
+ * @param {string} name - The skill
+ * @param {string} path - Path relative to the skill root (`SKILL.md`, `references/x.md`)
+ * @param {Object} user - The admin
+ * @param {Object} [deps]
+ * @returns {Promise<{path: string, size: number, text?: string, truncated?: boolean}>}
+ */
+export async function readInstallationSkillFile(instanceId, name, path, user, deps = {}) {
+  const d = await depsOf(deps);
+  mcpInstallation(instanceId, d);
+  const skills = await liveListing(instanceId, user, d);
+  const matches = skills.filter(skill => skill.frontmatter?.name === name);
+  const skill = matches.length === 1 && Array.isArray(matches[0].resources) ? matches[0] : null;
+  const resource = skill?.resources.find(r => skillFilePath(skill, r.uri) === path);
+  if (!resource) {
+    throw new ServiceError('SERVER_SKILL_NOT_FOUND', `${instanceId} offers no file "${path}"`, {
+      details: { instanceId, name, path }
+    });
+  }
+  let file;
+  try {
+    file = await d.manager.withUserConnection(instanceId, user, conn =>
+      conn.readSkillFile(skill, path)
+    );
+  } catch (error) {
+    throw new ServiceError('SKILL_UNREADABLE', `"${path}" could not be read`, {
+      details: { instanceId, name, path, reason: error.message }
+    });
+  }
+  const text = typeof file.text === 'string' ? file.text : null;
+  return {
+    path,
+    size: resource.size,
+    ...(text === null ? {} : { text: text.slice(0, MAX_REVIEW_CHARS) }),
+    ...(text !== null && text.length > MAX_REVIEW_CHARS ? { truncated: true } : {})
+  };
 }
 
 /**
@@ -390,11 +467,12 @@ function remember(key, text) {
  * the cache when it holds that digest. `SKILL.md` comes back as its body
  * (without the frontmatter); a file the server sent as bytes only, as null.
  */
-async function readVerified(conn, instanceId, approval, path) {
+async function readVerified(conn, instanceId, approval, path, { useCache = true } = {}) {
   const resource = approval.resources.find(r => skillFilePath(approval, r.uri) === path);
   if (!resource) return null;
-  const key = `${instanceId}\n${resource.digest}\n${path === SKILL_FILE ? 'body' : 'text'}`;
-  if (fileCache.has(key)) return fileCache.get(key);
+  const kind = path === SKILL_FILE ? 'body' : 'text';
+  const key = `${instanceId}\n${connectionKeyOf(conn)}\n${resource.digest}\n${kind}`;
+  if (useCache && fileCache.has(key)) return fileCache.get(key);
   const file = await conn.readSkillFile(approval, path);
   const text = path === SKILL_FILE ? (file.body ?? '') : (file.text ?? null);
   if (typeof text === 'string') remember(key, text);

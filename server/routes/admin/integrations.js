@@ -38,6 +38,7 @@ import { describeAction } from '../../services/integrations/actionDetail.js';
 import {
   approveInstallationSkill,
   listInstallationSkills,
+  readInstallationSkillFile,
   revokeInstallationSkill
 } from '../../services/mcp/mcpSkills.js';
 import { SKILL_NAME_PATTERN } from '../../validators/integrationsConfigSchema.js';
@@ -77,6 +78,7 @@ const ACTION_NAME_PATTERN = /^[A-Za-z0-9_.:-]{1,128}$/;
  *   POST /api/admin/integrations/installed/:id/actions/:action/_test  run the action without a model
  *   PUT  /api/admin/integrations/installed/:id/instructions     the installation's own model guidance
  *   GET  /api/admin/integrations/installed/:id/skills           an MCP server's skills and their approval
+ *   GET  /api/admin/integrations/installed/:id/skill-files?skillName=&path=  one skill file, to review it
  *   PUT  /api/admin/integrations/installed/:id/skill-approvals/:skillName   approve a server skill
  *   DELETE /api/admin/integrations/installed/:id/skill-approvals/:skillName withdraw the approval
  *
@@ -1142,6 +1144,69 @@ export default function registerAdminIntegrationsRoutes(app) {
     }
   );
 
+  /**
+   * @swagger
+   * /api/admin/integrations/installed/{id}/skill-files:
+   *   get:
+   *     summary: One file of a server skill, to review it before approving
+   *     description: |
+   *       Reads the file through the admin's own connection, verified against the server's
+   *       current listing and never cached. A file the server sends as bytes only has no
+   *       `text`; a text longer than 512 KB is cut and marked `truncated`.
+   *     tags:
+   *       - Admin
+   *       - Integrations
+   *     security:
+   *       - adminAuth: []
+   *     parameters:
+   *       - in: path
+   *         name: id
+   *         required: true
+   *         schema:
+   *           type: string
+   *       - in: query
+   *         name: skillName
+   *         required: true
+   *         schema:
+   *           type: string
+   *       - in: query
+   *         name: path
+   *         required: true
+   *         schema:
+   *           type: string
+   *         description: "Path relative to the skill root, e.g. `SKILL.md`"
+   *     responses:
+   *       200:
+   *         description: "`{ path, size, text?, truncated? }`"
+   *       400:
+   *         description: "`BAD_REQUEST`: no skill name or path"
+   *       404:
+   *         description: "`INTEGRATION_NOT_FOUND`, `SERVER_SKILL_NOT_FOUND`"
+   *       409:
+   *         description: "`SKILLS_NOT_SUPPORTED`, `INTEGRATION_AUTH_REQUIRED`"
+   *       502:
+   *         description: "`SKILL_UNREADABLE`, `UPSTREAM_ERROR`"
+   */
+  app.get(
+    buildServerPath('/api/admin/integrations/installed/:id/skill-files'),
+    adminAuth,
+    async (req, res) => {
+      const id = req.params.id;
+      assertValidId(id, 'integration');
+      const { skillName, path: filePath } = req.query;
+      if (typeof skillName !== 'string' || !SKILL_NAME_PATTERN.test(skillName)) {
+        throw new ServiceError('BAD_REQUEST', 'Invalid skill name', { details: { skillName } });
+      }
+      if (typeof filePath !== 'string' || !filePath || filePath.length > 2048) {
+        throw new ServiceError('BAD_REQUEST', 'A file path is required', {
+          details: { path: filePath ?? null }
+        });
+      }
+      // The path only selects a file the server's listing names; nothing is read from disk.
+      res.json(await readInstallationSkillFile(id, skillName, filePath, req.user));
+    }
+  );
+
   /** The skill name of a path, refused unless it is one. */
   const skillNameParam = req => {
     const name = req.params.skillName;
@@ -1157,9 +1222,10 @@ export default function registerAdminIntegrationsRoutes(app) {
    *   put:
    *     summary: Approve a skill of an MCP server
    *     description: |
-   *       Approves the skill as the server lists it now: its `SKILL.md`, frontmatter and
-   *       every file with its digest. Each file is read and verified first. A chat loads
-   *       the skill only while the server serves exactly what was approved.
+   *       Approves the skill the admin reviewed: the body names the `digest` of its item
+   *       in the listing, and a skill the server changed since is refused
+   *       (`SKILL_LISTING_CHANGED`). Each file is read and verified first. A chat loads the
+   *       skill only while the server serves exactly what was approved.
    *     tags:
    *       - Admin
    *       - Integrations
@@ -1176,6 +1242,17 @@ export default function registerAdminIntegrationsRoutes(app) {
    *         required: true
    *         schema:
    *           type: string
+   *     requestBody:
+   *       required: true
+   *       content:
+   *         application/json:
+   *           schema:
+   *             type: object
+   *             required: [digest]
+   *             properties:
+   *               digest:
+   *                 type: string
+   *                 description: "The `digest` of the skill's item the admin reviewed"
    *     responses:
    *       200:
    *         description: "The skill's item, `status: approved`"
@@ -1184,7 +1261,7 @@ export default function registerAdminIntegrationsRoutes(app) {
    *       404:
    *         description: "`INTEGRATION_NOT_FOUND`, `SERVER_SKILL_NOT_FOUND`"
    *       409:
-   *         description: "`SKILLS_NOT_SUPPORTED`, `SKILL_NOT_APPROVABLE`, `INTEGRATION_AUTH_REQUIRED`"
+   *         description: "`SKILLS_NOT_SUPPORTED`, `SKILL_NOT_APPROVABLE`, `SKILL_LISTING_CHANGED`, `INTEGRATION_AUTH_REQUIRED`"
    *       502:
    *         description: "`SKILL_UNREADABLE`, `UPSTREAM_ERROR`"
    *   delete:
@@ -1207,7 +1284,13 @@ export default function registerAdminIntegrationsRoutes(app) {
       const id = req.params.id;
       assertValidId(id, 'integration');
       const name = skillNameParam(req);
-      const item = await approveInstallationSkill(id, name, req.user);
+      const digest = req.body?.digest;
+      if (typeof digest !== 'string' || !digest) {
+        throw new ServiceError('VALIDATION_FAILED', 'The body needs the reviewed "digest"', {
+          details: { field: 'digest' }
+        });
+      }
+      const item = await approveInstallationSkill(id, name, req.user, {}, { digest });
       logAudit({
         req,
         action: 'update',

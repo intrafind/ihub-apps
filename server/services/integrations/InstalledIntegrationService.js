@@ -170,6 +170,17 @@ function keepGuidance(instance, stored, payload) {
   }
 }
 
+/**
+ * The approved skills of an MCP server as stored now: a save of the
+ * installation never changes them (only `setSkillApproval` does), and taking
+ * them from the locked config — not the snapshot the save started from — keeps
+ * an approval withdrawn meanwhile (on another worker) withdrawn.
+ */
+function keepSkillApprovals(instance, stored) {
+  if (stored?.skills) instance.skills = stored.skills;
+  else delete instance.skills;
+}
+
 function keepActionReview(instance, stored) {
   const { fingerprints, reviewedAt } = stored?.actions || {};
   if (!fingerprints && !reviewedAt) return;
@@ -782,6 +793,7 @@ export class InstalledIntegrationService {
           throw new IntegrationError('Integration not found', { status: 404, code: 'NOT_FOUND' });
         keepActionReview(instance, config.installed[index]);
         keepGuidance(instance, config.installed[index], payload);
+        keepSkillApprovals(instance, config.installed[index]);
         config.installed[index] = instance;
       });
       // Only once the file points elsewhere: a failed write must leave the

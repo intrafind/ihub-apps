@@ -173,7 +173,11 @@ It lists the server's skills with their files and size, and the status of each:
 offered** or **Cannot be approved** (two skills by one name, or a skill whose
 files the server does not list).
 
-- **Nothing reaches a chat unapproved.** **Approve** reads every file of the
+- **Read before you approve.** Each skill lists its files; a click opens one
+  read-only, as the server offers it now.
+- **Nothing reaches a chat unapproved.** **Approve** approves the skill as you
+  reviewed it: if the server changed it since the list was loaded, the approval
+  is refused and the list reloads for another look. It reads every file of the
   skill from the server, checks it against the digest and size the server
   listed, and stores that entry with the installation
   (`skills.approved.<name>`). A regular save of the installation never sets or
@@ -204,8 +208,12 @@ files the server does not list).
   than was approved, that user does not get the skill.
 
 Verified files are kept in memory by digest. Nothing is written to the skill
-folders. The routes are `GET /api/admin/integrations/installed/{id}/skills`
-and `PUT` / `DELETE /api/admin/integrations/installed/{id}/skill-approvals/{skillName}`.
+folders. A user's read is never answered from another connection's copy, so a
+per-user server that refuses a file to one user is not bypassed. The routes are
+`GET /api/admin/integrations/installed/{id}/skills`,
+`GET /api/admin/integrations/installed/{id}/skill-files?skillName=&path=` and
+`PUT` (body `{ digest }`, the reviewed item's) / `DELETE
+/api/admin/integrations/installed/{id}/skill-approvals/{skillName}`.
 
 ### Transports
 

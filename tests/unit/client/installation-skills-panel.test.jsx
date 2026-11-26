@@ -6,6 +6,7 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import InstallationSkillsPanel from '../../../client/src/features/admin/components/integrations/InstallationSkillsPanel';
 import {
   approveInstallationSkill,
+  fetchInstallationSkillFile,
   fetchInstallationSkills,
   revokeInstallationSkill
 } from '../../../client/src/api/integrationsAdminApi';
@@ -36,6 +37,11 @@ jest.mock('../../../client/src/api/adminApi', () => ({
 jest.mock('../../../client/src/api/integrationsAdminApi', () => ({
   __esModule: true,
   fetchInstallationSkills: jest.fn(),
+  fetchInstallationSkillFile: jest.fn(async (_id, _name, path) => ({
+    path,
+    size: 9,
+    text: 'FILE TEXT'
+  })),
   approveInstallationSkill: jest.fn(async () => ({})),
   revokeInstallationSkill: jest.fn(async () => {})
 }));
@@ -45,6 +51,7 @@ const ITEMS = [
     name: 'deploy',
     description: 'Deploy safely',
     uri: 'skill://deploy/SKILL.md',
+    digest: 'sha256:deploy',
     status: 'available',
     files: [{ path: 'SKILL.md', size: 100 }],
     size: 100
@@ -53,6 +60,7 @@ const ITEMS = [
     name: 'report',
     description: 'Monthly report',
     uri: 'skill://report/SKILL.md',
+    digest: 'sha256:report',
     status: 'changed',
     files: [],
     size: 0,
@@ -88,8 +96,29 @@ describe('the Skills tab', () => {
   it('approves a skill and lists anew', async () => {
     render(<InstallationSkillsPanel instanceId="billing" />);
     fireEvent.click(await screen.findByRole('button', { name: 'Approve' }));
-    await waitFor(() => expect(approveInstallationSkill).toHaveBeenCalledWith('billing', 'deploy'));
+    await waitFor(() =>
+      expect(approveInstallationSkill).toHaveBeenCalledWith('billing', 'deploy', 'sha256:deploy')
+    );
     await waitFor(() => expect(fetchInstallationSkills).toHaveBeenCalledTimes(2));
+  });
+
+  it('lists the files and opens one read-only before approving', async () => {
+    render(<InstallationSkillsPanel instanceId="billing" />);
+    fireEvent.click(await screen.findByRole('button', { name: 'SKILL.md' }));
+    await waitFor(() =>
+      expect(fetchInstallationSkillFile).toHaveBeenCalledWith('billing', 'deploy', 'SKILL.md')
+    );
+    expect(await screen.findByText('FILE TEXT')).toBeInTheDocument();
+  });
+
+  it('reloads and asks for a new review when the server changed the skill meanwhile', async () => {
+    approveInstallationSkill.mockRejectedValueOnce({
+      response: { data: { code: 'SKILL_LISTING_CHANGED', detail: 'changed' } }
+    });
+    render(<InstallationSkillsPanel instanceId="billing" />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Approve' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent(/Review it again/);
+    expect(fetchInstallationSkills).toHaveBeenCalledTimes(2);
   });
 
   it('withdraws an approval', async () => {

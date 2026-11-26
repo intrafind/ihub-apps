@@ -6178,7 +6178,12 @@
           "duplicateName": "The server offers more than one skill by this name.",
           "dynamic": "The server does not list this skill’s files, so they cannot be checked.",
           "invalidName": "The skill’s name does not follow the skill naming rules."
-        }
+        },
+        "loading": "Loading the skills…",
+        "loadingFile": "Reading the file…",
+        "binaryFile": "Not a text file.",
+        "truncated": "Only the start of the file is shown.",
+        "changedSinceListed": "The server changed this skill since the list was loaded. Review it again before you approve it."
       }
     },
     "sidebar": {
@@ -13993,6 +13998,7 @@
     "SERVER_SKILL_NOT_FOUND": "The server does not offer this skill.",
     "SKILL_NOT_APPROVABLE": "This skill cannot be approved.",
     "SKILL_UNREADABLE": "The skill's files could not be read from the server.",
+    "SKILL_LISTING_CHANGED": "The skill changed on the server since it was listed. Review it again.",
     "INVALID_SKILL_APPROVAL": "The skill approval is not valid.",
     "INTEGRATION_NOT_CONFIGURED": "The integration is not configured.",
     "INTEGRATION_NOT_GRANTED": "You are not allowed to use this integration.",

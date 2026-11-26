@@ -16,10 +16,9 @@ iHub talks MCP in two directions. The **gateway** (`/mcp`, iHub as server) now s
 | Elicitation                       | yes: approval of gated tools                 | yes: form and URL mode, in the chat |
 | File Uploads (experimental)       | no                                           | no                                 |
 
-Outbound, iHub declares none of the extensions, so every server answers it as it answers any
-client without them: synchronously, without asking the user mid-call, without skills. Nothing is
-broken; iHub just does not use what servers like Supabase, GitHub or Atlassian now offer. This
-document plans the three client-side pieces and says what blocks File Uploads.
+Outbound, iHub now takes questions from servers (elicitation, form and URL mode) and uses the
+skills an admin approved; it does not declare Tasks, so a server answers a long call synchronously.
+This document plans the three client-side pieces and says what blocks File Uploads.
 
 ## 1. Elicitation from external servers
 

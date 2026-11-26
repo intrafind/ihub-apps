@@ -7,6 +7,7 @@ import Badge from '../../../../shared/components/Badge';
 import LoadingSpinner from '../../../../shared/components/LoadingSpinner';
 import {
   approveInstallationSkill,
+  fetchInstallationSkillFile,
   fetchInstallationSkills,
   revokeInstallationSkill
 } from '../../../../api/integrationsAdminApi';
@@ -64,6 +65,92 @@ function sizeText(bytes) {
 }
 
 /**
+ * The files of a listed skill, each opened read-only as the server offers it
+ * now, so the admin reads what they approve before approving it.
+ */
+function SkillFiles({ instanceId, item }) {
+  const { t } = useTranslation();
+  const [open, setOpen] = useState(null);
+  const [file, setFile] = useState(null);
+  const [error, setError] = useState(null);
+
+  const show = async path => {
+    if (open === path) {
+      setOpen(null);
+      return;
+    }
+    setOpen(path);
+    setFile(null);
+    setError(null);
+    try {
+      setFile(await fetchInstallationSkillFile(instanceId, item.name, path));
+    } catch (err) {
+      setError(getAdminApiErrorMessage(err));
+    }
+  };
+
+  return (
+    <details className="mt-2">
+      <summary className="cursor-pointer text-xs text-gray-700 dark:text-gray-300">
+        {t('admin.integrations.skills.files', '{{count}} files, {{size}}', {
+          count: item.files.length,
+          size: sizeText(item.size)
+        })}
+      </summary>
+      <ul className="mt-1 space-y-1">
+        {item.files.map(entry => (
+          <li key={entry.path}>
+            <button
+              type="button"
+              aria-expanded={open === entry.path}
+              onClick={() => show(entry.path)}
+              className="font-mono text-xs text-blue-700 dark:text-blue-300 underline hover:no-underline focus:outline-hidden focus-visible:ring-2 focus-visible:ring-blue-500"
+            >
+              {entry.path}
+            </button>
+            <span className="ml-2 text-xs text-gray-600 dark:text-gray-400">
+              {sizeText(entry.size)}
+            </span>
+            {open === entry.path && (
+              <div className="mt-1">
+                {error && (
+                  <p role="alert" className="text-xs text-red-700 dark:text-red-400">
+                    {error}
+                  </p>
+                )}
+                {!error && !file && (
+                  <p className="text-xs text-gray-600 dark:text-gray-400">
+                    {t('admin.integrations.skills.loadingFile', 'Reading the file…')}
+                  </p>
+                )}
+                {file && typeof file.text === 'string' && (
+                  <pre className="max-h-80 overflow-auto whitespace-pre-wrap break-words rounded-sm border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 p-2 text-xs text-gray-800 dark:text-gray-200">
+                    {file.text}
+                  </pre>
+                )}
+                {file && typeof file.text !== 'string' && (
+                  <p className="text-xs text-gray-600 dark:text-gray-400">
+                    {t('admin.integrations.skills.binaryFile', 'Not a text file.')}
+                  </p>
+                )}
+                {file?.truncated && (
+                  <p className="text-xs text-gray-600 dark:text-gray-400">
+                    {t(
+                      'admin.integrations.skills.truncated',
+                      'Only the start of the file is shown.'
+                    )}
+                  </p>
+                )}
+              </div>
+            )}
+          </li>
+        ))}
+      </ul>
+    </details>
+  );
+}
+
+/**
  * The skills an MCP server offers (MCP Skills extension) and their approval.
  * A skill reaches chats only once approved here, and only while the server
  * serves exactly what was approved.
@@ -93,15 +180,26 @@ export default function InstallationSkillsPanel({ instanceId }) {
     load();
   }, [load]);
 
-  const act = async (name, action) => {
-    setBusy(name);
+  const act = async (item, action) => {
+    setBusy(item.name);
     setActionError(null);
     try {
-      if (action === 'approve') await approveInstallationSkill(instanceId, name);
-      else await revokeInstallationSkill(instanceId, name);
+      if (action === 'approve') await approveInstallationSkill(instanceId, item.name, item.digest);
+      else await revokeInstallationSkill(instanceId, item.name);
       await load();
     } catch (err) {
-      setActionError({ name, message: getAdminApiErrorMessage(err) });
+      const changed = err?.response?.data?.code === 'SKILL_LISTING_CHANGED';
+      // The server changed the skill since this list: show what it offers now.
+      if (changed) await load();
+      setActionError({
+        name: item.name,
+        message: changed
+          ? t(
+              'admin.integrations.skills.changedSinceListed',
+              'The server changed this skill since the list was loaded. Review it again before you approve it.'
+            )
+          : getAdminApiErrorMessage(err)
+      });
     } finally {
       setBusy(null);
     }
@@ -136,7 +234,11 @@ export default function InstallationSkillsPanel({ instanceId }) {
       </div>
     );
   }
-  if (items === null) return <LoadingSpinner />;
+  if (items === null) {
+    return (
+      <LoadingSpinner message={t('admin.integrations.skills.loading', 'Loading the skills…')} />
+    );
+  }
 
   return (
     <div className="space-y-4">
@@ -164,17 +266,17 @@ export default function InstallationSkillsPanel({ instanceId }) {
                       {item.description}
                     </p>
                   )}
-                  <p className="mt-1 text-xs text-gray-600 dark:text-gray-400">
-                    {Array.isArray(item.files) &&
-                      t('admin.integrations.skills.files', '{{count}} files, {{size}}', {
-                        count: item.files.length,
-                        size: sizeText(item.size)
-                      })}
-                    {approved &&
-                      ` · ${t('admin.integrations.skills.approvedAt', 'Approved {{date}}', {
+                  {approved && (
+                    <p className="mt-1 text-xs text-gray-600 dark:text-gray-400">
+                      {t('admin.integrations.skills.approvedAt', 'Approved {{date}}', {
                         date: new Date(item.approvedAt).toLocaleDateString(i18n.language)
-                      })}`}
-                  </p>
+                      })}
+                    </p>
+                  )}
+                  {/* What the server offers now; an approved skill it no longer lists has none. */}
+                  {Array.isArray(item.files) && item.status !== 'missing' && (
+                    <SkillFiles instanceId={instanceId} item={item} />
+                  )}
                   {item.status === 'not_approvable' && (
                     <p className="mt-1 text-xs text-gray-600 dark:text-gray-400">
                       {reasonText(t, item.reason)}
@@ -192,7 +294,7 @@ export default function InstallationSkillsPanel({ instanceId }) {
                       type="button"
                       className={PRIMARY}
                       disabled={busy !== null}
-                      onClick={() => act(item.name, 'approve')}
+                      onClick={() => act(item, 'approve')}
                     >
                       {item.status === 'changed'
                         ? t('admin.integrations.skills.approveAgain', 'Approve again')
@@ -204,7 +306,7 @@ export default function InstallationSkillsPanel({ instanceId }) {
                       type="button"
                       className={SECONDARY}
                       disabled={busy !== null}
-                      onClick={() => act(item.name, 'revoke')}
+                      onClick={() => act(item, 'revoke')}
                     >
                       {t('admin.integrations.skills.revoke', 'Withdraw approval')}
                     </button>

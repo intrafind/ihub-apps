@@ -15,6 +15,7 @@ import {
   listInstallationSkills,
   loadServerSkill,
   parseServerSkillId,
+  readInstallationSkillFile,
   revokeInstallationSkill,
   serverSkillId,
   usableServerSkills
@@ -158,6 +159,13 @@ function harness(path) {
   return { conn, deps, instance: () => instance };
 }
 
+/** Approve a skill as an admin does: list it, then approve what was listed. */
+async function approve(h, name) {
+  const { items } = await listInstallationSkills('billing', admin, h.deps);
+  const item = items.find(entry => entry.name === name);
+  return approveInstallationSkill('billing', name, admin, h.deps, { digest: item?.digest });
+}
+
 describe.each([
   ['2026-07-28', '/modern'],
   ['2025-era session', '/legacy']
@@ -186,9 +194,7 @@ describe.each([
       for (const report of reports) {
         expect(report).toMatchObject({ status: 'not_approvable', reason: 'duplicate_name' });
       }
-      await expect(
-        approveInstallationSkill('billing', 'report', admin, h.deps)
-      ).rejects.toMatchObject({ code: 'SKILL_NOT_APPROVABLE' });
+      await expect(approve(h, 'report')).rejects.toMatchObject({ code: 'SKILL_NOT_APPROVABLE' });
     } finally {
       await h.conn.disconnect();
     }
@@ -196,7 +202,7 @@ describe.each([
 
   it('approves a skill, which a chat then loads under the installation’s name', async () => {
     try {
-      const item = await approveInstallationSkill('billing', 'deploy', admin, h.deps);
+      const item = await approve(h, 'deploy');
       expect(item).toMatchObject({ name: 'deploy', status: 'approved', approvedBy: 'admin' });
       expect(h.instance().skills.approved.deploy.resources).toHaveLength(2);
 
@@ -220,7 +226,7 @@ describe.each([
 
   it('refuses a skill the server changed since it was approved, until it is approved again', async () => {
     try {
-      await approveInstallationSkill('billing', 'deploy', admin, h.deps);
+      await approve(h, 'deploy');
       // Loaded once: its files are cached.
       expect(await loadServerSkill('billing:deploy', { app, user, deps: h.deps })).not.toBeNull();
 
@@ -231,7 +237,7 @@ describe.each([
       await h.conn.disconnect();
       expect(await loadServerSkill('billing:deploy', { app, user, deps: h.deps })).toBeNull();
 
-      await approveInstallationSkill('billing', 'deploy', admin, h.deps);
+      await approve(h, 'deploy');
       const again = await loadServerSkill('billing:deploy', { app, user, deps: h.deps });
       expect(await again.readFile('references/CHECKLIST.md')).toBe('1. Deploy\n');
     } finally {
@@ -239,9 +245,71 @@ describe.each([
     }
   });
 
+  it('approves only what the admin reviewed: a skill changed since the listing is refused', async () => {
+    try {
+      const { items } = await listInstallationSkills('billing', admin, h.deps);
+      const reviewed = items.find(item => item.name === 'deploy').digest;
+      files.deploy['references/CHECKLIST.md'] = '1. Something else\n';
+      await expect(
+        approveInstallationSkill('billing', 'deploy', admin, h.deps, { digest: reviewed })
+      ).rejects.toMatchObject({ code: 'SKILL_LISTING_CHANGED' });
+      expect(h.instance().skills).toBeUndefined();
+    } finally {
+      await h.conn.disconnect();
+    }
+  });
+
+  it('lets the admin read a file before approving', async () => {
+    try {
+      const skillMd = await readInstallationSkillFile(
+        'billing',
+        'deploy',
+        'SKILL.md',
+        admin,
+        h.deps
+      );
+      expect(skillMd).toMatchObject({ path: 'SKILL.md' });
+      expect(skillMd.text).toContain('name: deploy');
+      expect(
+        await readInstallationSkillFile(
+          'billing',
+          'deploy',
+          'references/CHECKLIST.md',
+          admin,
+          h.deps
+        )
+      ).toMatchObject({ text: '1. Plan\n2. Deploy\n' });
+      await expect(
+        readInstallationSkillFile('billing', 'deploy', '../secret', admin, h.deps)
+      ).rejects.toMatchObject({ code: 'SERVER_SKILL_NOT_FOUND' });
+    } finally {
+      await h.conn.disconnect();
+    }
+  });
+
+  it('never answers one connection’s read from another’s cache', async () => {
+    const other = harness(path);
+    try {
+      await approve(h, 'deploy');
+      const first = await loadServerSkill('billing:deploy', { app, user, deps: h.deps });
+      expect(await first.readFile('references/CHECKLIST.md')).toBe('1. Plan\n2. Deploy\n');
+      // The second user's connection reads for itself: a server that refuses
+      // them the file is not bypassed by the first user's cached copy.
+      other.deps.installations = h.deps.installations;
+      other.conn.readSkillFile = async () => {
+        throw new Error('not for you');
+      };
+      const second = await loadServerSkill('billing:deploy', { app, user, deps: other.deps });
+      expect(second).toBeNull();
+    } finally {
+      await h.conn.disconnect();
+      await other.conn.disconnect();
+    }
+  });
+
   it('withdraws an approval; an approved skill the server dropped shows as missing', async () => {
     try {
-      await approveInstallationSkill('billing', 'deploy', admin, h.deps);
+      await approve(h, 'deploy');
       delete files.deploy;
       const { items } = await listInstallationSkills('billing', admin, h.deps);
       expect(items.find(item => item.name === 'deploy').status).toBe('missing');
