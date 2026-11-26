@@ -169,6 +169,26 @@ Zero or less switches a limit off. A refused upload answers `413` (`QUOTA_FILE_B
 project items use. The server downloads the file with the user's stored credentials. On a task file
 `refreshOnRun` fetches it again at the start of every run with the task owner's credentials.
 
+### Files copied from iHub ("Use in app")
+
+```json
+{ "appId": "offer-writer", "source": { "kind": "chat-artifact", "ref": { "chatId": "…", "artifactId": "…" } } }
+{ "appId": "offer-writer", "source": { "kind": "project-item", "ref": { "projectId": "prj_…", "itemId": "…" } } }
+```
+
+- `chat-artifact` copies a file the assistant generated in a chat you may read (your own, a chat of
+  a project you are a member of). For a chat or file shared with you, use
+  `{ "shareId", "artifactId" }`; only a file the share names can be copied.
+- `project-item` copies a project document of a project you may use: its original when the project
+  kept one, else its text as a Markdown file. A document marked _Not for AI_ and a link item are
+  refused.
+- The file is a **copy**, stored under the chat's app policy like an upload (`origin: "connector"`,
+  `source.kind` says which). Deleting the source chat, revoking the share or deleting the project
+  document leaves it. It is never refreshed, and `refreshOnRun` is ignored for these kinds.
+- Images and ZIP archives are refused (`UNSUPPORTED_TYPE`), as for an upload. `SOURCE_GONE` (404)
+  covers both "does not exist" and "not yours to read"; `SOURCE_FORBIDDEN` (403) a document marked
+  _Not for AI_ or user projects that are switched off.
+
 ## Using a file in the document skills
 
 The model sees `id="…"` and `can_use_as_template="true"` on the file's `<content>` tag.

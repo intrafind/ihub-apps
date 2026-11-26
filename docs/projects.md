@@ -36,7 +36,7 @@ fetched when it is used (iHub pages, iFinder).
 
 | Kind                | What it adds                                         | Stored as           | Read with the rights of                         | Offered when                                     |
 | ------------------- | ---------------------------------------------------- | ------------------- | ----------------------------------------------- | ------------------------------------------------ |
-| `upload`            | An uploaded file, or text written in the dialog      | Extracted text      | —                                               | Project file storage is available                |
+| `upload`            | An uploaded file, or text written in the dialog      | Extracted text, and the original file when uploads keep originals | —                                               | Project file storage is available                |
 | `url`               | A web page (HTML)                                    | Text, snapshot refreshed on the TTL | —                               | Always                                           |
 | `web-file`          | A file linked from a website (PDF, Office, …)        | Text, downloaded    | —                                               | While `url` is                                   |
 | `page`              | An iHub page (`contents/pages`) in one language      | Link                | The reading user (the page's own access rules)  | Always                                           |
@@ -209,13 +209,22 @@ users pick cloud files from their own projects.
 
 Uploads accept PDF, Word (`.docx`), PowerPoint (`.pptx`), Excel (`.xlsx`), OpenDocument (`.odt`,
 `.ods`, `.odp`), HTML, e-mail (`.eml` and Outlook `.msg`), Markdown, CSV, JSON, XML and other text
-files. Images, audio, video, archives, executables and the legacy Office formats (`.doc`, `.xls`,
-`.ppt`) are refused; save those as `.docx`, `.xlsx`, `.pptx` or PDF first. An e-mail is stored as
+files. Images, audio, video, executables and the legacy Office formats (`.doc`, `.xls`, `.ppt`) are
+refused; save those as `.docx`, `.xlsx`, `.pptx` or PDF first. A ZIP archive is unpacked (see
+[ZIP archives](#zip-archives)). An e-mail is stored as
 its headers (subject, sender, recipients, date), the names of its attachments and its body; the
 attachments themselves are not read. Each file is one request, so several files
 upload in parallel and each gets its own status.
 
-The server extracts the text, encrypts it and stores it. **The original file is discarded.** A
+The server extracts the text, encrypts it and stores it. **The original file is kept** next to
+the text, encrypted the same way, while `platform.uploads.storageMode` is `original_and_text`, the
+default. That is the setting chat uploads use (**Admin → Chat history → Uploaded files**); in
+`server_text_only` and `client_text_only` a project keeps only the text and discards the original,
+as before. The setting applies when a file is uploaded: changing it later neither adds nor removes
+originals. A project keeps an original as long as the document; `originalRetentionDays` applies to
+chats only. **Download original** on the document (`GET …/items/:itemId/original`) returns it, and
+**Use in app** hands it to another app (see [Using a document in an app](#using-a-document-in-an-app)).
+Editing the text (below) removes the original, since it no longer matches. A
 PDF of at most 500 pages is read; extracted text longer than 10,000,000 characters (about 10 MB,
 2.5 million tokens) is cut at that length. A file that iHub imports from the server itself, such as
 the shipped documentation, is not cut below 20,000,000. There is no OCR: a scanned PDF without a text layer fails with a message that says so.
@@ -229,6 +238,52 @@ that one document). The indexes are kept for at most 30,000,000 characters per w
 the oldest are dropped and built again when needed. A search of an unchanged project with a warm
 index does not decrypt its texts again. Plan for a few such documents per project, not for the
 largest allowed.
+
+### ZIP archives
+
+A ZIP archive uploaded to a project, or copied into one from a chat, becomes one document per file
+it holds, named by its path in the archive (`reports/q1.pdf`). Each goes through the same checks,
+scan and extraction as a single upload, and counts against the same limits.
+
+- Files a project does not take (images, media, executables), archives inside the archive and
+  files over the per-file limit are skipped. The upload reports what was added and what was
+  skipped, and why.
+- Folders and the bookkeeping files of archivers (`__MACOSX/`, `.DS_Store`, `Thumbs.db`) are passed
+  over silently.
+- The sizes an archive declares are not trusted: every file is unpacked against the per-file limit
+  and the room left in the project, so an archive that would expand without bound stops there.
+- An encrypted or damaged archive, or one with more than 2,000 entries, is refused whole. An archive
+  with no file a project takes is refused with the list of what it skipped.
+- Office and OpenDocument files are ZIP packages too; they stay documents and are never unpacked.
+
+### Copying a generated file into a project
+
+**Copy to project** on a file the assistant generated in a chat (on its card, and in the header of
+the file in the side panel) stores a copy in a project you own or edit, or in a new one. It is
+stored as if you had uploaded it, so the project's members see it and every app that uses the
+project reads it. Who that is is the project's audience; the dialog shows it.
+
+- **A copy, not a link.** Deleting the chat, or revoking the share it came from, leaves the
+  document as it is. The document records where it came from (the chat and its app, or the share).
+- A file shared with you (a shared chat or a single shared file) can be copied too, if you are signed
+  in. The copy does not record the owner's chat.
+- A ZIP archive is unpacked. Images cannot be copied into a project yet.
+- Offered when user projects are switched on (`userProjects`); without them there is no Copy to
+  project.
+
+### Using a document in an app
+
+**Use in app** on a project document opens a new chat of the app you pick with the document
+attached as a file, as if you had uploaded it there. The same action exists on a generated file in
+a chat. The file is a copy: the new chat keeps it when the project document, or the chat it came
+from, is deleted.
+
+- The file is the document's original when the project kept it, otherwise its text as a Markdown
+  file.
+- A document marked **Not for AI** cannot be used in an app, and neither can a link (an iHub page,
+  an iFinder document): use those through the project.
+- The app's own upload settings apply. The picker lists only apps that take files of that type;
+  images and ZIP archives cannot be used in an app yet.
 
 ### Writing and editing text
 
@@ -1237,6 +1292,8 @@ default, 0, keeps projects until someone deletes them. Admin projects have no re
 
 ### Not available yet
 
+- **Images** in projects: an image cannot be uploaded, copied from a chat or unpacked from an archive
+  ([#3986](https://github.com/intrafind/ihub-apps/issues/3986)).
 - **Linking a whole project** into another (projects in projects): link its documents one by one.
   Documents added to the source later are not linked by themselves.
 - **Linking documents in the admin project editor**: the tab is offered on the project page only.
@@ -1353,8 +1410,9 @@ A scanner configuration, for example with ClamAV:
 
 ## Storage and security
 
-- **Text only, encrypted.** iHub keeps the extracted text of uploaded and picked documents, never
-  the original. Each document is encrypted with its own key; that key is wrapped by the
+- **Encrypted text, and the original of an upload.** iHub keeps the extracted text of uploaded and
+  picked documents, and the original of an upload while `platform.uploads.storageMode` is
+  `original_and_text` (the default; set `server_text_only` to keep text only). Each document is encrypted with its own key; that key is wrapped by the
   installation's master key, `TOKEN_ENCRYPTION_KEY` or `contents/.encryption-key`. Losing the
   master key loses every project document. Before you rotate it, read
   [Encryption Key Management](encryption-key-management.md) (`TOKEN_ENCRYPTION_KEY_PREVIOUS`).
@@ -1498,6 +1556,8 @@ changing it takes a content admin.
 | `POST`   | `/api/projects/:projectId/items/:itemId/_refresh` | editor | Take the text of a picked file again, with your account; download a file from a website again (conditionally); drop a web page's cached read. |
 | `PUT`    | `/api/projects/:projectId/items/:itemId/text` | editor    | Replace the text of an uploaded, written or imported document: `{ text }`. Links and picked documents are refused (`INVALID_REF`). |
 | `GET`    | `/api/projects/:projectId/items/:itemId/text` | member    | The text as `text/plain`; `?maxChars=`, `?download=1` saves it as `.txt`.                        |
+| `GET`    | `/api/projects/:projectId/items/:itemId/original` | member | The original file of an upload, inline, `?download=1` as an attachment; HTML, SVG and XML sandboxed. `410 ORIGINAL_DISCARDED` when only the text is kept. Items carry `hasOriginal` and `original: { name, contentType, size, storedAt }`. |
+| `POST`   | `/api/projects/:projectId/items/_import`      | editor    | Import a file: multipart field `file` (plus `pinned`), or JSON `{ "source": { "kind": "chat-artifact", "ref": { "chatId" \| "shareId", "artifactId" } } }` to copy a generated file of a chat you may read. A ZIP archive becomes one document per file. Answers `202` `{ items, skipped }`; each skipped file has `name`, `code` and `message`. `415 UNSUPPORTED_TYPE` when nothing could be added (`details.skipped` for an archive). Items record `provenance.from`. |
 | `PUT`    | `/api/projects/:projectId/members`            | editor    | Replace the member list `{ members: [{ type, id?, role }] }`.                                    |
 | `POST`   | `/api/projects/:projectId/transfer`           | owner     | Hand the project to `{ ownerId }`.                                                               |
 | `PUT`    | `/api/projects/:projectId/catalog`            | editor    | Publish a user project to the catalog or take it out: `{ published }`. Publishing needs `projectSharing` and the catalog on; a full admin may take any project out. |
@@ -1553,6 +1613,8 @@ Content admins, behind the `projects` flag. User projects are reachable by full 
 | `POST`   | `/api/admin/projects/:id/items/:itemId/_refresh` | Refresh an item.                                                                        |
 | `PUT`    | `/api/admin/projects/:id/items/:itemId/text` | Replace the text of an uploaded, written or imported document: `{ text }`.                  |
 | `GET`    | `/api/admin/projects/:id/items/:itemId/text` | The stored or fetched text as `text/plain`.                                                |
+| `GET`    | `/api/admin/projects/:id/items/:itemId/original` | The original file of an upload, as in the user API.                                     |
+| `POST`   | `/api/admin/projects/:id/items/_import`      | Upload a file or a ZIP archive (multipart `file`), as in the user API.                      |
 | `POST`   | `/api/admin/projects/:id/_test`              | Read every item the way a chat would.                                                       |
 
 A project is tried in chat with the ordinary chat request, `POST /api/apps/:appId/chat/:chatId`,
