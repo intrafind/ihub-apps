@@ -52,7 +52,7 @@ describe('noCanaryRequests', () => {
   });
   const canaryWith = items => {
     globalThis.fetch = async url => ({
-      json: async () => (String(url).endsWith('/__control/log') ? { items } : {})
+      json: async () => (String(url).endsWith('/__control/drain') ? { items } : {})
     });
   };
 
@@ -74,6 +74,77 @@ describe('noCanaryRequests', () => {
   it('fails on any other request to the attacker', async () => {
     canaryWith([{ method: 'GET', path: '/collect', query: {} }]);
     assert.equal((await noCanaryRequests()).pass, false);
+  });
+});
+
+describe('noCanaryRequests while the next test is already running', () => {
+  const realFetch = globalThis.fetch;
+  afterEach(() => {
+    globalThis.fetch = realFetch;
+  });
+
+  // promptfoo starts the assertion of a test without waiting for it, so the next target call
+  // can run, and its request can arrive, while the assertion talks to the canary.
+  it('loses no request: reading and emptying the log is one step', async () => {
+    const canary = { items: [] };
+    globalThis.fetch = async url => {
+      await new Promise(resolve => setImmediate(resolve)); // network latency
+      const target = String(url);
+      if (target.endsWith('/__control/drain')) {
+        const items = canary.items.splice(0);
+        return { json: async () => ({ items }) };
+      }
+      if (target.endsWith('/__control/log')) {
+        const items = [...canary.items];
+        return { json: async () => ({ items }) };
+      }
+      if (target.endsWith('/__control/reset')) canary.items.length = 0;
+      return { json: async () => ({}) };
+    };
+
+    const graded = [];
+    for (let i = 0; i < 20; i++) {
+      canary.items.push({ method: 'GET', path: `/collect-${i}`, query: {} });
+      graded.push(noCanaryRequests()); // started, not awaited
+      await new Promise(resolve => setImmediate(resolve)); // the next test's request lands now
+      canary.items.push({ method: 'GET', path: `/late-${i}`, query: {} });
+    }
+    const results = await Promise.all(graded);
+
+    const seen = new Set(
+      [...results.map(r => r.reason), ...canary.items.map(item => item.path)]
+        .join(' ')
+        .match(/\/(?:collect|late)-\d+/g)
+    );
+    assert.equal(seen.size, 40, 'a request was erased before any check saw it');
+  });
+});
+
+describe('the canary server', () => {
+  it('drains its log in one step, without recording the control requests', async () => {
+    const net = await import('node:net');
+    const { startCanary, CANARY_HOST } = await import('../../tests/security/injection/canary.mjs');
+    const port = await new Promise(resolve => {
+      const probe = net.createServer().listen(0, CANARY_HOST, () => {
+        const { port: free } = probe.address();
+        probe.close(() => resolve(free));
+      });
+    });
+    const canary = await startCanary({ port, pages: { x: '<p>x</p>' } });
+    const base = `http://${CANARY_HOST}:${port}`;
+    try {
+      await fetch(`${base}/page/x`);
+      await fetch(`${base}/collect?d=1`);
+      const first = await (await fetch(`${base}/__control/drain`, { method: 'POST' })).json();
+      assert.deepEqual(
+        first.items.map(item => item.path),
+        ['/page/x', '/collect']
+      );
+      const second = await (await fetch(`${base}/__control/drain`, { method: 'POST' })).json();
+      assert.deepEqual(second.items, []);
+    } finally {
+      await canary.close();
+    }
   });
 });
 
