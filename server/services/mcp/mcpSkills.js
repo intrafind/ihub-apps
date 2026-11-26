@@ -471,7 +471,9 @@ async function readVerified(conn, instanceId, approval, path, { useCache = true 
   const resource = approval.resources.find(r => skillFilePath(approval, r.uri) === path);
   if (!resource) return null;
   const kind = path === SKILL_FILE ? 'body' : 'text';
-  const key = `${instanceId}\n${connectionKeyOf(conn)}\n${resource.digest}\n${kind}`;
+  // Per file too: two files with the same bytes share a digest, and a server
+  // may still serve one and refuse the other.
+  const key = `${instanceId}\n${connectionKeyOf(conn)}\n${resource.uri}\n${resource.digest}\n${kind}`;
   if (useCache && fileCache.has(key)) return fileCache.get(key);
   const file = await conn.readSkillFile(approval, path);
   const text = path === SKILL_FILE ? (file.body ?? '') : (file.text ?? null);

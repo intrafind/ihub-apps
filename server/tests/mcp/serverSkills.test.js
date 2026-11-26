@@ -307,6 +307,26 @@ describe.each([
     }
   });
 
+  it('never answers one file’s read with another file of the same bytes', async () => {
+    files.deploy['references/COPY.md'] = files.deploy['references/CHECKLIST.md'];
+    try {
+      await approve(h, 'deploy');
+      // Approval read every file on this connection: start from an empty cache.
+      clearServerSkillCache();
+      const skill = await loadServerSkill('billing:deploy', { app, user, deps: h.deps });
+      expect(await skill.readFile('references/CHECKLIST.md')).toBe('1. Plan\n2. Deploy\n');
+      // The server refuses the copy: its read is not answered from the cache.
+      const read = h.conn.readSkillFile.bind(h.conn);
+      h.conn.readSkillFile = async (entry, ref) => {
+        if (ref === 'references/COPY.md') throw new Error('not this one');
+        return read(entry, ref);
+      };
+      expect(await skill.readFile('references/COPY.md')).toBeNull();
+    } finally {
+      await h.conn.disconnect();
+    }
+  });
+
   it('withdraws an approval; an approved skill the server dropped shows as missing', async () => {
     try {
       await approve(h, 'deploy');
