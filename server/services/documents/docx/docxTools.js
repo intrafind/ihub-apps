@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
+import { getLocalizedString } from '../../../utils/localize.js';
 import logger from '../../../utils/logger.js';
 import { assertSpecSize, optionalString, toolFailure } from '../documentToolHelpers.js';
 import {
@@ -15,7 +16,7 @@ import {
 import { GeneratedFileError, holdGeneratedFile } from '../generatedFiles.js';
 import { DocumentGenerationError, renderInWorker } from '../renderService.js';
 import { applyTemplateToDocxSpec, templateBundleFor } from '../templates/applyTemplate.js';
-import { givenFieldsOf } from '../templates/templateFields.js';
+import { givenFieldsOf, resolveFieldValues } from '../templates/templateFields.js';
 import {
   DOCX_FILE_MIME,
   loadUploadedFileOriginal,
@@ -54,15 +55,11 @@ export function docxSpecFromToolArgs(args) {
     // Unset leaves the table of contents to the template: one at `{{toc}}`, none otherwise.
     toc: typeof args.toc === 'boolean' ? args.toc : undefined,
     fields: givenFieldsOf(args.fields),
-    header: optionalString(args.header, 300),
-    footer: optionalString(args.footer, 300),
-    pageNumbers: args.pageNumbers !== false,
-    page: { size: args.pageSize, orientation: args.orientation },
-    colors: {
-      primary: optionalString(args.primaryColor, 20),
-      accent: optionalString(args.accentColor, 20)
-    },
-    fonts: { body: optionalString(args.font, 64) }
+    // The design (colours, fonts, header, footer, page setup) comes from the template.
+    pageNumbers: true,
+    page: {},
+    colors: {},
+    fonts: {}
   };
   assertSpecSize(spec);
   return spec;
@@ -77,8 +74,14 @@ export function docxSpecFromToolArgs(args) {
  * @param {string} [options.template] - Requested template id.
  * @returns {Promise<{ buffer: Buffer, warnings: string[], templateId: string|null }>}
  */
-export async function createDocx(spec, { app, template, templateFile = null } = {}) {
+export async function createDocx(
+  spec,
+  { app, template, templateFile = null, askForFields = false } = {}
+) {
   const bundle = await templateBundleFor({ format: 'docx', app, requested: template });
+  // An uploaded document replaces the template, and so its fields.
+  const fieldWarnings =
+    bundle && askForFields && !templateFile?.buffer ? checkFields(bundle.template, spec) : [];
   const applied = applyTemplateToDocxSpec(spec, bundle);
   if (templateFile?.buffer) {
     // The user's own document: its styles, headers/footers and page setup win
@@ -98,7 +101,43 @@ export async function createDocx(spec, { app, template, templateFile = null } = 
     template: applied.templateId,
     durationMs: Date.now() - started
   });
-  return { buffer, warnings, templateId: applied.templateId };
+  return { buffer, warnings: [...fieldWarnings, ...warnings], templateId: applied.templateId };
+}
+
+/**
+ * Stop a document whose template needs a value it does not have: a required
+ * field without a value, or a value that is not one of the field's options.
+ * The message is for the model and tells it to ask the user.
+ *
+ * @param {Object} template
+ * @param {Object} spec
+ * @returns {string[]} Warnings: field names the template does not have.
+ * @throws {DocumentGenerationError} `missing_fields`, with the fields as `details`.
+ */
+function checkFields(template, spec) {
+  const { missing, invalid, unknown } = resolveFieldValues(template.fields, spec.fields);
+  if (missing.length || invalid.length) {
+    const name = getLocalizedString(template.name, 'en') || template.id;
+    const about = field =>
+      `${field.name} (${[field.label, field.description].filter(Boolean).join(': ')}${
+        field.options ? `; one of: ${field.options.join(', ')}` : ''
+      })`;
+    const parts = [];
+    if (missing.length) parts.push(`Missing: ${missing.map(about).join('; ')}.`);
+    if (invalid.length) {
+      parts.push(
+        `Not allowed: ${invalid.map(f => `${f.name} = "${f.value}" (use one of: ${f.options.join(', ')})`).join('; ')}.`
+      );
+    }
+    throw new DocumentGenerationError(
+      `The document template "${name}" needs more information before the document can be created. ${parts.join(' ')} Ask the user for these values; do not invent them. Then call this tool again with "fields" set, for example {"${(missing[0] || invalid[0]).name}": "…"}.`,
+      'missing_fields',
+      { missing, invalid }
+    );
+  }
+  return unknown.length
+    ? [`The template has no field named ${unknown.join(', ')}; the value was ignored.`]
+    : [];
 }
 
 /**
@@ -114,6 +153,10 @@ export async function runCreateDocx(params) {
       throw new DocumentGenerationError('Provide the document content in "markdown".', 'invalid');
     }
     const spec = docxSpecFromToolArgs(params);
+    // The author of a document is the person who asked for it, unless told otherwise.
+    if (!spec.author && params.user?.name && params.user.id !== 'anonymous') {
+      spec.author = params.user.name;
+    }
     const extraWarnings = [];
     let templateFile = null;
     if (params.templateFileId) {
@@ -148,7 +191,8 @@ export async function runCreateDocx(params) {
     } = await createDocx(spec, {
       app: params.appConfig,
       template: params.template,
-      templateFile
+      templateFile,
+      askForFields: true
     });
     const warnings = [...extraWarnings, ...renderWarnings];
     const file = holdGeneratedFile({
@@ -214,6 +258,10 @@ export async function runEditDocx(params) {
       what: 'Word document'
     });
     const next = applySettings(args, params.set, DOCX_SETTINGS);
+    // Changing one field keeps the others.
+    if (next.fields && next.fields !== args.fields) {
+      next.fields = { ...args.fields, ...givenFieldsOf(next.fields) };
+    }
     if (edits.length) {
       next.markdown = applyTextEdits(String(next.markdown || ''), edits, {
         readHint:

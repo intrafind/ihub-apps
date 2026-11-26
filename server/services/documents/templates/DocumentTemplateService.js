@@ -17,6 +17,7 @@ import {
   referencedAssets
 } from '../../../validators/documentTemplateSchema.js';
 import { checkTemplateAsset, TemplateAssetError } from './templateAssets.js';
+import { fieldsGuide } from './templateFields.js';
 import { pdfMarginsFromWordSetup, readThemeBrand, resolveBrand } from './themeBrand.js';
 
 /**
@@ -281,20 +282,38 @@ export async function slideGuideFor(
  * @param {Object} params
  * @param {Object} [params.app]
  * @param {string} [params.language]
- * @returns {Promise<{ pinned: { id: string, name: string } | null, choices: Array<Object>, defaultName: string|null, guides: { pptx: string } }>}
+ * @returns {Promise<{ pinned: { id: string, name: string } | null, choices: Array<Object>,
+ *   defaultName: string|null, guides: { pptx: string, docx: string }, fieldsApply: boolean,
+ *   brand: Object|null }>} `guides.docx` describes the fields of the templates that can apply,
+ *   `fieldsApply` says whether there are any, and `brand` is what the template that applies
+ *   gives its documents (null when it takes all of it from the neutral default).
  */
 export async function documentTemplateContext({ app, language = 'en' } = {}) {
-  const choices = await templateChoices(language);
+  const all = await listTemplates();
+  const choices = all.map(t => ({
+    id: t.id,
+    name: getLocalizedString(t.name, language) || t.id,
+    description: getLocalizedString(t.description, language) || '',
+    default: Boolean(t.default)
+  }));
   const pinned = app?.documentTemplate ? choices.find(c => c.id === app.documentTemplate) : null;
   const applying = pinned || choices.find(c => c.default) || null;
   const template = applying ? await getTemplate(applying.id) : null;
+  // Fields can be asked for in the templates that can apply: the pinned one, else every enabled one.
+  const fieldTemplates = pinned ? all.filter(t => t.id === pinned.id) : all;
+  const docxGuide = fieldsGuide(fieldTemplates, { language, single: Boolean(pinned) });
+  const brand = template ? await resolveTemplateBrand(template) : null;
   // Loaded here: the chat file code it comes with is not needed to read or write templates.
   const { userTemplateUploadsAllowed } = await import('../templateFiles.js');
   return {
     pinned: pinned ? { id: pinned.id, name: pinned.name } : null,
     choices,
     defaultName: choices.find(c => c.default)?.name || null,
+    fieldsApply: Boolean(docxGuide),
+    brand:
+      brand && Object.values(brand.sources).some(source => source !== 'default') ? brand : null,
     guides: {
+      docx: docxGuide,
       pptx: template
         ? await slideGuideFor(template, {
             language,

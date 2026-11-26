@@ -138,3 +138,68 @@ function valueOfField(definition, given) {
   const option = definition.options.find(o => o.toLowerCase() === value.toLowerCase());
   return option === undefined ? { value: '', notAllowed: value } : { value: option };
 }
+
+const GUIDE_TEXT = {
+  en: {
+    intro:
+      'Fields of the company\'s Word templates. Pass their values in "fields" as {"name": "value"}. Ask the user for every required field whose value you do not know; never invent a value. The title, subtitle, author, date, year and company are filled in automatically.',
+    template: 'Template "{id}"{default}: ',
+    isDefault: ' (default)',
+    required: 'required',
+    optional: 'optional',
+    oneOf: 'one of',
+    defaultValue: 'default'
+  },
+  de: {
+    intro:
+      'Felder der Word-Vorlagen des Unternehmens. Die Werte in "fields" als {"name": "wert"} übergeben. Den Benutzer nach jedem Pflichtfeld fragen, dessen Wert du nicht kennst; nie einen Wert erfinden. Titel, Untertitel, Autor, Datum, Jahr und Firma werden automatisch eingetragen.',
+    template: 'Vorlage "{id}"{default}: ',
+    isDefault: ' (Standard)',
+    required: 'Pflicht',
+    optional: 'optional',
+    oneOf: 'einer von',
+    defaultValue: 'Standard'
+  }
+};
+
+/** The longest guide the model is given, in characters. */
+const MAX_GUIDE_LENGTH = 3000;
+
+function fieldLine(field, text) {
+  const notes = [
+    field.required ? text.required : text.optional,
+    ...(field.options ? [`${text.oneOf}: ${field.options.join(' | ')}`] : []),
+    ...(field.default !== undefined ? [`${text.defaultValue}: ${field.default}`] : [])
+  ];
+  const about = field.description ? `${field.label} — ${field.description}` : field.label;
+  return `${field.name} (${about}; ${notes.join('; ')})`;
+}
+
+/**
+ * What the model is told about the fields of the templates it can use: each
+ * field with its label, whether it is required, its allowed values and its
+ * default, and that it asks the user instead of inventing a value.
+ *
+ * @param {Array<{ id: string, default?: boolean, fields?: Object }>} templates -
+ *   The templates that can apply: the pinned one, else every enabled one.
+ * @param {Object} [options]
+ * @param {string} [options.language]
+ * @param {boolean} [options.single] - Only one template can apply, so it is not named.
+ * @returns {string} Empty when no template has fields.
+ */
+export function fieldsGuide(templates, { language = 'en', single = false } = {}) {
+  const text = GUIDE_TEXT[String(language).slice(0, 2)] || GUIDE_TEXT.en;
+  const lines = [];
+  for (const template of templates) {
+    const fields = describeFields(template.fields || {}, language);
+    if (!fields.length) continue;
+    const prefix = single
+      ? ''
+      : text.template
+          .replace('{id}', template.id)
+          .replace('{default}', template.default ? text.isDefault : '');
+    lines.push(`${prefix}${fields.map(field => fieldLine(field, text)).join('; ')}`);
+  }
+  if (!lines.length) return '';
+  return `${text.intro}\n${lines.join('\n')}`.slice(0, MAX_GUIDE_LENGTH);
+}

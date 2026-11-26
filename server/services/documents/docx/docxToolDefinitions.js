@@ -18,7 +18,8 @@ export const CREATE_DOCX_TOOL = {
     de: String.raw`Erstellt ein bearbeitbares Word-Dokument (.docx) auf dem Server und stellt es dem Benutzer als Download bereit. Inhalt als Markdown schreiben (Überschriften, Absätze, Listen, GFM-Tabellen, Code, Zitate, GitHub-Hinweise wie "> [!NOTE]"; "\pagebreak" in einer eigenen Zeile beginnt eine neue Seite). Überschriften werden echte Word-Überschriften, sodass der Benutzer das Dokument umformatieren und das Inhaltsverzeichnis aktualisieren kann. Der Benutzer sieht im Chat eine Download-Karte – keinen Link einfügen, stattdessen den Dateinamen nennen. Für Hinweise zuerst den Skill "docx" aktivieren.`
   },
   usesDocumentTemplate: true,
-  brandParameters: ['primaryColor', 'accentColor', 'font'],
+  templateGuide: 'docx',
+  fieldParameters: ['fields'],
   parameters: {
     type: 'object',
     properties: {
@@ -36,7 +37,7 @@ export const CREATE_DOCX_TOOL = {
       date: {
         type: 'string',
         description:
-          'Optional date for the cover page and the {date} / {{date}} placeholder (defaults to today).'
+          'Optional date for the cover page and the {{date}} placeholder; {{year}} is its year (defaults to today).'
       },
       showTitle: {
         type: 'boolean',
@@ -59,23 +60,13 @@ export const CREATE_DOCX_TOOL = {
       toc: {
         type: 'boolean',
         description:
-          'Add a table of contents built from the headings (Word updates the page numbers when the file is opened).'
+          'Add a table of contents built from the headings (Word updates the page numbers when the file is opened; other viewers show it empty). A template with a {{toc}} placeholder shows one where it wants it unless you set this to false; leave it unset to follow the template.'
       },
-      header: {
-        type: 'string',
-        description: 'Running header text; placeholders {title}, {page}, {pages}, {date}.'
-      },
-      footer: { type: 'string', description: 'Running footer text (left); same placeholders.' },
-      pageNumbers: { type: 'boolean', description: 'Page numbers in the footer (default true).' },
-      pageSize: { type: 'string', enum: ['A4', 'LETTER', 'LEGAL', 'A3', 'A5'] },
-      orientation: { type: 'string', enum: ['portrait', 'landscape'] },
-      primaryColor: {
-        type: 'string',
-        description: 'Hex colour for headings, table headers and bullets, e.g. "#0f766e".'
-      },
-      accentColor: {
-        type: 'string',
-        description: 'Hex colour for secondary accents, e.g. "#0284c7".'
+      fields: {
+        type: 'object',
+        additionalProperties: { type: 'string' },
+        description:
+          'Values of the template\'s own fields, as {"name": "value"}. The fields a template has, and which of them are required, are listed in this tool\'s description. Ask the user for a required value you do not know; do not invent one.'
       },
       templateFileId: {
         type: 'string',
@@ -87,11 +78,6 @@ export const CREATE_DOCX_TOOL = {
         enum: ['styles_only', 'fill_placeholders', 'append'],
         description:
           'How to use templateFileId. "styles_only" (default when the file has no {{content}} marker) keeps styles, headers/footers and page setup and drops the old body text; "fill_placeholders" fills {{title}}, {{date}}, … and inserts the content at {{content}}; "append" adds the content after the old body.'
-      },
-      font: {
-        type: 'string',
-        description:
-          'Body font: "sans" (Calibri), "serif" (Cambria) or a font name installed on the reader\'s computer, e.g. "Arial".'
       }
     },
     required: ['filename', 'title', 'markdown']
@@ -102,8 +88,8 @@ export const EDIT_DOCX_TOOL = {
   id: 'edit_docx',
   name: { en: 'Edit Word document', de: 'Word-Dokument bearbeiten' },
   description: {
-    en: 'Change a Word document this chat created with create_docx instead of writing it again: exact text replacements in its Markdown ("edits"), new settings ("set": title, subtitle, author, date, header, footer, toc, coverPage, pageNumbers, …), or both. Each oldText must occur exactly once; all edits apply or none. The document is rendered again under the same name, in the same template. If you do not have its Markdown, read it with chat_artifacts_read first. Use create_docx only for a new document or a rewrite.',
-    de: 'Ändert ein Word-Dokument, das dieser Chat mit create_docx erstellt hat, statt es neu zu schreiben: exakte Textersetzungen im Markdown ("edits"), neue Einstellungen ("set": title, subtitle, author, date, header, footer, toc, coverPage, pageNumbers, …) oder beides. Jeder oldText muss genau einmal vorkommen; alle Änderungen werden übernommen oder keine. Das Dokument wird unter demselben Namen in derselben Vorlage neu erzeugt. Fehlt das Markdown, zuerst mit chat_artifacts_read lesen. create_docx nur für ein neues Dokument oder eine Neufassung.'
+    en: 'Change a Word document this chat created with create_docx instead of writing it again: exact text replacements in its Markdown ("edits"), new settings ("set": title, subtitle, author, date, toc, coverPage, fields, …), or both. Each oldText must occur exactly once; all edits apply or none. The document is rendered again under the same name, in the same template. If you do not have its Markdown, read it with chat_artifacts_read first. Use create_docx only for a new document or a rewrite.',
+    de: 'Ändert ein Word-Dokument, das dieser Chat mit create_docx erstellt hat, statt es neu zu schreiben: exakte Textersetzungen im Markdown ("edits"), neue Einstellungen ("set": title, subtitle, author, date, toc, coverPage, fields, …) oder beides. Jeder oldText muss genau einmal vorkommen; alle Änderungen werden übernommen oder keine. Das Dokument wird unter demselben Namen in derselben Vorlage neu erzeugt. Fehlt das Markdown, zuerst mit chat_artifacts_read lesen. create_docx nur für ein neues Dokument oder eine Neufassung.'
   },
   parameters: {
     type: 'object',

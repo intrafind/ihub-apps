@@ -3,7 +3,7 @@ name: docx
 description: Create editable Word documents (.docx) on demand — reports, proposals, concepts, letters, minutes, specifications, manuals, contract drafts — with real Word headings, lists, tables, callouts, a cover page and a table of contents, in the company's document template. Use whenever the user asks to create, generate or export a Word document, a .docx file, or an editable document they want to keep working on. Also use it to change a Word document this chat already made. Do NOT activate just to read, summarize or answer questions about an uploaded .docx file (its extracted text is already in the conversation context).
 metadata:
   author: IntraFind
-  version: '1.2'
+  version: '1.3'
 allowed-tools: create_docx edit_docx
 ---
 
@@ -29,24 +29,35 @@ You create Word documents with the `create_docx` tool. You write the content as 
 
 ## The company template
 
-If the app uses a **document template**, the server applies it automatically: the company's Word template (styles, header, footer, logo, page setup, and `{{title}}` / `{{subtitle}}` / `{{author}}` / `{{date}}` / `{{company}}` / `{{content}}` placeholders) or its brand colours, fonts and logo. Then:
+If the app uses a **document template**, the server applies it automatically: the company's Word template (styles, header, footer, logo, page setup) or its brand colours, fonts and logo. Then:
 
-- Do not try to imitate the corporate design yourself, and do not set `primaryColor`, `accentColor` or `font`.
+- Do not try to imitate the corporate design yourself: colours, fonts, header, footer and page setup come from the template. The tool description names the brand (colours, fonts) for your information.
 - Do not repeat the company name, logo text or a confidentiality line in the content: the header and footer have them.
 - If `create_docx` offers a `template` parameter, use `default` unless the user asks for a specific template.
+
+### Placeholders and fields of a template
+
+The company's Word template can hold placeholders written `{{name}}`. The server fills them; you do not write them into the Markdown.
+
+- **Filled automatically:** `{{title}}`, `{{subtitle}}`, `{{author}}` (you, else the person who asked), `{{date}}` (today unless you set `date`), `{{year}}` and `{{company}}`. Page numbers (`{{page}}`, `{{pages}}`) are Word fields that count the pages.
+- **The template's own fields** (a classification, a department, a document number, …) are described in the tool description, if the template has any. Pass their values in `fields`, for example `{"classification": "internal"}`. A field marked required needs a value:
+  - **Ask the user for it** when you do not know it, and name the allowed values if the field has a list. **Never invent a value** and never fill a required field with a guess.
+  - A field with a default needs no question unless the user wants something else.
+  - If `create_docx` answers `missing_fields`, nothing was created: ask the user for exactly the values it names, then call it again with `fields` set. An edit later changes one field with `edit_docx`, `set: {"fields": {"classification": "public"}}`; the other fields stay.
+- **The table of contents** is part of the template when it has a `{{toc}}` placeholder: leave `toc` unset and it appears where the template wants it. Set `toc: false` only when the user does not want one. Without `{{toc}}`, `toc: true` puts it at the start of the content. Word fills the contents when the file is opened and asks the user to update fields; other viewers (a preview, a mobile app) show it empty. Say so when it matters, and do not claim it is filled.
 
 ## Workflow
 
 1. **Plan the document.** Audience, purpose, sections, key facts. Ask only when essential facts are missing.
 2. **Write the content as Markdown** in `markdown`. Start with the first section — the title is printed already; do not repeat it as a `#` heading.
-3. **Call `create_docx`** with a descriptive `filename`, the `title`, the `language` of the content and the `markdown`. Add `subtitle`, `author`, `date`, `showTitle: false` (for letters), `coverPage` (formal documents of more than about three pages) and `toc` (four or more sections) as needed.
+3. **Call `create_docx`** with a descriptive `filename`, the `title`, the `language` of the content and the `markdown`. Add `subtitle`, `author`, `date`, `showTitle: false` (for letters), `coverPage` (formal documents of more than about three pages), `toc` (four or more sections, when the template has no `{{toc}}` of its own) and `fields` (when the template has fields) as needed.
 4. **Answer briefly.** Name the file and summarise it in one or two sentences. Do not paste the document into the chat and do not add a link: the download card is already there.
 
 If `create_docx` returns `warnings`, read them. They name content that was skipped (for example an unsupported image). Fix what matters with `edit_docx`.
 
 ## Changing a document: `edit_docx`, not a new one
 
-Writing a document costs as long as the document is. Once it exists, change it with `edit_docx`: the `filename`, and `edits` (each an `oldText` copied exactly from the Markdown — a heading, a sentence, a table row — and its `newText`), `set` for settings (`title`, `subtitle`, `date`, `toc`, `coverPage`, `header`, `footer`, …), or both. All edits apply or none; the document is rendered again under the same name, in the same template.
+Writing a document costs as long as the document is. Once it exists, change it with `edit_docx`: the `filename`, and `edits` (each an `oldText` copied exactly from the Markdown — a heading, a sentence, a table row — and its `newText`), `set` for settings (`title`, `subtitle`, `date`, `toc`, `coverPage`, `fields`, …), or both. All edits apply or none; the document is rendered again under the same name, in the same template.
 
 - **Use it for every change to part of a document** the user asks for: a new paragraph, a corrected figure, another section order, a shorter summary. Create a new document only when most of it changes or the user wants a new one.
 - **When you do not have the current Markdown** (the document was made in an earlier turn), read it with `chat_artifacts_read`: for a document made here it returns the Markdown it was made from. Copy `oldText` from there.
@@ -57,7 +68,7 @@ Writing a document costs as long as the document is. Once it exists, change it w
 
 - **Use heading levels consistently**: `#` for main sections, `##` and `###` below them. Never skip levels. The table of contents is built from levels 1–3.
 - **Keep paragraphs short**; use bullet lists for enumerations and numbered lists for steps.
-- **Tables**: GFM tables, at most 6–7 columns in portrait (use `orientation: "landscape"` for wider ones). Right-align numbers (`|---:|`), give units in the header.
+- **Tables**: GFM tables, at most 6–7 columns (the page format is the template's, so keep wide tables to the columns that matter). Right-align numbers (`|---:|`), give units in the header.
 - **Callouts**: GitHub alerts become shaded boxes:
   ```markdown
   > [!IMPORTANT]
@@ -70,7 +81,7 @@ Writing a document costs as long as the document is. Once it exists, change it w
 - **Images** only as `data:image/png;base64,…` or `data:image/jpeg;base64,…`; you cannot fetch images from URLs.
 - **Sub- and superscript**: `H<sub>2</sub>O`, `m<sup>2</sup>`.
 - **Not supported**: Mermaid, LaTeX math, HTML layout, footnotes, comments and tracked changes. Charts are not drawn in Word documents; give the numbers as a table, or create a PDF or presentation for charts.
-- **Letters**: set `showTitle: false` and `pageNumbers: false`, and put the recipient block, date line and bold subject line as normal paragraphs at the top of `markdown`, followed by the salutation and body. A document template that sets `document.pageNumbers` wins over `pageNumbers: false`, so with such a template a letter can still show page numbers.
+- **Letters**: set `showTitle: false`, and put the recipient block, date line and bold subject line as normal paragraphs at the top of `markdown`, followed by the salutation and body. Page numbers and the header and footer come from the template.
 
 ## Quality checklist
 

@@ -4,9 +4,10 @@ Continues [`2026-10-29 Document Templates and Office System Skills`](<2026-10-29
 Admin documentation today: [`docs/document-templates.md`](../docs/document-templates.md),
 [`docs/powerpoint-template-guide.md`](../docs/powerpoint-template-guide.md).
 
-Status: draft, decided in conversation. Steps 1 and 2 of the plan are implemented (brand resolution
-from the themes, `fields` and `pdf.margins` in the schema, and the placeholder engine of the Word
-merge). The rest is not.
+Status: draft, decided in conversation. Steps 1 to 3 of the plan are implemented (brand resolution
+from the themes, `fields` and `pdf.margins` in the schema, the placeholder engine of the Word merge,
+and the Word tool with its fields, its failure that asks the user, and its skill text). The rest is
+not.
 
 Related issues: [#3605](https://github.com/intrafind/ihub-apps/issues/3605) (create a template
 automatically from uploaded brand documents, see "Relation to #3605") and
@@ -361,7 +362,13 @@ One release, built in this order (as pull requests, or as commits on one branch)
    and footer text of PDFs and of Word without a template still use the single-brace form until
    those settings are removed in step 4.
 3. Tools: arguments, `fields`, the missing-fields error, the skill texts (`docx`, `pdf`, `pptx`,
-   `xlsx`, `web-artifacts`).
+   `xlsx`, `web-artifacts`). Done for Word: `create_docx` has `fields`, no longer offers colours,
+   fonts, header, footer, page number and page format arguments, stops with `missing_fields` and
+   asks the user, takes the author from the signed-in user, and follows the template for the table
+   of contents. `edit_docx` changes one field and keeps the others. Every tool that renders in a
+   template is told the template's brand (colours, palette, fonts, read-only). The design arguments
+   of the PDF, PowerPoint, Excel and web artifact tools go in step 4, with the settings they map
+   to.
 4. PDF without letterhead, fonts and base design; the export dialog.
 5. Admin page, English and German texts, the colour picker fix, `docs/document-templates.md`,
    `docs/powerpoint-template-guide.md`, `docs/pdf-generation.md`, release note, end-to-end test.
