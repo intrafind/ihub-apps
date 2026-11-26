@@ -888,16 +888,24 @@
         "maxApiBytesHelp": "All files one user keeps through the Inference API together. 0 removes the limit.",
         "ocr": {
           "title": "Text recognition",
-          "description": "A model that reads images reads the text of an image (PNG, JPEG, GIF, WebP) or of the PDF pages without a text layer once, when the file is uploaded; every model then works with that text. Projects use it whenever a model is set; chats only when switched on below. The images and pages are sent to the provider of this model when they are uploaded.",
+          "description": "The text of an image (PNG, JPEG, GIF, WebP) or of the PDF pages without a text layer is read once, when the file is uploaded; every model then works with that text. Projects use it whenever an engine is ready; chats only when switched on below. The images and pages are sent to the engine when they are uploaded: the provider of the model, or the OCR service.",
           "modelId": "Text recognition model",
           "off": "Off",
           "unavailable": "{{model}} (not available)",
           "modelIdHelp": "Only enabled models that read images are offered. \"Off\" stops text recognition: images are then refused and scanned PDFs are handled as before.",
           "maxPages": "Most pages per document",
-          "maxPagesHelp": "Pages beyond this are not read; the document then says that only the first pages were recognized. Each page is one request to the model.",
+          "maxPagesHelp": "Pages beyond this are not read; the document then says that only the first pages were recognized. Each page is one request to the engine.",
           "recognizeText": "Read images and scanned PDFs in chats as text",
           "recognizeTextHelp": "An image or a scanned PDF attached to a chat is then stored with its recognized text instead of being sent to the chat model as pictures, so models without vision can use it too. Not where only the text extracted in the browser is kept. An app can override this.",
-          "recognizeTextNoModel": "Choose a text recognition model first."
+          "recognizeTextNoModel": "Choose a text recognition model or a ready OCR integration first.",
+          "engine": "Engine",
+          "engineModel": "A model that reads images",
+          "engineOff": "{{name}} (switched off)",
+          "engineHelp": "An OCR integration reads the pages on its own servers instead of a model; set it up under Admin → Integrations.",
+          "engineNone": "To use an OCR service instead of a model, install an OCR integration (such as the iFinder OCR service) under Admin → Integrations.",
+          "integrationsLink": "Open Integrations",
+          "engineReady": "Images and scanned pages go to {{name}}. Its own settings (address, languages) decide how well it reads them.",
+          "engineNotReady": "This integration is switched off or no longer installed, so nothing is recognized: images are refused and scanned PDFs are handled as before."
         }
       }
     },
@@ -5312,6 +5320,7 @@
         "secretSet": "set",
         "secretNotSet": "not set",
         "instanceUrl": "Instance",
+        "serviceUrl": "Service URL",
         "authorization": "Authorization",
         "yes": "yes",
         "no": "no",
@@ -5337,6 +5346,10 @@
         "storage": {
           "title": "Storage providers",
           "description": "Cloud storage users browse and attach files from in the chat and in projects."
+        },
+        "ocr": {
+          "title": "Text recognition",
+          "description": "OCR services that read uploaded images and scanned PDF pages; pick one under Chat history → Text recognition."
         },
         "mcp": {
           "title": "MCP servers",

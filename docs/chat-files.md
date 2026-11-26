@@ -128,18 +128,22 @@ resized copy), in the chat's files with the origin `image`.
 By default a picture goes to the model as an image, and a scanned PDF (no text layer) as up to five
 page images, on **every** turn; a model without vision cannot read either. With **Read images and
 scanned PDFs in chats as text** switched on (`platform.uploads.recognizeText`, or per app
-`app.uploads.recognizeText`) and a text recognition model set (`platform.ocr.modelId`, see
+`app.uploads.recognizeText`) and a text recognition engine ready (a model, `platform.ocr.modelId`, or
+an OCR integration, `platform.ocr.engine`; see
 [Projects → Images and scanned PDFs](projects.md#images-and-scanned-pdfs)):
 
-- An attached image (PNG, JPEG, GIF, WebP) is stored as a document: the recognition model reads its
+- An attached image (PNG, JPEG, GIF, WebP) is stored as a document: the recognition engine reads its
   text **once**, and the chat model gets that text on every turn, also a model without vision.
 - A PDF without a text layer is read the same way instead of being sent as page images; a PDF with
   some scanned pages gets the recognized text in place of those pages. No page images are kept.
-- The file says so (`meta.recognized`: model, pages, date; "Text recognized" on its card). At most
+- The file says so (`meta.recognized`: model or OCR integration, pages, date; "Text recognized" on
+  its card). At most
   `platform.ocr.maxPages` pages are read per file.
-- A failure refuses the upload: `OCR_FAILED` (502, the model refused or failed), `OCR_UNAVAILABLE`
-  (400, the model is not available or cannot read images), `OCR_NO_TEXT` (400, no text found).
-- The pages go to the provider of the recognition model when the file is attached.
+- A failure refuses the upload: `OCR_FAILED` (502, the engine refused or failed), `OCR_UNAVAILABLE`
+  (400, the engine is not available: a model that cannot read images, an OCR integration switched
+  off), `OCR_NO_TEXT` (400, no text found).
+- The pages go to the engine when the file is attached: the provider of the model, or the OCR
+  service.
 
 Switched off, nothing changes: pictures and scanned PDFs are sent as images, as described above.
 
@@ -153,7 +157,7 @@ Edited in **Admin → Chat history → Uploaded files**.
 | `storageMode`                 | `original_and_text` | `original_and_text`, `server_text_only` or `client_text_only` (app override: `app.uploads.storageMode`) |
 | `originalRetentionDays`       | `14`           | Days an original is kept; `0` keeps it as long as the chat. The text stays with the chat (a picture goes whole) |
 | `evictOldestOriginalsOnQuota` | `true`         | When a user or the server is full, drop the oldest chat originals before refusing        |
-| `recognizeText`               | `false`        | Read images and scanned PDFs as text with the text recognition model (app override: `app.uploads.recognizeText`); see [Text recognition in chats](#text-recognition-in-chats) |
+| `recognizeText`               | `false`        | Read images and scanned PDFs as text with the text recognition engine (app override: `app.uploads.recognizeText`); see [Text recognition in chats](#text-recognition-in-chats) |
 | `quotas.maxFileBytes`         | 25 MB          | One file                                                                                 |
 | `quotas.maxChatBytes` / `maxChatFiles` | 100 MB / 25 | One chat or one task                                                                  |
 | `quotas.maxUserBytes`         | 1 GB           | One user (chats, tasks, API files)                                                       |

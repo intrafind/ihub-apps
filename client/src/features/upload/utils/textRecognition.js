@@ -198,15 +198,23 @@ export function awaitsRecognition(entry) {
  * carries it: a stored chat file (`meta.recognized`), a composer entry or a
  * transcript descriptor (`recognized`), a project item's text (`text.recognized`).
  *
+ * `engine` names who recognized it: the text recognition model, or the OCR
+ * integration the installation uses instead.
+ *
  * @param {Object|null|undefined} source
- * @returns {{modelId: string, pages: number, truncated: boolean, at?: string}|null}
+ * @returns {{modelId: string, integrationId: string, engine: string, pages: number, truncated: boolean, at?: string}|null}
  */
 export function recognitionOf(source) {
   const recognized = source?.recognized || source?.meta?.recognized || source?.text?.recognized;
   if (!recognized || typeof recognized !== 'object') return null;
   const pages = Number(recognized.pages);
+  const modelId = typeof recognized.modelId === 'string' ? recognized.modelId : '';
+  const integrationId =
+    typeof recognized.integrationId === 'string' ? recognized.integrationId : '';
   return {
-    modelId: typeof recognized.modelId === 'string' ? recognized.modelId : '',
+    modelId,
+    integrationId,
+    engine: modelId || integrationId,
     pages: Number.isFinite(pages) && pages > 0 ? Math.floor(pages) : 0,
     truncated: recognized.truncated === true,
     ...(typeof recognized.at === 'string' ? { at: recognized.at } : {})
@@ -238,15 +246,15 @@ export function recognitionLabel(recognized, t) {
 }
 
 /**
- * The tooltip naming the model that recognized the text.
+ * The tooltip naming the engine (model or OCR integration) that recognized the text.
  *
  * @param {ReturnType<typeof recognitionOf>} recognized
  * @param {Function} t - i18next `t`.
  * @returns {string|undefined}
  */
 export function recognitionTitle(recognized, t) {
-  if (!recognized?.modelId) return undefined;
+  if (!recognized?.engine) return undefined;
   return t('textRecognition.recognizedBy', 'Recognized by {{model}}', {
-    model: recognized.modelId
+    model: recognized.engine
   });
 }

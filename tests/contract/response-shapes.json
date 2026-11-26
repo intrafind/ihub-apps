@@ -722,6 +722,7 @@
     "status": 200,
     "shape": {
       "generatedAt": "string",
+      "ocrEngines": [],
       "ocrModels": [],
       "settings": {
         "chats": {
@@ -739,6 +740,7 @@
           "maxContentBytes": "number"
         },
         "ocr": {
+          "engine": "string",
           "maxPages": "number",
           "modelId": "null"
         },
@@ -1048,6 +1050,7 @@
         }
       },
       "ocr": {
+        "engine": "string",
         "maxPages": "number",
         "modelId": "null"
       },
@@ -1829,7 +1832,7 @@
           "alwaysInstalled": "boolean",
           "authModes": "array",
           "builtIn": "boolean",
-          "capabilities": "array",
+          "capabilities": "[]|array",
           "categories": "array",
           "compatibility": "object",
           "compatible": "boolean",
@@ -5922,7 +5925,7 @@
       "items": [
         {
           "actionCount": "number",
-          "capabilities": "array",
+          "capabilities": "[]|array",
           "categories": "array",
           "definition": "string",
           "description": "string",

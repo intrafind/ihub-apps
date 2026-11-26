@@ -39,8 +39,16 @@ import {
   mergeRecognizedPages,
   ocrSettings,
   pagesWithoutText,
-  recognizableImageTypeOf
+  recognizableImageTypeOf,
+  recognizedTextOf
 } from '../services/ocr/textRecognition.js';
+import { discoverIntegrationTools } from '../services/integrations/integrationTools.js';
+import {
+  fixtureIntegrations,
+  fixtureTool,
+  registerFixtureTools,
+  unregisterFixtureTools
+} from './helpers/integrationToolFixture.js';
 
 const MASTER = crypto.createHash('sha256').update('text-recognition-master').digest('hex');
 const ADMIN = { id: 'admin', name: 'Admin' };
@@ -165,6 +173,7 @@ beforeEach(() => {
 
 after(async () => {
   llmClient.complete = originalComplete;
+  await unregisterFixtureTools();
   shutdownProjects();
   evictItemText();
   await shutdownStorageBootstrap();
@@ -173,12 +182,53 @@ after(async () => {
 
 describe('text recognition helpers', () => {
   it('reads the settings, with no model meaning no recognition', () => {
-    assert.deepEqual(ocrSettings({}), { modelId: null, maxPages: 50, enabled: false });
-    assert.deepEqual(ocrSettings({ ocr: { modelId: ' m ', maxPages: 3 } }), {
+    assert.deepEqual(ocrSettings({}), {
+      engine: 'model',
+      modelId: null,
+      integrationId: null,
+      maxPages: 50,
+      enabled: false
+    });
+    assert.deepEqual(ocrSettings({ ocr: { engine: 'model', modelId: ' m ', maxPages: 3 } }), {
+      engine: 'model',
       modelId: 'm',
+      integrationId: null,
       maxPages: 3,
       enabled: true
     });
+  });
+
+  it('reads an OCR integration as the engine, ready only while it is installed and on', () => {
+    configCache.setCacheEntry('config/integrations.json', {
+      installed: [
+        { id: 'scanner-ocr', definition: 'acme/ocr' },
+        { id: 'off-ocr', definition: 'acme/ocr', enabled: false }
+      ]
+    });
+    try {
+      const on = ocrSettings({ ocr: { engine: 'scanner-ocr' } });
+      assert.equal(on.engine, 'scanner-ocr');
+      assert.equal(on.integrationId, 'scanner-ocr');
+      assert.equal(on.enabled, true, 'needs no model');
+      assert.equal(ocrSettings({ ocr: { engine: 'off-ocr', modelId: 'm' } }).enabled, false);
+      assert.equal(ocrSettings({ ocr: { engine: 'gone-ocr' } }).enabled, false);
+    } finally {
+      configCache.setCacheEntry('config/integrations.json', { installed: [] });
+    }
+  });
+
+  it('reads the answer of an OCR integration: a string, a text, pages, or an error', () => {
+    assert.equal(recognizedTextOf('  plain  '), 'plain');
+    assert.equal(recognizedTextOf({ text: 'field ' }), 'field');
+    assert.equal(
+      recognizedTextOf({ pages: [{ text: 'one' }, 'two', { text: ' ' }] }),
+      'one\n\ntwo'
+    );
+    assert.throws(
+      () => recognizedTextOf({ error: true, status: 415, message: 'no webp' }),
+      error => error.status === 415 && /no webp/.test(error.message)
+    );
+    assert.throws(() => recognizedTextOf({ result: 'x' }), /without a text/);
   });
 
   it('recognizes in chats only where it is switched on, the app over the installation', () => {
@@ -371,5 +421,120 @@ describe('chats: text recognition is opt-in', () => {
     const { stored } = await attach(await pdfOf([null]), 'app-scan.pdf', 'application/pdf', app);
     assert.match(stored.text, /Recognized text/);
     assert.equal(stored.pageImages, undefined);
+  });
+});
+
+describe('an OCR integration as the engine', () => {
+  let received;
+  let reply;
+
+  before(async () => {
+    await registerFixtureTools([
+      fixtureTool('test-ocr', {
+        type: 'ocr',
+        action: 'recognize',
+        run: async args => {
+          received.push(args);
+          if (typeof reply === 'function') return reply(args, received.length);
+          return reply;
+        }
+      })
+    ]);
+  });
+
+  beforeEach(() => {
+    received = [];
+    reply = (_args, n) => ({ text: `Service text of call ${n}` });
+    configCache.setCacheEntry('config/integrations.json', fixtureIntegrations('test-ocr'));
+    setPlatform({ ocr: { engine: 'test-ocr', maxPages: 50 } });
+  });
+
+  after(() => {
+    configCache.setCacheEntry('config/integrations.json', { installed: [] });
+  });
+
+  it('sends an image to the integration, not to a model, and records it', async () => {
+    await createProject('ocr-engine-image');
+    const picture = png(77);
+    const { project, item } = await upload('ocr-engine-image', 'note.png', picture, 'image/png');
+    assert.equal(item.status, 'ready', JSON.stringify(item.error));
+    assert.equal(calls.length, 0, 'no model call');
+    assert.equal(received.length, 1);
+    assert.equal(received[0].mimeType, 'image/png');
+    assert.deepEqual(Buffer.from(received[0].content, 'base64'), picture);
+    assert.equal(received[0].name, 'note.png');
+    assert.match(await readText(project, item), /Service text of call 1/);
+    assert.equal(item.text.recognized.integrationId, 'test-ocr');
+    assert.equal(item.text.recognized.modelId, undefined);
+  });
+
+  it('sends only the scanned pages of a PDF, each as a PNG', async () => {
+    await createProject('ocr-engine-pdf');
+    const { project, item } = await upload(
+      'ocr-engine-pdf',
+      'mixed-engine.pdf',
+      await pdfOf([TEXT_PAGE, null, null]),
+      'application/pdf'
+    );
+    assert.equal(item.status, 'ready', JSON.stringify(item.error));
+    assert.equal(received.length, 2);
+    assert.ok(received.every(args => args.mimeType === 'image/png'));
+    assert.ok(
+      received.every(args =>
+        Buffer.from(args.content, 'base64').subarray(1, 4).equals(Buffer.from('PNG'))
+      )
+    );
+    const text = await readText(project, item);
+    assert.match(text, /real text layer/);
+    assert.match(text, /\[Page 2\]\nService text/);
+    assert.match(text, /\[Page 3\]\nService text/);
+    assert.equal(item.text.recognized.pages, 2);
+  });
+
+  it('fails the document when the integration refuses (4xx)', async () => {
+    reply = { error: true, status: 415, message: 'type not read' };
+    await createProject('ocr-engine-refused');
+    const { error } = await upload('ocr-engine-refused', 'pic.png', png(5), 'image/png');
+    assert.equal(error?.code, 'OCR_FAILED');
+    assert.match(error?.message || '', /test-ocr refused the request \(415\)/);
+  });
+
+  it('is unavailable while the integration is switched off', async () => {
+    configCache.setCacheEntry('config/integrations.json', {
+      ...fixtureIntegrations('test-ocr'),
+      installed: fixtureIntegrations('test-ocr').installed.map(entry => ({
+        ...entry,
+        enabled: false
+      }))
+    });
+    await createProject('ocr-engine-off');
+    const { error } = await upload('ocr-engine-off', 'off.png', png(6), 'image/png');
+    assert.ok(error, 'an image is not accepted without a ready engine');
+    assert.equal(received.length, 0);
+  });
+
+  it('is no tool for a model', async () => {
+    const tools = await discoverIntegrationTools('en');
+    assert.equal(
+      tools.some(tool => tool._integration?.instanceId === 'test-ocr'),
+      false
+    );
+  });
+
+  it('recognizes chat uploads too, when chats recognize text', async () => {
+    setPlatform({ ocr: { engine: 'test-ocr' }, uploads: { recognizeText: true } });
+    const scope = { type: 'chat', id: 'ocr-engine-chat' };
+    const store = getChatFileRepository();
+    const file = await ingestChatFile({
+      scope,
+      ownerId: ADMIN.id,
+      name: 'chat.png',
+      mimeType: 'image/png',
+      buffer: png(90),
+      policy: chatFilePolicy(null),
+      store
+    });
+    assert.equal(file.meta.recognized.integrationId, 'test-ocr');
+    assert.match((await store.getText(scope, file.id)).text, /Service text of call 1/);
   });
 });

@@ -146,10 +146,16 @@ reading them again. Set it in **Admin → Chat history → Uploaded files → Te
   app too). Then an attached image or scanned PDF is read once and the model gets its text; switched
   off, chats send them as images, as before.
 - **Use in app** and **Copy to project** now work for images where they can be read as text.
-- Each document records that its text was recognized and by which model, and says so in the list.
+- Each document records that its text was recognized and by which model or OCR service, and says so
+  in the list.
 - At most 50 pages are read per document by default (**Most pages per document**).
 - The pages are sent to the provider of the recognition model when they are added. Pick a model your
   data may go to.
+- **OCR services as the engine:** instead of a model, an installed OCR integration can read the
+  pages (**Engine**), so they stay on your servers. iHub ships the **iFinder OCR service**
+  integration (**Admin → Integrations → Text recognition**): enter the address of your `if-ocr`
+  service, test it, and pick it as the engine. Other OCR services can be connected as integrations
+  of type `ocr`.
 
 **Before upgrading:** nothing to do. Migration V265 adds the settings with no model set, so nothing
 is read until an administrator picks one.

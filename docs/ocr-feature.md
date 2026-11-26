@@ -11,10 +11,43 @@ The OCR (Optical Character Recognition) feature converts PDF documents and image
 
 > [!TIP]
 > To read images and scanned PDFs **when they are added** to a project or a chat, without a separate
-> OCR job, set a text recognition model in **Admin → Chat history → Uploaded files → Text
-> recognition**. See [Projects → Images and scanned PDFs](projects.md#images-and-scanned-pdfs) and
-> [Chat files → Text recognition in chats](chat-files.md#text-recognition-in-chats). It uses the same
-> page rendering and prompt as this tool, and reads only pages without a text layer.
+> OCR job, set up text recognition in **Admin → Chat history → Uploaded files → Text
+> recognition**. See [Projects → Images and scanned PDFs](projects.md#images-and-scanned-pdfs),
+> [Chat files → Text recognition in chats](chat-files.md#text-recognition-in-chats) and
+> [OCR engines](#ocr-engines) below. With a model as the engine it uses the same page rendering and
+> prompt as this tool; any engine reads only pages without a text layer.
+
+## OCR engines
+
+Text recognition at upload reads with one engine for the whole installation, chosen under **Admin →
+Chat history → Uploaded files → Text recognition → Engine** (`platform.ocr.engine`):
+
+| Engine | What reads the pages | Set up |
+|---|---|---|
+| **A model that reads images** (`model`, the default) | a vision-capable model (`platform.ocr.modelId`), with the prompt of this tool | pick the model next to the engine |
+| **An OCR integration** (its installation id) | the service the integration calls; the pages do not go to a model provider | install it under **Admin → Integrations → Text recognition**, then pick it as the engine |
+
+iHub ships one OCR integration, the **iFinder OCR service** (`com.intrafind/ifinder-ocr`, installed
+as `ifinder-ocr`): the OCR service of iFinder (`if-ocr`, Tesseract).
+
+- **Service URL** (`serviceUrl`): the service with its API path, e.g. `http://if-ocr:9618/ocr-api`.
+  A URL without a path gets `/ocr-api`. The address passes the SSRF check (company-internal
+  addresses pass; `localhost` and link-local addresses need `ssrf.allowedHosts`), and a service with
+  a private CA needs its host on `ssl.domainWhitelist`.
+- **Authorization** (`authorizationRef`, optional): the service accepts every request in its default
+  setup. For one set up for JWT or OAuth2, a credential of type secret, sent as a `Bearer` token.
+- **Timeout per page** (`timeoutMs`, advanced, 120 s): the service recognizes two pages at a time
+  and queues the rest.
+- **Test connection** checks the address and sends a small blank image.
+- iHub sends it one image at a time: an uploaded image, or a scanned PDF page rendered as PNG. It
+  reads PNG, JPEG, GIF, BMP and TIFF; a WebP image fails with `OCR_FAILED`.
+- The recognition languages are set on the service (`intrafind.ocr.engine.tesseract.languages`,
+  German and English by default), not in iHub.
+
+An OCR integration is never a tool for a model and no app binds it; its groups do not limit it
+either, since it reads for every user once it is the engine. To connect another OCR service, write
+an integration of `"type": "ocr"` (see
+[Building an Integration → OCR engines](integration-development.md#ocr-engines)).
 
 ## Enabling OCR
 

@@ -108,6 +108,24 @@ jest.unstable_mockModule('../services/runtime/RunSummaryRepository.js', () => ({
   })
 }));
 
+// The OCR integrations the engine setting may name.
+jest.unstable_mockModule('../services/integrations/InstalledIntegrationService.js', () => {
+  const installed = [
+    { id: 'ifinder-ocr', definition: 'com.intrafind/ifinder-ocr' },
+    { id: 'jira', definition: 'com.intrafind/jira' }
+  ];
+  const types = { 'com.intrafind/ifinder-ocr': 'ocr', 'com.intrafind/jira': undefined };
+  const service = {
+    list: () => installed,
+    resolve: async instance => ({
+      instance,
+      label: instance.id === 'ifinder-ocr' ? 'iFinder OCR service' : instance.id,
+      definition: { id: instance.definition, type: types[instance.definition] }
+    })
+  };
+  return { default: service, installedIntegrationService: service };
+});
+
 const { default: registerAdminChatHistoryRoutes } = await import('../routes/admin/chatHistory.js');
 const { default: errorHandler } = await import('../middleware/errorHandler.js');
 
@@ -299,8 +317,36 @@ describe('text recognition settings (platform.ocr)', () => {
   test('reads no model and the default page limit, and offers the models that read images', async () => {
     const response = await request(createTestApp()).get('/api/admin/chat-history');
     expect(response.status).toBe(200);
-    expect(response.body.settings.ocr).toEqual({ modelId: null, maxPages: 50 });
+    expect(response.body.settings.ocr).toEqual({ engine: 'model', modelId: null, maxPages: 50 });
     expect(response.body.ocrModels.map(model => model.id)).toEqual(['vision-model']);
+    expect(response.body.ocrEngines).toEqual([
+      {
+        id: 'ifinder-ocr',
+        name: 'iFinder OCR service',
+        definition: 'com.intrafind/ifinder-ocr',
+        enabled: true
+      }
+    ]);
+  });
+
+  test('picks an installed OCR integration as the engine, and refuses any other', async () => {
+    const picked = await request(createTestApp())
+      .put('/api/admin/chat-history/settings')
+      .send({ ocr: { engine: 'ifinder-ocr' } });
+    expect(picked.status).toBe(200);
+    expect(state.stored.ocr.engine).toBe('ifinder-ocr');
+
+    const notOcr = await request(createTestApp())
+      .put('/api/admin/chat-history/settings')
+      .send({ ocr: { engine: 'jira' } });
+    expect(notOcr.status).toBe(400);
+    expect(state.stored.ocr.engine).toBe('ifinder-ocr');
+
+    const back = await request(createTestApp())
+      .put('/api/admin/chat-history/settings')
+      .send({ ocr: { engine: 'model' } });
+    expect(back.status).toBe(200);
+    expect(state.stored.ocr.engine).toBe('model');
   });
 
   test('writes the model, the page limit and the chat opt-in', async () => {

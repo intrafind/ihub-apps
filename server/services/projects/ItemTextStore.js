@@ -206,8 +206,9 @@ async function openBytes(project, item, block, what, { platform, repository, ten
  * @param {string} options.text - The extracted text.
  * @param {{contentType?: string, bytes?: number, pages?: number}} [options.original]
  * @param {boolean} [options.truncated]
- * @param {{modelId: string, pages: number, truncated?: boolean, at: string}|null} [options.recognition] -
- *   The text, or part of it, was recognized by the OCR model (#3986): recorded as `recognized`.
+ * @param {{modelId?: string, integrationId?: string, pages: number, truncated?: boolean, at: string}|null} [options.recognition] -
+ *   The text, or part of it, was recognized by the OCR engine (#3986), the
+ *   vision model (`modelId`) or an OCR integration (`integrationId`): recorded as `recognized`.
  * @param {Object} [options.platform] - Platform configuration (for the key provider).
  * @param {import('./ProjectRepository.js').ProjectRepository} [options.repository]
  * @param {string} [options.tenant='default']
@@ -241,7 +242,10 @@ export async function storeText({
     ...(recognition
       ? {
           recognized: {
-            modelId: String(recognition.modelId).slice(0, 200),
+            ...(recognition.modelId ? { modelId: String(recognition.modelId).slice(0, 200) } : {}),
+            ...(recognition.integrationId
+              ? { integrationId: String(recognition.integrationId).slice(0, 200) }
+              : {}),
             pages: Number(recognition.pages) || 0,
             ...(recognition.truncated ? { truncated: true } : {}),
             at: recognition.at

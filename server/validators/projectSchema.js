@@ -191,10 +191,14 @@ export const itemTextSchema = z
     tenant: z.string().max(100).optional(),
     extractedAt: z.string(),
     truncated: z.boolean().optional(),
-    /** The text, or part of it, was recognized by the OCR model (#3986). */
+    /**
+     * The text, or part of it, was recognized by the OCR engine (#3986): the
+     * vision model (`modelId`) or an OCR integration (`integrationId`).
+     */
     recognized: z
       .object({
-        modelId: z.string().max(200),
+        modelId: z.string().max(200).optional(),
+        integrationId: z.string().max(200).optional(),
         pages: z.number().int().nonnegative(),
         truncated: z.boolean().optional(),
         at: z.string()

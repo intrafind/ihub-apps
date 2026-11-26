@@ -88,6 +88,16 @@ const OCR_MODELS = [
 ];
 
 const uploadsText = en.admin.chatHistory.uploads.ocr;
+const OCR_ENGINES = [
+  {
+    id: 'ifinder-ocr',
+    name: 'iFinder OCR service',
+    definition: 'com.intrafind/ifinder-ocr',
+    enabled: true
+  },
+  { id: 'old-ocr', name: 'Old OCR', definition: 'acme/ocr', enabled: false }
+];
+const engineSelect = () => screen.getByLabelText(uploadsText.engine);
 const modelSelect = () => screen.getByLabelText(uploadsText.modelId);
 const maxPages = () => screen.getByLabelText(uploadsText.maxPages);
 const chatToggle = () => screen.getByLabelText(uploadsText.recognizeText);
@@ -109,7 +119,7 @@ const renderPage = async overview => {
       <AdminChatHistoryPage />
     </MemoryRouter>
   );
-  await screen.findByLabelText(uploadsText.modelId);
+  await screen.findByLabelText(uploadsText.engine);
   await act(async () => {
     await new Promise(resolve => setTimeout(resolve, 0));
   });
@@ -178,6 +188,65 @@ describe('Admin → Chat history → Text recognition', () => {
     });
     expect(modelSelect()).toHaveValue('gone-model');
     expect(screen.getByRole('option', { name: 'gone-model (not available)' })).toBeInTheDocument();
+  });
+
+  test('offers the installed OCR integrations as engines; one replaces the model', async () => {
+    await renderPage({
+      status: {},
+      stats: {},
+      settings: SETTINGS,
+      ocrModels: OCR_MODELS,
+      ocrEngines: OCR_ENGINES
+    });
+    const options = within(engineSelect())
+      .getAllByRole('option')
+      .map(option => option.textContent);
+    expect(options).toEqual([
+      uploadsText.engineModel,
+      'iFinder OCR service',
+      'Old OCR (switched off)'
+    ]);
+    expect(engineSelect()).toHaveValue('model');
+
+    fireEvent.change(engineSelect(), { target: { value: 'ifinder-ocr' } });
+    expect(screen.queryByLabelText(uploadsText.modelId)).not.toBeInTheDocument();
+    expect(chatToggle()).toBeEnabled();
+
+    fireEvent.change(engineSelect(), { target: { value: 'old-ocr' } });
+    expect(chatToggle()).toBeDisabled();
+    expect(screen.getByText(uploadsText.engineNotReady)).toBeInTheDocument();
+
+    fireEvent.change(engineSelect(), { target: { value: 'ifinder-ocr' } });
+    fireEvent.click(chatToggle());
+    await act(async () => {
+      fireEvent.click(saveButton());
+    });
+    await waitFor(() => expect(puts()).toHaveLength(1));
+    const { body } = puts()[0][1];
+    expect(body.ocr.engine).toBe('ifinder-ocr');
+    expect(body.uploads.recognizeText).toBe(true);
+  });
+
+  test('without an OCR integration, says how to get one', async () => {
+    await renderPage({ status: {}, stats: {}, settings: SETTINGS, ocrModels: OCR_MODELS });
+    expect(screen.getByText(uploadsText.engineNone, { exact: false })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: uploadsText.integrationsLink })).toHaveAttribute(
+      'href',
+      '/admin/integrations'
+    );
+  });
+
+  test('keeps showing an engine that is no longer installed', async () => {
+    await renderPage({
+      status: {},
+      stats: {},
+      settings: { ...SETTINGS, ocr: { engine: 'gone-ocr', modelId: null, maxPages: 50 } },
+      ocrModels: OCR_MODELS,
+      ocrEngines: OCR_ENGINES
+    });
+    expect(engineSelect()).toHaveValue('gone-ocr');
+    expect(screen.getByRole('option', { name: 'gone-ocr (not available)' })).toBeInTheDocument();
+    expect(chatToggle()).toBeDisabled();
   });
 
   test('a server without text recognition shows no block and sends no `ocr`', async () => {

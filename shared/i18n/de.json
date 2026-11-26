@@ -1368,16 +1368,24 @@
         "maxApiBytesHelp": "Alle Dateien, die ein Benutzer über die Inference-API behält, zusammen. 0 hebt die Grenze auf.",
         "ocr": {
           "title": "Texterkennung",
-          "description": "Ein Modell, das Bilder lesen kann, liest den Text eines Bildes (PNG, JPEG, GIF, WebP) oder der PDF-Seiten ohne Textebene einmalig beim Hochladen; jedes Modell arbeitet danach mit diesem Text. Projekte nutzen es, sobald ein Modell gewählt ist; Chats nur, wenn es unten eingeschaltet ist. Die Bilder und Seiten werden beim Hochladen an den Anbieter dieses Modells gesendet.",
+          "description": "Der Text eines Bildes (PNG, JPEG, GIF, WebP) oder der PDF-Seiten ohne Textebene wird einmalig beim Hochladen gelesen; jedes Modell arbeitet danach mit diesem Text. Projekte nutzen ihn, sobald eine Engine bereit ist; Chats nur, wenn es unten eingeschaltet ist. Die Bilder und Seiten werden beim Hochladen an die Engine gesendet: an den Anbieter des Modells oder an den OCR-Dienst.",
           "modelId": "Texterkennungsmodell",
           "off": "Aus",
           "unavailable": "{{model}} (nicht verfügbar)",
           "modelIdHelp": "Angeboten werden nur aktivierte Modelle, die Bilder lesen können. „Aus“ beendet die Texterkennung: Bilder werden dann abgelehnt und gescannte PDFs wie bisher behandelt.",
           "maxPages": "Höchstens Seiten pro Dokument",
-          "maxPagesHelp": "Weitere Seiten werden nicht gelesen; das Dokument weist dann darauf hin, dass nur die ersten Seiten erkannt wurden. Jede Seite ist eine Anfrage an das Modell.",
+          "maxPagesHelp": "Weitere Seiten werden nicht gelesen; das Dokument weist dann darauf hin, dass nur die ersten Seiten erkannt wurden. Jede Seite ist eine Anfrage an die Engine.",
           "recognizeText": "Bilder und gescannte PDFs in Chats als Text lesen",
           "recognizeTextHelp": "Ein Bild oder gescanntes PDF, das an einen Chat angehängt wird, wird dann mit seinem erkannten Text gespeichert, statt als Bild an das Chatmodell gesendet zu werden; so können es auch Modelle ohne Bildverständnis nutzen. Nicht, wo nur der im Browser extrahierte Text gespeichert wird. Eine App kann dies überschreiben.",
-          "recognizeTextNoModel": "Wählen Sie zuerst ein Texterkennungsmodell."
+          "recognizeTextNoModel": "Wählen Sie zuerst ein Texterkennungsmodell oder eine bereite OCR-Integration.",
+          "engine": "Engine",
+          "engineModel": "Ein Modell, das Bilder liest",
+          "engineOff": "{{name}} (ausgeschaltet)",
+          "engineHelp": "Eine OCR-Integration liest die Seiten auf ihren eigenen Servern statt eines Modells; eingerichtet wird sie unter Admin → Integrationen.",
+          "engineNone": "Um einen OCR-Dienst statt eines Modells zu nutzen, installieren Sie unter Admin → Integrationen eine OCR-Integration (etwa den iFinder-OCR-Dienst).",
+          "integrationsLink": "Integrationen öffnen",
+          "engineReady": "Bilder und gescannte Seiten gehen an {{name}}. Wie gut sie gelesen werden, bestimmen dessen eigene Einstellungen (Adresse, Sprachen).",
+          "engineNotReady": "Diese Integration ist ausgeschaltet oder nicht mehr installiert, daher wird nichts erkannt: Bilder werden abgelehnt und gescannte PDFs wie bisher behandelt."
         }
       }
     },
@@ -5803,6 +5811,7 @@
         "secretSet": "gesetzt",
         "secretNotSet": "nicht gesetzt",
         "instanceUrl": "Instanz",
+        "serviceUrl": "Dienst-URL",
         "authorization": "Autorisierung",
         "yes": "ja",
         "no": "nein",
@@ -5843,6 +5852,10 @@
         "storage": {
           "title": "Speicheranbieter",
           "description": "Cloud-Speicher, aus denen Benutzer im Chat und in Projekten Dateien durchsuchen und anhängen."
+        },
+        "ocr": {
+          "title": "Texterkennung",
+          "description": "OCR-Dienste, die hochgeladene Bilder und gescannte PDF-Seiten lesen; die Auswahl erfolgt unter Chatverlauf → Texterkennung."
         },
         "mcp": {
           "title": "MCP-Server",

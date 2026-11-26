@@ -209,7 +209,7 @@ users pick cloud files from their own projects.
 
 Uploads accept PDF, Word (`.docx`), PowerPoint (`.pptx`), Excel (`.xlsx`), OpenDocument (`.odt`,
 `.ods`, `.odp`), HTML, e-mail (`.eml` and Outlook `.msg`), Markdown, CSV, JSON, XML and other text
-files, and images (PNG, JPEG, GIF, WebP) when a text recognition model is set (see
+files, and images (PNG, JPEG, GIF, WebP) when text recognition is set up (see
 [Images and scanned PDFs](#images-and-scanned-pdfs)). Audio, video, executables, other images and the
 legacy Office formats (`.doc`, `.xls`, `.ppt`) are refused; save those as `.docx`, `.xlsx`, `.pptx`
 or PDF first. A ZIP archive is unpacked (see [ZIP archives](#zip-archives)). An e-mail is stored as
@@ -228,35 +228,39 @@ chats only. **Download original** on the document (`GET …/items/:itemId/origin
 Editing the text (below) removes the original, since it no longer matches. A
 PDF of at most 500 pages is read; extracted text longer than 10,000,000 characters (about 10 MB,
 2.5 million tokens) is cut at that length. A file that iHub imports from the server itself, such as
-the shipped documentation, is not cut below 20,000,000. Without a text recognition model, a scanned
+the shipped documentation, is not cut below 20,000,000. Without text recognition, a scanned
 PDF without a text layer fails with a message that says so.
 
 ### Images and scanned PDFs
 
-When an administrator sets a **text recognition model** (**Admin → Chat history → Uploaded files →
-Text recognition**, `platform.ocr.modelId`), a vision-capable model reads the text of an image, or of
-the pages of a PDF that have no text layer, **once, when the document is added**. The text is stored
+When an administrator sets up **text recognition** (**Admin → Chat history → Uploaded files →
+Text recognition**), its engine reads the text of an image, or of the pages of a PDF that have no
+text layer, **once, when the document is added**. The engine (`platform.ocr.engine`) is a
+vision-capable **model** (`platform.ocr.modelId`), or an installed **OCR integration** such as the
+iFinder OCR service, which reads the pages on your own servers (see
+[OCR → OCR engines](ocr-feature.md#ocr-engines)). The text is stored
 like any other extracted text, so every app can use the document, also one whose model cannot read
 images, and no question pays for reading it again.
 
 - **What is read:** an image (PNG, JPEG, GIF, WebP), uploaded, picked from a cloud drive, unpacked
   from a ZIP archive or copied from a chat; and the pages of a PDF without a text layer (scanned
-  pages). A page that has text is never sent to the model, so a logo on a text page costs nothing.
+  pages). A page that has text is never sent to the engine, so a logo on a text page costs nothing.
   A PDF with some scanned pages keeps the text of the others and gets the recognized text in place
   of the scanned ones.
 - **Page limit:** at most `platform.ocr.maxPages` pages (50 by default) are read per document. Pages
   past it keep the marker "no extractable text", and the document says it was cut.
-- **Marked as recognized:** the document records the model, the number of pages and the date
-  (`text.recognized`), and its row says "Text recognized from N pages". Recognized text can contain
+- **Marked as recognized:** the document records the model or the OCR integration (`modelId` or
+  `integrationId`), the number of pages and the date (`text.recognized`), and its row says "Text recognized from N pages". Recognized text can contain
   errors: check what matters.
 - **The original** (the image or the PDF) is kept per `platform.uploads.storageMode` like any
   upload, and **Download original** returns it.
-- **When it fails:** a model that refuses or cannot be reached fails the document (`OCR_FAILED`,
-  **Retry** reads it again); a model that is not set up for images fails it with `OCR_UNAVAILABLE`.
-- **Without a model** nothing is read: images are refused and a scanned PDF fails with `NO_TEXT`,
-  as before.
-- **Where the pages go:** the pages are sent to the provider of the recognition model when the
-  document is added. Pick a model your data may go to.
+- **When it fails:** an engine that refuses or cannot be reached fails the document (`OCR_FAILED`,
+  **Retry** reads it again); a model that is not set up for images, or an OCR integration that is
+  switched off or removed, fails it with `OCR_UNAVAILABLE`.
+- **Without an engine** (no model, or the OCR integration switched off) nothing is read: images are
+  refused and a scanned PDF fails with `NO_TEXT`, as before.
+- **Where the pages go:** the pages are sent to the engine when the document is added: the provider
+  of the model, or the service the OCR integration calls. Pick an engine your data may go to.
 
 A large text costs memory and time. The first search after a start, or after any document of the
 project changed, builds the search index of the project: about 1.5 seconds per 10,000,000
@@ -273,7 +277,7 @@ A ZIP archive uploaded to a project, or copied into one from a chat, becomes one
 it holds, named by its path in the archive (`reports/q1.pdf`). Each goes through the same checks,
 scan and extraction as a single upload, and counts against the same limits.
 
-- Files a project does not take (media, executables, and images when no text recognition model is
+- Files a project does not take (media, executables, and images when no text recognition engine is
   set), archives inside the archive and files over the per-file limit are skipped. A file that is
   refused does not use up one of the project's documents. The upload reports what was added and what was
   skipped, and why.
@@ -299,7 +303,7 @@ project reads it. Who that is is the project's audience; the dialog shows it.
   document as it is. The document records where it came from (the chat and its app, or the share).
 - A file shared with you (a shared chat or a single shared file) can be copied too, if you are signed
   in. The copy does not record the owner's chat.
-- A ZIP archive is unpacked. An image can be copied when a text recognition model is set; its text
+- A ZIP archive is unpacked. An image can be copied when text recognition is set up; its text
   is read when it is added.
 - Offered when user projects are switched on (`userProjects`); without them there is no Copy to
   project.
@@ -349,10 +353,10 @@ The reasons a **Failed** item names:
 
 | Code                | Message                                                                     |
 | ------------------- | --------------------------------------------------------------------------- |
-| `NO_TEXT`           | This PDF has no text layer (scanned). Run it through OCR and upload the result. (Only without a text recognition model.) |
-| `OCR_FAILED`        | The text recognition model refused the request or could not read the pages; **Retry**. |
-| `OCR_UNAVAILABLE`   | The text recognition model is not available or cannot read images; an administrator picks another one. |
-| `OCR_NO_TEXT`       | The text recognition model found no text in the image or the scanned pages. |
+| `NO_TEXT`           | This PDF has no text layer (scanned). Run it through OCR and upload the result. (Only without text recognition.) |
+| `OCR_FAILED`        | The text recognition engine refused the request or could not read the pages; **Retry**. |
+| `OCR_UNAVAILABLE`   | The text recognition engine is not available (a model that cannot read images, an OCR integration switched off); an administrator picks another one. |
+| `OCR_NO_TEXT`       | The text recognition engine found no text in the image or the scanned pages. |
 | `UNSUPPORTED_TYPE`  | This file type is not supported.                                            |
 | `EXTRACTION_FAILED` | The extractor's own message.                                                |
 | `EXTRACTION_TIMEOUT` | The file took longer than `extraction.timeoutMs` to read and was stopped.  |

@@ -405,6 +405,19 @@ const FACTS_BY_DEFINITION = {
         )
       : null
   ],
+  'com.intrafind/ifinder-ocr': (item, context) => [
+    fieldFact(item, 'serviceUrl', 'serviceUrl', label('serviceUrl', 'Service URL'), {
+      mono: true,
+      context
+    }),
+    hasValue(item.values?.authorizationRef)
+      ? secretFact(
+          'authorization',
+          label('authorization', 'Authorization'),
+          item.values.authorizationRef
+        )
+      : null
+  ],
   'com.intrafind/office365': (item, context) => [
     fieldFact(item, 'tenantId', 'tenantId', label('tenantId', 'Tenant ID'), {
       mono: true,
