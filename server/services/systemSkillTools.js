@@ -190,7 +190,9 @@ function withTemplates(definition, templates, language) {
   }
   const guide = definition.templateGuide ? templates.guides?.[definition.templateGuide] : '';
   const brand = brandNote(templates.brand, language);
-  const description = `${getLocalizedString(definition.description, language)}${guide ? `\n\n${guide}` : ''}${brand ? `\n\n${brand}` : ''}`;
+  const description = [getLocalizedString(definition.description, language), guide, brand]
+    .filter(Boolean)
+    .join('\n\n');
   const note = key => getLocalizedString(TEMPLATE_NOTES[key], language);
   if (templates.pinned) {
     return {

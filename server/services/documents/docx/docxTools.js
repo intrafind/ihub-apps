@@ -121,27 +121,45 @@ export async function createDocx(
 function checkFields(template, spec) {
   const { missing, invalid, unknown } = resolveFieldValues(template.fields, spec.fields);
   if (missing.length || invalid.length) {
-    const name = getLocalizedString(template.name, 'en') || template.id;
-    const about = field =>
-      `${field.name} (${[field.label, field.description].filter(Boolean).join(': ')}${
-        field.options ? `; one of: ${field.options.join(', ')}` : ''
-      })`;
-    const parts = [];
-    if (missing.length) parts.push(`Missing: ${missing.map(about).join('; ')}.`);
-    if (invalid.length) {
-      parts.push(
-        `Not allowed: ${invalid.map(f => `${f.name} = "${f.value}" (use one of: ${f.options.join(', ')})`).join('; ')}.`
-      );
-    }
     throw new DocumentGenerationError(
-      `The document template "${name}" needs more information before the document can be created. ${parts.join(' ')} Ask the user for these values; do not invent them. Then call this tool again with "fields" set, for example {"${(missing[0] || invalid[0]).name}": "…"}.`,
+      missingFieldsMessage(template, missing, invalid),
       'missing_fields',
-      { missing, invalid }
+      {
+        missing,
+        invalid
+      }
     );
   }
   return unknown.length
     ? [`The template has no field named ${unknown.join(', ')}; the value was ignored.`]
     : [];
+}
+
+/** A field as the model is told about it: name, label and description, allowed values. */
+function fieldAbout(field) {
+  const label = [field.label, field.description].filter(Boolean).join(': ');
+  const options = field.options ? `; one of: ${field.options.join(', ')}` : '';
+  return `${field.name} (${label}${options})`;
+}
+
+/** What the model is told when a template needs values it has not been given. */
+function missingFieldsMessage(template, missing, invalid) {
+  const name = getLocalizedString(template.name, 'en') || template.id;
+  const parts = [];
+  if (missing.length) parts.push(`Missing: ${missing.map(fieldAbout).join('; ')}.`);
+  if (invalid.length) {
+    const notAllowed = invalid.map(
+      field => `${field.name} = "${field.value}" (use one of: ${field.options.join(', ')})`
+    );
+    parts.push(`Not allowed: ${notAllowed.join('; ')}.`);
+  }
+  const example = (missing[0] || invalid[0]).name;
+  return [
+    `The document template "${name}" needs more information before the document can be created.`,
+    parts.join(' '),
+    'Ask the user for these values; do not invent them.',
+    `Then call this tool again with "fields" set, for example {"${example}": "…"}.`
+  ].join(' ');
 }
 
 /**

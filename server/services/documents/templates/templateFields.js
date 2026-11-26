@@ -193,12 +193,11 @@ export function fieldsGuide(templates, { language = 'en', single = false } = {})
   for (const template of templates) {
     const fields = describeFields(template.fields || {}, language);
     if (!fields.length) continue;
+    const marker = template.default ? text.isDefault : '';
     const prefix = single
       ? ''
-      : text.template
-          .replace('{id}', template.id)
-          .replace('{default}', template.default ? text.isDefault : '');
-    lines.push(`${prefix}${fields.map(field => fieldLine(field, text)).join('; ')}`);
+      : text.template.replace('{id}', template.id).replace('{default}', marker);
+    lines.push(prefix + fields.map(field => fieldLine(field, text)).join('; '));
   }
   if (!lines.length) return '';
   return `${text.intro}\n${lines.join('\n')}`.slice(0, MAX_GUIDE_LENGTH);
