@@ -126,6 +126,12 @@ context on blank space.
   becomes one, invisible characters (zero-width space, soft hyphen) are removed, and pages that
   space their layout with empty paragraphs no longer leave stacks of blank lines.
 - The layout of code blocks and the indentation of nested lists stay as they are.
+- Text the page hides is left out: an element with the `hidden` attribute, or with an inline
+  `display: none` or `visibility: hidden`, in any spelling (`DISPLAY:NONE` included). Pages
+  without a clear article, such as short pages and listings, used to keep such text, and so did
+  an article page when the property was written in capitals. Text hidden in other ways (by a
+  stylesheet, or by size, position, opacity or colour) cannot be told from visible text this way
+  and is still passed on.
 - The description in the page's `<meta name="description">` is still passed on next to the text,
   because it says what the page is about.
 - Every web page result now says that its text, title, description, author and dates were written
