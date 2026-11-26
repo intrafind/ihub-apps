@@ -40,7 +40,7 @@ function installedIntegrations() {
 
 /**
  * The installed web search engines, enabled or not, in the order
- * `websearch.provider: "auto"` tries them (Brave, Staan, Qwant, then any
+ * `websearch.provider: "auto"` tries them (Brave, Staan, then any
  * other engine by id).
  *
  * @returns {Object[]} installations of type `web-search`
@@ -125,7 +125,7 @@ export function resolveStaanApiKey() {
 
 /**
  * Whether an engine has what it needs to answer: a keyed built-in engine
- * (Brave, Staan) needs a key; Qwant and third-party engines need nothing iHub
+ * (Brave, Staan) needs a key; third-party engines need nothing iHub
  * can check here (their own test says more).
  *
  * @param {{ id: string }|null} engine - the installation

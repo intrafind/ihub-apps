@@ -5,7 +5,7 @@
  * The web search engines as the app editor offers them: the installations of
  * type `web-search` (`GET /api/admin/integrations/installed`), in the order
  * `websearch.provider: "auto"` tries them on the server
- * (`server/services/search/webSearchEngines.js`): Brave, Staan, Qwant, then
+ * (`server/services/search/webSearchEngines.js`): Brave, Staan, then
  * every other engine by id.
  *
  * Pure module (no React), so the order and the status rules are tested on
@@ -18,7 +18,7 @@
 export const AUTO_ENGINE = 'auto';
 
 /** The shipped engines, in the order `auto` tries them. */
-export const BUILT_IN_ENGINE_ORDER = Object.freeze(['brave', 'staan', 'qwant']);
+export const BUILT_IN_ENGINE_ORDER = Object.freeze(['brave', 'staan']);
 
 /**
  * The engine installations, sorted as `auto` tries them.
@@ -26,8 +26,8 @@ export const BUILT_IN_ENGINE_ORDER = Object.freeze(['brave', 'staan', 'qwant']);
  * @param {Array<{ id: string, type?: string|null }>|null|undefined} installed
  * @returns {Array<Object>} installations of type `web-search`
  * @example
- *   webSearchEnginesOf([{ id: 'qwant', type: 'web-search' }, { id: 'jira' },
- *                       { id: 'brave', type: 'web-search' }]).map(e => e.id); // ['brave', 'qwant']
+ *   webSearchEnginesOf([{ id: 'staan', type: 'web-search' }, { id: 'jira' },
+ *                       { id: 'brave', type: 'web-search' }]).map(e => e.id); // ['brave', 'staan']
  */
 export function webSearchEnginesOf(installed) {
   const rank = id => {

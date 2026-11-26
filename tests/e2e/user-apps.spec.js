@@ -195,10 +195,10 @@ let toolStub = null;
  * The search engine the cases about web search need. A fresh install has none
  * unless the environment holds a key (`STAAN_API_KEY`, `BRAVE_SEARCH_API_KEY`),
  * and CI holds none: without an engine nobody may use web search, and creating
- * an app that asks for it answers 403. Qwant needs no key. No case sends a
- * search: the scripted model only reads a page.
+ * an app that asks for it answers 403. The engine is installed without a key,
+ * which is enough to allow it. No case sends a search: the scripted model only reads a page.
  */
-const SEARCH_ENGINE = Object.freeze({ id: 'qwant', definition: 'com.intrafind/qwant-search' });
+const SEARCH_ENGINE = Object.freeze({ id: 'staan', definition: 'com.intrafind/staan-search' });
 /** Whether this run installed {@link SEARCH_ENGINE}, and so removes it again. */
 let installedSearchEngine = false;
 

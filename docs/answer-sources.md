@@ -295,7 +295,7 @@ serves would offer actions that cannot work. A source with a `ref` is always pri
 
 | Source | Private |
 |---|---|
-| Web search results of the platform's own search (Brave, Staan, Qwant, provider-run search) | no |
+| Web search results of the platform's own search (Brave, Staan, provider-run search) | no |
 | Hits of an MCP or custom tool named after a search engine | yes; a custom tool's `sources` declaration can say `"public": true` |
 | A page only the page reader read | yes (the reader can reach intranet hosts on the SSL whitelist) |
 | iFinder and iAssistant documents | yes |

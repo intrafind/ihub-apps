@@ -20,6 +20,8 @@
  * @module features/chat/utils/chatFileUpload
  */
 
+import { requestTooLargeBy } from '../../../api/utils/apiErrors';
+
 /**
  * Where the composer keeps the `File` a document entry was extracted from.
  *
@@ -187,11 +189,14 @@ export function splitFilesForWire(fileData) {
  * error body (`code` of `413 QUOTA_*`, `UNSUPPORTED_TYPE`, …).
  *
  * @param {unknown} error
- * @returns {string} A code; `'FAILED'` when the server named none.
+ * @returns {string} A code; `'PROXY_BODY_LIMIT'` when a proxy in front of iHub refused the upload
+ *   for its size (a 413 no iHub answered), `'FAILED'` when the server named none.
  */
 export function uploadErrorCode(error) {
   // The file API wraps axios errors (`handleApiResponse`): the response then sits
   // on `originalError`.
   const data = error?.response?.data || error?.originalError?.response?.data;
+  // A 413 that no iHub answered: a proxy in front of iHub refused the upload (nginx: 1 MB)
+  if (requestTooLargeBy(error) === 'proxy') return 'PROXY_BODY_LIMIT';
   return (data?.code || error?.code || 'FAILED').toString();
 }

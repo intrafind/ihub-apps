@@ -4,7 +4,7 @@
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
 /**
- * The built-in web search engine connectors (`brave`, `staan`, `qwant`): one
+ * The built-in web search engine connectors (`brave`, `staan`): one
  * action `search` under the historical tool id, the shipped definitions that
  * name them, and the installation test, which checks the key of the values
  * under test (credential, environment variable) and runs one live search with
@@ -23,7 +23,6 @@ import webSearchService from '../services/WebSearchService.js';
 import {
   apiKeyStep,
   braveSearchConnector,
-  qwantSearchConnector,
   staanSearchConnector
 } from '../services/integrations/protocols/native/connectors/websearch/index.js';
 import { getConnector } from '../services/integrations/protocols/native/connectors/index.js';
@@ -99,7 +98,7 @@ describe('definitions and connectors', () => {
     });
   }
 
-  it('Brave and Staan take a credential API key; Qwant has no field', async () => {
+  it('Brave and Staan take a credential API key', async () => {
     for (const id of ['brave', 'staan']) {
       const def = await definitionOf(id);
       assert.deepEqual(
@@ -107,7 +106,6 @@ describe('definitions and connectors', () => {
         [['apiKeyRef', 'credential', ['secret']]]
       );
     }
-    assert.deepEqual((await definitionOf('qwant')).install, []);
   });
 });
 
@@ -137,10 +135,6 @@ describe('the API key step', () => {
     const { step } = apiKeyStep('brave', {});
     assert.equal(step.status, 'fail');
     assert.match(step.message, /BRAVE_SEARCH_API_KEY/);
-  });
-
-  it('needs nothing for Qwant', () => {
-    assert.equal(apiKeyStep('qwant', {}).step.status, 'ok');
   });
 });
 
@@ -172,10 +166,10 @@ describe('the installation test', () => {
   it('reports a failed search with the diagnosis', async () => {
     webSearchService.search = async () => {
       const error = new Error('captcha');
-      error.code = 'QWANT_CAPTCHA';
+      error.code = 'HTTP_429';
       throw error;
     };
-    const steps = await qwantSearchConnector.test({ values: {} });
+    const steps = await braveSearchConnector.test({ values: { apiKeyRef: 'brave-key' } });
     assert.equal(steps[1].id, 'search');
     assert.equal(steps[1].status, 'fail');
   });

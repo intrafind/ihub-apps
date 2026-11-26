@@ -34,18 +34,14 @@ export const ENGINE_KEY_ENV = Object.freeze({
   'com.intrafind/staan-search': 'STAAN_API_KEY'
 });
 
-/** Shipped engines whose search is known to be blocked from many data-centre IP addresses. */
-const EGRESS_SENSITIVE = new Set(['com.intrafind/qwant-search']);
-
 /**
  * The dedicated editor of a web search engine (`type: "web-search"`): Brave
- * Search, Staan and Qwant, and any engine definition registered for it.
+ * Search and Staan, and any engine definition registered for it.
  *
  * - **API key** (engines with an `apiKeyRef` field): a credential of the
  *   credential store, with the environment variable the server falls back to
  *   when none is picked (`BRAVE_SEARCH_API_KEY`, `STAAN_API_KEY`).
- * - An engine without a key (Qwant) says so, with the hint that its egress IP
- *   decides whether it answers.
+ * - An engine without a key (a third-party engine) says so.
  * - Every other install field of the definition is rendered by the generic
  *   field input, so a third-party engine registered here keeps its settings.
  *
@@ -95,7 +91,7 @@ function WebSearchEngineEditor({ instance, definition, onSaved, onCancel }) {
           title={t(`${K}.engineSection`, 'Search engine')}
           description={t(
             `${K}.engineSectionHelp`,
-            'Apps with web search on use this engine when they name it, or on Auto when it is the first engine a user may use (Brave, Staan, Qwant, then any other engine). Models with native search do not need an engine.'
+            'Apps with web search on use this engine when they name it, or on Auto when it is the first engine a user may use (Brave, Staan, then any other engine). Models with native search do not need an engine.'
           )}
         >
           {keyField ? (
@@ -132,14 +128,6 @@ function WebSearchEngineEditor({ instance, definition, onSaved, onCancel }) {
               data-testid="web-search-engine-no-key"
             >
               {t(`${K}.noKeyNeeded`, '{{engine}} needs no API key.', { engine: engineName })}
-            </p>
-          )}
-          {EGRESS_SENSITIVE.has(instance.definition) && (
-            <p className={CALLOUT_CLASS.warning}>
-              {t(
-                `${K}.egressHint`,
-                'Qwant blocks many data-centre IP addresses. Run Test connection to see whether it answers this server.'
-              )}
             </p>
           )}
           {otherFields.map(field => (

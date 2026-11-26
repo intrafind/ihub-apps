@@ -45,6 +45,11 @@ function uploadErrorText(code, t) {
         'attachedFiles.errors.fileTooLarge',
         'Too large to save; the file is sent with the message only'
       );
+    case 'PROXY_BODY_LIMIT':
+      return t(
+        'attachedFiles.errors.proxyBodyLimit',
+        'Too large for the connection to iHub, so it was not saved to the chat; the file is sent with the message only'
+      );
     case 'UNSUPPORTED_TYPE':
       return t(
         'attachedFiles.errors.unsupportedType',
