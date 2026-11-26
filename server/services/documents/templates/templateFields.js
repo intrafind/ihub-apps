@@ -97,32 +97,44 @@ export function describeFields(definitions = {}, language = 'en') {
  *   not declare (the built-in placeholders are not reported).
  */
 export function resolveFieldValues(definitions = {}, given = {}, language = 'en') {
-  const provided = new Map();
-  for (const [key, value] of Object.entries(given && typeof given === 'object' ? given : {})) {
-    const name = String(key).toLowerCase();
-    const text = textOf(value);
-    if (text) provided.set(name, text);
-    else if (!provided.has(name)) provided.set(name, '');
-  }
+  const provided = providedValues(given);
   const values = {};
   const missing = [];
   const invalid = [];
   for (const [name, definition] of Object.entries(definitions)) {
-    let value = provided.get(name) || textOf(definition.default);
-    if (value && definition.options) {
-      const option = definition.options.find(o => o.toLowerCase() === value.toLowerCase());
-      if (option === undefined) {
-        invalid.push({ ...describeField(name, definition, language), value });
-        value = '';
-      } else value = option;
-    }
-    if (!value && definition.required === true && !invalid.some(f => f.name === name)) {
+    const { value, notAllowed } = valueOfField(definition, provided.get(name));
+    values[name] = value;
+    if (notAllowed) {
+      invalid.push({ ...describeField(name, definition, language), value: notAllowed });
+    } else if (!value && definition.required === true) {
       missing.push(describeField(name, definition, language));
     }
-    values[name] = value;
   }
   const unknown = [...provided.keys()].filter(
     name => !Object.hasOwn(definitions, name) && !BUILT_IN_PLACEHOLDERS.includes(name)
   );
   return { values, missing, invalid, unknown };
+}
+
+/** The given values by lower case name, as text; an entry without text is kept as empty. */
+function providedValues(given) {
+  const provided = new Map();
+  for (const [key, value] of Object.entries(given && typeof given === 'object' ? given : {})) {
+    const name = String(key).toLowerCase();
+    const text = textOf(value);
+    if (text || !provided.has(name)) provided.set(name, text);
+  }
+  return provided;
+}
+
+/**
+ * The value of one field: what was given, else the default. A value that is
+ * not one of the options is not used and comes back as `notAllowed`; one that
+ * matches an option without regard to case takes the option's spelling.
+ */
+function valueOfField(definition, given) {
+  const value = given || textOf(definition.default);
+  if (!value || !definition.options) return { value };
+  const option = definition.options.find(o => o.toLowerCase() === value.toLowerCase());
+  return option === undefined ? { value: '', notAllowed: value } : { value: option };
 }

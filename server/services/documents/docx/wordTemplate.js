@@ -274,7 +274,7 @@ function tocNodes(doc, title) {
     '<w:docPartGallery w:val="Table of Contents"/><w:docPartUnique/></w:docPartObj></w:sdtPr>' +
     `<w:sdtContent><w:p><w:pPr><w:pStyle w:val="TOCHeading"/></w:pPr><w:r><w:t>${xmlEscape(title)}</w:t></w:r></w:p>` +
     '<w:p><w:r><w:fldChar w:fldCharType="begin" w:dirty="true"/></w:r>' +
-    '<w:r><w:instrText xml:space="preserve">TOC \\o "1-3" \\h \\z \\u</w:instrText></w:r>' +
+    String.raw`<w:r><w:instrText xml:space="preserve">TOC \o "1-3" \h \z \u</w:instrText></w:r>` +
     '<w:r><w:fldChar w:fldCharType="separate"/></w:r><w:r><w:fldChar w:fldCharType="end"/></w:r></w:p>' +
     '</w:sdtContent></w:sdt></w:root>';
   return childElements(parseXml(xml, 'table of contents').documentElement).map(node =>
