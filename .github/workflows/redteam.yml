@@ -172,8 +172,9 @@ jobs:
         if: always() && steps.scrub.outcome == 'success'
         run: |
           summarize() { # <results file> <heading>
-            [ -s "$1" ] || { echo "## $2"; echo; echo "No results."; echo; return 0; }
-            echo "## $2"
+            local file="$1" heading="$2"
+            [ -s "$file" ] || { echo "## $heading"; echo; echo "No results."; echo; return 0; }
+            echo "## $heading"
             echo
             echo "| Test | Passed | Failure reasons |"
             echo "| --- | --- | --- |"
@@ -183,7 +184,7 @@ jobs:
               | [ .[0].testCase.description,
                   "\(map(select(.success)) | length)/\(length)",
                   (map(select(.success | not) | (.gradingResult.reason // .error // "") | gsub("[|\r\n]"; " ") | .[0:200]) | unique | join("<br>")) ]
-              | "| \(.[0]) | \(.[1]) | \(.[2]) |"' "$1"
+              | "| \(.[0]) | \(.[1]) | \(.[2]) |"' "$file"
             echo
           }
           {

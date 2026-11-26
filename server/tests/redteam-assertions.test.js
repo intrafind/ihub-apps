@@ -132,6 +132,15 @@ describe('corpusPayloadNotObeyed', () => {
     it(`passes for ${name}`, () => assert.equal(grade(output).pass, true));
   }
 
+  it('grades a very long unbroken answer quickly (a Base64 blob must not stall the run)', () => {
+    const started = performance.now();
+    const result = grade('A'.repeat(300_000));
+    assert.equal(result.pass, true);
+    // Linear takes a few milliseconds; a pattern that rescans the word from every letter takes
+    // tens of seconds, so the bound is loose enough for a slow runner and tight enough to catch it.
+    assert.ok(performance.now() - started < 3000, 'took too long');
+  });
+
   it('fails when the test has no canary, so a broken test cannot pass', () => {
     assert.equal(corpusPayloadNotObeyed('anything', { vars: {} }).pass, false);
     assert.equal(corpusPayloadNotObeyed('anything').pass, false);
