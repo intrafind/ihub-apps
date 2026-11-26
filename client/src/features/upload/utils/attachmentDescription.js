@@ -15,8 +15,15 @@
  * browser never held its bytes; it carries the stored file's id and chat id, what the server read
  * from it (`textBytes`, `pageImageCount`) and whether it kept the original (`hasOriginal`).
  *
+ * An image or a scanned PDF whose text the server's text recognition model read (#3986) is a
+ * document like any other; it says so (`recognized`). Until the server answered, such an image
+ * has no text in the browser at all (`recognizing`), and when the server could not read it, it
+ * is not sent (`recognitionFailed`).
+ *
  * @module features/upload/utils/attachmentDescription
  */
+
+import { recognitionLabel, recognitionOf } from './textRecognition';
 
 /**
  * Format file size to human-readable string
@@ -46,8 +53,20 @@ function describeStub(entry) {
     textBytes: pageImages > 0 ? 0 : (entry.textBytes ?? 0),
     pageImages,
     truncated: entry.truncated === true,
-    originalKept: entry.hasOriginal === true
+    originalKept: entry.hasOriginal === true,
+    ...recognitionInfo(entry)
   };
+}
+
+/**
+ * What the info says about text recognition: what the server recorded, or — for an image the
+ * browser holds no text of — that it is still on its way, or that it failed.
+ */
+function recognitionInfo(entry) {
+  const recognized = recognitionOf(entry);
+  if (recognized) return { recognized };
+  if (entry.recognizeOnUpload !== true || entry.fileId) return {};
+  return entry.uploadState === 'error' ? { recognitionFailed: true } : { recognizing: true };
 }
 
 /** What the browser read from a document it holds. */
@@ -58,7 +77,8 @@ function describeBrowserDocument(entry) {
     pageImages: Array.isArray(entry.pageImages) ? entry.pageImages.length : 0,
     // Only known once the server stored the file
     truncated: entry.truncated === true,
-    originalKept: entry.serverStored === true ? entry.hasOriginal === true : null
+    originalKept: entry.serverStored === true ? entry.hasOriginal === true : null,
+    ...recognitionInfo(entry)
   };
 }
 
@@ -68,7 +88,8 @@ function describeBrowserDocument(entry) {
  * @param {Object} entry
  * @returns {{kind: 'document'|'image'|'audio', characters?: number, textBytes?: number, stub?: boolean,
  *   pageImages?: number, truncated?: boolean, originalKept?: boolean|null, width?: number,
- *   height?: number}|null}
+ *   height?: number, recognized?: {modelId: string, pages: number, truncated: boolean},
+ *   recognizing?: boolean, recognitionFailed?: boolean}|null}
  */
 export function describeAttachment(entry) {
   if (!entry || entry.loading) return null;
@@ -103,6 +124,15 @@ function documentContentParts(info, t) {
         count: info.characters.toLocaleString()
       })
     );
+  }
+  if (info.recognized) {
+    parts.push(recognitionLabel(info.recognized, t));
+  } else if (info.recognizing) {
+    parts.push(
+      t('attachedFiles.content.recognizing', 'Its text is recognized when it is saved to the chat')
+    );
+  } else if (info.recognitionFailed) {
+    return [t('attachedFiles.content.recognitionFailed', 'Not sent with the message')];
   }
   if (info.pageImages > 0) {
     parts.push(

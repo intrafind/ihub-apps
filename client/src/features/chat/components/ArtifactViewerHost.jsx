@@ -54,6 +54,7 @@ import {
 import { downloadableArtifactBlob, libraryKitOf } from '../utils/artifactLibraryKit';
 import { canCopyArtifactToProject } from '../../projects/utils/projectImport';
 import { canUseArtifactInApp } from '../utils/useInApp';
+import useImageTextRecognition from '../hooks/useImageTextRecognition';
 import ArtifactsPanel from './ArtifactsPanel';
 import ArtifactViewer from './ArtifactViewer';
 import UploadedFileDetail from './UploadedFilesTab';
@@ -179,6 +180,8 @@ export default function ArtifactViewerHost({
 }) {
   const { t } = useTranslation();
   const customFetch = useArtifactFetcher();
+  // Pictures can be used in an app or copied to a project once their text is recognized (#3986)
+  const imageTextRecognition = useImageTextRecognition();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const embeddedKind = useEmbeddedHostKind();
@@ -572,7 +575,8 @@ export default function ArtifactViewerHost({
       activeId,
       shareArtifact: onShare || null,
       openArtifactInApp: onUseInApp || null,
-      copyArtifactToProject: onCopyToProject || null
+      copyArtifactToProject: onCopyToProject || null,
+      imageTextRecognition
     }),
     [
       openArtifact,
@@ -583,7 +587,8 @@ export default function ArtifactViewerHost({
       activeId,
       onShare,
       onUseInApp,
-      onCopyToProject
+      onCopyToProject,
+      imageTextRecognition
     ]
   );
 
@@ -785,9 +790,13 @@ export default function ArtifactViewerHost({
       const shareArtifact = withStoredCopy(onShare);
       // Judged by type only here: a live file is resolved to its stored copy on click.
       const typeOnly = { ...descriptor, id: descriptor.id || 'live' };
-      const toApp = onUseInApp && canUseArtifactInApp(typeOnly) ? withStoredCopy(onUseInApp) : null;
+      const toApp =
+        onUseInApp && canUseArtifactInApp(typeOnly, { textRecognition: imageTextRecognition.apps })
+          ? withStoredCopy(onUseInApp)
+          : null;
       const copyToProject =
-        onCopyToProject && canCopyArtifactToProject(typeOnly)
+        onCopyToProject &&
+        canCopyArtifactToProject(typeOnly, { textRecognition: imageTextRecognition.projects })
           ? withStoredCopy(onCopyToProject)
           : null;
       const reuseMenu = [

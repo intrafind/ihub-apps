@@ -19,6 +19,11 @@
  */
 
 import { appUploadAccepts } from '../../upload/utils/uploadFormats';
+import {
+  appRecognizesImages,
+  isRecognizableImage,
+  textRecognitionAvailable
+} from '../../upload/utils/textRecognition';
 
 /** Source kind of a generated file of a chat (server: `chatFiles/fileSources.js`). */
 export const CHAT_ARTIFACT_SOURCE = 'chat-artifact';
@@ -48,20 +53,27 @@ const ARCHIVE_TYPES = new Set([
 /**
  * Whether a generated file may be offered to "Use in app": a stored file (an
  * id the server knows) that the chat file store takes. It takes the document
- * types of a normal chat upload and refuses pictures and ZIP archives
+ * types of a normal chat upload and refuses ZIP archives and pictures
  * (`400 UNSUPPORTED_TYPE`), so those are not offered at all. (A ZIP *can* be
- * copied into a project, which unpacks it.)
+ * copied into a project, which unpacks it.) A PNG, JPEG, GIF or WebP picture is
+ * offered while a text recognition model is set (#3986): the picker then lists
+ * the apps whose chats recognize the text of images (`appsAcceptingFile`).
  *
  * @param {{id?: string, kind?: string, mimeType?: string, name?: string}|null|undefined} artifact
+ * @param {{textRecognition?: boolean}} [options] - `textRecognition`: a text recognition model
+ *   is set (`platformConfig.uploads.textRecognition.available`).
  * @returns {boolean}
  */
-export function canUseArtifactInApp(artifact) {
-  if (!artifact?.id || artifact.kind === 'image') return false;
+export function canUseArtifactInApp(artifact, { textRecognition = false } = {}) {
+  if (!artifact?.id) return false;
   const type = String(artifact.mimeType || '')
     .split(';')[0]
     .trim()
     .toLowerCase();
-  if (type.startsWith('image/') || ARCHIVE_TYPES.has(type)) return false;
+  if (artifact.kind === 'image' || type.startsWith('image/')) {
+    return textRecognition === true && isRecognizableImage(type, artifact.name);
+  }
+  if (ARCHIVE_TYPES.has(type)) return false;
   return !/\.zip$/i.test(String(artifact.name || ''));
 }
 
@@ -178,15 +190,27 @@ export function isChatApp(app) {
  * The apps a file can be used in: chat apps the user can use whose uploads
  * take the file's type (see `appUploadAccepts`).
  *
+ * A PNG, JPEG, GIF or WebP picture reaches the chat as the text the server
+ * recognizes in it (#3986), never as a picture, so for one the apps are those
+ * whose chats recognize text and whose uploads are on
+ * (`appRecognizesImages`) — whatever their image upload and their models'
+ * vision say. Without a text recognition model no app takes a picture.
+ *
  * @param {Array<Object>} apps
  * @param {{mimeType?: string, name?: string}} file
+ * @param {{uploads?: Object|null}} [options] - `uploads`: `platformConfig.uploads`, which says
+ *   whether text recognition is available and for which chats.
  * @returns {Array<Object>} In the order given.
  *
  * @example
  * appsAcceptingFile(apps, { mimeType: 'text/markdown', name: 'notes.md' });
+ * appsAcceptingFile(apps, { mimeType: 'image/png' }, { uploads: platformConfig.uploads });
  */
-export function appsAcceptingFile(apps, file) {
-  return (Array.isArray(apps) ? apps : []).filter(
-    app => isChatApp(app) && appUploadAccepts(app, file)
-  );
+export function appsAcceptingFile(apps, file, { uploads = null } = {}) {
+  const list = Array.isArray(apps) ? apps : [];
+  if (isRecognizableImage(file?.mimeType, file?.name)) {
+    if (!textRecognitionAvailable(uploads)) return [];
+    return list.filter(app => isChatApp(app) && appRecognizesImages(app, uploads));
+  }
+  return list.filter(app => isChatApp(app) && appUploadAccepts(app, file));
 }

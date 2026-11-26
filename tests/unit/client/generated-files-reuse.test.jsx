@@ -5,9 +5,10 @@ import { render, screen, fireEvent } from '@testing-library/react';
 import '@testing-library/jest-dom';
 
 /**
- * The ⋯ menu of a generated file's card: "Use in app…" for stored documents (not pictures, not
- * ZIP archives — a chat takes neither), "Copy to project…" for every stored file but a picture
- * (a project unpacks a ZIP), and nothing where the page does not offer them.
+ * The ⋯ menu of a generated file's card: "Use in app…" for stored documents (never ZIP archives,
+ * pictures only where the server recognizes their text), "Copy to project…" for every stored file
+ * but a picture (a project unpacks a ZIP; a picture only while projects recognize its text), and
+ * nothing where the page does not offer them.
  */
 jest.mock('react-i18next', () => ({
   useTranslation: () => ({
@@ -69,6 +70,20 @@ describe('GeneratedFiles reuse menu', () => {
   it('offers neither for a picture', () => {
     renderCard(picture, both());
     expect(screen.queryByTestId('generated-file-more')).not.toBeInTheDocument();
+  });
+
+  it('offers each for a picture where the server recognizes its text there (#3986)', () => {
+    renderCard(picture, { ...both(), imageTextRecognition: { apps: true, projects: false } });
+    openMenu();
+    expect(screen.getByTestId('generated-file-use-in-app')).toBeInTheDocument();
+    expect(screen.queryByTestId('generated-file-copy-to-project')).not.toBeInTheDocument();
+  });
+
+  it('offers Copy to project for a picture while projects recognize its text', () => {
+    renderCard(picture, { ...both(), imageTextRecognition: { apps: false, projects: true } });
+    openMenu();
+    expect(screen.queryByTestId('generated-file-use-in-app')).not.toBeInTheDocument();
+    expect(screen.getByTestId('generated-file-copy-to-project')).toBeInTheDocument();
   });
 
   it('offers nothing for a live file or where the page does not offer the actions', () => {

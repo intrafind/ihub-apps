@@ -41,8 +41,9 @@ export function problemDetailOf(error) {
  *    or the project document into this chat's file store, checks it against
  *    the app's upload policy and extracts its text; the composer gets the
  *    stored file (an id, like any pre-uploaded document). It takes the document
- *    types of a normal chat upload — pictures and ZIP archives are never handed
- *    over (`canUseArtifactInApp`).
+ *    types of a normal chat upload — ZIP archives are never handed over, and
+ *    pictures only to an app whose chats recognize their text (#3986), where the
+ *    stored file is that text (`canUseArtifactInApp`, `appsAcceptingFile`).
  * 2. **In the browser** (the exception): an installation that keeps no chat
  *    files on the server (`uploads.enabled` off) has no store to copy into. The
  *    bytes of a generated file are then fetched through its chat or its share

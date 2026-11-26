@@ -34,7 +34,16 @@
       "unsupportedType": "Dieser Dateityp kann nicht im Chat gespeichert werden; die Datei wird nur mit der Nachricht gesendet",
       "unreadable": "Der Server konnte diese Datei nicht lesen und hat sie daher nicht im Chat gespeichert; die Datei wird nur mit der Nachricht gesendet",
       "scanRejected": "Vom Sicherheitsscan abgelehnt und daher nicht im Chat gespeichert; die Datei wird nur mit der Nachricht gesendet",
-      "notSaved": "Konnte nicht im Chat gespeichert werden; die Datei wird nur mit der Nachricht gesendet"
+      "notSaved": "Konnte nicht im Chat gespeichert werden; die Datei wird nur mit der Nachricht gesendet",
+      "recognition": {
+        "unavailable": "Die Texterkennung ist gerade nicht verfügbar; dieses Bild wird nicht gesendet",
+        "failed": "Der Text dieses Bildes konnte nicht erkannt werden; es wird nicht gesendet. Bitte versuchen Sie es später erneut",
+        "noText": "In diesem Bild wurde kein Text gefunden; es wird nicht gesendet",
+        "notSaved": "Konnte nicht im Chat gespeichert werden, daher wurde der Text nicht erkannt; dieses Bild wird nicht gesendet"
+      },
+      "ocrUnavailable": "Die Texterkennung ist gerade nicht verfügbar; die Datei wird nur mit der Nachricht gesendet",
+      "ocrFailed": "Der Text der gescannten Seiten konnte nicht erkannt werden; die Datei wird nur mit der Nachricht gesendet",
+      "ocrNoText": "Auf den gescannten Seiten wurde kein Text gefunden; die Datei wird nur mit der Nachricht gesendet"
     },
     "stored": "Im Chat gespeichert",
     "templateReady": "als Vorlage verwendbar",
@@ -53,7 +62,9 @@
       "audio": "Audio wird an das Modell gesendet",
       "truncated": "gekürzt",
       "textOnly": "nur der Text wird im Chat gespeichert",
-      "textServer": "Auf dem Server extrahierter Text: {{size}}"
+      "textServer": "Auf dem Server extrahierter Text: {{size}}",
+      "recognizing": "Der Text wird erkannt, sobald die Datei im Chat gespeichert ist",
+      "recognitionFailed": "Wird nicht mit der Nachricht gesendet"
     },
     "downloadDiscarded": "Die Originaldatei wird nicht mehr gespeichert; nur ihr Text bleibt erhalten.",
     "downloadFailed": "Der Download ist fehlgeschlagen. Bitte versuchen Sie es erneut."
@@ -1354,7 +1365,20 @@
         "maxApiFiles": "Inference-API: Dateien pro Benutzer",
         "maxApiFilesHelp": "Die meisten Dateien, die ein Benutzer über die Inference-API (/v1/files) behalten darf. 0 hebt die Grenze auf.",
         "maxApiBytes": "Inference-API: Größe pro Benutzer",
-        "maxApiBytesHelp": "Alle Dateien, die ein Benutzer über die Inference-API behält, zusammen. 0 hebt die Grenze auf."
+        "maxApiBytesHelp": "Alle Dateien, die ein Benutzer über die Inference-API behält, zusammen. 0 hebt die Grenze auf.",
+        "ocr": {
+          "title": "Texterkennung",
+          "description": "Ein Modell, das Bilder lesen kann, liest den Text eines Bildes (PNG, JPEG, GIF, WebP) oder der PDF-Seiten ohne Textebene einmalig beim Hochladen; jedes Modell arbeitet danach mit diesem Text. Projekte nutzen es, sobald ein Modell gewählt ist; Chats nur, wenn es unten eingeschaltet ist. Die Bilder und Seiten werden beim Hochladen an den Anbieter dieses Modells gesendet.",
+          "modelId": "Texterkennungsmodell",
+          "off": "Aus",
+          "unavailable": "{{model}} (nicht verfügbar)",
+          "modelIdHelp": "Angeboten werden nur aktivierte Modelle, die Bilder lesen können. „Aus“ beendet die Texterkennung: Bilder werden dann abgelehnt und gescannte PDFs wie bisher behandelt.",
+          "maxPages": "Höchstens Seiten pro Dokument",
+          "maxPagesHelp": "Weitere Seiten werden nicht gelesen; das Dokument weist dann darauf hin, dass nur die ersten Seiten erkannt wurden. Jede Seite ist eine Anfrage an das Modell.",
+          "recognizeText": "Bilder und gescannte PDFs in Chats als Text lesen",
+          "recognizeTextHelp": "Ein Bild oder gescanntes PDF, das an einen Chat angehängt wird, wird dann mit seinem erkannten Text gespeichert, statt als Bild an das Chatmodell gesendet zu werden; so können es auch Modelle ohne Bildverständnis nutzen. Nicht, wo nur der im Browser extrahierte Text gespeichert wird. Eine App kann dies überschreiben.",
+          "recognizeTextNoModel": "Wählen Sie zuerst ein Texterkennungsmodell."
+        }
       }
     },
     "voiceInput": {
@@ -4976,7 +5000,12 @@
           "use": "Diesen Text verwenden",
           "close": "Schließen",
           "noChange": "Es wurde kein neuer Text vorgeschlagen."
-        }
+        },
+        "recognizeText": "Texterkennung in Chats",
+        "recognizeTextDefault": "Standard der Installation",
+        "recognizeTextOn": "An",
+        "recognizeTextOff": "Aus",
+        "recognizeTextHelp": "Ob Bilder und gescannte PDFs, die in den Chats dieser App angehängt werden, vom Texterkennungsmodell (Administration → Chatverlauf → Hochgeladene Dateien) als Text gelesen und mit diesem Text gespeichert werden, statt als Bilder an das Chatmodell gesendet zu werden. Ohne Texterkennungsmodell hat dies keine Wirkung."
       },
       "reorder": "Reihenfolge",
       "reorderHelp": "Ziehen Sie eine Zeile oder nutzen Sie die Pfeile, um die Reihenfolge festzulegen, in der Apps für Benutzer erscheinen – in der App-Übersicht, auf der Startseite und in der Seitenleiste. Es werden immer alle Apps aufgelistet, Suche und Filter gelten hier nicht. Gespeichert wird erst, wenn Sie die neue Reihenfolge unten auf der Seite speichern.",
@@ -13056,7 +13085,8 @@
       "nothingToAdd": "Diese Art von Eintrag ist hier nicht verfügbar.",
       "ifinderProfile": "Suchen in",
       "crawlOtherHosts": "Dateien auf anderen Websites einbeziehen",
-      "archiveHint": "Ein ZIP-Archiv wird entpackt: Jede unterstützte Datei darin wird ein Dokument."
+      "archiveHint": "Ein ZIP-Archiv wird entpackt: Jede unterstützte Datei darin wird ein Dokument.",
+      "recognitionHint": "Der Text von Bildern und gescannten PDF-Seiten wird beim Hinzufügen erkannt: Die Seiten werden dazu an den Anbieter des Texterkennungsmodells gesendet."
     },
     "chatBar": {
       "inProject": "Im Projekt: {{name}}",
@@ -13181,7 +13211,10 @@
         "scanRejected": "Vom Virenscanner abgelehnt.",
         "sourceForbidden": "Verbinden Sie die Integration erneut; das Dokument konnte mit Ihrem Konto nicht gelesen werden.",
         "sourceGone": "Das Quelldokument wurde entfernt.",
-        "unsupportedType": "Dieser Dateityp wird nicht unterstützt."
+        "unsupportedType": "Dieser Dateityp wird nicht unterstützt.",
+        "ocrUnavailable": "Die Texterkennung ist gerade nicht verfügbar, daher konnte der Text dieses Bildes oder Scans nicht gelesen werden. Wenden Sie sich an einen Administrator oder laden Sie eine Datei mit Textebene hoch.",
+        "ocrFailed": "Der Text dieses Bildes oder Scans konnte nicht erkannt werden. Laden Sie die Datei später erneut hoch.",
+        "ocrNoText": "In diesem Bild oder Scan wurde kein Text gefunden."
       },
       "full": "Dieses Projekt enthält so viele Elemente wie erlaubt.",
       "pinItem": "{{name}} anheften",
@@ -14505,5 +14538,11 @@
       "refused": "Die Datei konnte nicht angehängt werden: {{detail}}",
       "failed": "Die Datei konnte nicht angehängt werden. Bitte versuchen Sie es erneut."
     }
+  },
+  "textRecognition": {
+    "recognized": "Text erkannt",
+    "recognizedPages": "Text aus {{count}} Seite(n) erkannt",
+    "recognizedPagesTruncated": "Text nur aus den ersten {{count}} Seite(n) erkannt",
+    "recognizedBy": "Erkannt von {{model}}"
   }
 }

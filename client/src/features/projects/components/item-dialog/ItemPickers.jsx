@@ -87,6 +87,14 @@ export function UploadPicker({
           })}
         </p>
       )}
+      {config?.textRecognition?.enabled === true && (
+        <p className={HINT_CLASS} data-testid="project-item-recognition-hint">
+          {t(
+            'projects.addItem.recognitionHint',
+            'The text of images and of scanned PDF pages is recognized when they are added: the pages are sent to the provider of the text recognition model.'
+          )}
+        </p>
+      )}
       {acceptArchives && (
         <p className={HINT_CLASS}>
           {t(

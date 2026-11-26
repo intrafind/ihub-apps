@@ -209,8 +209,38 @@ export function projectErrorMessage(error, t) {
         'projects.errors.downloadNotSaved',
         'The file arrived, but the browser did not save it. Please try again.'
       );
+    case 'OCR_UNAVAILABLE':
+    case 'OCR_FAILED':
+    case 'OCR_NO_TEXT':
+      return recognitionErrorMessage(code, t);
     default:
       return message || t('projects.errors.generic', 'Something went wrong. Please try again.');
+  }
+}
+
+/**
+ * Why the text of an image or of a scanned PDF could not be recognized at
+ * upload (#3986): no usable text recognition model, the model failed, or it
+ * found no text.
+ *
+ * @param {'OCR_UNAVAILABLE'|'OCR_FAILED'|'OCR_NO_TEXT'} code
+ * @param {Function} t - i18next `t`.
+ * @returns {string}
+ */
+function recognitionErrorMessage(code, t) {
+  switch (code) {
+    case 'OCR_UNAVAILABLE':
+      return t(
+        'projects.items.errors.ocrUnavailable',
+        'Text recognition is not available right now, so the text of this image or scan could not be read. Ask an administrator, or upload a file with a text layer.'
+      );
+    case 'OCR_FAILED':
+      return t(
+        'projects.items.errors.ocrFailed',
+        'The text of this image or scan could not be recognized. Upload it again later.'
+      );
+    default:
+      return t('projects.items.errors.ocrNoText', 'No text was found in this image or scan.');
   }
 }
 
@@ -247,6 +277,10 @@ export function itemErrorMessage(item, t) {
       );
     case 'SOURCE_GONE':
       return t('projects.items.errors.sourceGone', 'The source document was removed.');
+    case 'OCR_UNAVAILABLE':
+    case 'OCR_FAILED':
+    case 'OCR_NO_TEXT':
+      return recognitionErrorMessage(code, t);
     default:
       return message || null;
   }

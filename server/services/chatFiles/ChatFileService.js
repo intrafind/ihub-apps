@@ -501,7 +501,12 @@ export function describeStored(stored) {
       ? { textBytes: stored.textBytes }
       : {}),
     ...(stored.pageImageCount > 0 ? { pageImageCount: stored.pageImageCount } : {}),
-    ...(stored.truncated === true ? { truncated: true } : {})
+    ...(stored.truncated === true ? { truncated: true } : {}),
+    // The text was read by the OCR model (#3986): an image stored this way is a
+    // document the model got as text, not a picture it saw.
+    ...(stored.meta?.recognized && typeof stored.meta.recognized === 'object'
+      ? { recognized: stored.meta.recognized }
+      : {})
   };
 }
 

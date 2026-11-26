@@ -14,6 +14,7 @@ import {
   uploadErrorCode,
   withStoredFile
 } from '../utils/chatFileUpload';
+import { composerRecognizesImages } from '../../upload/utils/textRecognition';
 
 const BUSY_ID = 'chat-file-upload';
 
@@ -38,8 +39,11 @@ const BUSY_ID = 'chat-file-upload';
  * @param {Function} params.setSelectedFile - Raw state setter of the selection (accepts an updater).
  * @param {(id: string, busy: boolean) => void} [params.setAttachmentProcessing]
  * @param {boolean} [params.ephemeral] - Whether the chat is temporary (creates it as such).
- * @returns {{ handleFileSelect: (next: Object|Object[]|null) => void, enabled: boolean, mode: string }}
- *   `handleFileSelect` replaces the composer's own `onFileSelect`.
+ * @returns {{ handleFileSelect: (next: Object|Object[]|null) => void, enabled: boolean, mode: string,
+ *   recognizesImages: boolean }}
+ *   `handleFileSelect` replaces the composer's own `onFileSelect`. `recognizesImages`: an image
+ *   attached here goes to the server, which recognizes its text (#3986); pass it to
+ *   `createUploadConfig(app, model, { recognizeImages })`.
  */
 export default function useChatFilePreUpload({
   chatId,
@@ -53,6 +57,7 @@ export default function useChatFilePreUpload({
   const uploads = platformConfig?.uploads;
   const enabled = preUploadAvailable({ uploads, chatId });
   const mode = resolveUploadMode(uploads, app);
+  const recognizesImages = composerRecognizesImages({ uploads, app, preUpload: enabled, mode });
 
   const running = useRef(new Map()); // entryKey → AbortController
   // entryKey → descriptor of what the server stored. The uploader hands back
@@ -174,5 +179,5 @@ export default function useChatFilePreUpload({
     [reportBusy, setSelectedFile]
   );
 
-  return { handleFileSelect, enabled, mode };
+  return { handleFileSelect, enabled, mode, recognizesImages };
 }

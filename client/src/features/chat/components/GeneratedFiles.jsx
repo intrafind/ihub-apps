@@ -48,11 +48,18 @@ function GeneratedFileCard({ file, chatId }) {
   const storedHere = Boolean(file.stored && file.id && chatId && state !== 'missing');
   const shareable = Boolean(viewer?.shareArtifact && storedHere);
   // "Use in app…" and "Copy to project…" copy the stored file on the server, so they
-  // need its id too. A chat takes no pictures and no ZIP archives; a project takes
-  // ZIP archives (it unpacks them) but no pictures.
-  const usableInApp = Boolean(viewer?.openArtifactInApp && storedHere && canUseArtifactInApp(file));
+  // need its id too. A chat takes no ZIP archives; a project takes ZIP archives (it unpacks
+  // them). Neither takes pictures unless the server recognizes their text (#3986).
+  const recognition = viewer?.imageTextRecognition;
+  const usableInApp = Boolean(
+    viewer?.openArtifactInApp &&
+    storedHere &&
+    canUseArtifactInApp(file, { textRecognition: recognition?.apps === true })
+  );
   const copyableToProject = Boolean(
-    viewer?.copyArtifactToProject && storedHere && canCopyArtifactToProject(file)
+    viewer?.copyArtifactToProject &&
+    storedHere &&
+    canCopyArtifactToProject(file, { textRecognition: recognition?.projects === true })
   );
   const hasMore = usableInApp || copyableToProject;
   const menuId = useId();

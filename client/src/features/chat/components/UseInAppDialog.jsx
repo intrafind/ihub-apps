@@ -6,6 +6,7 @@ import { useTranslation } from 'react-i18next';
 import Modal from '../../../shared/components/Modal';
 import Icon from '../../../shared/components/Icon';
 import useApps from '../../../shared/hooks/useApps';
+import { usePlatformConfig } from '../../../shared/contexts/platformConfigContextValue';
 import { getLocalizedContent } from '../../../utils/localizeContent';
 import { createFavoriteItemHelpers } from '../../../utils/favoriteItems';
 import { getRecentAppIds } from '../../../utils/recentApps';
@@ -41,7 +42,8 @@ function sortApps(apps, language) {
  *
  * Only apps that can take the file are listed: chat apps the user can use
  * (personal apps included) whose uploads are on and accept the file's type,
- * judged the way the composer's attach button is (`appsAcceptingFile`). The
+ * judged the way the composer's attach button is (`appsAcceptingFile`). A
+ * picture is listed for the apps whose chats recognize its text (#3986). The
  * dialog only picks; the caller opens the chat (`openAppWithAttachment`).
  *
  * @param {Object} props
@@ -58,11 +60,12 @@ export default function UseInAppDialog({ isOpen, onClose, attachment, onSelect }
   const titleId = `${baseId}-title`;
   const searchRef = useRef(null);
   const { apps, loading, error } = useApps();
+  const uploads = usePlatformConfig()?.platformConfig?.uploads || null;
   const [query, setQuery] = useState('');
 
   const candidates = useMemo(
-    () => sortApps(appsAcceptingFile(apps, attachment || {}), language),
-    [apps, attachment, language]
+    () => sortApps(appsAcceptingFile(apps, attachment || {}, { uploads }), language),
+    [apps, attachment, language, uploads]
   );
   const shown = useMemo(() => {
     const needle = query.trim().toLowerCase();

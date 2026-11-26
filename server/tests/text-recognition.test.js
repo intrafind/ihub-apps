@@ -30,7 +30,7 @@ import { getProjectService } from '../services/projects/ProjectService.js';
 import { readOriginal, readText } from '../services/projects/ItemTextStore.js';
 import { serializeItem } from '../services/projects/projectView.js';
 import { evictItemText } from '../services/knowledge/ItemTextService.js';
-import { ingestChatFile } from '../services/chatFiles/ChatFileService.js';
+import { describeStored, ingestChatFile } from '../services/chatFiles/ChatFileService.js';
 import { chatFilePolicy } from '../services/chatFiles/chatFilePolicy.js';
 import { getChatFileRepository } from '../services/chatFiles/ChatFileRepository.js';
 import {
@@ -353,6 +353,8 @@ describe('chats: text recognition is opt-in', () => {
     const image = await attach(png(), 'photo.png', 'image/png');
     assert.match(image.stored.text, /invoice from ACME/);
     assert.equal(image.file.meta.recognized.modelId, 'ocr-vision');
+    // The transcript says so after a reload too: a document read as text, not a picture.
+    assert.equal(describeStored(image.file).recognized.modelId, 'ocr-vision');
     assert.equal(image.stored.pageImages, undefined);
 
     const pdf = await attach(await pdfOf([TEXT_PAGE, null]), 'mixed.pdf', 'application/pdf');
