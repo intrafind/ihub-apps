@@ -17,7 +17,8 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { SERVER_PORT } from '../injection/scenario.mjs';
+import { MCP_INSTALLATION, SERVER_PORT } from '../injection/scenario.mjs';
+import { MAIL_APP } from './agency.mjs';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const base = process.env.IHUB_URL || `http://127.0.0.1:${SERVER_PORT}`;
@@ -48,6 +49,22 @@ async function getJson(url) {
   return { status: response.status, body };
 }
 
+/**
+ * start-target.mjs installs the canary's mail tool once the server is up, which can be after the
+ * health check passed: wait until the user's own view of the installation lists it.
+ */
+async function waitForMailTool() {
+  for (let attempt = 0; attempt < 90; attempt++) {
+    const { status, body } = await getJson(`${base}/api/integrations/${MCP_INSTALLATION}`);
+    if (status === 200 && (body.actions || []).some(action => action.name === 'send_email')) {
+      console.log(`The mail tool (${MCP_INSTALLATION}) is installed.`);
+      return;
+    }
+    await new Promise(resolve => setTimeout(resolve, 1000));
+  }
+  throw new Error(`The mail tool ${MCP_INSTALLATION} never became usable for the user`);
+}
+
 async function main() {
   const apps = [
     ...new Set(
@@ -61,10 +78,12 @@ async function main() {
 
   const { status, body } = await getJson(`${base}/api/inference/v1/models`);
   const listed = new Set((body.data || []).map(model => model.id));
-  const wanted = [...apps.map(id => `app:${id}`), MODEL_ID];
+  // The agency pages (agency.mjs) name their app in the generated tests, not in a config.
+  const wanted = [...new Set([...apps, MAIL_APP])].map(id => `app:${id}`).concat(MODEL_ID);
   const missing = wanted.filter(id => !listed.has(id));
   if (status === 200 && missing.length === 0) {
     console.log(`The user can use ${wanted.join(', ')}.`);
+    await waitForMailTool();
     return;
   }
 
