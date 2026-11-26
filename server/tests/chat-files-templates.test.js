@@ -227,6 +227,73 @@ describe('create_docx with templateFileId', () => {
     );
   });
 
+  it('fills the placeholders of the uploaded file from "fields" and reports the ones left', async () => {
+    clearHeldGeneratedFiles();
+    const { buffer: uploaded } = await buildDocx({
+      title: 'Old',
+      markdown: 'Project: {{project}}. Client: {{client}}. Written by {{author}}.'
+    });
+    const file = await store('placeholders.docx', DOCX, uploaded);
+    const base = {
+      filename: 'filled',
+      title: 'Filled',
+      markdown: 'NEW-CONTENT',
+      templateFileId: file.id,
+      templateMode: 'append',
+      user,
+      chatId
+    };
+    const result = await runCreateDocx({ ...base, fields: { project: 'Apollo' } });
+    assert.equal(result.success, true, result.error);
+    const text = await bodyText(heldGeneratedFile(user, result.file.id, { chatId }).data);
+    assert.match(text, /Project: Apollo\./);
+    assert.match(text, /Client: \{\{client\}\}\./, 'no value: it stays as written');
+    // The model is told which one is left, and how to give it.
+    const warning = result.warnings.find(w => /not built in/.test(w));
+    assert.match(warning, /\{\{client\}\}/);
+    assert.doesNotMatch(warning, /\{\{project\}\}|\{\{author\}\}/);
+    assert.match(warning, /"fields"/);
+
+    // With every value given there is nothing to report.
+    const complete = await runCreateDocx({
+      ...base,
+      fields: { project: 'Apollo', client: 'ACME' }
+    });
+    assert.equal(complete.success, true, complete.error);
+    assert.equal(
+      (complete.warnings || []).some(w => /not built in/.test(w)),
+      false
+    );
+    assert.match(
+      await bodyText(heldGeneratedFile(user, complete.file.id, { chatId }).data),
+      /Client: ACME\./
+    );
+  });
+
+  it('does not report a placeholder that sat in an old body that was cleared', async () => {
+    clearHeldGeneratedFiles();
+    const { buffer: uploaded } = await buildDocx({
+      title: 'Old',
+      markdown: 'Gone: {{project}}.'
+    });
+    const file = await store('cleared.docx', DOCX, uploaded);
+    const result = await runCreateDocx({
+      filename: 'cleared',
+      title: 'Cleared',
+      markdown: 'NEW-CONTENT',
+      templateFileId: file.id,
+      user,
+      chatId
+    });
+    assert.equal(result.success, true, result.error);
+    assert.equal(
+      (result.warnings || []).some(w => /not built in/.test(w)),
+      false
+    );
+    const text = await bodyText(heldGeneratedFile(user, result.file.id, { chatId }).data);
+    assert.doesNotMatch(text, /\{\{project\}\}/);
+  });
+
   it('rejects unknown modes, wrong file types and unknown ids with a readable error', async () => {
     const { buffer } = await buildDocx({ title: 'x', markdown: 'x' });
     const file = await store('m.docx', DOCX, buffer);

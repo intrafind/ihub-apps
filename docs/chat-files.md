@@ -222,8 +222,11 @@ project items use. The server downloads the file with the user's stored credenti
 
 The model sees `id="…"` and `can_use_as_template="true"` on the file's `<content>` tag.
 
-- `create_docx({ templateFileId, templateMode })`: `styles_only` (default when the file has no
-  `{{content}}` marker), `fill_placeholders`, `append`.
+- `create_docx({ templateFileId, templateMode, fields })`: `styles_only` (default when the file has no
+  `{{content}}` marker), `fill_placeholders`, `append`. The built-in placeholders (`{{title}}`,
+  `{{date}}`, `{{year}}` …) are filled by the server; the file's other placeholders (`{{project}}` …)
+  are filled from `fields`, and the ones left without a value are reported to the model, which asks the
+  user and tries again. They stay as written in the document until then.
 - `create_pptx({ templateFileId, templateMode })`: `styles_only` (default) or `append`.
 - `restyle_pptx({ fileId })`: moves the uploaded deck onto the document template's master and layouts and keeps its content ([details](document-templates.md#uploaded-presentations)); the result is a new file.
 - `create_pdf({ templateFileId, fillFormFields, flattenForm })`: fills the form fields in place;

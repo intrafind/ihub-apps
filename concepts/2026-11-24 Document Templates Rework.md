@@ -256,8 +256,10 @@ nothing. `fields` is added. Whether a pinned template should hide more of them i
 implementation, per format.
 
 `templateFileId` (a Word file the user uploaded in the chat) stays as it is and gets the same
-built-in placeholders, including `{{year}}`, `{{toc}}`, `{{page}}` and `{{pages}}`. It has no custom
-fields.
+built-in placeholders, including `{{year}}`, `{{toc}}`, `{{page}}` and `{{pages}}`. It has no declared
+fields, so nothing is required of it. Its other placeholders are filled from the values the model passes
+in `fields`, and the ones left without a value are reported in the tool's warnings, so the model can ask
+the user and try again.
 
 ### Export dialog
 

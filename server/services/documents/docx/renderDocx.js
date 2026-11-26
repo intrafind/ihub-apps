@@ -3,11 +3,39 @@
 
 import { assertWellFormed, openPackage } from '../ooxml/opcPackage.js';
 import { buildDocx, labelsFor } from './buildDocx.js';
-import { mergeIntoWordTemplate, readWordTemplateLayout } from './wordTemplate.js';
+import {
+  inspectWordTemplate,
+  mergeIntoWordTemplate,
+  readWordTemplateLayout
+} from './wordTemplate.js';
 
 /** The year in a date such as `2026-11-26` or `26 November 2026`; this year when there is none. */
 function yearOf(date) {
   return /\b(?:19|20)\d{2}\b/.exec(String(date))?.[0] || String(new Date().getFullYear());
+}
+
+/**
+ * The placeholders of an uploaded Word file that are not built in and are
+ * still in the finished document: they had no value, so they print as written.
+ * (A placeholder in a body that was cleared is gone, and is not reported.)
+ *
+ * @param {Buffer} template - The uploaded file.
+ * @param {Buffer} result - The finished document.
+ * @returns {Promise<string[]>} Names, in the order they appear in the file.
+ */
+async function unfilledFields(template, result) {
+  const [wanted, left] = await Promise.all([
+    inspectWordTemplate(template),
+    inspectWordTemplate(result)
+  ]);
+  const remaining = new Set(left.customFields);
+  return wanted.customFields.filter(name => remaining.has(name));
+}
+
+/** What the model is told about placeholders of an uploaded file that had no value. */
+function unfilledWarning(names) {
+  const list = names.map(name => `{{${name}}}`).join(', ');
+  return `The uploaded file has placeholders that are not built in and had no value, so they stay as written: ${list}. Ask the user for their values if you do not know them, then create the document again with "fields" set, for example {"${names[0]}": "…"}.`;
 }
 
 /**
@@ -88,6 +116,11 @@ export async function renderDocx(spec, assets = {}) {
         language: spec.language
       }
     });
+    // An uploaded file's own placeholders get their values from `fields`; report what is left.
+    if (spec.templateMode) {
+      const unfilled = await unfilledFields(template, buffer);
+      if (unfilled.length) warnings = [...warnings, unfilledWarning(unfilled)];
+    }
   } else {
     ({ buffer, warnings } = await buildDocx(spec));
   }
