@@ -141,7 +141,8 @@ its own, neither for generating nor for detecting:
   without results) or *not detected*. The `_verify` answer names the key file
   (`watermark.keyLabel`), the algorithm, the number of checks (`watermark.checksMade`) and the
   route that decided (`watermark.source`: `ihub`, `model` or `gateway`). With several routes, a
-  detection wins; without one, a route that could not answer makes the result *unavailable*.
+  detection wins, then *too short*; otherwise a route that could not answer makes the result
+  *unavailable*, so *not detected* means that every route answered.
 - **Through an iFinder Model Gateway.** Where iFinder runs alongside iHub, set the gateway's
   detection endpoint in **Admin → EU AI Act → Text watermark → Detectors and self-test**
   (`provenance.watermark.gatewayUrl`, with `gatewayCredentialRef`: a `bearer` credential, or an
@@ -153,11 +154,16 @@ its own, neither for generating nor for detecting:
   tokens); iHub's `alpha` and `minScoredTokens` do not apply, `detectorTimeoutMs` does.
   The gateway checks with **all** detectors in its own configuration
   (`intrafind.modelgateway.watermark-detection.detectors`), including those of models iHub does
-  not use, and asks none that are only registered in iHub. A *detected* therefore means "from a
-  model the gateway knows", not necessarily "through this iHub"; the output record answers the
-  latter. A model missing from the gateway's configuration shows up as a failed self-test.
+  not use, and asks none that are only registered in iHub. A *detected* is therefore evidence, not
+  proof of origin: the text is consistent with a watermark that one of the gateway's detectors
+  recognises, which need not be one of this iHub's models; the output record answers whether it
+  came through this iHub. Likewise a passing self-test shows that one of the gateway's detectors
+  knows the model's key, not under which detector the model is listed; a model whose key no
+  detector knows shows up as a failed self-test.
 - **Self-test.** It generates as usual and passes with `watermark_found` (and the key file in
-  `matchedKeyLabel`) when the image or the gateway finds the watermark.
+  `matchedKeyLabel`) when the image or the gateway finds the watermark. The result is marked
+  outdated when the route changes afterwards (a gateway is set or removed, or its address or the
+  image's detection endpoint changes), as it is after a change of the key holder.
 
 iHub's key store and the `ihub` key holder stay as they are for vLLM servers started with
 `--watermark-config` by hand.

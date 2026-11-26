@@ -247,7 +247,8 @@ function logPValueBucket(pValue) {
  *   different keys give different results anyway. A detector that reports no
  *   tokenizer shares no check with another one.
  * - Bonferroni: the strongest check's p-value times the number of distinct
- *   checks (at most 1) must be below `alpha`. Of equal p-values the first
+ *   checks (at most 1) must be below `alpha`. A counted check carries the
+ *   smallest p-value of the reports it stands for; of equal p-values the first
  *   detector's check wins.
  * - Otherwise "too short" when a check scored fewer than `minScoredTokens`
  *   tokens, "unavailable" when a detector did not answer or answered without
@@ -271,7 +272,12 @@ export function evaluateChecks(outcomes, { alpha, minScoredTokens }) {
         logPValueBucket(check.pValue),
         check.numScoredTokens
       ]);
-      if (!distinct.has(id)) distinct.set(id, { ...check, detector: outcome.detector });
+      // Checks in one bucket may still differ in the last digits: the smallest
+      // p-value represents them, so the verdict does not depend on their order.
+      const seen = distinct.get(id);
+      if (!seen || check.pValue < seen.pValue) {
+        distinct.set(id, { ...check, detector: outcome.detector });
+      }
     }
   }
   const checks = [...distinct.values()];
@@ -348,11 +354,10 @@ export function decideFromGateway(answer, { detector }) {
     gateway
   };
   if (answer.verdict === 'DETECTED') {
-    const detected =
-      answer.schemes
-        .filter(scheme => scheme.verdict === 'DETECTED' && scheme.strongestResult)
-        .map(scheme => scheme.strongestResult)
-        .sort(byPValue)[0] || results[0];
+    const detected = answer.schemes
+      .filter(scheme => scheme.verdict === 'DETECTED' && scheme.strongestResult)
+      .map(scheme => scheme.strongestResult)
+      .sort(byPValue)[0];
     return {
       ...base,
       status: WATERMARK_STATUS.DETECTED,

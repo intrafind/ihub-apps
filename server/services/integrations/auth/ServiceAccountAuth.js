@@ -217,6 +217,17 @@ export class ClientCredentialsTokenCache {
     return data.access_token;
   }
 
+  /**
+   * Forget the cached token of `key` if it is still `token` (a server rejected
+   * it before it expired). A newer token another request fetched meanwhile stays.
+   *
+   * @param {string} key
+   * @param {string} token
+   */
+  invalidate(key, token) {
+    if (this.entries.get(key)?.token === token) this.entries.delete(key);
+  }
+
   /** Forget every cached token (a config change). */
   clear() {
     this.entries.clear();

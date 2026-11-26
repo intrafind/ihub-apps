@@ -52,7 +52,6 @@
 import { createHash } from 'node:crypto';
 import { z } from 'zod';
 import { httpFetch } from '../../../utils/httpConfig.js';
-import { createPinnedLookup } from '../../../utils/ssrfGuard.js';
 import { readBoundedBody } from '../../../utils/boundedBodyReader.js';
 import { redactUrl, scrubSecrets } from '../../../utils/secretRedaction.js';
 import { ServiceError } from '../../../utils/ServiceError.js';
@@ -63,7 +62,7 @@ import {
   credentialProfileAuth
 } from '../../integrations/auth/ServiceAccountAuth.js';
 import logger from '../../../utils/logger.js';
-import { checkDetectorUrl } from './detectorUrlPolicy.js';
+import { checkDetectorUrl, pinnedDetectorLookup } from './detectorUrlPolicy.js';
 
 const COMPONENT = 'WatermarkDetector';
 
@@ -150,6 +149,19 @@ function notConfigured(message) {
   return new ServiceError('WATERMARK_DETECTOR_NOT_CONFIGURED', message);
 }
 
+/** The cache key of a detector credential's token: a changed secret gets a new entry. */
+function tokenCacheKey(credentialRef, profile) {
+  return JSON.stringify([
+    credentialRef,
+    profile.tokenUrl,
+    profile.clientId,
+    profile.scope || '',
+    createHash('sha256')
+      .update(String(profile.clientSecret || ''))
+      .digest('hex')
+  ]);
+}
+
 /**
  * An OAuth2 client-credentials token for a detector credential. The request goes
  * to the addresses the token URL policy accepted (no second DNS answer), through
@@ -163,16 +175,7 @@ function notConfigured(message) {
  * @returns {Promise<string>}
  */
 function fetchToken(credentialRef, profile, addresses, signal) {
-  const cacheKey = JSON.stringify([
-    credentialRef,
-    profile.tokenUrl,
-    profile.clientId,
-    profile.scope || '',
-    createHash('sha256')
-      .update(String(profile.clientSecret || ''))
-      .digest('hex')
-  ]);
-  return tokenCache.getToken(cacheKey, async () => {
+  return tokenCache.getToken(tokenCacheKey(credentialRef, profile), async () => {
     const body = clientCredentialsBody({
       clientId: profile.clientId,
       clientSecret: profile.clientSecret,
@@ -189,7 +192,7 @@ function fetchToken(credentialRef, profile, addresses, signal) {
       body: body.toString(),
       signal,
       redirect: 'error',
-      lookup: createPinnedLookup(addresses, { allowPrivate: true })
+      lookup: pinnedDetectorLookup(addresses)
     });
     if (!res.ok) throw new Error(`OAuth token request failed: ${res.status}`);
     const raw = await readBoundedBody(res, MAX_TOKEN_RESPONSE_BYTES, 'OAuth token response');
@@ -212,7 +215,8 @@ export function clearDetectorTokens() {
  * @param {string|undefined} credentialRef
  * @param {{resolve?: Function, bearerToken?: string|null}} [options] - `bearerToken`: sent
  *   when no credential is referenced (a model's own API key)
- * @returns {Promise<{headers: Object<string, string>, secrets: string[]}>}
+ * @returns {Promise<{headers: Object<string, string>, secrets: string[], forget?: Function}>}
+ *   `forget` drops a cached OAuth2 token the detector rejected
  * @throws {ServiceError} WATERMARK_DETECTOR_NOT_CONFIGURED | WATERMARK_DETECTOR_UNREACHABLE (`token`)
  */
 async function credentialHeaders(credentialRef, { resolve, bearerToken, signal } = {}) {
@@ -231,6 +235,7 @@ async function credentialHeaders(credentialRef, { resolve, bearerToken, signal }
     );
   }
   const headers = { ...credentialProfileAuth(profile).headers };
+  let forget = () => {};
   if (profile.type === 'oauth2') {
     const check = await checkDetectorUrl(profile.tokenUrl, { resolve });
     if (!check.ok) {
@@ -241,6 +246,8 @@ async function credentialHeaders(credentialRef, { resolve, bearerToken, signal }
     try {
       const token = await fetchToken(credentialRef, profile, check.addresses, signal);
       headers.Authorization = `Bearer ${token}`;
+      // A detector that rejects the token before it expires gets a new one next time.
+      forget = () => tokenCache.invalidate(tokenCacheKey(credentialRef, profile), token);
     } catch (error) {
       logger.warn('Watermark detector token request failed', {
         component: COMPONENT,
@@ -255,7 +262,7 @@ async function credentialHeaders(credentialRef, { resolve, bearerToken, signal }
   const auth = { headers };
   const secrets = Object.values(auth.headers).filter(Boolean);
   if (profile.clientSecret) secrets.push(profile.clientSecret);
-  return { headers: auth.headers, secrets };
+  return { headers: auth.headers, secrets, forget };
 }
 
 /**
@@ -304,7 +311,7 @@ async function postJson({
         body: JSON.stringify(body),
         signal: controller.signal,
         redirect: 'error',
-        lookup: createPinnedLookup(check.addresses, { allowPrivate: true })
+        lookup: pinnedDetectorLookup(check.addresses)
       });
     } catch (error) {
       const message = scrubSecrets(String(error?.message || error), secrets);
@@ -320,6 +327,7 @@ async function postJson({
       throw unreachable(`The watermark detector call failed (${reason})`, { reason });
     }
     if (res.status === 401 || res.status === 403) {
+      auth.forget?.();
       throw unreachable('The watermark detector refused the credential', {
         reason: 'unauthorized',
         status: res.status

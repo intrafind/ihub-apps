@@ -15,7 +15,10 @@ import { ServiceError } from '../../utils/ServiceError.js';
 import { logAudit } from '../../services/AuditLogService.js';
 import llmClient from '../../services/loop/LLMClient.js';
 import { getActiveKeyId } from '../../services/provenance/watermark/activeKeySnapshot.js';
-import { listDetectorConfigs } from '../../services/provenance/watermark/detect.js';
+import {
+  detectorConfigOf,
+  listDetectorConfigs
+} from '../../services/provenance/watermark/detect.js';
 import { checkDetectorUrl } from '../../services/provenance/watermark/detectorUrlPolicy.js';
 import { recordSelfTest } from '../../services/euAiAct/selfTestStore.js';
 import { pingDetector, runSelfTest } from '../../services/provenance/watermark/selfTest.js';
@@ -120,15 +123,19 @@ export default function registerAdminWatermarkDetectorRoutes(app) {
     requireEuAiActEnabled('watermark'),
     async (req, res) => {
       const model = findIhubModel(req.params.modelId);
+      // The overview page (#3329) shows the last result and marks it outdated after a
+      // change of the key, the key holder or the detection route. Captured before the
+      // generation, so a change during the test does not count as tested. A model
+      // whose image holds the key does not depend on iHub's keys.
+      const tested = detectorConfigOf(model);
+      const modelHeld = tested?.keyHolder === 'model';
+      const activeKeyId = modelHeld ? null : getActiveKeyId();
       const result = await runSelfTest(model, { llmClient, user: req.user });
-      // The overview page (#3329) shows the last result and marks it outdated after a key change.
-      // A model whose image holds the key does not depend on iHub's keys.
-      const modelHeld = model.contentMarking?.text?.keyHolder === 'model';
-      await recordSelfTest(
-        model.id,
-        result,
-        modelHeld ? { activeKeyId: null, keyHolder: 'model' } : { keyHolder: 'ihub' }
-      );
+      await recordSelfTest(model.id, result, {
+        activeKeyId,
+        keyHolder: modelHeld ? 'model' : 'ihub',
+        detector: tested ? { api: tested.api, url: tested.detectorUrl } : null
+      });
       await logAudit({
         req,
         action: 'execute',

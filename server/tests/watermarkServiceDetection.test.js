@@ -34,6 +34,10 @@ const { resetWatermarkKeyStore } =
   await import('../services/provenance/watermark/WatermarkKeyStore.js');
 const { callGatewayDetector, callModelDetector, clearDetectorTokens } =
   await import('../services/provenance/watermark/DetectorClient.js');
+const { pinnedDetectorLookup } =
+  await import('../services/provenance/watermark/detectorUrlPolicy.js');
+const { ClientCredentialsTokenCache } =
+  await import('../services/integrations/auth/ServiceAccountAuth.js');
 const {
   combineVerdicts,
   decideFromGateway,
@@ -261,6 +265,19 @@ describe('evaluateChecks (Bonferroni, as the Model Gateway decides)', () => {
     expect(evaluateChecks([bare('https://a'), bare('https://b')], settings).checksMade).toBe(2);
   });
 
+  test('checks in one bucket give the same verdict in any order', () => {
+    // Both p-values round to the same ln p bucket but lie on either side of alpha.
+    const below = check('k', 0.999999999e-4);
+    const above = check('k', 1.000000001e-4);
+    const verdicts = [
+      [below, above],
+      [above, below]
+    ].map(pair => evaluateChecks([outcome([pair[0]]), outcome([pair[1]])], settings));
+    expect(verdicts.map(verdict => verdict.checksMade)).toEqual([1, 1]);
+    expect(verdicts.map(verdict => verdict.status)).toEqual(['detected', 'detected']);
+    expect(verdicts[0].pValue).toBe(verdicts[1].pValue);
+  });
+
   test('too short, a detector down, or not detected', () => {
     expect(evaluateChecks([outcome([check('k', 0.3, 50)])], settings).status).toBe('too_short');
     // An image that answers without results is down, as for the gateway.
@@ -364,21 +381,73 @@ describe('callGatewayDetector', () => {
     });
 
   test('the token request goes to the address the URL check accepted, not a new DNS answer', async () => {
-    // The check accepts 192.0.2.1 (a documentation address); a second lookup of
-    // "localhost" would reach the mock. Pinned, the request never gets there.
+    // "token.invalid" never resolves in DNS: the mock is reached only through the
+    // address the URL check accepted (loopback, which the detector policy allows).
+    const port = new URL(oauthGateway.tokenUrl).port;
+    withOauthCredential({ tokenUrl: `http://token.invalid:${port}/oauth/token` });
+    const resolve = async host => {
+      if (host !== 'token.invalid') throw new Error(`unexpected lookup of ${host}`);
+      return ['127.0.0.1'];
+    };
+    await callGatewayDetector({
+      url: oauthGateway.url,
+      credentialRef: 'gw-oauth',
+      text: TEXT,
+      resolve
+    });
+    expect(oauthGateway.tokenCalls).toHaveLength(1);
+    expect(oauthGateway.calls).toHaveLength(1);
+  });
+
+  test('a token request pinned to another accepted address does not reach the server', async () => {
+    // The check accepts 127.0.0.2; "localhost" would resolve to the mock on 127.0.0.1.
     const port = new URL(oauthGateway.tokenUrl).port;
     withOauthCredential({ tokenUrl: `http://localhost:${port}/oauth/token` });
-    await expect(
-      callGatewayDetector({
-        url: oauthGateway.url,
-        credentialRef: 'gw-oauth',
-        text: TEXT,
-        timeoutMs: 300,
-        resolve: async () => ['192.0.2.1']
-      })
-    ).rejects.toMatchObject({ code: 'WATERMARK_DETECTOR_UNREACHABLE' });
+    const error = await callGatewayDetector({
+      url: oauthGateway.url,
+      credentialRef: 'gw-oauth',
+      text: TEXT,
+      timeoutMs: 1000,
+      resolve: async () => ['127.0.0.2']
+    }).catch(caught => caught);
+    // Refused by the connection, not by the URL check.
+    expect(error).toMatchObject({ code: 'WATERMARK_DETECTOR_UNREACHABLE' });
+    expect(['token', 'timeout']).toContain(error.details.reason);
     expect(oauthGateway.tokenCalls).toHaveLength(0);
     expect(oauthGateway.calls).toHaveLength(0);
+  });
+
+  test('the pinned lookup keeps loopback and drops forbidden addresses', async () => {
+    const lookup = (addresses, options) =>
+      new Promise((resolve, reject) =>
+        pinnedDetectorLookup(addresses)('detector', options, (error, address) =>
+          error ? reject(error) : resolve(address)
+        )
+      );
+    await expect(lookup(['127.0.0.1'], {})).resolves.toBe('127.0.0.1');
+    await expect(lookup(['169.254.169.254', '10.0.0.5'], {})).resolves.toBe('10.0.0.5');
+    await expect(lookup(['169.254.169.254'], {})).rejects.toMatchObject({ code: 'ENOTFOUND' });
+  });
+
+  test('a token the detector rejects is dropped from the cache', async () => {
+    await callGatewayDetector({ url: oauthGateway.url, credentialRef: 'gw-oauth', text: TEXT });
+    oauthGateway.setMode('401');
+    await expect(
+      callGatewayDetector({ url: oauthGateway.url, credentialRef: 'gw-oauth', text: TEXT })
+    ).rejects.toMatchObject({ details: { reason: 'unauthorized' } });
+    oauthGateway.setMode('ok');
+    await callGatewayDetector({ url: oauthGateway.url, credentialRef: 'gw-oauth', text: TEXT });
+    expect(oauthGateway.tokenCalls).toHaveLength(2);
+  });
+
+  test('dropping a rejected token keeps a newer one', async () => {
+    const cache = new ClientCredentialsTokenCache();
+    await cache.getToken('k', async () => ({ access_token: 'old' }));
+    cache.invalidate('k', 'old');
+    await cache.getToken('k', async () => ({ access_token: 'new' }));
+    // A late rejection of the old token must not evict the new one.
+    cache.invalidate('k', 'old');
+    await expect(cache.getToken('k', async () => ({ access_token: 'newer' }))).resolves.toBe('new');
   });
 
   test('a token request that hangs ends with the deadline of the detector call', async () => {
@@ -468,6 +537,34 @@ describe('callGatewayDetector', () => {
     expect(combineVerdicts([{ status: 'not_detected' }, { status: 'unavailable' }]).status).toBe(
       'unavailable'
     );
+    // "Too short" outranks a route that could not answer.
+    expect(combineVerdicts([{ status: 'too_short' }, { status: 'unavailable' }]).status).toBe(
+      'too_short'
+    );
+  });
+
+  test('a gateway detection names no key file of a scheme that did not detect', () => {
+    const result = {
+      keyLabel: 'other-key',
+      algorithm: 'gumbel',
+      pValue: 0.4,
+      numScoredTokens: 300
+    };
+    const answer = {
+      verdict: 'DETECTED',
+      alpha: 0.01,
+      textSha256: 'a'.repeat(64),
+      detectedAt: '2026-11-23T10:00:00Z',
+      gatewayVersion: '6.9.0',
+      schemes: [
+        { scheme: 'a', verdict: 'DETECTED', unclearReasons: [] },
+        { scheme: 'b', verdict: 'NOT_DETECTED', unclearReasons: [], strongestResult: result }
+      ]
+    };
+    const verdict = decideFromGateway(answer, { detector: { scheme: 'vllm-gumbel' } });
+    expect(verdict.status).toBe('detected');
+    expect(verdict).not.toHaveProperty('keyLabel');
+    expect(verdict).not.toHaveProperty('pValue');
   });
 });
 

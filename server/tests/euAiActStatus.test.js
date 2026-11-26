@@ -340,6 +340,27 @@ describe('self-test store', () => {
     const { keyHolder: _omit, ...legacy } = stored.vl;
     expect(selfTestSummary(legacy, 'wm-2026-1', 'ihub').state).toBe('passed');
   });
+
+  test('a pass is stale once the detection route or its address changed', async () => {
+    const image = { api: 'model', url: 'https://gpu-02.example/watermark/v1/detect' };
+    const gateway = { api: 'gateway', url: 'https://gw.example/v1/gateway/detections/text' };
+    await recordSelfTest(
+      'img',
+      { diagnosis: 'watermark_found' },
+      { activeKeyId: null, keyHolder: 'model', detector: image }
+    );
+    const stored = await readSelfTests();
+    expect(selfTestSummary(stored.img, null, 'model', image).state).toBe('passed');
+    // A gateway set after the test: the image was tested, not the gateway.
+    expect(selfTestSummary(stored.img, null, 'model', gateway).state).toBe('stale');
+    expect(
+      selfTestSummary(stored.img, null, 'model', { ...image, url: 'https://gpu-03.example/x' })
+        .state
+    ).toBe('stale');
+    // An entry without the route cannot tell and is not aged by it.
+    const { detector: _omit, ...legacy } = stored.img;
+    expect(selfTestSummary(legacy, null, 'model', gateway).state).toBe('passed');
+  });
 });
 
 describe('detector probe', () => {
