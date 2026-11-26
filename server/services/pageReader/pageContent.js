@@ -390,49 +390,126 @@ function metaContent(document, selectors) {
   return '';
 }
 
-// `text` without its CSS comments, scanned by index, not by a pattern that could backtrack.
-function withoutCssComments(text) {
-  let result = '';
-  let at = 0;
-  for (;;) {
-    const start = text.indexOf('/*', at);
-    if (start === -1) return result + text.slice(at);
-    result += text.slice(at, start);
-    const end = text.indexOf('*/', start + 2);
-    if (end === -1) return result;
-    at = end + 2;
+/**
+ * The declarations of an inline style as `[name, value, important]`, scanned by index (no pattern
+ * that could backtrack). Comments are dropped, and a `;` inside a string, a parenthesis or after a
+ * backslash does not end a declaration: `--note: 'x;display:none'` is one declaration.
+ *
+ * @param {string} style
+ * @returns {Array<[string, string, boolean]>}
+ */
+function parseDeclarations(style) {
+  const declarations = [];
+  let current = '';
+  let quote = '';
+  let depth = 0;
+
+  const finish = () => {
+    const colon = current.indexOf(':');
+    if (colon !== -1) {
+      const name = current.slice(0, colon).trim().toLowerCase();
+      let value = current
+        .slice(colon + 1)
+        .trim()
+        .toLowerCase();
+      let important = false;
+      if (value.endsWith('important')) {
+        const rest = value.slice(0, -'important'.length).trimEnd();
+        if (rest.endsWith('!')) {
+          important = true;
+          value = rest.slice(0, -1).trim();
+        }
+      }
+      declarations.push([name, value, important]);
+    }
+    current = '';
+  };
+
+  for (let i = 0; i < style.length; i++) {
+    const c = style[i];
+    if (c === '\\') {
+      current += c + (style[i + 1] ?? '');
+      i++;
+    } else if (quote) {
+      current += c;
+      if (c === quote) quote = '';
+    } else if (c === '/' && style[i + 1] === '*') {
+      const end = style.indexOf('*/', i + 2);
+      if (end === -1) break;
+      i = end + 1;
+    } else if (c === '"' || c === "'") {
+      quote = c;
+      current += c;
+    } else if (c === ';' && depth === 0) {
+      finish();
+    } else {
+      if (c === '(') depth++;
+      else if (c === ')' && depth > 0) depth--;
+      current += c;
+    }
   }
+  finish();
+  return declarations;
 }
 
 /**
- * Whether the markup of an element hides it: the `hidden` attribute, or an inline `display: none`
- * or `visibility: hidden`. The inline style is read here, not by the DOM's style parser, which
- * does not know an upper-case property name (`DISPLAY:none` reads as empty) although a browser
- * hides the text just the same. Spacing, case, `!important` and comments do not matter.
+ * The value an inline style gives a property after the cascade: a later declaration wins, unless an
+ * earlier one is `!important` and the later one is not.
+ *
+ * @param {Array<[string, string, boolean]>} declarations
+ * @param {string} property
+ * @returns {string|null}
+ */
+function winningValue(declarations, property) {
+  let winner = null;
+  let winnerImportant = false;
+  for (const [name, value, important] of declarations) {
+    if (name !== property || (winnerImportant && !important)) continue;
+    winner = value;
+    winnerImportant = important;
+  }
+  return winner;
+}
+
+/**
+ * What the markup of an element does to the text: the `hidden` attribute and an inline
+ * `display: none` remove the element with everything in it (`'remove'`); an inline `visibility`
+ * is inherited, so `hidden` / `collapse` hides the text of the element and of the descendants that
+ * do not say otherwise (`'hide-text'`) and `visible` shows it again (`'show-text'`). The inline
+ * style is read here, not by the DOM's style parser, which does not know an upper-case property
+ * name (`DISPLAY:none` reads as empty) although a browser hides the text just the same. Spacing,
+ * case, `!important`, comments and the order of declarations are taken as a browser takes them.
  *
  * @param {Element} element
- * @returns {boolean}
+ * @returns {'remove'|'hide-text'|'show-text'|null}
  */
-function hidesItself(element) {
-  if (element.hasAttribute('hidden')) return true;
+function hidingOf(element) {
+  if (element.hasAttribute('hidden')) return 'remove';
   const style = element.getAttribute('style');
-  if (!style) return false;
-  return withoutCssComments(style)
-    .split(';')
-    .some(declaration => {
-      const colon = declaration.indexOf(':');
-      if (colon === -1) return false;
-      const name = declaration.slice(0, colon).trim().toLowerCase();
-      const value = declaration
-        .slice(colon + 1)
-        .replace(/!\s*important/i, '')
-        .trim()
-        .toLowerCase();
-      return (
-        (name === 'display' && value === 'none') ||
-        (name === 'visibility' && (value === 'hidden' || value === 'collapse'))
-      );
-    });
+  if (!style) return null;
+  const declarations = parseDeclarations(style);
+  if (winningValue(declarations, 'display') === 'none') return 'remove';
+  const visibility = winningValue(declarations, 'visibility');
+  if (visibility === 'hidden' || visibility === 'collapse') return 'hide-text';
+  if (visibility === 'visible') return 'show-text';
+  return null;
+}
+
+/**
+ * Removes the text of `root` and of its descendants that inherit `visibility: hidden`, and keeps
+ * what a descendant shows again with its own `visibility: visible`.
+ *
+ * @param {Element} root
+ */
+function dropInheritedHiddenText(root) {
+  const pending = [root];
+  while (pending.length > 0) {
+    const parent = pending.pop();
+    for (const child of [...parent.childNodes]) {
+      if (child.nodeType === 3) child.remove();
+      else if (child.nodeType === 1 && hidingOf(child) !== 'show-text') pending.push(child);
+    }
+  }
 }
 
 /**
@@ -446,7 +523,17 @@ function hidesItself(element) {
  */
 function dropHiddenElements(document) {
   for (const element of document.querySelectorAll('[hidden], [style]')) {
-    if (hidesItself(element)) element.remove();
+    const hiding = hidingOf(element);
+    if (hiding === 'remove') element.remove();
+    else if (hiding === 'hide-text') {
+      // Nothing below can show the text again: the element goes whole. Otherwise only its own
+      // text goes, and its style with it, as Readability drops a visibility-hidden element together
+      // with the descendants that show themselves again.
+      if (element.querySelector('[style]')) {
+        dropInheritedHiddenText(element);
+        element.removeAttribute('style');
+      } else element.remove();
+    }
   }
 }
 

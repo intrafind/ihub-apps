@@ -140,14 +140,31 @@ describe('hidden text on a page with and without an article', () => {
     ['visibility:collapse', '<span style="visibility:collapse">HIDDEN-7</span>'],
     ['among other declarations', '<p style="color:red;DISPLAY:none;margin:0">HIDDEN-8</p>'],
     ['a hidden parent', '<div style="display:none"><p>HIDDEN-9 <a href="/x">link</a></p></div>'],
-    ['aria-hidden', '<p aria-hidden="true">HIDDEN-10</p>']
+    ['aria-hidden', '<p aria-hidden="true">HIDDEN-10</p>'],
+    [
+      'a later display:none over an earlier block',
+      '<p style="display:block;display:none">HIDDEN-11</p>'
+    ],
+    [
+      'an !important display:none over a later block',
+      '<p style="display:none !important;display:block">HIDDEN-12</p>'
+    ]
   ];
   const visibleKinds = [
     '<p style="display:block">VISIBLE-1</p>',
     '<p style="visibility:visible">VISIBLE-2</p>',
     '<p hidden-note="x">VISIBLE-3</p>',
     '<p style="content:\'display:none\'">VISIBLE-4</p>',
-    '<p style="display">VISIBLE-5</p>'
+    '<p style="display">VISIBLE-5</p>',
+    // The cascade: a later declaration wins, an earlier !important one beats a later normal one.
+    '<p style="display:none;display:block">VISIBLE-6</p>',
+    '<p style="display:block !important;display:none">VISIBLE-7</p>',
+    // A semicolon inside a string or a parenthesis does not end a declaration.
+    '<p style="--note:\'x;display:none;y\'">VISIBLE-8</p>',
+    '<p style="background:url(a;display:none)">VISIBLE-9</p>',
+    // visibility is inherited, and a descendant may show itself again.
+    '<div style="visibility:hidden">HIDDEN-13<p style="visibility:visible">VISIBLE-10</p></div>',
+    '<div style="visibility:hidden"><div style="VISIBILITY:visible">VISIBLE-11 <span style="visibility:hidden">HIDDEN-14</span></div></div>'
   ];
 
   const sentences = 'The regional team reviewed the quarter and agreed on the next steps. ';
@@ -178,9 +195,10 @@ describe('hidden text on a page with and without an article', () => {
       it('keeps text whose style does not hide it', () => {
         const page = read(wrap(visibleKinds.join('')));
         assert.equal(page.extractor, extractor);
-        for (let n = 1; n <= visibleKinds.length; n++) {
-          assert.match(page.markdown, new RegExp(`VISIBLE-${n}`));
+        for (let n = 1; n <= 11; n++) {
+          assert.match(page.markdown, new RegExp(`VISIBLE-${n}\\b`));
         }
+        assert.doesNotMatch(page.markdown, /HIDDEN-\d/);
       });
     });
   }
