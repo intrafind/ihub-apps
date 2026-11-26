@@ -182,7 +182,7 @@ describe('the PDF margins', () => {
     );
     expect(screen.getByLabelText('Top', { selector: 'input[type=number]' })).toHaveValue(72);
     expect(
-      screen.getByText(/^From the Word template Left, top, right, bottom/)
+      screen.getByText(/^From the Word template\. Left, top, right, bottom/)
     ).toBeInTheDocument();
     expect(
       screen.queryByRole('button', { name: "Use the Word template's margins" })
