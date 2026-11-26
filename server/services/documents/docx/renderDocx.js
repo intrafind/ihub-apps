@@ -39,6 +39,25 @@ function unfilledWarning(names) {
 }
 
 /**
+ * How the content goes into the template: `auto` (an uploaded file, `spec.templateMode`)
+ * fills `{{content}}` when the file has the marker, else uses the file for its look only.
+ */
+function mergeModeOf(spec, layout) {
+  if (spec.templateMode !== 'auto') return spec.templateMode;
+  return layout.placeholders.has('content') ? 'fill_placeholders' : 'styles_only';
+}
+
+/**
+ * An uploaded file's own placeholders get their values from `fields`: what is left
+ * without a value is reported (nothing for a template of the company).
+ */
+async function unfilledWarnings(spec, template, result) {
+  if (!spec.templateMode) return [];
+  const names = await unfilledFields(template, result);
+  return names.length ? [unfilledWarning(names)] : [];
+}
+
+/**
  * Render a Word document spec, in the current thread (the render worker
  * calls this; see `../renderService.js`).
  *
@@ -86,12 +105,7 @@ export async function renderDocx(spec, assets = {}) {
     // An uploaded document (`spec.templateMode` is set by `templateFileId`)
     // that has no `{{content}}` marker is used for its look only: its old body
     // is cleared instead of having the new content appended to it.
-    const mode =
-      spec.templateMode === 'auto'
-        ? layout.placeholders.has('content')
-          ? 'fill_placeholders'
-          : 'styles_only'
-        : spec.templateMode;
+    const mode = mergeModeOf(spec, layout);
     const date = spec.date || new Date().toISOString().slice(0, 10);
     buffer = await mergeIntoWordTemplate(built.buffer, template, {
       mode,
@@ -116,11 +130,7 @@ export async function renderDocx(spec, assets = {}) {
         language: spec.language
       }
     });
-    // An uploaded file's own placeholders get their values from `fields`; report what is left.
-    if (spec.templateMode) {
-      const unfilled = await unfilledFields(template, buffer);
-      if (unfilled.length) warnings = [...warnings, unfilledWarning(unfilled)];
-    }
+    warnings = [...warnings, ...(await unfilledWarnings(spec, template, buffer))];
   } else {
     ({ buffer, warnings } = await buildDocx(spec));
   }
