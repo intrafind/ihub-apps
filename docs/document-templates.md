@@ -147,7 +147,7 @@ Templates live in `contents/document-templates/<id>/`: `template.json` and the t
 | `POST /api/admin/document-templates/:id/sample/:format` | A sample `pdf`, `png`, `docx` or `pptx` |
 | `GET /api/document-templates` | Enabled templates for the export dialog (signed-in users); with `appId`, also the template that app pins |
 
-Template ids use `a-z`, `0-9` and `-`. `default` and `new` are reserved.
+Template ids use `a-z`, `0-9` and `-`. `default`, `professional`, `minimal` and `new` are reserved: the first three name the chat export's built-in designs.
 
 ### template.json
 

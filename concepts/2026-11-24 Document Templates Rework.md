@@ -301,7 +301,7 @@ taken on `main` by the removal of Qwant). For every
   neutral design in its colours.
 
 The schema is `.strict()`, so a `template.json` with old keys would be refused. The migration runs on
-startup and is forward-only. The ids `professional` and `minimal` stop being reserved.
+startup and is forward-only. The ids `professional` and `minimal` stay reserved, because they name the built-in export designs.
 
 The release note under `docs/releases/next/` says what admins lose and what to do: put the logo and
 the letterhead into the Word and PowerPoint templates, and check the PDF look.

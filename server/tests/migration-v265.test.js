@@ -180,6 +180,13 @@ describe('fieldNamesOfWordTemplate', () => {
     );
   });
 
+  it('decodes numeric character references, decimal and hexadecimal, of a placeholder', async () => {
+    const buffer = await wordTemplate({
+      body: [['&#123;{depart&#109;ent}}'], ['&#x7B;&#x7B;dept2&#x7D;&#x7D;'], ['{{x&#0;y}}']]
+    });
+    assert.deepEqual(fieldNamesOfWordTemplate(buffer), ['department', 'dept2']);
+  });
+
   it('decodes the XML entities of a placeholder', async () => {
     const buffer = await wordTemplate({ body: [['&#123;{a&amp;b}}'], ['{{ok}}']] });
     assert.deepEqual(fieldNamesOfWordTemplate(buffer), ['ok']);
@@ -355,5 +362,32 @@ describe('migration V265', () => {
       ctx.warnings.join(),
       /lost: the Word template word-template.dotx could not be read/
     );
+  });
+});
+
+describe('a file that cannot be deleted', () => {
+  it('keeps the template as it was, so a later run tries again, and does not mind a file that is gone', async () => {
+    const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'ihub-v265-stuck-'));
+    try {
+      const folder = await writeTemplate(
+        dir,
+        'stuck',
+        { id: 'stuck', name: { en: 'Stuck' }, brand: { logo: 'logo.png' } },
+        {}
+      );
+      // A directory where the logo should be: deleting it fails with something other than "not found".
+      await fs.mkdir(path.join(folder, 'logo.png'));
+      const before = await fs.readFile(path.join(folder, 'template.json'), 'utf8');
+      await assert.rejects(() => up(makeCtx(dir)));
+      assert.equal(await fs.readFile(path.join(folder, 'template.json'), 'utf8'), before);
+
+      // Once the obstacle is gone (here: the logo was deleted by hand), the run completes.
+      await fs.rmdir(path.join(folder, 'logo.png'));
+      await up(makeCtx(dir));
+      const migrated = JSON.parse(await fs.readFile(path.join(folder, 'template.json'), 'utf8'));
+      assert.equal(migrated.brand.logo, undefined);
+    } finally {
+      await fs.rm(dir, { recursive: true, force: true });
+    }
   });
 });

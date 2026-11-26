@@ -18,9 +18,11 @@ export const TEMPLATE_ID_PATTERN = /^[a-z0-9][a-z0-9-]{0,63}$/;
 
 /**
  * Ids a template cannot have: `default` means "the default template" to the
- * tools and the export, and `new` is the editor's route for a new template.
+ * tools and the export, `professional` and `minimal` are built-in designs of
+ * the chat export (a request that names them gets the design, not a template),
+ * and `new` is the editor's route for a new template.
  */
-export const RESERVED_TEMPLATE_IDS = Object.freeze(['default', 'new']);
+export const RESERVED_TEMPLATE_IDS = Object.freeze(['default', 'professional', 'minimal', 'new']);
 
 /** File name of an asset inside a template directory. */
 export const ASSET_NAME_PATTERN = /^[a-z0-9][a-z0-9._-]{0,120}$/;

@@ -161,13 +161,26 @@ export function readZipEntries(buffer, wanted) {
   return entries;
 }
 
+const NAMED_ENTITIES = new Map([
+  ['lt', '<'],
+  ['gt', '>'],
+  ['quot', '"'],
+  ['apos', "'"],
+  ['amp', '&']
+]);
+
+/** Decodes the named and numeric (`&#123;`, `&#x7B;`) character references of XML text in one pass. */
 function decodeXml(text) {
-  return text
-    .replaceAll('&lt;', '<')
-    .replaceAll('&gt;', '>')
-    .replaceAll('&quot;', '"')
-    .replaceAll('&apos;', "'")
-    .replaceAll('&amp;', '&');
+  return text.replace(/&(#x[0-9a-f]{1,6}|#\d{1,7}|lt|gt|quot|apos|amp);/gi, (match, ref) => {
+    const named = NAMED_ENTITIES.get(ref.toLowerCase());
+    if (named) return named;
+    const code =
+      ref[1].toLowerCase() === 'x'
+        ? Number.parseInt(ref.slice(2), 16)
+        : Number.parseInt(ref.slice(1), 10);
+    const valid = code > 0 && code <= 0x10ffff && !(code >= 0xd800 && code <= 0xdfff);
+    return valid ? String.fromCodePoint(code) : match;
+  });
 }
 
 /**
@@ -245,14 +258,16 @@ async function migrateOne(ctx, id) {
   if (!(await ctx.fileExists(file))) return 0;
   const { template, files, changed } = migrateTemplate(await ctx.readJson(file));
   const fieldsChanged = await declareWordFields(ctx, id, template);
-  if (changed || fieldsChanged) await ctx.writeJson(file, template);
+  // The files go first: if one cannot be deleted, `template.json` still names it and
+  // a later run tries again. A file that is already gone is fine.
   await Promise.all(
     files.map(name =>
-      ctx.deleteFile(`${DIRECTORY}/${id}/${name}`).catch(() => {
-        // Already gone: nothing to delete.
+      ctx.deleteFile(`${DIRECTORY}/${id}/${name}`).catch(error => {
+        if (error?.code !== 'ENOENT') throw error;
       })
     )
   );
+  if (changed || fieldsChanged) await ctx.writeJson(file, template);
   return changed || fieldsChanged ? 1 : 0;
 }
 

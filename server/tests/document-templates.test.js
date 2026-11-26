@@ -213,7 +213,7 @@ describe('document template schema', () => {
   });
 
   it('refuses reserved ids, bad colours and unknown keys', () => {
-    for (const id of ['default', 'new', 'Has Space', '../x']) {
+    for (const id of ['default', 'professional', 'minimal', 'new', 'Has Space', '../x']) {
       assert.equal(documentTemplateSchema.safeParse({ ...VALID, id }).success, false, id);
     }
     assert.equal(

@@ -372,10 +372,11 @@ describe('the author of a Word document', () => {
   });
 
   it('is not the name of an anonymous visitor', async () => {
-    const { core } = await create(
+    const { result, core } = await create(
       { fields: { department: 'Sales' } },
       { user: { id: 'anonymous', name: 'Anonymous' } }
     );
+    assert.equal(result.success, true);
     assert.doesNotMatch(core, /Anonymous/);
   });
 });

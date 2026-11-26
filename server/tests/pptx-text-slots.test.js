@@ -229,6 +229,22 @@ describe('the layout of a slide with text slots', () => {
     assert.equal(parts.length, 2);
   });
 
+  it('also considers layouts that are chosen for the kind by their name', async () => {
+    // Both layouts are "content" layouts by type; their names make them section layouts.
+    const { buffer, parts } = await templateWith(
+      ['Title and Content', 'Abschnitt', ''],
+      ['Title and Content', 'Abschnitt mit Lead', LEAD]
+    );
+    const { layouts } = await loadPresentationTemplate(buffer);
+    const base = layouts.find(l => l.name === 'Abschnitt');
+    assert.equal(chooseLayoutForSlots(layouts, 'section', base, []).name, 'Abschnitt');
+    assert.equal(
+      chooseLayoutForSlots(layouts, 'section', base, ['lead']).name,
+      'Abschnitt mit Lead'
+    );
+    assert.equal(parts.length, 2);
+  });
+
   it('is used when the slide fills the slots, and only then', async () => {
     const { buffer, parts } = await templateWith(
       ['Title and Content', 'Kicker only', KICKER],

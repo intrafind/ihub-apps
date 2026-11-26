@@ -9,7 +9,7 @@
  * settings of the new model.
  */
 import '@testing-library/jest-dom';
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 
 const mockSave = jest.fn();
@@ -59,7 +59,11 @@ const RESOLVED = {
       bodyFont: 'powerpoint'
     }
   },
-  pdf: { margins: [85, 72, 57, 57], source: 'word' }
+  pdf: {
+    margins: [85, 72, 57, 57],
+    source: 'word',
+    inherited: { margins: [85, 72, 57, 57], source: 'word' }
+  }
 };
 jest.mock('../../../client/src/api/documentTemplatesAdminApi', () => ({
   createDocumentTemplate: jest.fn(),
@@ -173,6 +177,37 @@ describe('the colours', () => {
   });
 });
 
+describe('taking colours and saving', () => {
+  it('do not overlap: the colour buttons wait for a save, and a save waits for the colours', async () => {
+    let finishRead;
+    mockReadBrand.mockImplementation(
+      () =>
+        new Promise(resolve => {
+          finishRead = () => resolve({ primaryColor: '#112233' });
+        })
+    );
+    renderPage();
+    fireEvent.click(await screen.findByLabelText(/^Enabled/));
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Take colours from the PowerPoint template' })
+    );
+    // The read is running: a save is refused with a message, nothing is saved.
+    fireEvent.click(saveButton());
+    expect((await screen.findAllByRole('alert'))[0]).toHaveTextContent(
+      'still being read from the file'
+    );
+    expect(mockSave).not.toHaveBeenCalled();
+    await act(async () => finishRead());
+    fireEvent.click(saveButton());
+    await waitFor(() =>
+      expect(mockSave).toHaveBeenCalledWith(
+        'corporate',
+        expect.objectContaining({ brand: expect.objectContaining({ primaryColor: '#112233' }) })
+      )
+    );
+  });
+});
+
 describe('the PDF margins', () => {
   it('show the margins of the Word template with their source until they are set', async () => {
     renderPage();
@@ -203,6 +238,30 @@ describe('the PDF margins', () => {
 
     fireEvent.click(screen.getByRole('button', { name: "Use the Word template's margins" }));
     expect(screen.getByLabelText('Left', { selector: 'input[type=number]' })).toHaveValue(85);
+  });
+
+  it('start from the Word template’s after the own ones were taken back, not from the saved own ones', async () => {
+    // Saved with own margins; the Word template's are the inherited ones.
+    const { fetchDocumentTemplate } = require('../../../client/src/api/documentTemplatesAdminApi');
+    fetchDocumentTemplate.mockResolvedValueOnce({
+      template: { ...STORED, pdf: { margins: [30, 40, 30, 40] } },
+      files: FILES,
+      resolved: {
+        ...RESOLVED,
+        pdf: { ...RESOLVED.pdf, margins: [30, 40, 30, 40], source: 'template' }
+      }
+    });
+    renderPage();
+    expect(await screen.findByLabelText('Left', { selector: 'input[type=number]' })).toHaveValue(
+      30
+    );
+    fireEvent.click(screen.getByRole('button', { name: "Use the Word template's margins" }));
+    expect(screen.getByLabelText('Left', { selector: 'input[type=number]' })).toHaveValue(85);
+    fireEvent.change(screen.getByLabelText('Top', { selector: 'input[type=number]' }), {
+      target: { value: '50' }
+    });
+    expect(screen.getByLabelText('Left', { selector: 'input[type=number]' })).toHaveValue(85);
+    expect(screen.getByLabelText('Right', { selector: 'input[type=number]' })).toHaveValue(57);
   });
 
   it('are refused when out of range', async () => {

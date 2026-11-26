@@ -9,8 +9,8 @@
  */
 
 export const TEMPLATE_ID_PATTERN = /^[a-z0-9][a-z0-9-]{0,63}$/;
-/** Ids the editor's "new" route and the default template use. */
-export const RESERVED_TEMPLATE_IDS = ['default', 'new'];
+/** Ids the editor's "new" route and the built-in export designs use. */
+export const RESERVED_TEMPLATE_IDS = ['default', 'professional', 'minimal', 'new'];
 export const HEX_COLOR = /^#[0-9a-f]{6}$/i;
 /** The kinds of slide a PowerPoint template is described by. */
 export const SLIDE_KINDS = ['title', 'section', 'content', 'twoColumn', 'titleOnly', 'blank'];

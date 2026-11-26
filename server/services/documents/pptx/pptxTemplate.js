@@ -353,6 +353,15 @@ export function layoutKind(layout) {
   return kindFromPlaceholders(layout) || kindFromName(layout);
 }
 
+/** The layouts that can serve a kind of slide: by type, else by placeholders, else by name. */
+function layoutsOfKind(layouts, kind) {
+  return [
+    ...layouts.filter(l => KIND_BY_TYPE[l.type] === kind),
+    ...layouts.filter(l => KIND_BY_TYPE[l.type] === undefined && kindFromPlaceholders(l) === kind),
+    ...layouts.filter(l => kindFromName(l) === kind)
+  ];
+}
+
 /**
  * The layout for each kind of slide, with fallbacks.
  *
@@ -364,13 +373,7 @@ export function chooseLayouts(layouts) {
   // A layout with a kicker or lead placeholder is for the slides that have one:
   // the plain layouts of a kind come first.
   const candidates = kind => {
-    const all = [
-      ...layouts.filter(l => KIND_BY_TYPE[l.type] === kind),
-      ...layouts.filter(
-        l => KIND_BY_TYPE[l.type] === undefined && kindFromPlaceholders(l) === kind
-      ),
-      ...layouts.filter(l => kindFromName(l) === kind)
-    ];
+    const all = layoutsOfKind(layouts, kind);
     return [...all.filter(l => !hasTextSlots(l)), ...all.filter(hasTextSlots)];
   };
   for (const kind of ['title', 'section', 'content', 'twoColumn', 'titleOnly', 'blank']) {
@@ -402,7 +405,8 @@ export function chooseLayouts(layouts) {
  */
 export function chooseLayoutForSlots(layouts, kind, base, slotIds) {
   if (!slotIds.length) return base;
-  const candidates = [base, ...layouts.filter(l => l !== base && layoutKind(l) === kind)];
+  // The same rules as for the layout of the kind, so a layout chosen by its name is a candidate too.
+  const candidates = [...new Set([base, ...layoutsOfKind(layouts, kind)])];
   let best = null;
   for (const layout of candidates) {
     const ids = layoutSlotIds(layout);

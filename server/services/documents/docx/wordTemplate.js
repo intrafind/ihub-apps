@@ -178,6 +178,33 @@ function replaceInParagraph(paragraph, values, onField) {
   }
 }
 
+/** Private-use characters standing in for the template's own while the page markers are in the text. */
+const PROTECTED = Object.freeze({ '\uE000': '\uE0F0', '\uE001': '\uE0F1' });
+const RESTORED = Object.freeze({ '\uE0F0': '\uE000', '\uE0F1': '\uE001' });
+
+/** Swap characters in every text under a root (`map` has single characters as keys). */
+function swapCharacters(root, map) {
+  const pattern = new RegExp(`[${Object.keys(map).join('')}]`, 'g');
+  for (const t of descendants(root, 't')) {
+    if (t.namespaceURI === NS.w && pattern.test(t.textContent)) {
+      pattern.lastIndex = 0;
+      t.textContent = t.textContent.replace(pattern, ch => map[ch]);
+    }
+    pattern.lastIndex = 0;
+  }
+}
+
+/**
+ * Fill the placeholders under a root and write `{{page}}` and `{{pages}}` as
+ * page number fields. A private-use character of the template's own (an icon
+ * font) is kept as it is, also next to a page placeholder.
+ */
+function fillPlaceholders(doc, root, values) {
+  swapCharacters(root, PROTECTED);
+  convertPageFields(doc, replacePlaceholders(root, values));
+  swapCharacters(root, RESTORED);
+}
+
 /**
  * Fill the placeholders under a root.
  *
@@ -764,7 +791,7 @@ export async function mergeIntoWordTemplate(generated, template, options = {}) {
   // A `{{toc}}` that shares its paragraph with other text has no place for a
   // table of contents.
   values.toc = '';
-  convertPageFields(tplDoc, replacePlaceholders(tplBody, values));
+  fillPlaceholders(tplDoc, tplBody, values);
 
   // Place the content.
   const marker = findMarker(tplBody, CONTENT_MARKER);
@@ -778,6 +805,8 @@ export async function mergeIntoWordTemplate(generated, template, options = {}) {
       // section (their page setup and headers would be lost).
       for (const child of childElements(tplBody)) {
         if (child === sectPr || firstChild(firstChild(child, 'pPr'), 'sectPr')) continue;
+        // The table of contents put at `{{toc}}` is not the old body.
+        if (toc.includes(child)) continue;
         tplBody.removeChild(child);
       }
     }
@@ -790,7 +819,7 @@ export async function mergeIntoWordTemplate(generated, template, options = {}) {
   for (const part of await headerFooterParts(tpl, tplMain)) {
     const partDoc = await readXmlPart(tpl, part);
     if (!partDoc) continue;
-    convertPageFields(partDoc, replacePlaceholders(partDoc.documentElement, values));
+    fillPlaceholders(partDoc, partDoc.documentElement, values);
     writeXmlPart(tpl, part, partDoc);
   }
 

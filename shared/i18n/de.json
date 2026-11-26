@@ -8728,7 +8728,8 @@
         "takeFromPowerpoint": "Farben aus der PowerPoint-Vorlage übernehmen",
         "takeFromWord": "Farben aus der Word-Vorlage übernehmen",
         "palette": "Palette und Schriften",
-        "derivedHelp": "Aus den Vorlagen gelesen und dem Modell mitgeteilt; hier nicht änderbar. Diagramme nutzen die Palette. Angezeigt wird die gespeicherte Vorlage."
+        "derivedHelp": "Aus den Vorlagen gelesen und dem Modell mitgeteilt; hier nicht änderbar. Diagramme nutzen die Palette. Angezeigt wird die gespeicherte Vorlage.",
+        "busy": "Die Farben werden noch aus der Datei gelesen. Speichern Sie gleich noch einmal."
       },
       "fields": {
         "notInWord": "Die Word-Vorlage enthält den Platzhalter {{placeholder}} nicht mehr. Entfernen Sie das Feld oder fügen Sie den Platzhalter der Word-Vorlage hinzu.",

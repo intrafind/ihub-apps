@@ -457,7 +457,11 @@ describe('what the admin page shows of a stored template', () => {
   it('says where the PDF margins come from: the template, the Word template or the default', async () => {
     await templates.saveTemplate('shown', { ...BASE, id: 'shown' }, { create: true });
     const bare = await templates.resolveTemplateSettings(await templates.getTemplate('shown'));
-    assert.deepEqual(bare.pdf, { margins: [50, 62, 50, 62], source: 'default' });
+    assert.deepEqual(bare.pdf, {
+      margins: [50, 62, 50, 62],
+      source: 'default',
+      inherited: { margins: [50, 62, 50, 62], source: 'default' }
+    });
     assert.equal(bare.brand.sources.primaryColor, 'default');
 
     await templates.saveTemplateAsset('shown', {
@@ -469,6 +473,7 @@ describe('what the admin page shows of a stored template', () => {
     assert.deepEqual(word.pdf, {
       margins: [85, 72, 57, 57],
       source: 'word',
+      inherited: { margins: [85, 72, 57, 57], source: 'word' },
       size: 'A4',
       orientation: 'portrait'
     });
@@ -488,6 +493,28 @@ describe('what the admin page shows of a stored template', () => {
     const own = await templates.resolveTemplateSettings(await templates.getTemplate('shown'));
     assert.equal(own.pdf.source, 'template');
     assert.deepEqual(own.pdf.margins, [30, 40, 30, 40]);
+    // The Word template's margins are still known, for taking the own ones back.
+    assert.deepEqual(own.pdf.inherited, { margins: [85, 72, 57, 57], source: 'word' });
+  });
+});
+
+describe('what the model is told about the brand', () => {
+  it("is the brand each tool's own output uses: the Word theme first for Word", async () => {
+    const { systemSkillToolsFor } = await import('../services/systemSkillTools.js');
+    const context = await templates.documentTemplateContext({
+      app: { documentTemplate: 'mixed' }
+    });
+    assert.equal(context.brand.primaryColor, `#${RED}`);
+    assert.equal(context.brands.docx.primaryColor, `#${GREEN}`);
+    const skills = [
+      { name: 'docx', isSystem: true, providedTools: ['create_docx'] },
+      { name: 'pdf', isSystem: true, providedTools: ['create_pdf'] }
+    ];
+    const tools = systemSkillToolsFor(skills, { language: 'en', templates: context });
+    const description = id => tools.find(t => t.id === id).description;
+    assert.match(description('create_docx'), new RegExp(`primary colour #${GREEN}`));
+    assert.doesNotMatch(description('create_docx'), new RegExp(`primary colour #${RED}`));
+    assert.match(description('create_pdf'), new RegExp(`primary colour #${RED}`));
   });
 });
 

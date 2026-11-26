@@ -189,7 +189,13 @@ function withTemplates(definition, templates, language) {
     };
   }
   const guide = definition.templateGuide ? templates.guides?.[definition.templateGuide] : '';
-  const brand = brandNote(templates.brand, language);
+  // Each tool is told the brand its own output uses (a Word document follows the Word theme first).
+  const brand = brandNote(
+    templates.brands && definition.templateGuide in templates.brands
+      ? templates.brands[definition.templateGuide]
+      : templates.brand,
+    language
+  );
   const description = [getLocalizedString(definition.description, language), guide, brand]
     .filter(Boolean)
     .join('\n\n');

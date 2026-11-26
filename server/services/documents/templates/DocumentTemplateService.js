@@ -278,9 +278,10 @@ export async function slideGuideFor(
  * @param {string} [params.language]
  * @returns {Promise<{ pinned: { id: string, name: string } | null, choices: Array<Object>,
  *   defaultName: string|null, guides: { pptx: string, docx: string }, fieldsApply: boolean,
- *   brand: Object|null }>} `guides.docx` describes the fields of the templates that can apply,
+ *   brand: Object|null, brands: { docx: Object|null } }>} `guides.docx` describes the fields of the templates that can apply,
  *   `fieldsApply` says whether there are any, and `brand` is what the template that applies
- *   gives its documents (null when it takes all of it from the neutral default).
+ *   gives its documents (null when it takes all of it from the neutral default); `brands.docx` is
+ *   the brand of a Word document, which follows the Word theme first.
  */
 export async function documentTemplateContext({ app, language = 'en' } = {}) {
   const all = await listTemplates();
@@ -297,6 +298,10 @@ export async function documentTemplateContext({ app, language = 'en' } = {}) {
   const fieldTemplates = pinned ? all.filter(t => t.id === pinned.id) : all;
   const docxGuide = fieldsGuide(fieldTemplates, { language, single: Boolean(pinned) });
   const brand = template ? await resolveTemplateBrand(template) : null;
+  // A Word document follows the Word theme first: its tools are told that brand.
+  const wordBrand = template ? await resolveTemplateBrand(template, { first: 'word' }) : null;
+  const shown = value =>
+    value && Object.values(value.sources).some(source => source !== 'default') ? value : null;
   // Loaded here: the chat file code it comes with is not needed to read or write templates.
   const { userTemplateUploadsAllowed } = await import('../templateFiles.js');
   return {
@@ -304,8 +309,8 @@ export async function documentTemplateContext({ app, language = 'en' } = {}) {
     choices,
     defaultName: choices.find(c => c.default)?.name || null,
     fieldsApply: Boolean(docxGuide),
-    brand:
-      brand && Object.values(brand.sources).some(source => source !== 'default') ? brand : null,
+    brand: shown(brand),
+    brands: { docx: shown(wordBrand) },
     guides: {
       docx: docxGuide,
       pptx: template
@@ -475,12 +480,17 @@ export const DEFAULT_PDF_MARGINS = Object.freeze([50, 62, 50, 62]);
  * the page of PDFs (margins with their source).
  *
  * @param {Object} template - A parsed template.
- * @returns {Promise<{ brand: Object, pdf: { margins: number[], source: 'template'|'word'|'default', size?: string, orientation?: string } }>}
+ * @returns {Promise<{ brand: Object, pdf: { margins: number[], source: 'template'|'word'|'default',
+ *   inherited: { margins: number[], source: 'word'|'default' }, size?: string, orientation?: string } }>}
+ *   `pdf.inherited` is what the margins are without the template's own.
  */
 export async function resolveTemplateSettings(template) {
-  const [brand, page] = await Promise.all([
+  // What the margins would be without the template's own: the editor shows them
+  // when the admin takes the own margins back.
+  const [brand, page, inheritedPage] = await Promise.all([
     resolveTemplateBrand(template),
-    resolvePdfPage(template)
+    resolvePdfPage(template),
+    resolvePdfPage({ ...template, pdf: { ...template.pdf, margins: undefined } })
   ]);
   let source = 'default';
   if (template.pdf?.margins) source = 'template';
@@ -490,6 +500,10 @@ export async function resolveTemplateSettings(template) {
     pdf: {
       margins: [...(page.margins || DEFAULT_PDF_MARGINS)],
       source,
+      inherited: {
+        margins: [...(inheritedPage.margins || DEFAULT_PDF_MARGINS)],
+        source: inheritedPage.margins ? 'word' : 'default'
+      },
       ...(page.size ? { size: page.size } : {}),
       ...(page.orientation ? { orientation: page.orientation } : {})
     }

@@ -8222,7 +8222,8 @@
         "takeFromPowerpoint": "Take colours from the PowerPoint template",
         "takeFromWord": "Take colours from the Word template",
         "palette": "Palette and fonts",
-        "derivedHelp": "Read from the templates and told to the model; they cannot be edited here. Charts use the palette. Saved template shown."
+        "derivedHelp": "Read from the templates and told to the model; they cannot be edited here. Charts use the palette. Saved template shown.",
+        "busy": "The colours are still being read from the file. Save again in a moment."
       },
       "fields": {
         "notInWord": "The Word template has no {{placeholder}} placeholder any more. Remove the field, or add the placeholder to the Word template.",

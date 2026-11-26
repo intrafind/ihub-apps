@@ -189,6 +189,16 @@ describe('page numbers in a Word template', () => {
     assert.match(textOf(document), /Icon \uE001 and \uE000 here/);
   });
 
+  it('keeps the icon of the template that shares a text with {{page}}', async () => {
+    const template = await wordTemplate({
+      body: [['Page {{page}} \uE000 of the template'], ['{{content}}']]
+    });
+    const { document } = await render(template);
+    // One field for the placeholder; the icon in the same text stays a character.
+    assert.equal((document.match(/<w:fldSimple /g) || []).length, 1);
+    assert.match(textOf(document), /\uE000 of the template/);
+  });
+
   it('turns a value that holds the private markers into plain text', async () => {
     const template = await wordTemplate({ body: [['{{title}}'], ['{{content}}']] });
     const { document } = await render(template, { title: 'ABC' });
@@ -248,6 +258,15 @@ describe('{{toc}} in a Word template', () => {
     const { document } = await render(template, { toc: true });
     assert.equal(tocCount(document), 1);
     assert.match(textOf(document), /Contents: /);
+  });
+
+  it('keeps the requested table of contents when an uploaded file is used for its look only', async () => {
+    // `{{toc}}` but no `{{content}}`: the old body is cleared, the contents stay.
+    const template = await wordTemplate({ body: [['Old text'], ['{{toc}}'], ['More old text']] });
+    const { document } = await render(template, { templateMode: 'styles_only', toc: true });
+    assert.equal(tocCount(document), 1);
+    assert.doesNotMatch(textOf(document), /Old text/);
+    assert.ok(tocAt(document) < document.indexOf('Introduction'));
   });
 
   it('keeps the page break that ends the paragraph of {{toc}}', async () => {

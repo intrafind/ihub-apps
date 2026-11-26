@@ -143,11 +143,14 @@ function Swatches({ colors }) {
   );
 }
 
-/** The four margins of PDFs: what is set, else what the Word template (or the default) gives. */
-function MarginFields({ margins, resolved, source, hasWord, error, onChange, onReset }) {
+/**
+ * The four margins of PDFs: what is set in the draft, else what the Word template (or the
+ * default) gives (`inherited`, whatever was saved as the template's own).
+ */
+function MarginFields({ margins, inherited, source, hasWord, error, onChange, onReset }) {
   const { t } = useTranslation();
   const baseId = useId();
-  const shown = margins || resolved || DEFAULT_MARGINS;
+  const shown = margins || inherited || DEFAULT_MARGINS;
   const labels = [
     t('admin.documentTemplates.edit.marginLeft', 'Left'),
     t('admin.documentTemplates.edit.marginTop', 'Top'),
@@ -391,6 +394,17 @@ export default function AdminDocumentTemplateEditPage() {
     );
 
   const save = async () => {
+    // A colour read that ends during the save would be lost when the saved template replaces the draft.
+    if (busySlot?.startsWith('colours:')) {
+      setMessage({
+        type: 'error',
+        text: t(
+          'admin.documentTemplates.brand.busy',
+          'The colours are still being read from the file. Save again in a moment.'
+        )
+      });
+      return false;
+    }
     const problems = validateTemplate(draft, t);
     setErrors(problems);
     if (Object.keys(problems).length) {
@@ -673,8 +687,8 @@ export default function AdminDocumentTemplateEditPage() {
                 </TemplateFileSlot>
                 <MarginFields
                   margins={draft.pdf.margins}
-                  resolved={resolved?.pdf?.margins}
-                  source={resolved?.pdf?.source}
+                  inherited={resolved?.pdf?.inherited?.margins}
+                  source={resolved?.pdf?.inherited?.source}
                   hasWord={Boolean(draft.docx.template)}
                   error={errors.margins}
                   onChange={margins => update('pdf', 'margins', margins)}
@@ -765,7 +779,7 @@ export default function AdminDocumentTemplateEditPage() {
                       <button
                         type="button"
                         className={SECONDARY_BUTTON_CLASS}
-                        disabled={busySlot === 'colours:powerpointTemplate'}
+                        disabled={saving || busySlot === 'colours:powerpointTemplate'}
                         onClick={() => takeColours('powerpointTemplate', pptxLabel)}
                       >
                         <Icon name="color-swatch" size="sm" />
@@ -779,7 +793,7 @@ export default function AdminDocumentTemplateEditPage() {
                       <button
                         type="button"
                         className={SECONDARY_BUTTON_CLASS}
-                        disabled={busySlot === 'colours:wordTemplate'}
+                        disabled={saving || busySlot === 'colours:wordTemplate'}
                         onClick={() => takeColours('wordTemplate', wordLabel)}
                       >
                         <Icon name="color-swatch" size="sm" />
