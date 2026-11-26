@@ -279,10 +279,12 @@ export async function loadPresentationTemplate(buffer) {
       titleSize: titleSize(doc)
     };
     masters.push(master);
-    for (const layoutId of descendants(doc.documentElement, 'sldLayoutId')) {
-      const layout = await readLayout(zip, { layoutId, rels, master, matchers });
-      if (layout) layouts.push(layout);
-    }
+    const read = await Promise.all(
+      descendants(doc.documentElement, 'sldLayoutId').map(layoutId =>
+        readLayout(zip, { layoutId, rels, master, matchers })
+      )
+    );
+    layouts.push(...read.filter(Boolean));
   }
   if (!layouts.length) throw new Error('The template has no slide layouts.');
   const notesRel = presRels.find(r => r.type === REL_TYPES.notesMaster);
