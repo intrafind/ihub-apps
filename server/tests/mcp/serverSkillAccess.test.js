@@ -94,7 +94,11 @@ after(() => {
   fs.rmSync(contentsDir, { recursive: true, force: true });
 });
 
-const user = { id: 'alice', groups: ['users'], permissions: { skills: new Set() } };
+const user = {
+  id: 'alice',
+  groups: ['users'],
+  permissions: { skills: new Set(), apps: new Set(['ops']) }
+};
 const app = { id: 'ops', skillSettings: { enabled: true }, integrations: { billing: {} } };
 
 describe('a server skill an admin approved', () => {
@@ -248,9 +252,10 @@ describe('the / picker', () => {
 
   test("lists the app's server skills, by id, with the server's name", async () => {
     const getSkillsForUser = configCache.getSkillsForUser;
-    const getAppForUserById = configCache.getAppForUserById;
+    const getAppForRequest = configCache.getAppForRequest;
     configCache.getSkillsForUser = async () => ({ data: [], etag: 'x' });
-    configCache.getAppForUserById = async (_user, _platform, id) => (id === 'ops' ? app : null);
+    configCache.getAppForRequest = id =>
+      ({ ops: app, closed: { ...app, id: 'closed' } })[id] || null;
     try {
       const withApp = await list({ appId: 'ops' });
       assert.deepEqual(withApp.body, [
@@ -264,12 +269,14 @@ describe('the / picker', () => {
         }
       ]);
       assert.equal(withApp.headers['cache-control'], 'private, no-store');
-      // Without an app, or with one the user may not open, there are none.
+      // Without an app, with an unknown one, or with one the user's groups do
+      // not grant, there are none.
       assert.deepEqual((await list({})).body, []);
       assert.deepEqual((await list({ appId: 'secret' })).body, []);
+      assert.deepEqual((await list({ appId: 'closed' })).body, []);
     } finally {
       configCache.getSkillsForUser = getSkillsForUser;
-      configCache.getAppForUserById = getAppForUserById;
+      configCache.getAppForRequest = getAppForRequest;
     }
   });
 });

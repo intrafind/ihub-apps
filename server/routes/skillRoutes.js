@@ -3,7 +3,11 @@
 
 import { authRequired } from '../middleware/authRequired.js';
 import configCache from '../configCache.js';
-import { isAnonymousAccessAllowed, enhanceUserWithPermissions } from '../utils/authorization.js';
+import {
+  canUserAccessResource,
+  isAnonymousAccessAllowed,
+  enhanceUserWithPermissions
+} from '../utils/authorization.js';
 import { buildServerPath } from '../utils/basePath.js';
 import { responseEtag } from '../utils/etag.js';
 import { ServiceError } from '../utils/ServiceError.js';
@@ -79,10 +83,11 @@ export default function registerSkillRoutes(app) {
 
       // The skills the MCP servers of the app ship, once approved.
       const appId = typeof req.query.appId === 'string' ? req.query.appId : '';
+      // The app this request may run (a content admin's unpublished test app
+      // too), and only when the caller's groups grant it.
+      const candidate = appId && req.user ? configCache.getAppForRequest(appId, req.user) : null;
       const app =
-        appId && req.user
-          ? await configCache.getAppForUserById(req.user, platformConfig, appId)
-          : null;
+        candidate && canUserAccessResource(req.user, 'apps', candidate.id) ? candidate : null;
       const server = app ? await getUsableServerSkills({ app, user: req.user }) : [];
       for (const skill of server) {
         safeSkills.push({
