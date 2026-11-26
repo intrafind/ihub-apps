@@ -21,7 +21,7 @@ Copy this to whoever maintains the template (marketing, design).
 4. **Use real placeholders.** The title is a **Title** placeholder, text and tables go in **Content** placeholders, the subtitle of the title slide is the **Subtitle** placeholder. Text boxes drawn on a layout are decoration: iHub does not fill them.
 5. **Set the look in the placeholders.** Font, size, colour and bullets of the text belong in the master's text styles (levels 1–5) and in the layout's placeholders, not on slides.
 6. **Theme colours and fonts.** Define the brand in the theme (Slide Master → Colours, Fonts). Charts use *accent 1–6* in that order, tables use *accent 1* for the header row, KPI cards use *Dark 2* for text, *Light 2* for the card and the first colourful accent for their top rule. Put a brand colour first and avoid grey as *accent 1* if charts should be colourful.
-7. **Optional: text slots.** A small text placeholder next to the title that slides can fill — a label above the title, a one-sentence introduction below it, the presenter on the title slide. Name each placeholder (Selection Pane) and tell the admin the names. See [Text slots](#text-slots).
+7. **Optional: text slots.** A small text placeholder next to the title that slides can fill — a label above the title, or a one-sentence introduction below it. Name the placeholders `Kicker` and `Lead` (Selection Pane). See [Text slots](#text-slots).
 8. **Size 16:9** (13.33 × 7.5 in). Leave room between the title and the content area for slots.
 9. **Footer and slide number.** Keep the footer and slide number placeholders on the layouts. On the title slide a footer placeholder with a text (for example the company name) becomes the footer strip.
 10. **Fonts.** Use fonts installed on your colleagues' computers; PowerPoint substitutes others.
@@ -36,13 +36,13 @@ Copy this to whoever maintains the template (marketing, design).
 | Master text styles | Bullets, sizes and colours of body text; the size iHub assumes to judge whether text fits |
 | Layouts and their placeholders | Where titles, text, tables, charts, pictures and slots go |
 | Master and layout shapes, backgrounds | Appear on every slide of that layout, as in PowerPoint |
-| Placeholder names, prompt text, position, font size | The description the model reads (see [Text slots](#text-slots)) and the editor's suggestions |
+| Placeholder names, position, font size | The description the model reads (see [Text slots](#text-slots)) |
 
 **Not used:** sample slides, custom shows and sections, and the theme of a second master.
 
 ## Layouts
 
-iHub chooses a layout for each kind of slide: first by the layout's **type** (the built-in layouts keep theirs), then by its placeholders, then by its **name**. In the editor (**PowerPoint → Layouts for each kind of slide**) an admin can pick another layout where the choice does not fit.
+iHub chooses a layout for each kind of slide by itself: first by the layout's **type** (the built-in layouts keep theirs), then by its placeholders, then by its **name**. The editor (**PowerPoint template**) lists the layout found for each kind of slide; there is no setting to pick another one, so if a choice does not fit, fix the template: use a built-in layout as the base, or name the layout like the kind it is for.
 
 | Slide kind (`layout`) | PowerPoint layout | What iHub puts in it |
 |---|---|---|
@@ -59,7 +59,7 @@ iHub chooses a layout for each kind of slide: first by the layout's **type** (th
 
 ## Footer, slide numbers and the title slide strip
 
-- **Footer text and slide numbers** are set in the document template (**Slide footer**, **Slide numbers**) and appear in the layout's footer and slide number placeholders. They do not appear on the title slide.
+- **Footer text and slide numbers** come from the layout's own placeholders: keep the **Footer** and **Slide Number** placeholders on the layouts. A slide gets its number there (the model can turn numbers off) and footer text where the model passes `footer`. Neither appears on the title slide.
 - **Title slide strip:** if the title layout has a **Footer** placeholder with text in it ("IntraFind Software AG"), every title slide shows that text; the model can replace it per deck (for example "Strategy 2027 · November 2026"). If the layout also has the text as a plain text box under the placeholder, give the placeholder a **white fill** so it covers the box when it is used.
 
 ## Text slots
@@ -71,17 +71,16 @@ A **text slot** is a text placeholder of a layout that a slide can fill besides 
 1. **View → Slide Master**, select the layout (not the master).
 2. **Slide Master → Insert Placeholder → Text**, draw the box where the text should be.
 3. Give it its look in the placeholder itself: font size, colour, **no bullet**, left aligned. A one-line label is typically 12 pt bold capitals; a lead sentence 16–18 pt.
-4. Name it: **Home → Arrange → Selection Pane** (or Alt + F10), double-click the name. A name that says what the text is, such as `Kicker`, `Lead` or `Presenter`.
-5. Type a short instruction as the placeholder's text ("One sentence that gives the context"). iHub reads it and shows it to the admin.
+4. Name it: **Home → Arrange → Selection Pane** (or Alt + F10), double-click the name: `Kicker` for a label above the title, `Lead` for a sentence under it.
+5. Type a short instruction as the placeholder's text ("One sentence that gives the context").
 6. Repeat for each layout that should have the slot, using the **same name** each time.
 
 Because slides with a slot use a layout that has it, it is simplest to **duplicate** *Title and Content*, *Two Content* and *Title Only*, add the slot placeholders to the copies and name them (for example *Title, Lead and Content*). Give the placeholders room: a label sits between the top edge and the title, a lead between the title and the content area.
 
 ### What the admin does
 
-- **Names `Kicker` / `Eyebrow` and `Lead` / `Einleitung`** need no setup: iHub recognises them.
-- **Any other name:** in the editor (**PowerPoint → Text slots**) iHub lists "Found in your template": small text placeholders with a name of their own. **Add as slot** takes the name, an id and the template's instruction text. Or add a slot by hand with an id, the placeholder's name, a description for the model and what to do in a layout without it.
-- **Checks:** every slot says in which layouts it was found; a slot with no layout shows a warning.
+- **Names `Kicker` / `Eyebrow` and `Lead` / `Einleitung` / `Teaser`** are recognised by iHub; nothing is set up in the admin area. Other names are not slots: there is no setting to declare more.
+- **Checks:** the editor lists the slots it found. Every slot says in which layouts it was found.
 
 The model then sees, for example:
 
@@ -93,8 +92,7 @@ The model then sees, for example:
 ### What helps the model
 
 - **Small, labelled boxes.** A box that is one line high gets one-line text. The estimate of how much fits comes from the box size and the font size set in the placeholder, so set the size in the placeholder.
-- **A description in the template's language.** The placeholder's instruction text, or the admin's description per language.
-- **Not a slot:** large boxes, columns, picture or chart placeholders, and placeholders with PowerPoint's default names ("Content Placeholder 3", "Textplatzhalter 5") are never suggested.
+- **Not a slot:** large boxes, columns, picture or chart placeholders, and placeholders with other names are content areas.
 
 ## Colours and the look of KPI cards, tables and charts
 
@@ -109,7 +107,7 @@ If the charts of your decks come out grey, accent 1 of the theme is grey: move a
 
 ## Testing a template
 
-1. Upload it under **Admin → Document templates → PowerPoint**. Check the list of layouts per kind and the slots.
+1. Upload it under **Admin → Document templates → PowerPoint template**. Check the list of layouts per kind and the slots.
 2. **Preview** renders a sample presentation with the saved template: look at the title slide, a content slide and a section slide.
 3. In a chat with the `pptx` skill, ask for a short deck with a table, a chart and KPI figures, then open it in PowerPoint.
 4. Change the template, upload it again, repeat. The model's view of the template follows the file; no restart is needed.
@@ -121,10 +119,10 @@ If the charts of your decks come out grey, accent 1 of the theme is grey: move a
 | The deck has iHub's own design, not the template | The template is not the default, not pinned by the app, or disabled — see [Which template a document gets](document-templates.md#which-template-a-document-gets) |
 | Cover photo, logo or strips are missing | They are on a sample slide, not on the master or layout |
 | The title slide looks right, other slides do not | Shapes sit on the title layout only; put shared ones on the master |
-| Wrong layout for a kind of slide | Choose another under **Layouts for each kind of slide**, or use a built-in layout as the base |
+| Wrong layout for a kind of slide | The layouts are found automatically: use a built-in layout as the base, or name the layout like its kind |
 | Text in the wrong place or too large | Placeholders positioned or sized off; set sizes in the master's text styles |
 | Charts and tables are grey | Accent 1 is grey |
-| A slot is never filled | Its placeholder is not named as declared, or it exists in one layout only: the model's slide needs a layout that has it |
+| A slot is never filled | Its placeholder is not named `Kicker` or `Lead` (or the equivalents above), or it exists in one layout only: the model's slide needs a layout that has it |
 | A slot text appears as the first paragraph | The slide's layout has no such slot and the slot says "first paragraph" |
 | Fonts differ from the template | The font is not installed on the computer that opens the file |
 | Upload refused | The file has macros (`.potm`) or is not a PowerPoint file |
@@ -139,7 +137,7 @@ Dieses Briefing können Admins an die Pflege der PowerPoint-Vorlage weitergeben.
 4. **Echte Platzhalter verwenden:** Titel als **Titel**-Platzhalter, Text und Tabellen in **Inhalts**-Platzhaltern, den Untertitel der Titelfolie als **Untertitel**-Platzhalter. Auf ein Layout gezeichnete Textfelder sind Dekoration und werden nicht gefüllt.
 5. **Schrift, Größe, Farbe und Aufzählungszeichen** gehören in die Textformate des Masters (Ebenen 1–5) und in die Platzhalter der Layouts.
 6. **Designfarben und Schriftarten im Design (Theme) festlegen.** Diagramme nutzen Akzent 1–6 in dieser Reihenfolge, Tabellenköpfe Akzent 1, KPI-Karten *Dunkel 2*, *Hell 2* und die erste bunte Akzentfarbe. Eine Markenfarbe an den Anfang stellen; Grau nicht als Akzent 1.
-7. **Optional: Textfelder.** Kleine Textplatzhalter neben dem Titel, die Folien füllen können: ein Label über dem Titel, ein Einleitungssatz darunter, der Referent auf der Titelfolie. Jeden Platzhalter im **Auswahlbereich** (Alt + F10) benennen, zum Beispiel `Kicker`, `Lead`, `Referent`, den Namen in allen Layouts gleich lassen und dem Admin mitteilen. Schriftgröße, Farbe und „kein Aufzählungszeichen“ im Platzhalter selbst einstellen; als Platzhaltertext eine kurze Anweisung eintragen („Ein Satz, der den Kontext gibt“).
+7. **Optional: Textfelder.** Kleine Textplatzhalter neben dem Titel, die Folien füllen können: ein Label über dem Titel, ein Einleitungssatz darunter. Die Platzhalter im **Auswahlbereich** (Alt + F10) `Kicker` und `Lead` (oder `Einleitung`) nennen und den Namen in allen Layouts gleich lassen. Schriftgröße, Farbe und „kein Aufzählungszeichen“ im Platzhalter selbst einstellen; als Platzhaltertext eine kurze Anweisung eintragen („Ein Satz, der den Kontext gibt“).
 8. **Format 16:9** (33,87 × 19,05 cm). Zwischen Titel und Inhaltsbereich Platz für Textfelder lassen.
 9. **Fußzeile und Foliennummer** auf den Layouts behalten. Auf der Titelfolie wird ein Fußzeilen-Platzhalter mit Text (zum Beispiel der Firmenname) zum Fußzeilenstreifen.
 10. **Schriften** verwenden, die auf den Rechnern der Kolleginnen und Kollegen installiert sind.

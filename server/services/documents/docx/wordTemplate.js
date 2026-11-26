@@ -12,6 +12,7 @@ import {
   firstChild,
   nextRelId,
   openPackage,
+  parseXml,
   readRels,
   readXmlPart,
   relativeTarget,
@@ -20,8 +21,10 @@ import {
   setCoreProperties,
   writePackage,
   writeRels,
-  writeXmlPart
+  writeXmlPart,
+  xmlEscape
 } from '../ooxml/opcPackage.js';
+import { BUILT_IN_PLACEHOLDERS } from '../../../validators/documentTemplateSchema.js';
 
 /**
  * Put a generated Word document into a company's Word template.
@@ -40,9 +43,11 @@ import {
  *   template in any language styles the content; styles the template does
  *   not have are copied over;
  * - merges list numbering, pictures and hyperlinks under new ids;
- * - fills `{{title}}`, `{{subtitle}}`, `{{author}}`, `{{date}}` and
- *   `{{company}}` in the body, headers and footers, also when Word split the
- *   placeholder into several runs;
+ * - fills `{{title}}`, `{{subtitle}}`, `{{author}}`, `{{date}}`, `{{year}}`,
+ *   `{{company}}` and the template's own fields in the body, headers and
+ *   footers, also when Word split the placeholder into several runs;
+ * - writes `{{page}}` and `{{pages}}` as Word's page number fields, and the
+ *   table of contents at a paragraph that holds only `{{toc}}`;
  * - turns a template (`.dotx`) into a document, sets the document
  *   properties, and drops parts nothing refers to any more.
  */
@@ -60,9 +65,31 @@ const WP_NS = 'http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDr
 
 export const WORD_TEMPLATE_MODES = Object.freeze(['styles_only', 'fill_placeholders', 'append']);
 
-export const TEXT_PLACEHOLDERS = Object.freeze(['title', 'subtitle', 'author', 'date', 'company']);
-const PLACEHOLDER = /\{\{\s*([a-z]+)\s*\}\}/gi;
+export const TEXT_PLACEHOLDERS = Object.freeze([
+  'title',
+  'subtitle',
+  'author',
+  'date',
+  'year',
+  'company'
+]);
+/** `{{name}}`: a letter, then letters, digits or underscores (see `FIELD_NAME_PATTERN`). */
+const PLACEHOLDER = /\{\{\s*([a-z][a-z0-9_]{0,31})\s*\}\}/gi;
 const CONTENT_MARKER = /^\{\{\s*content\s*\}\}$/i;
+const TOC_MARKER = /^\{\{\s*toc\s*\}\}$/i;
+
+/**
+ * `{{page}}` and `{{pages}}` are first replaced by these private-use
+ * characters, then each is turned into a page number field. A value given by
+ * the caller never holds them.
+ */
+const PAGE_SENTINEL = '\uE000';
+const PAGES_SENTINEL = '\uE001';
+const FIELD_INSTRUCTIONS = Object.freeze({
+  [PAGE_SENTINEL]: ' PAGE ',
+  [PAGES_SENTINEL]: ' NUMPAGES '
+});
+const SENTINELS = /[\uE000\uE001]/;
 
 /** Settings elements that come after `w:updateFields` (schema order). */
 const AFTER_UPDATE_FIELDS = new Set([
@@ -115,7 +142,7 @@ function paragraphText(paragraph) {
  *
  * @returns {boolean} Whether anything was replaced.
  */
-function replaceInParagraph(paragraph, values) {
+function replaceInParagraph(paragraph, values, onField) {
   const texts = descendants(paragraph, 't').filter(t => t.namespaceURI === NS.w);
   if (!texts.length) return false;
   let changed = false;
@@ -131,6 +158,7 @@ function replaceInParagraph(paragraph, values) {
     const start = match.index;
     const end = start + match[0].length;
     const value = String(values[match[1].toLowerCase()] ?? '');
+    if (SENTINELS.test(value)) onField(paragraph);
     let offset = 0;
     let first = true;
     for (const t of texts) {
@@ -150,10 +178,163 @@ function replaceInParagraph(paragraph, values) {
   }
 }
 
-function replacePlaceholders(root, values) {
-  for (const paragraph of descendants(root, 'p')) {
-    if (paragraph.namespaceURI === NS.w) replaceInParagraph(paragraph, values);
+/** Private-use characters standing in for the template's own while the page markers are in the text. */
+const PROTECTED = Object.freeze({ '\uE000': '\uE0F0', '\uE001': '\uE0F1' });
+const RESTORED = Object.freeze({ '\uE0F0': '\uE000', '\uE0F1': '\uE001' });
+
+/** Swap characters in every text under a root (`map` has single characters as keys). */
+function swapCharacters(root, map) {
+  const pattern = new RegExp(`[${Object.keys(map).join('')}]`, 'g');
+  for (const t of descendants(root, 't')) {
+    if (t.namespaceURI === NS.w && pattern.test(t.textContent)) {
+      pattern.lastIndex = 0;
+      t.textContent = t.textContent.replace(pattern, ch => map[ch]);
+    }
+    pattern.lastIndex = 0;
   }
+}
+
+/**
+ * Fill the placeholders under a root and write `{{page}}` and `{{pages}}` as
+ * page number fields. A private-use character of the template's own (an icon
+ * font) is kept as it is, also next to a page placeholder.
+ */
+function fillPlaceholders(doc, root, values) {
+  swapCharacters(root, PROTECTED);
+  convertPageFields(doc, replacePlaceholders(root, values));
+  swapCharacters(root, RESTORED);
+}
+
+/**
+ * Fill the placeholders under a root.
+ *
+ * @returns {Set<Element>} The paragraphs where a page number placeholder was
+ *   replaced by its marker: only there is a marker turned into a field, so a
+ *   private-use character of the template's own (an icon font) stays as it is.
+ */
+function replacePlaceholders(root, values) {
+  const fieldParagraphs = new Set();
+  for (const paragraph of descendants(root, 'p')) {
+    if (paragraph.namespaceURI === NS.w) {
+      replaceInParagraph(paragraph, values, found => fieldParagraphs.add(found));
+    }
+  }
+  return fieldParagraphs;
+}
+
+function newText(doc, text) {
+  const t = doc.createElementNS(NS.w, 'w:t');
+  t.textContent = text;
+  t.setAttributeNS(XML_NS, 'xml:space', 'preserve');
+  return t;
+}
+
+/**
+ * Turn the page number sentinels in one text element into fields. The run
+ * that holds it is split: the text before stays, a `w:fldSimple` with the
+ * run's own formatting follows, and the text after goes into a copy of the run.
+ */
+function convertSentinels(doc, t) {
+  let run = t.parentNode;
+  let text = t;
+  if (run?.localName !== 'r' || run.namespaceURI !== NS.w) {
+    // Not in a run of its own (unexpected): drop the markers.
+    t.textContent = t.textContent.replace(/[\uE000\uE001]/g, '');
+    return;
+  }
+  for (;;) {
+    const at = text.textContent.search(SENTINELS);
+    if (at < 0) return;
+    const sentinel = text.textContent[at];
+    const after = text.textContent.slice(at + 1);
+    const properties = firstChild(run, 'rPr');
+    const rest = run.cloneNode(false);
+    if (properties) rest.appendChild(properties.cloneNode(true));
+    const restText = newText(doc, after);
+    rest.appendChild(restText);
+    for (let sibling = text.nextSibling; sibling;) {
+      const next = sibling.nextSibling;
+      rest.appendChild(sibling);
+      sibling = next;
+    }
+    text.textContent = text.textContent.slice(0, at);
+    text.setAttributeNS(XML_NS, 'xml:space', 'preserve');
+
+    const field = doc.createElementNS(NS.w, 'w:fldSimple');
+    setWAttr(field, 'instr', FIELD_INSTRUCTIONS[sentinel]);
+    const shown = doc.createElementNS(NS.w, 'w:r');
+    if (properties) shown.appendChild(properties.cloneNode(true));
+    shown.appendChild(newText(doc, '1'));
+    field.appendChild(shown);
+
+    run.parentNode.insertBefore(field, run.nextSibling);
+    run.parentNode.insertBefore(rest, field.nextSibling);
+    run = rest;
+    text = restText;
+  }
+}
+
+/** Write `{{page}}` and `{{pages}}` (already replaced by markers) in these paragraphs as page number fields. */
+function convertPageFields(doc, paragraphs) {
+  for (const paragraph of paragraphs) {
+    for (const t of descendants(paragraph, 't')) {
+      if (t.namespaceURI === NS.w && SENTINELS.test(t.textContent)) convertSentinels(doc, t);
+    }
+  }
+}
+
+/** The paragraph that holds only the given marker, e.g. `{{toc}}`, if there is one. */
+function findMarker(body, pattern) {
+  return descendants(body, 'p').find(
+    p => p.namespaceURI === NS.w && pattern.test(paragraphText(p).trim())
+  );
+}
+
+/**
+ * Put nodes where a marker paragraph is and remove the marker. A section
+ * break stored in the marker's own properties (`w:pPr/w:sectPr`) is kept as
+ * an empty paragraph.
+ */
+function placeAtMarker(marker, nodes) {
+  for (const node of nodes) marker.parentNode.insertBefore(node, marker);
+  // A page break in the marker's paragraph ends the section it stands for:
+  // keep it, as a paragraph of its own after what was put there.
+  if (
+    descendants(marker, 'br').some(br => br.namespaceURI === NS.w && wAttr(br, 'type') === 'page')
+  ) {
+    const doc = marker.ownerDocument;
+    const paragraph = doc.createElementNS(NS.w, 'w:p');
+    const run = doc.createElementNS(NS.w, 'w:r');
+    const pageBreak = doc.createElementNS(NS.w, 'w:br');
+    setWAttr(pageBreak, 'type', 'page');
+    run.appendChild(pageBreak);
+    paragraph.appendChild(run);
+    marker.parentNode.insertBefore(paragraph, marker);
+  }
+  const markerPr = firstChild(marker, 'pPr');
+  if (firstChild(markerPr, 'sectPr')) {
+    for (const child of childElements(marker)) {
+      if (child !== markerPr) marker.removeChild(child);
+    }
+  } else marker.parentNode.removeChild(marker);
+}
+
+/**
+ * A table of contents as Word writes one: a heading and the `TOC` field,
+ * marked dirty so that Word fills it when the document is opened.
+ */
+function tocNodes(doc, title) {
+  const xml =
+    `<w:root xmlns:w="${NS.w}"><w:sdt><w:sdtPr><w:docPartObj>` +
+    '<w:docPartGallery w:val="Table of Contents"/><w:docPartUnique/></w:docPartObj></w:sdtPr>' +
+    `<w:sdtContent><w:p><w:pPr><w:pStyle w:val="TOCHeading"/></w:pPr><w:r><w:t>${xmlEscape(title)}</w:t></w:r></w:p>` +
+    '<w:p><w:r><w:fldChar w:fldCharType="begin" w:dirty="true"/></w:r>' +
+    String.raw`<w:r><w:instrText xml:space="preserve">TOC \o "1-3" \h \z \u</w:instrText></w:r>` +
+    '<w:r><w:fldChar w:fldCharType="separate"/></w:r><w:r><w:fldChar w:fldCharType="end"/></w:r></w:p>' +
+    '</w:sdtContent></w:sdt></w:root>';
+  return childElements(parseXml(xml, 'table of contents').documentElement).map(node =>
+    doc.importNode(node, true)
+  );
 }
 
 function placeholdersIn(root) {
@@ -265,6 +446,9 @@ export async function inspectWordTemplate(buffer) {
   return {
     placeholders: [...placeholders].sort((a, b) => a.localeCompare(b)),
     contentPlaceholder: placeholders.has('content'),
+    tocPlaceholder: placeholders.has('toc'),
+    // Names that are not built in: the template's own fields, in the order they appear.
+    customFields: [...placeholders].filter(name => !BUILT_IN_PLACEHOLDERS.includes(name)),
     bodyHasContent: hasContent(bodyOf(doc)),
     headerFooterParts: (await headerFooterParts(zip, mainPart)).length,
     page: {
@@ -296,7 +480,7 @@ async function themeAccentOf(zip, mainPart) {
  * content is built.
  *
  * @param {Buffer} buffer
- * @returns {Promise<{ setup: Object, placeholders: Set<string>, accent: string|null }>}
+ * @returns {Promise<{ setup: Object, placeholders: Set<string>, tocMarker: boolean, accent: string|null }>}
  */
 export async function readWordTemplateLayout(buffer) {
   const zip = await openPackage(buffer);
@@ -305,6 +489,8 @@ export async function readWordTemplateLayout(buffer) {
   return {
     setup: pageSetupOf(doc),
     placeholders: placeholdersIn(bodyOf(doc)),
+    // A paragraph that holds only `{{toc}}`: the only place a table of contents can go.
+    tocMarker: Boolean(findMarker(bodyOf(doc), TOC_MARKER)),
     accent: await themeAccentOf(zip, mainPart)
   };
 }
@@ -502,7 +688,12 @@ async function enableFieldUpdate(ctx) {
  * @param {Buffer} generated - From `buildDocx(spec, { forTemplate: true })`.
  * @param {Buffer} template - The `.docx`/`.dotx` template.
  * @param {Object} options
- * @param {Object} options.values - Placeholder values (`title`, `subtitle`, …).
+ * @param {Object} options.values - Placeholder values (`title`, `subtitle`, the
+ *   template's own fields …). `page`, `pages` and `toc` are not values: they
+ *   are written as fields.
+ * @param {boolean} [options.toc] - Write the table of contents where the
+ *   template has `{{toc}}`; without it that paragraph is removed.
+ * @param {string} [options.tocTitle] - The heading of the table of contents.
  * @param {boolean} [options.updateFields] - Ask Word to update fields (the
  *   table of contents) when the document is opened.
  * @param {Object} [options.properties] - Core properties (`title`, `author`, …).
@@ -540,6 +731,10 @@ export async function mergeIntoWordTemplate(generated, template, options = {}) {
   if (nodes.at(-1)?.localName === 'tbl') {
     nodes.push(tplDoc.createElementNS(NS.w, 'w:p'));
   }
+  // A table of contents where the template wants it. It is styled like the
+  // content: its heading takes the template's "TOC Heading" style.
+  const tocMarker = findMarker(tplBody, TOC_MARKER);
+  const toc = tocMarker && options.toc ? tocNodes(tplDoc, options.tocTitle || 'Contents') : [];
 
   // Styles: the template's, plus the ones only the content has.
   const genStyles = await stylesOf(gen, genMain);
@@ -557,7 +752,7 @@ export async function mergeIntoWordTemplate(generated, template, options = {}) {
   }
   if (genStyles && tplStyles) {
     const map = styleMapper(genStyles.doc, tplStyles.doc, tplStyles.doc, options.accent);
-    for (const node of nodes) {
+    for (const node of [...nodes, ...toc]) {
       for (const element of [node, ...descendants(node)]) {
         if (['pStyle', 'rStyle', 'tblStyle'].includes(element.localName)) {
           setWAttr(element, 'val', map(wAttr(element, 'val')));
@@ -587,24 +782,22 @@ export async function mergeIntoWordTemplate(generated, template, options = {}) {
 
   // Fill the template's own placeholders first: the content is the model's
   // text and keeps any "{{…}}" it holds.
-  const values = options.values || {};
-  replacePlaceholders(tplBody, values);
+  const values = {};
+  for (const [name, value] of Object.entries(options.values || {})) {
+    values[name.toLowerCase()] = String(value ?? '').replace(/[\uE000\uE001]/g, '');
+  }
+  Object.assign(values, { page: PAGE_SENTINEL, pages: PAGES_SENTINEL });
+  if (tocMarker) placeAtMarker(tocMarker, toc);
+  // A `{{toc}}` that shares its paragraph with other text has no place for a
+  // table of contents.
+  values.toc = '';
+  fillPlaceholders(tplDoc, tplBody, values);
 
   // Place the content.
-  const marker = descendants(tplBody, 'p').find(
-    p => p.namespaceURI === NS.w && CONTENT_MARKER.test(paragraphText(p).trim())
-  );
+  const marker = findMarker(tplBody, CONTENT_MARKER);
   const sectPr = lastSectPr(tplBody);
   if (marker) {
-    for (const node of nodes) marker.parentNode.insertBefore(node, marker);
-    // A section break after the marker is stored in the marker's own
-    // properties (`w:pPr/w:sectPr`): keep it as an empty paragraph.
-    const markerPr = firstChild(marker, 'pPr');
-    if (firstChild(markerPr, 'sectPr')) {
-      for (const child of childElements(marker)) {
-        if (child !== markerPr) marker.removeChild(child);
-      }
-    } else marker.parentNode.removeChild(marker);
+    placeAtMarker(marker, nodes);
   } else {
     if (options.mode === 'styles_only' || !hasContent(tplBody)) {
       // An empty body, or `styles_only` (an uploaded document used only for
@@ -612,6 +805,8 @@ export async function mergeIntoWordTemplate(generated, template, options = {}) {
       // section (their page setup and headers would be lost).
       for (const child of childElements(tplBody)) {
         if (child === sectPr || firstChild(firstChild(child, 'pPr'), 'sectPr')) continue;
+        // The table of contents put at `{{toc}}` is not the old body.
+        if (toc.includes(child)) continue;
         tplBody.removeChild(child);
       }
     }
@@ -624,7 +819,7 @@ export async function mergeIntoWordTemplate(generated, template, options = {}) {
   for (const part of await headerFooterParts(tpl, tplMain)) {
     const partDoc = await readXmlPart(tpl, part);
     if (!partDoc) continue;
-    replacePlaceholders(partDoc.documentElement, values);
+    fillPlaceholders(partDoc, partDoc.documentElement, values);
     writeXmlPart(tpl, part, partDoc);
   }
 

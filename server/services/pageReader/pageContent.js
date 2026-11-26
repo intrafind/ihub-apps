@@ -390,6 +390,173 @@ function metaContent(document, selectors) {
   return '';
 }
 
+/** The index after the string that starts at `start`; an unclosed string runs to the end. */
+function quotedEnd(style, start) {
+  let i = start + 1;
+  while (i < style.length && style[i] !== style[start]) i += style[i] === '\\' ? 2 : 1;
+  return Math.min(i + 1, style.length);
+}
+
+/**
+ * The text of the declarations of an inline style, scanned by index (no pattern that could
+ * backtrack). Comments are dropped, and a `;` inside a string, a parenthesis or after a backslash
+ * does not end a declaration: `--note: 'x;display:none'` is one declaration.
+ *
+ * @param {string} style
+ * @returns {string[]}
+ */
+function splitDeclarations(style) {
+  const parts = [];
+  let current = '';
+  let depth = 0;
+  let i = 0;
+  while (i < style.length) {
+    const c = style[i];
+    let next = i + 1;
+    let piece = c;
+    if (c === '\\') {
+      next = i + 2;
+      piece = style.slice(i, next);
+    } else if (c === '"' || c === "'") {
+      next = quotedEnd(style, i);
+      piece = style.slice(i, next);
+    } else if (c === '/' && style[i + 1] === '*') {
+      const end = style.indexOf('*/', i + 2);
+      next = end === -1 ? style.length : end + 2;
+      piece = '';
+    } else if (c === ';' && depth === 0) {
+      parts.push(current);
+      current = '';
+      piece = '';
+    } else if (c === '(') depth++;
+    else if (c === ')' && depth > 0) depth--;
+    current += piece;
+    i = next;
+  }
+  parts.push(current);
+  return parts;
+}
+
+/**
+ * One declaration as `[name, value, important]`, lower-cased; `null` without a colon.
+ *
+ * @param {string} text
+ * @returns {[string, string, boolean]|null}
+ */
+function declarationOf(text) {
+  const colon = text.indexOf(':');
+  if (colon === -1) return null;
+  const name = text.slice(0, colon).trim().toLowerCase();
+  const value = text
+    .slice(colon + 1)
+    .trim()
+    .toLowerCase();
+  if (value.endsWith('important')) {
+    const rest = value.slice(0, -'important'.length).trimEnd();
+    if (rest.endsWith('!')) return [name, rest.slice(0, -1).trim(), true];
+  }
+  return [name, value, false];
+}
+
+/**
+ * The declarations of an inline style as `[name, value, important]`.
+ *
+ * @param {string} style
+ * @returns {Array<[string, string, boolean]>}
+ */
+function parseDeclarations(style) {
+  return splitDeclarations(style)
+    .map(declarationOf)
+    .filter(declaration => declaration !== null);
+}
+
+/**
+ * The value an inline style gives a property after the cascade: a later declaration wins, unless an
+ * earlier one is `!important` and the later one is not.
+ *
+ * @param {Array<[string, string, boolean]>} declarations
+ * @param {string} property
+ * @returns {string|null}
+ */
+function winningValue(declarations, property) {
+  let winner = null;
+  let winnerImportant = false;
+  for (const [name, value, important] of declarations) {
+    if (name !== property || (winnerImportant && !important)) continue;
+    winner = value;
+    winnerImportant = important;
+  }
+  return winner;
+}
+
+/**
+ * What the markup of an element does to the text: the `hidden` attribute and an inline
+ * `display: none` remove the element with everything in it (`'remove'`); an inline `visibility`
+ * is inherited, so `hidden` / `collapse` hides the text of the element and of the descendants that
+ * do not say otherwise (`'hide-text'`) and `visible` shows it again (`'show-text'`). The inline
+ * style is read here, not by the DOM's style parser, which does not know an upper-case property
+ * name (`DISPLAY:none` reads as empty) although a browser hides the text just the same. Spacing,
+ * case, `!important`, comments and the order of declarations are taken as a browser takes them.
+ *
+ * @param {Element} element
+ * @returns {'remove'|'hide-text'|'show-text'|null}
+ */
+function hidingOf(element) {
+  if (element.hasAttribute('hidden')) return 'remove';
+  const style = element.getAttribute('style');
+  if (!style) return null;
+  const declarations = parseDeclarations(style);
+  if (winningValue(declarations, 'display') === 'none') return 'remove';
+  const visibility = winningValue(declarations, 'visibility');
+  if (visibility === 'hidden' || visibility === 'collapse') return 'hide-text';
+  if (visibility === 'visible') return 'show-text';
+  return null;
+}
+
+/**
+ * Removes the text of `root` and of its descendants that inherit `visibility: hidden`, and keeps
+ * what a descendant shows again with its own `visibility: visible`.
+ *
+ * @param {Element} root
+ */
+function dropInheritedHiddenText(root) {
+  const pending = [root];
+  while (pending.length > 0) {
+    const parent = pending.pop();
+    const text = [];
+    for (const child of parent.childNodes) {
+      if (child.nodeType === 3) text.push(child);
+      else if (child.nodeType === 1 && hidingOf(child) !== 'show-text') pending.push(child);
+    }
+    for (const node of text) node.remove();
+  }
+}
+
+/**
+ * Removes what the page itself hides, before anything reads the text. Readability would drop an
+ * inline `display: none` on an article page, but only when the style parser understands it, and
+ * the selector fallback does not look at all. The DOM here applies no stylesheet, so only what the
+ * markup says counts; text hidden by a class, a stylesheet, or by size, position, opacity or colour
+ * cannot be told from visible text this way.
+ *
+ * @param {Document} document - mutated
+ */
+function dropHiddenElements(document) {
+  for (const element of document.querySelectorAll('[hidden], [style]')) {
+    const hiding = hidingOf(element);
+    if (hiding === 'remove') element.remove();
+    else if (hiding === 'hide-text') {
+      // Nothing below can show the text again: the element goes whole. Otherwise only its own
+      // text goes, and its style with it, as Readability drops a visibility-hidden element together
+      // with the descendants that show themselves again.
+      if (element.querySelector('[style]')) {
+        dropInheritedHiddenText(element);
+        element.removeAttribute('style');
+      } else element.remove();
+    }
+  }
+}
+
 /**
  * The page reader's selector rules: strip chrome, then take the first known
  * content container, or `body` with more removed.
@@ -531,6 +698,9 @@ export function extractHtmlPage(html, { url, maxChars = MAX_DOCUMENT_CHARS } = {
   ]);
   const metaSiteName = metaContent(document, ['meta[property="og:site_name"]']);
   const language = document.documentElement?.getAttribute('lang') || '';
+
+  // Before Readability and before the selector fallback read a word of it.
+  dropHiddenElements(document);
 
   let article = null;
   try {

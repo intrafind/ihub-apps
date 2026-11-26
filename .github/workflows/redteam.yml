@@ -133,6 +133,7 @@ jobs:
       # Part two: every page of the injection corpus, one test each. It runs even when the
       # first part found a failure, so one night shows both; either failing fails the job.
       - name: Run the red team on the page corpus
+        id: corpus
         if: env.CONFIGURED == 'true' && (success() || steps.redteam.outcome == 'failure')
         timeout-minutes: 100
         run: |
@@ -140,6 +141,20 @@ jobs:
           bash tests/security/redteam/promptfoo.sh eval \
             -c tests/security/redteam/promptfooconfig.corpus.yaml \
             -o redteam-report/corpus-results.json -o redteam-report/corpus-report.html \
+            --no-cache --no-progress-bar
+
+      # The pages the model obeyed, asked twice more, to tell a one-off from a model that obeys every
+      # time. It does not change the verdict: the first run decides whether the job fails. It runs
+      # before the scrub below, which removes the model host from the reports.
+      - name: Run the failing pages again
+        if: env.CONFIGURED == 'true' && steps.corpus.outcome == 'failure'
+        continue-on-error: true
+        timeout-minutes: 40
+        run: |
+          bash tests/security/redteam/promptfoo.sh eval \
+            -c tests/security/redteam/promptfooconfig.corpus.yaml \
+            --filter-failing redteam-report/corpus-results.json --repeat 2 \
+            -o redteam-report/corpus-rerun.json \
             --no-cache --no-progress-bar
 
       # The model host must not reach anything public: the reports and the server log
@@ -191,6 +206,20 @@ jobs:
             summarize redteam-report/results.json "Red team"
             summarize redteam-report/corpus-results.json "Red team: page corpus"
           } >> "$GITHUB_STEP_SUMMARY"
+
+      # The same results by OWASP LLM Top 10 id (tests/security/redteam/owasp.mjs): what a
+      # customer or an auditor asks for.
+      - name: Summarize by OWASP category
+        if: always() && steps.scrub.outcome == 'success'
+        run: |
+          node tests/security/redteam/owasp-summary.mjs \
+            redteam-report/results.json redteam-report/corpus-results.json >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Summarize the failing pages run again
+        if: always() && steps.scrub.outcome == 'success'
+        run: |
+          node tests/security/redteam/rerun-summary.mjs \
+            redteam-report/corpus-results.json redteam-report/corpus-rerun.json >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload the report and the server log
         if: always() && steps.scrub.outcome == 'success'

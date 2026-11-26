@@ -83,13 +83,11 @@ export async function createPptx(spec, { app, template, templateFile = null } = 
   const applied = applyTemplateToPptxSpec(spec, bundle);
   if (templateFile?.buffer) {
     // The user's own deck: its master, layouts and theme build the slides. The
-    // admin brand settings (colours, fonts, logo) only describe the built-in
+    // admin brand settings (colours, fonts) only describe the built-in
     // template, so they are left out of the way.
     applied.assets = { powerpointTemplate: templateFile.buffer };
     applied.spec = {
       ...applied.spec,
-      layouts: undefined,
-      slotConfig: undefined,
       templateMode: templateFile.mode === 'append' ? 'append' : 'styles_only'
     };
     applied.templateId = null;
@@ -137,17 +135,15 @@ export async function runRestylePptx(params) {
     const { buffer, meta, warnings } = await renderInWorker('pptxRestyle', {
       spec: {
         brand: applied.spec.brand,
-        layouts: applied.spec.layouts,
-        slotConfig: applied.spec.slotConfig,
         footer: applied.spec.footer,
-        slideNumbers: applied.spec.slideNumbers,
+        // Slide numbers go where the template's layout has a slide-number placeholder.
+        slideNumbers: applied.spec.slideNumbers !== false,
         title: uploaded.name.replace(/\.pptx$/i, ''),
         author: applied.spec.author
       },
       assets: {
         deck: uploaded.buffer,
-        powerpointTemplate: applied.assets?.powerpointTemplate,
-        logo: applied.assets?.logo
+        powerpointTemplate: applied.assets?.powerpointTemplate
       }
     });
     logger.info('Presentation restyled', {

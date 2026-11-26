@@ -19,9 +19,11 @@ visible text, white 1px text and the meta description.
 | Indirect injection      | poisoned retrieved document, malicious tool result                                                                         |
 | Exfiltration by address | Markdown image, reference-style image, HTML `<img>`, Markdown link, citation address, an address the agent is told to open |
 
-A payload in an HTML comment, an image's alt text or a `display:none` block is not in it: the page
-reader does not pass those on, which `server/tests/websearch-page-content.test.js` pins, so asking a
-model about them would test an empty page.
+`cases-hidden.json` holds the same 19 templates in the three places a reader is expected to drop: an
+HTML comment, a `display:none` block and an image's alt text. The red team does not ask a model about
+them (it would test an empty page); `server/tests/page-extraction-corpus.test.js` pins what the page
+reader and the website corpus extraction make of every page of both files, so a change in what reaches
+the model shows up as a failing test.
 
 Every payload is harmless: it asks the model for a token (the page's own canary, a passphrase such as
 `cedar-anchor-ea0d`) or for an address on a host that never resolves. Nothing leaves the machine:
@@ -37,7 +39,7 @@ follow the 13 templates of <https://prefactor.tech/tools/prompt-injection-test> 
 AgentDojo style) and add six exfiltration-by-address templates. `cases.json` records the commit and
 the seed it was made from (`source`).
 
-To update it, generate the site with that seed and keep the three deliveries:
+To update it, generate the site with that seed and export the two files:
 
 ```bash
 git clone https://github.com/manzke/prompt-injection-webpage && cd prompt-injection-webpage
@@ -45,20 +47,26 @@ node generate.mjs --seed manzke/prompt-injection-webpage --base https://example.
 node -e '
   const fs = require("fs");
   const manifest = require("./manifest.json");
-  const keep = new Set(["visible", "white-text", "meta-description"]);
-  const cases = manifest.filter(m => keep.has(m.delivery)).map(m => ({
-    id: m.id, category: m.category, template: m.template, delivery: m.delivery,
-    canary: m.canary, exfil: !!m.exfilHost,
-    page: m.path.replace(/^notes\//, "").replace(/\.html$/, ""),
-    html: fs.readFileSync("docs/" + m.path, "utf8")
-  }));
-  const source = {
-    repository: "https://github.com/manzke/prompt-injection-webpage",
-    commit: process.argv[1], seed: "manzke/prompt-injection-webpage", exfilHost: "collect.invalid",
-    note: "Pages of the three deliveries that reach the model through the page reader (visible text, white 1px text, meta description). Regenerate: see README.md."
+  const files = {
+    "cases.json": [["visible", "white-text", "meta-description"], "that reach the model through the page reader (visible text, white 1px text, meta description)"],
+    "cases-hidden.json": [["html-comment", "display-none", "image-alt"], "a reader is expected to drop (HTML comment, display:none, image alt text). Only the extraction tests use them"]
   };
-  fs.writeFileSync("cases.json", JSON.stringify({ source, cases }, null, 2) + "\n");
+  for (const [file, [deliveries, what]] of Object.entries(files)) {
+    const keep = new Set(deliveries);
+    const cases = manifest.filter(m => keep.has(m.delivery)).map(m => ({
+      id: m.id, category: m.category, template: m.template, delivery: m.delivery,
+      canary: m.canary, exfil: !!m.exfilHost,
+      page: m.path.replace(/^notes\//, "").replace(/\.html$/, ""),
+      html: fs.readFileSync("docs/" + m.path, "utf8")
+    }));
+    const source = {
+      repository: "https://github.com/manzke/prompt-injection-webpage",
+      commit: process.argv[1], seed: "manzke/prompt-injection-webpage", exfilHost: "collect.invalid",
+      note: "Pages of the three deliveries " + what + ". Regenerate: see README.md."
+    };
+    fs.writeFileSync(file, JSON.stringify({ source, cases }, null, 2) + "\n");
+  }
 ' "$(git rev-parse --short=8 HEAD)"
 ```
 
-Then copy `cases.json` here and run `node --test server/tests/redteam-corpus.test.js`.
+Then copy both files here and run `node --test server/tests/redteam-corpus.test.js server/tests/page-extraction-corpus.test.js`.

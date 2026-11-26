@@ -31,12 +31,14 @@ const FORMAT_LABELS = {
 export class DocumentGenerationError extends Error {
   /**
    * @param {string} message
-   * @param {string} code - `invalid`, `timeout`, `busy`, `failed`
+   * @param {string} code - `invalid`, `missing_fields`, `timeout`, `busy`, `failed`
+   * @param {Object} [details] - What a caller can act on, e.g. the missing fields.
    */
-  constructor(message, code = 'failed') {
+  constructor(message, code = 'failed', details = undefined) {
     super(message);
     this.name = 'DocumentGenerationError';
     this.code = code;
+    if (details) this.details = details;
   }
 }
 
