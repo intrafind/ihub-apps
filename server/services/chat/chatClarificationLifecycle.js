@@ -37,11 +37,16 @@ const RUN_END_BY_STATUS = Object.freeze({
   expired: { status: 'aborted', finishReason: 'clarification_expired' }
 });
 
-/** True for an `ask_user` question raised by a chat turn (not by a workflow node). */
+/**
+ * True for an `ask_user` question raised by a chat turn (not by a workflow
+ * node, and not a question an MCP server asks mid-call, which pauses no chat
+ * run of its own).
+ */
 export function isChatClarification(interaction) {
   return (
     !!interaction &&
     interaction.origin === 'tool' &&
+    !interaction.source?.mcpElicitation &&
     typeof interaction.source?.chatId === 'string' &&
     interaction.source.chatId.length > 0 &&
     !interaction.source.checkpointId

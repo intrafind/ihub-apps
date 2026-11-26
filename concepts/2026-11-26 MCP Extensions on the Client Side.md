@@ -13,7 +13,7 @@ iHub talks MCP in two directions. The **gateway** (`/mcp`, iHub as server) now s
 | Protocol 2026-07-28               | yes, stateless, next to the 2025 revisions   | yes, over Streamable HTTP          |
 | Skills (`io.modelcontextprotocol/skills`) | yes: `skills/list`, `skill://` files | no                                 |
 | Tasks (`io.modelcontextprotocol/tasks`)   | yes: apps and workflows              | no                                 |
-| Elicitation                       | yes: approval of gated tools                 | no                                 |
+| Elicitation                       | yes: approval of gated tools                 | yes: form and URL mode, in the chat |
 | File Uploads (experimental)       | no                                           | no                                 |
 
 Outbound, iHub declares none of the extensions, so every server answers it as it answers any
@@ -22,6 +22,28 @@ broken; iHub just does not use what servers like Supabase, GitHub or Atlassian n
 document plans the three client-side pieces and says what blocks File Uploads.
 
 ## 1. Elicitation from external servers
+
+**Status: implemented, form and URL mode** (see
+[MCP Integration → Questions from the server](../docs/mcp-integration.md#questions-from-the-server-elicitation)).
+As built, the question is a `question` interaction on a child run of the chat
+run (the chat-launched workflow pattern), shown by its own form card and
+answered on the runs endpoint; a per-call AsyncLocalStorage scope finds the
+chat on the shared connection. Admins switch it off per installation
+(`elicitation: { enabled }`).
+
+URL mode answers `accept` when the person comes back and clicks **Done**, not
+when the page opens: 2026-07-28 drops `elicitationId` and the completion
+notice, so a server that got `accept` at once would only ask again. A 2025
+server's `notifications/elicitation/complete` ends the question early, and a
+`-32042` refusal is answered by asking for each page and calling again.
+
+A question's child run is a run of its own on the ledger, and a client that
+re-attaches mid-question (a reload) gets its card back with the resume of the
+turn (`openQuestionFrames` in `chatResume.js`). Questions are offered over
+Streamable HTTP only; on `stdio` and legacy SSE a question arrives outside the
+call and could not be put to the right chat.
+
+The original plan follows.
 
 **What it gives:** a server can ask the chat user mid-call: confirm a paid action (Supabase), type
 a repository name before deleting it (GitHub), fill in a missing parameter.
@@ -96,7 +118,7 @@ chat files to servers instead of passing base64 through the model.
 
 ## Order
 
-1. Elicitation (biggest user value, needs the chat UI change).
+1. Elicitation — done (form and URL mode).
 2. Skills (server-side only, no SDK gap).
 3. Tasks (blocked on SDK client extensions).
 4. File Uploads (blocked on the spec).

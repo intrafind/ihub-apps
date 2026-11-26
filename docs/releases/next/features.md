@@ -197,6 +197,26 @@ as before.
 
 Details: [MCP Integration](../../mcp-integration.md#protocol-revisions).
 
+## Chat: Connected MCP Servers Can Ask You Mid-Call
+
+An MCP server can now ask the chat user for something while one of its tools runs: to confirm a
+paid action, to type the name of what it is about to delete, or to fill in a missing value. The
+question appears in the chat as a form card with the server's name; **Submit** sends the answer to
+the server, **Decline** tells it no, and the tool call goes on.
+
+- The answer goes to the server only, not into the conversation. The call's own timeout stands
+  still while you answer; an unanswered question is cancelled after 10 minutes or when you stop the
+  turn.
+- A server can also send you to a page of its own, for example to sign in or to confirm a payment.
+  The card shows where the link goes; **Open** opens it in a new tab, and **Done** tells the server
+  you are finished there.
+- Where nobody can answer (workflows, scheduled runs, the inference API, the MCP gateway), the
+  server is told the question was dismissed, as before.
+- On for every MCP server connected over Streamable HTTP. Switch it off per server on the installation (**Admin → Integrations →
+  the server → Actions**, **Let the server ask chat users questions during a call**).
+
+Details: [MCP Integration](../../mcp-integration.md#questions-from-the-server-elicitation).
+
 ## Document Templates: Colours and Fonts From the Word and PowerPoint Files
 
 A document template that sets no colours of its own takes them from its Word and PowerPoint files,

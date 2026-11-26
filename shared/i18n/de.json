@@ -5641,7 +5641,9 @@
         "description": "Beschreibung",
         "descriptionHelp": "Was diese Installation enthält – für Administratoren und, wo die Integration sie liest (ein Personenverzeichnis), für das Modell: sagen, was enthalten ist und wonach gesucht wird.",
         "alwaysInstalledHelp": "Diese Integration ist immer installiert und aktiv; schalten Sie stattdessen unten einzelne Aktionen ab.",
-        "onePerLine": "Ein Eintrag pro Zeile"
+        "onePerLine": "Ein Eintrag pro Zeile",
+        "elicitation": "Dem Server erlauben, Chat-Nutzern während eines Aufrufs Fragen zu stellen",
+        "elicitationHelp": "Der Server kann während eines Tool-Aufrufs um eine Bestätigung oder einen fehlenden Wert bitten oder den Benutzer auf eine eigene Seite schicken; der Chat zeigt das an. Nur für Server, die über Streamable HTTP verbunden sind. Aus: Dem Server wird das nicht angeboten, und er arbeitet ohne Rückfrage weiter."
       },
       "connections": {
         "title": "Verbundene Benutzer",
@@ -14526,6 +14528,28 @@
       "refused": "Die Datei konnte nicht angehängt werden: {{detail}}",
       "failed": "Die Datei konnte nicht angehängt werden. Bitte versuchen Sie es erneut."
     }
+  },
+  "mcpElicitation": {
+    "title": "{{server}} fragt",
+    "titleUnknown": "Ein verbundenes System fragt",
+    "notice": "Ihre Antwort geht an {{server}}, nicht in die Unterhaltung. Die Anfrage wartet, bis Sie antworten.",
+    "theServer": "den Server",
+    "choose": "Auswählen…",
+    "submit": "Senden",
+    "decline": "Ablehnen",
+    "required": "Pflichtfeld",
+    "invalid": "Bitte prüfen Sie diesen Wert",
+    "sent": "Antwort an {{server}} gesendet.",
+    "declined": "Sie haben abgelehnt. {{server}} wurde abgesagt.",
+    "failed": "Die Antwort konnte nicht gesendet werden.",
+    "pageHost": "Öffnet {{host}}",
+    "pageNotice": "Prüfen Sie die Adresse, bevor Sie sie öffnen. iHub öffnet nichts von selbst und sendet nichts an die Seite.",
+    "pageOpen": "{{host}} öffnen",
+    "pageOpenAgain": "Erneut öffnen",
+    "pageOpened": "Schließen Sie den Vorgang auf {{host}} ab, kommen Sie dann hierher zurück und klicken Sie auf Fertig.",
+    "pageDone": "Fertig",
+    "pageSent": "{{server}} wurde mitgeteilt, dass Sie fertig sind.",
+    "pageUnsafe": "iHub öffnet diese Adresse nicht."
   },
   "textRecognition": {
     "recognized": "Text erkannt",

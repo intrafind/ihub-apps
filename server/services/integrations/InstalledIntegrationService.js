@@ -199,6 +199,10 @@ function parseInstancePayload(fields, existing) {
   // removes it explicitly.
   const keepsApproval = !Object.hasOwn(fields, 'approval') && existing?.approval;
   if (fields.approval === null) delete fields.approval;
+  // The same for an MCP server's question setting: an editor that does not
+  // know it keeps it; `elicitation: null` returns to the definition's default.
+  const keepsElicitation = !Object.hasOwn(fields, 'elicitation') && existing?.elicitation;
+  if (fields.elicitation === null) delete fields.elicitation;
   // The accepted action fingerprints (#2916) are the server's: a baseline
   // or "Mark reviewed" writes them, a save keeps the stored ones (`update`).
   if (fields.actions && typeof fields.actions === 'object') {
@@ -210,7 +214,8 @@ function parseInstancePayload(fields, existing) {
     installedAt: existing?.installedAt,
     health: existing?.health,
     ...(existing?.migrationLog ? { migrationLog: existing.migrationLog } : {}),
-    ...(keepsApproval ? { approval: existing.approval } : {})
+    ...(keepsApproval ? { approval: existing.approval } : {}),
+    ...(keepsElicitation ? { elicitation: existing.elicitation } : {})
   });
   if (!parsed.success) {
     throw new IntegrationError('Invalid installed integration', {

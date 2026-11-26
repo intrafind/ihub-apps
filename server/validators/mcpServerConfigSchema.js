@@ -167,6 +167,15 @@ export const mcpServerConfigSchema = z
         enabled: z.boolean().prefault(true)
       })
       .prefault({}),
+    // MCP elicitation: when enabled, iHub declares form elicitation on connect
+    // and shows the questions the server asks mid-call in the chat
+    // (`services/mcp/mcpElicitation.js`). When disabled it is not declared, so
+    // a well-behaved server asks nothing and goes on without the answer.
+    elicitation: z
+      .object({
+        enabled: z.boolean().prefault(true)
+      })
+      .prefault({}),
     // Auto-reconnect window. After `maxRetries` failures the connection is
     // marked unhealthy and excluded from `tools/list` aggregation.
     reconnect: z

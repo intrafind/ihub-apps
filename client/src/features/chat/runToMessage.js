@@ -32,6 +32,7 @@ import {
   interactionToCheckpoint,
   isCheckpointInteraction,
   isClarificationInteraction,
+  isMcpElicitationInteraction,
   isToolApprovalInteraction
 } from '../../shared/run/interactionToCheckpoint';
 
@@ -151,6 +152,17 @@ function addToolApproval(extras, interactions) {
   return true;
 }
 
+/**
+ * A question an MCP server asked mid-call (elicitation), while it waits for
+ * the answer. The run it is raised on is a child of the chat run.
+ */
+function addMcpElicitation(extras, run, interactions, finished) {
+  const question = last(interactions, isMcpElicitationInteraction);
+  if (!question) return;
+  extras.mcpElicitation =
+    question.status === 'pending' && !finished ? { interaction: question, runId: run.runId } : null;
+}
+
 /** Chat-launched workflow: checkpoint, steps, result. */
 function addWorkflowState(extras, run, interactions, finished) {
   const workflow = run.meta?.extra?.workflow;
@@ -262,6 +274,7 @@ export function projectRunToMessage(run, options = {}) {
   const awaitingQuestion = addClarification(extras, interactions);
   const awaitingApproval = addToolApproval(extras, interactions);
   addWorkflowState(extras, run, interactions, finished);
+  addMcpElicitation(extras, run, interactions, finished);
   addToolSideChannels(extras, run);
   addCompletionMetadata(extras, run, finished);
 
@@ -275,6 +288,15 @@ export function projectRunToMessage(run, options = {}) {
       (run.status === 'paused' && !awaitingQuestion && !awaitingApproval));
 
   return { content, loading, extras };
+}
+
+/** Carry a child run's workflow state (and server questions) onto the message. */
+function mergeChildExtras(extras, child) {
+  for (const key of ['workflowStep', 'workflowCheckpoint', 'mcpElicitation']) {
+    if (child[key] !== undefined) extras[key] = child[key];
+  }
+  if (child.workflowResult) extras.workflowResult = child.workflowResult;
+  if (child.outputFormat && !extras.outputFormat) extras.outputFormat = child.outputFormat;
 }
 
 /**
@@ -297,10 +319,7 @@ export function projectMessageRuns(run, childRuns = [], options = {}) {
   for (const child of childRuns) {
     const c = projectRunToMessage(child, options).extras;
     if (c.workflowSteps?.length) steps = [...steps, ...c.workflowSteps];
-    if (c.workflowStep !== undefined) extras.workflowStep = c.workflowStep;
-    if (c.workflowCheckpoint !== undefined) extras.workflowCheckpoint = c.workflowCheckpoint;
-    if (c.workflowResult) extras.workflowResult = c.workflowResult;
-    if (c.outputFormat && !extras.outputFormat) extras.outputFormat = c.outputFormat;
+    mergeChildExtras(extras, c);
   }
   if (steps.length) extras.workflowSteps = steps;
   return { ...base, extras };

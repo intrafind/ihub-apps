@@ -246,6 +246,12 @@ const installedIntegrationObjectSchema = z.object({
   actions: installedActionsSchema.prefault({ enabled: ['*'], disabled: [], overrides: {} }),
   /** Tool approval: `{ default?, actions?, newOrChanged? }` (see {@link installedApprovalSchema}). */
   approval: installedApprovalSchema.optional(),
+  /**
+   * MCP servers only: whether the server may ask the chat user questions
+   * mid-call (MCP elicitation). Absent: the definition decides (on unless it
+   * says otherwise).
+   */
+  elicitation: z.object({ enabled: z.boolean() }).strict().optional(),
   // No `allowedGroups` (removed in #3093, moved onto the groups by V203): who
   // may use an installation is `groups.json` → `permissions.integrations`.
   timeoutMs: z.number().int().min(1000).max(120000).optional(),

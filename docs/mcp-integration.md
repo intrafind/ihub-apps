@@ -89,9 +89,79 @@ to be configured. The other transports (`sse`, `websocket`, `stdio`) keep the
 2025 handshake: a probe over `stdio` would start a second copy of the server
 process.
 
-On either revision iHub declares no elicitation, Tasks or Skills support as a
-client, so servers answer it the way they answer any client without them:
-synchronously, without asking the user anything mid-call.
+On either revision iHub may be asked questions mid-call
+([Questions from the server](#questions-from-the-server-elicitation)). It
+declares no Tasks or Skills support as a client, so servers answer its tool
+calls synchronously and offer it no skills.
+
+### Questions from the server (elicitation)
+
+A server can ask the chat user for something in the middle of a tool call:
+to confirm a paid action, to type the name of what it is about to delete, to
+fill in a value it is missing (MCP elicitation, form mode). The question shows
+in the chat as a card with the server's name, its message and the form it
+asked for; the turn keeps running and the tool call waits.
+
+- **Submit** sends the form to the server, **Decline** tells it no. The answer
+  goes to the server only, not into the conversation, and the model never sees
+  it; it sees the tool's result once the server has finished.
+- The call's own timeout (`timeoutMs`) stands still while the person answers.
+  A question nobody answers within 10 minutes is cancelled, and so is a
+  question left open when the user stops the turn.
+- Only the user whose chat it is may answer.
+- A reload, or a second tab on the same chat, shows a question that is still
+  open again. Each question is a run of its own on the run ledger, under the
+  chat run, with its outcome.
+- Where nobody can answer — a workflow, a scheduled run, the inference API, the
+  MCP gateway, an MCP App view's own call, an anonymous user — iHub answers
+  `cancel` at once, and the server goes on as it does when a person dismisses
+  the question.
+- A 2025-era server that sends its question outside the call (on the
+  session's own stream, as `server.elicitInput()` does) still reaches the
+  chat when exactly one call to that server is running; with several running,
+  iHub cannot tell whose question it is and answers `cancel`.
+
+The forms carry what MCP elicitation allows: text (with the formats e-mail,
+URL, date and date-time), numbers, yes/no, a single choice and a multiple
+choice. Other field types are left out of the form.
+
+#### Pages to open (URL mode)
+
+A server can also send the person to a page of its own: to sign in to the
+service, to confirm a payment, to grant access (MCP elicitation, URL mode).
+The card then shows the server's message, the host the link goes to and the
+full address. iHub does not open, fetch or preview the page.
+
+- **Open** opens the page in a new browser tab, without a referrer. Back in
+  the chat, **Done** tells the server the person is finished there
+  (`accept`); **Decline** tells it no.
+- A 2025-era server may report on its own that the page is finished
+  (`notifications/elicitation/complete`); the question then ends without
+  **Done**.
+- A 2025-era server may also refuse a call until the person has opened one or
+  more pages (error `-32042`, URL elicitation required). iHub puts each page
+  to the person and, once they are done with all of them, makes the call
+  again (at most three times). A declined page leaves the server's error as
+  the tool's result.
+- Only `https` addresses without a user name or password in them are shown.
+  A server that sends any other address gets `decline` without the person
+  being asked.
+
+Questions work with servers connected over Streamable HTTP. There a
+question arrives on the call's own response stream, which is how iHub knows
+whose chat it belongs to. Over `stdio` and the legacy SSE transport every
+question arrives on the connection's one stream, outside any call, so iHub
+does not offer elicitation to those servers; they go on as they would
+without it.
+
+Elicitation is on for every Streamable HTTP server unless switched off. On the
+installation (**Admin → Integrations → the server**, section **Actions**), the
+switch **Let the server ask chat users questions during a call** turns it off
+for that server, forms and pages alike: iHub then does not offer elicitation, and a well-behaved
+server goes on without asking. The choice is stored on the installation as
+`elicitation: { enabled }`; while the switch has never been changed, the
+definition decides (a shipped definition can set
+`protocol.elicitation.enabled: false`). A change reconnects the server.
 
 ### Transports
 
@@ -1829,8 +1899,7 @@ Discovery: `/mcp/.well-known` advertises `a2a_endpoint` when enabled.
   currently run the LLM call synchronously without iHub's tool
   executor; an MCP-side tool loop is a follow-up.
 - **mTLS** for service-to-service — additive layer; optional.
-- **The MCP extensions as a client** — iHub does not yet answer an external
-  server's elicitation in the chat, poll its tasks, or load its skills. Servers
-  answer iHub as a client without those extensions (synchronously, without
-  asking mid-call). The plan is in
+- **Tasks and Skills as a client** — iHub does not yet poll an external
+  server's tasks or load its skills; servers answer its calls synchronously.
+  URL-mode questions are declined. The plan is in
   `concepts/2026-11-26 MCP Extensions on the Client Side.md`.

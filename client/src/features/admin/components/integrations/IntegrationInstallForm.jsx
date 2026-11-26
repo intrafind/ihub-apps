@@ -49,6 +49,23 @@ const AUTH_MODE_KEYS = {
 };
 
 /** Instance id proposal from a definition id: the last segment, de-duplicated by the caller. */
+/**
+ * The question setting (MCP elicitation) of an MCP installation's payload:
+ * what the admin chose, or nothing while the form still shows the
+ * definition's default and nothing was stored, so the definition keeps
+ * deciding.
+ *
+ * @param {Object} definition
+ * @param {Object} form
+ * @returns {{elicitation?: {enabled: boolean}}}
+ */
+export function elicitationPayload(definition, form) {
+  if (definition?.protocol !== 'mcp') return {};
+  const fallback = definition.elicitationDefault ?? true;
+  if (!form.storedElicitation && form.elicitationEnabled === fallback) return {};
+  return { elicitation: { enabled: form.elicitationEnabled } };
+}
+
 export function proposeInstanceId(definitionId, taken = []) {
   const base = String(definitionId || 'integration')
     .split('/')
@@ -240,6 +257,10 @@ function IntegrationInstallForm({
           storedActions: instance?.actions || null,
           // Tool approval (#2945) is edited on the Overview; sent back unchanged.
           storedApproval: instance?.approval || null,
+          // MCP servers: may the server ask the chat user questions mid-call?
+          // Only an admin's choice is stored; untouched, the definition decides.
+          storedElicitation: instance?.elicitation || null,
+          elicitationEnabled: instance?.elicitation?.enabled ?? def.elicitationDefault ?? true,
           // A new installation starts with an approval default the admin can
           // change before saving (#2916): the server's preset for the definition.
           approvalDefault: isEdit ? undefined : def.approvalPreset || installApprovalPreset(def)
@@ -316,7 +337,8 @@ function IntegrationInstallForm({
         overrides: form.overrides || {}
       }),
       ...(form.storedApproval ? { approval: form.storedApproval } : {}),
-      ...(!isEdit && form.approvalDefault ? { approval: { default: form.approvalDefault } } : {})
+      ...(!isEdit && form.approvalDefault ? { approval: { default: form.approvalDefault } } : {}),
+      ...elicitationPayload(definition, form)
     };
     if (secretField && form.secret.trim()) {
       payload.secrets = { [secretField.key]: form.secret.trim() };
@@ -686,6 +708,31 @@ function IntegrationInstallForm({
             dynamicActions={Boolean(definition.dynamicActions)}
             storedPolicy={form.storedActions}
           />
+          {definition.protocol === 'mcp' && (
+            <div className="pt-2" data-testid="install-elicitation">
+              <label className="inline-flex items-start gap-2 text-sm text-gray-800 dark:text-gray-200">
+                <input
+                  type="checkbox"
+                  className={`${CHECKBOX_CLASS} mt-0.5`}
+                  checked={form.elicitationEnabled}
+                  aria-describedby="install-elicitation-help"
+                  onChange={e =>
+                    setForm(prev => ({ ...prev, elicitationEnabled: e.target.checked }))
+                  }
+                />
+                {t(
+                  'admin.integrationCatalog.wizard.elicitation',
+                  'Let the server ask chat users questions during a call'
+                )}
+              </label>
+              <p id="install-elicitation-help" className={HELP_CLASS}>
+                {t(
+                  'admin.integrationCatalog.wizard.elicitationHelp',
+                  'The server can ask for a confirmation or a missing value while one of its tools runs; the chat shows a form. Off: the server is not offered this, and goes on without asking.'
+                )}
+              </p>
+            </div>
+          )}
           {/* A new installation's tool approval (#2916); edited on the Overview afterwards. */}
           {!isEdit && (
             <div className="pt-2 sm:max-w-md" data-testid="install-approval-default">

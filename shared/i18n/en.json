@@ -5135,7 +5135,9 @@
         "description": "Description",
         "descriptionHelp": "What this installation holds, for admins and — where the integration reads it, like a people directory — for the model: say what is in it and what to search by.",
         "alwaysInstalledHelp": "This integration is always installed and enabled; switch single actions off below instead.",
-        "onePerLine": "One entry per line"
+        "onePerLine": "One entry per line",
+        "elicitation": "Let the server ask chat users questions during a call",
+        "elicitationHelp": "The server can ask for a confirmation or a missing value, or send the user to a page of its own, while one of its tools runs; the chat shows it. Servers connected over Streamable HTTP only. Off: the server is not offered this, and goes on without asking."
       },
       "connections": {
         "title": "Connected users",
@@ -14527,6 +14529,28 @@
       "refused": "The file could not be attached: {{detail}}",
       "failed": "The file could not be attached. Please try again."
     }
+  },
+  "mcpElicitation": {
+    "title": "{{server}} asks",
+    "titleUnknown": "A connected system asks",
+    "notice": "Your answer goes to {{server}}, not into the conversation. The request waits until you answer.",
+    "theServer": "the server",
+    "choose": "Choose…",
+    "submit": "Submit",
+    "decline": "Decline",
+    "required": "Required",
+    "invalid": "Check this value",
+    "sent": "Answer sent to {{server}}.",
+    "declined": "You declined. {{server}} was told no.",
+    "failed": "The answer could not be sent.",
+    "pageHost": "Opens {{host}}",
+    "pageNotice": "Check the address before you open it. iHub opens nothing by itself and sends nothing to the page.",
+    "pageOpen": "Open {{host}}",
+    "pageOpenAgain": "Open again",
+    "pageOpened": "Finish on {{host}}, then come back here and click Done.",
+    "pageDone": "Done",
+    "pageSent": "{{server}} was told you are done.",
+    "pageUnsafe": "iHub does not open this address."
   },
   "textRecognition": {
     "recognized": "Text recognized",

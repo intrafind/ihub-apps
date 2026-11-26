@@ -176,6 +176,13 @@ function catalogEntryView(entry, language, instances, updates) {
     dynamicActions: Boolean(getProtocolAdapter(def.protocol.type)?.dynamicActions),
     /** The definition brings a connector module that runs in the server process. */
     runsCode: def.protocol.type === 'script',
+    /**
+     * MCP servers: whether the server may ask the chat user questions mid-call
+     * when the installation does not say (the definition's choice, else on).
+     */
+    ...(def.protocol.type === 'mcp'
+      ? { elicitationDefault: def.protocol.elicitation?.enabled !== false }
+      : {}),
     /** Installed at all times (iHub's own tools): no enable switch, no remove. */
     alwaysInstalled: def.alwaysInstalled === true,
     /**

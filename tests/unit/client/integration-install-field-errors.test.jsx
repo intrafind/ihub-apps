@@ -214,3 +214,57 @@ test('a sign-in mode the server supports is offered, not "(later release)" (IN-B
   expect(radio).toBeChecked();
   expect(screen.queryByText('(later release)')).not.toBeInTheDocument();
 });
+
+describe('the MCP question switch (elicitation)', () => {
+  const {
+    elicitationPayload
+  } = require('../../../client/src/features/admin/components/integrations/IntegrationInstallForm');
+  const MCP = {
+    ...PORTAL,
+    id: 'com.intrafind/mcp-server',
+    name: 'MCP server',
+    protocol: 'mcp',
+    elicitationDefault: true,
+    install: []
+  };
+
+  test('stores nothing while the form shows the definition default', () => {
+    expect(elicitationPayload(MCP, { elicitationEnabled: true, storedElicitation: null })).toEqual(
+      {}
+    );
+    expect(
+      elicitationPayload({ ...MCP, elicitationDefault: false }, { elicitationEnabled: false })
+    ).toEqual({});
+    expect(elicitationPayload(PORTAL, { elicitationEnabled: false })).toEqual({});
+  });
+
+  test("stores the admin's choice, and keeps a stored one", () => {
+    expect(elicitationPayload(MCP, { elicitationEnabled: false })).toEqual({
+      elicitation: { enabled: false }
+    });
+    expect(
+      elicitationPayload(MCP, { elicitationEnabled: true, storedElicitation: { enabled: false } })
+    ).toEqual({ elicitation: { enabled: true } });
+  });
+
+  test('is offered for an MCP server only and sent when switched off', async () => {
+    mockApi.fetchIntegrationDefinition.mockResolvedValue(MCP);
+    mockApi.testIntegrationDraft.mockResolvedValue({ ok: true });
+    renderForm();
+    const box = await screen.findByLabelText(/ask chat users questions/i);
+    expect(box).toBeChecked();
+    fireEvent.click(box);
+    fireEvent.click(screen.getByRole('button', { name: 'Test connection' }));
+    await waitFor(() => expect(mockApi.testIntegrationDraft).toHaveBeenCalled());
+    expect(JSON.stringify(mockApi.testIntegrationDraft.mock.calls[0])).toContain(
+      '"elicitation":{"enabled":false}'
+    );
+  });
+
+  test('is not offered for another protocol', async () => {
+    mockApi.fetchIntegrationDefinition.mockResolvedValue(PORTAL);
+    renderForm();
+    await screen.findByLabelText(/Portal URL/);
+    expect(screen.queryByLabelText(/ask chat users questions/i)).not.toBeInTheDocument();
+  });
+});

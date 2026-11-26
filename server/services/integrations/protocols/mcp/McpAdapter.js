@@ -119,7 +119,10 @@ export async function run({ context }) {
   const toolId = context?.tool?.id;
   if (!toolId) throw new Error('MCP action call without a tool id');
   return mcpClientManager.callTool(toolId, context.params || {}, {
-    onRawResult: context.options?.onMcpAppResult
+    onRawResult: context.options?.onMcpAppResult,
+    // The turn's abort signal: a stop also ends a question the server is
+    // waiting on (MCP elicitation).
+    signal: context.options?.signal
   });
 }
 
