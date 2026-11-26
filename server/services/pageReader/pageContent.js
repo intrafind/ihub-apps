@@ -390,66 +390,84 @@ function metaContent(document, selectors) {
   return '';
 }
 
+/** The index after the string that starts at `start`; an unclosed string runs to the end. */
+function quotedEnd(style, start) {
+  let i = start + 1;
+  while (i < style.length && style[i] !== style[start]) i += style[i] === '\\' ? 2 : 1;
+  return Math.min(i + 1, style.length);
+}
+
 /**
- * The declarations of an inline style as `[name, value, important]`, scanned by index (no pattern
- * that could backtrack). Comments are dropped, and a `;` inside a string, a parenthesis or after a
- * backslash does not end a declaration: `--note: 'x;display:none'` is one declaration.
+ * The text of the declarations of an inline style, scanned by index (no pattern that could
+ * backtrack). Comments are dropped, and a `;` inside a string, a parenthesis or after a backslash
+ * does not end a declaration: `--note: 'x;display:none'` is one declaration.
+ *
+ * @param {string} style
+ * @returns {string[]}
+ */
+function splitDeclarations(style) {
+  const parts = [];
+  let current = '';
+  let depth = 0;
+  let i = 0;
+  while (i < style.length) {
+    const c = style[i];
+    let next = i + 1;
+    let piece = c;
+    if (c === '\\') {
+      next = i + 2;
+      piece = style.slice(i, next);
+    } else if (c === '"' || c === "'") {
+      next = quotedEnd(style, i);
+      piece = style.slice(i, next);
+    } else if (c === '/' && style[i + 1] === '*') {
+      const end = style.indexOf('*/', i + 2);
+      next = end === -1 ? style.length : end + 2;
+      piece = '';
+    } else if (c === ';' && depth === 0) {
+      parts.push(current);
+      current = '';
+      piece = '';
+    } else if (c === '(') depth++;
+    else if (c === ')' && depth > 0) depth--;
+    current += piece;
+    i = next;
+  }
+  parts.push(current);
+  return parts;
+}
+
+/**
+ * One declaration as `[name, value, important]`, lower-cased; `null` without a colon.
+ *
+ * @param {string} text
+ * @returns {[string, string, boolean]|null}
+ */
+function declarationOf(text) {
+  const colon = text.indexOf(':');
+  if (colon === -1) return null;
+  const name = text.slice(0, colon).trim().toLowerCase();
+  const value = text
+    .slice(colon + 1)
+    .trim()
+    .toLowerCase();
+  if (value.endsWith('important')) {
+    const rest = value.slice(0, -'important'.length).trimEnd();
+    if (rest.endsWith('!')) return [name, rest.slice(0, -1).trim(), true];
+  }
+  return [name, value, false];
+}
+
+/**
+ * The declarations of an inline style as `[name, value, important]`.
  *
  * @param {string} style
  * @returns {Array<[string, string, boolean]>}
  */
 function parseDeclarations(style) {
-  const declarations = [];
-  let current = '';
-  let quote = '';
-  let depth = 0;
-
-  const finish = () => {
-    const colon = current.indexOf(':');
-    if (colon !== -1) {
-      const name = current.slice(0, colon).trim().toLowerCase();
-      let value = current
-        .slice(colon + 1)
-        .trim()
-        .toLowerCase();
-      let important = false;
-      if (value.endsWith('important')) {
-        const rest = value.slice(0, -'important'.length).trimEnd();
-        if (rest.endsWith('!')) {
-          important = true;
-          value = rest.slice(0, -1).trim();
-        }
-      }
-      declarations.push([name, value, important]);
-    }
-    current = '';
-  };
-
-  for (let i = 0; i < style.length; i++) {
-    const c = style[i];
-    if (c === '\\') {
-      current += c + (style[i + 1] ?? '');
-      i++;
-    } else if (quote) {
-      current += c;
-      if (c === quote) quote = '';
-    } else if (c === '/' && style[i + 1] === '*') {
-      const end = style.indexOf('*/', i + 2);
-      if (end === -1) break;
-      i = end + 1;
-    } else if (c === '"' || c === "'") {
-      quote = c;
-      current += c;
-    } else if (c === ';' && depth === 0) {
-      finish();
-    } else {
-      if (c === '(') depth++;
-      else if (c === ')' && depth > 0) depth--;
-      current += c;
-    }
-  }
-  finish();
-  return declarations;
+  return splitDeclarations(style)
+    .map(declarationOf)
+    .filter(declaration => declaration !== null);
 }
 
 /**
@@ -505,10 +523,12 @@ function dropInheritedHiddenText(root) {
   const pending = [root];
   while (pending.length > 0) {
     const parent = pending.pop();
-    for (const child of [...parent.childNodes]) {
-      if (child.nodeType === 3) child.remove();
+    const text = [];
+    for (const child of parent.childNodes) {
+      if (child.nodeType === 3) text.push(child);
       else if (child.nodeType === 1 && hidingOf(child) !== 'show-text') pending.push(child);
     }
+    for (const node of text) node.remove();
   }
 }
 
