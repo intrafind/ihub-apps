@@ -25,7 +25,13 @@ import {
   isUserProjectId,
   mintItemId
 } from './ProjectRepository.js';
-import { evictItemKeys, readText, storeText } from './ItemTextStore.js';
+import {
+  evictItemKeys,
+  readOriginal,
+  readText,
+  storeOriginal,
+  storeText
+} from './ItemTextStore.js';
 import { getItemKind, isItemKindEnabled } from './kinds/registry.js';
 import { ProjectError } from './projectErrors.js';
 import { applyItemInfo, cleanItemInfo } from './itemInfo.js';
@@ -563,7 +569,10 @@ export class ProjectService {
    * @param {string} projectId
    * @param {{kind: string, ref?: Object, name?: string, pinned?: boolean, text?: string,
    *   crawlId?: string,
-   *   file?: {path: string, contentType?: string, name?: string, bytes?: number, cleanupDir?: string}}} input
+   *   file?: {path?: string, buffer?: Buffer, contentType?: string, name?: string, bytes?: number,
+   *     cleanupDir?: string}}} input
+   *   `file.buffer`: the file's bytes when the caller holds them already (a
+   *   chat artifact, an entry of a ZIP) instead of a temp file at `file.path`.
    *   `crawlId`: the site crawl that listed a web page; the page it read is stored
    *   instead of a new fetch (`crawlHandover.js`).
    * @param {{user: Object, authorize?: Function, origin?: string, run?: Object, wait?: boolean}} options
@@ -598,8 +607,13 @@ export class ProjectService {
     }
     const described = describeItemRef(kind, ref, prepared, user?.language);
     const now = nowIso();
+    if (file && !file.path && !Buffer.isBuffer(file.buffer)) {
+      throw new ProjectError('INVALID_REF', 'A file needs a path or its bytes');
+    }
     const declaredBytes = file
-      ? Number(file.bytes) || 0
+      ? Buffer.isBuffer(file.buffer)
+        ? file.buffer.length
+        : Number(file.bytes) || 0
       : text !== null
         ? Buffer.byteLength(text, 'utf8')
         : Number(ref.size) || 0;
@@ -668,7 +682,9 @@ export class ProjectService {
             // The file's own name decides the type; the item's name is the
             // display title the uploader chose.
             name: file.name || storedItem.name,
-            bytes: declaredBytes,
+            // The bytes themselves when the caller handed them in, else the
+            // declared size of the temp file.
+            bytes: Buffer.isBuffer(file.buffer) ? file.buffer : declaredBytes,
             attempt: storedItem.ingestAttempt,
             purpose: 'upload'
           }
@@ -1375,6 +1391,35 @@ export class ProjectService {
       // The text is the same text: it keeps the age of the extraction.
       if (item.text.extractedAt) block.extractedAt = item.text.extractedAt;
     }
+    // The original goes with the text. Encrypted under the item's ids like
+    // the text, so it is decrypted and encrypted again for the target.
+    let originalBlock = null;
+    if (item.originalFile?.blobKey) {
+      try {
+        const bytes = await readOriginal(source, item, {
+          platform: this._platform(),
+          repository: this.repository
+        });
+        originalBlock = await storeOriginal({
+          projectId: targetId,
+          itemId: newId,
+          bytes,
+          contentType: item.originalFile.contentType,
+          name: item.originalFile.name,
+          platform: this._platform(),
+          repository: this.repository,
+          tenant: item.originalFile.tenant || 'default'
+        });
+        originalBlock.storedAt = item.originalFile.storedAt || originalBlock.storedAt;
+      } catch (error) {
+        if (block) {
+          await this.repository.blobs
+            .delete(PROJECT_FILES_NAMESPACE, block.blobKey)
+            .catch(() => false);
+        }
+        throw error;
+      }
+    }
 
     const copy = structuredClone(item);
     copy.id = newId;
@@ -1388,6 +1433,8 @@ export class ProjectService {
       delete copy.managedSha256;
     }
     if (block) copy.text = block;
+    if (originalBlock) copy.originalFile = originalBlock;
+    else delete copy.originalFile;
     copy.provenance = {
       ...(copy.provenance || {}),
       transferredFrom: { projectId: sourceId, itemId, mode, by: actorOf(user), at: now }
@@ -1395,9 +1442,13 @@ export class ProjectService {
     copy.updatedAt = now;
 
     const dropBlob = async () => {
-      if (!block) return;
-      await this.repository.blobs.delete(PROJECT_FILES_NAMESPACE, block.blobKey).catch(() => false);
-      evictItemKeys(block.blobKey);
+      for (const dropped of [block, originalBlock]) {
+        if (!dropped) continue;
+        await this.repository.blobs
+          .delete(PROJECT_FILES_NAMESPACE, dropped.blobKey)
+          .catch(() => false);
+        evictItemKeys(dropped.blobKey);
+      }
     };
     let stored = null;
     try {

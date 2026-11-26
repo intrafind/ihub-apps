@@ -45,7 +45,8 @@ import {
   refreshItem,
   replaceItemText,
   registerProjectPickerRoutes,
-  sendItemText
+  sendItemText,
+  sendItemOriginal
 } from './projectItemRoutes.js';
 import {
   UNSHAREABLE_GROUPS,
@@ -818,6 +819,45 @@ export default function registerProjectRoutes(app) {
     authenticatedOnly,
     projectAccessRequired('use'),
     (req, res) => sendItemText(req, res, { project: req.project })
+  );
+
+  /**
+   * @swagger
+   * /api/projects/{projectId}/items/{itemId}/original:
+   *   get:
+   *     summary: The original file of a project document
+   *     description: >-
+   *       The file as it was uploaded, kept when `platform.uploads.storageMode` is
+   *       `original_and_text` (the default). Inline unless `download=1`. HTML, SVG and XML
+   *       are served sandboxed. `hasOriginal` on the item says whether there is one.
+   *     tags:
+   *       - Projects
+   *     parameters:
+   *       - in: path
+   *         name: projectId
+   *         required: true
+   *         schema: { type: string }
+   *       - in: path
+   *         name: itemId
+   *         required: true
+   *         schema: { type: string }
+   *       - in: query
+   *         name: download
+   *         schema: { type: string, enum: ['1'] }
+   *     responses:
+   *       200:
+   *         description: The file
+   *       404:
+   *         description: No such project or item (`NOT_FOUND`)
+   *       410:
+   *         description: Only the text is stored (`ORIGINAL_DISCARDED`)
+   */
+  app.get(
+    route('/:projectId/items/:itemId/original'),
+    ...gate,
+    authenticatedOnly,
+    projectAccessRequired('use'),
+    (req, res) => sendItemOriginal(req, res, { project: req.project })
   );
 
   // Load every document, count its tokens and say whether the text belongs

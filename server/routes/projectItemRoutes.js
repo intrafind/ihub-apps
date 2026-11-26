@@ -29,6 +29,10 @@ import { buildServerPath } from '../utils/basePath.js';
 import { ServiceError } from '../utils/ServiceError.js';
 import { assertValidId } from '../utils/pathSecurity.js';
 import { getItemText } from '../services/knowledge/ItemTextService.js';
+import { readOriginal } from '../services/projects/ItemTextStore.js';
+import { servedMediaType } from '../services/artifacts/artifactPolicy.js';
+import { setUserFileContentType } from '../utils/activeContentHeaders.js';
+import { buildContentDisposition } from '../utils/safeContentDisposition.js';
 import { ProjectError, getProjectService } from '../services/projects/ProjectService.js';
 import { PROJECTS_FEATURE, projectSettings } from '../services/projects/projectSettings.js';
 import { ACCEPTED_TYPES, acceptedTypeOf, sniffBytes } from '../services/projects/extractText.js';
@@ -336,6 +340,49 @@ export async function sendItemText(req, res, { project }) {
       .slice(0, 120);
     res.setHeader('Content-Disposition', `attachment; filename="${base || item.id}.txt"`);
   }
+  res.send(body);
+}
+
+/**
+ * Send the original file of an upload, when the installation kept it
+ * (`platform.uploads.storageMode` is `original_and_text`). Inline by default,
+ * `?download=1` as an attachment. Served like a chat file: under its own
+ * type with `nosniff`, and an HTML, SVG or XML file with a `sandbox` policy,
+ * so it cannot run script on this origin.
+ *
+ * @param {import('express').Request} req
+ * @param {import('express').Response} res
+ * @param {{project: Object}} options
+ */
+export async function sendItemOriginal(req, res, { project }) {
+  const { itemId } = req.params;
+  assertValidId(itemId, 'item');
+  const item = (project.items || []).find(entry => entry.id === itemId);
+  if (!item) throw new ServiceError('NOT_FOUND', 'Item not found');
+  if (!item.originalFile?.blobKey) {
+    throw new ServiceError(
+      'ORIGINAL_DISCARDED',
+      'This document keeps only its text; the original file was not stored'
+    );
+  }
+  const body = await readOriginal(project, item, { platform: platformOf() });
+  if (platformOf().audit?.logReads === true) {
+    logAudit({
+      req,
+      action: 'read',
+      resource: 'projectItem',
+      resourceId: project.id,
+      summary: `Downloaded the original of "${item.name}" of project "${projectName(project)}"`
+    });
+  }
+  const download = req.query?.download === '1' || req.query?.download === 'true';
+  setUserFileContentType(res, servedMediaType(item.originalFile.contentType));
+  res.setHeader('Content-Length', String(body.length));
+  res.setHeader('Cache-Control', 'private, no-cache');
+  res.setHeader(
+    'Content-Disposition',
+    download ? buildContentDisposition(item.originalFile.name || item.name) : 'inline'
+  );
   res.send(body);
 }
 

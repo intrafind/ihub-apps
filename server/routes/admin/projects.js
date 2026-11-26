@@ -63,7 +63,8 @@ import {
   receiveUpload,
   refreshItem,
   replaceItemText,
-  sendItemText
+  sendItemText,
+  sendItemOriginal
 } from '../projectItemRoutes.js';
 import { getItemText } from '../../services/knowledge/ItemTextService.js';
 import { estimateProject } from '../../services/projects/projectEstimate.js';
@@ -789,6 +790,11 @@ export default function registerAdminProjectsRoutes(app) {
   app.get(route('/:id/items/:itemId/text'), ...gate, contentAdminAuth, async (req, res) => {
     const project = await loadAdminProject(req);
     return sendItemText(req, res, { project });
+  });
+
+  app.get(route('/:id/items/:itemId/original'), ...gate, contentAdminAuth, async (req, res) => {
+    const project = await loadAdminProject(req);
+    return sendItemOriginal(req, res, { project });
   });
 
   app.put(route('/:id/items/:itemId/text'), ...gate, contentAdminAuth, async (req, res) => {

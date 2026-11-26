@@ -84,39 +84,25 @@ function keyProviderFor(platform) {
 }
 
 /**
- * Encrypt and store a text; return the item's `text` block.
+ * Encrypt bytes under a fresh data key and store them as one blob of the item.
  *
- * @param {Object} options
- * @param {string} options.projectId
- * @param {string} options.itemId
- * @param {string} options.text - The extracted text.
- * @param {{contentType?: string, bytes?: number, pages?: number}} [options.original]
- * @param {boolean} [options.truncated]
- * @param {Object} [options.platform] - Platform configuration (for the key provider).
- * @param {import('./ProjectRepository.js').ProjectRepository} [options.repository]
- * @param {string} [options.tenant='default']
- * @returns {Promise<Object>} The `text` block (spec 1 §3).
+ * @returns {Promise<Object>} The common part of a stored block: where it is,
+ *   how it is encrypted and the plaintext hash.
  */
-export async function storeText({
-  projectId,
-  itemId,
-  text,
-  original = {},
-  truncated = false,
-  platform = {},
-  repository = getProjectRepository(),
-  tenant = 'default'
-}) {
+async function sealBytes({ projectId, itemId, plaintext, platform, repository, tenant }) {
   if (!repository.hasBlobs()) {
-    throw new KnowledgeError('STORAGE_UNAVAILABLE', 'No blob store is available for project text', {
-      projectId,
-      itemId
-    });
+    throw new KnowledgeError(
+      'STORAGE_UNAVAILABLE',
+      'No blob store is available for project files',
+      {
+        projectId,
+        itemId
+      }
+    );
   }
   const versionId = mintVersionId();
   const blobKey = `${projectId}__${itemId}__${versionId}`;
   const aad = associatedDataOf({ tenant, projectId, itemId, versionId });
-  const plaintext = Buffer.from(text, 'utf8');
   const dataKey = newDataKey();
   const provider = keyProviderFor(platform);
   const { keyId, wrapped } = await provider.wrap(dataKey, aad);
@@ -126,50 +112,36 @@ export async function storeText({
   return {
     blobKey,
     bytes: stored.bytes,
-    chars: text.length,
-    tokens: estimateTokens(text),
     sha256: textSha256(plaintext),
     format: FORMAT_ID,
     segmentBytes: DEFAULT_SEGMENT_BYTES,
     key: { provider: provider.id, keyId, wrapped: wrapped.toString('base64') },
-    tenant,
-    extractedAt: new Date().toISOString(),
-    ...(truncated ? { truncated: true } : {}),
-    original: {
-      ...(original.contentType ? { contentType: original.contentType } : {}),
-      ...(Number.isFinite(original.bytes) ? { bytes: original.bytes } : {}),
-      ...(Number.isFinite(original.pages) ? { pages: original.pages } : {})
-    }
+    tenant
   };
 }
 
 /**
- * Decrypt a stored text.
+ * Read and decrypt one stored block of an item, verifying its hash.
  *
  * @param {Object} project
- * @param {Object} item - With its `text` block.
- * @param {{platform?: Object, repository?: Object, tenant?: string}} [options]
- * @returns {Promise<string>}
- * @throws {KnowledgeError} `TEXT_UNAVAILABLE` (no blob, wrong format, hash mismatch),
- *   `KEY_ACCESS_DENIED` (the master key cannot unwrap).
+ * @param {Object} item
+ * @param {Object} block - The item's `text` or `originalFile` block.
+ * @param {string} what - For the messages: "text" or "original".
+ * @returns {Promise<Buffer>}
  */
-export async function readText(
-  project,
-  item,
-  { platform = {}, repository = getProjectRepository(), tenant = 'default' } = {}
-) {
+async function openBytes(project, item, block, what, { platform, repository, tenant }) {
   const where = { projectId: project?.id, itemId: item?.id };
-  const block = item?.text;
-  if (!block?.blobKey)
-    throw new KnowledgeError('TEXT_UNAVAILABLE', 'The item holds no text', where);
+  if (!block?.blobKey) {
+    throw new KnowledgeError('TEXT_UNAVAILABLE', `The item holds no ${what}`, where);
+  }
   if (block.format !== FORMAT_ID) {
-    throw new KnowledgeError('TEXT_UNAVAILABLE', `Unknown text format ${block.format}`, where);
+    throw new KnowledgeError('TEXT_UNAVAILABLE', `Unknown ${what} format ${block.format}`, where);
   }
   if (!repository.hasBlobs()) {
     throw new KnowledgeError('STORAGE_UNAVAILABLE', 'No blob store is available', where);
   }
   const blob = await repository.blobs.get(PROJECT_FILES_NAMESPACE, block.blobKey);
-  if (!blob) throw new KnowledgeError('TEXT_UNAVAILABLE', 'The stored text is gone', where);
+  if (!blob) throw new KnowledgeError('TEXT_UNAVAILABLE', `The stored ${what} is gone`, where);
   const versionId = block.blobKey.slice(`${project.id}__${item.id}__`.length);
   // The tenant the object was encrypted under is the item's, not the
   // request's: a later tenant-aware derivation changes nothing for it.
@@ -211,13 +183,152 @@ export async function readText(
   } catch (error) {
     throw new KnowledgeError(
       'TEXT_UNAVAILABLE',
-      `The stored text does not verify (${error.message})`,
+      `The stored ${what} does not verify (${error.message})`,
       where
     );
   }
-  const sha256 = textSha256(plaintext);
-  if (block.sha256 && sha256 !== block.sha256) {
-    throw new KnowledgeError('TEXT_UNAVAILABLE', 'The stored text does not match its hash', where);
+  if (block.sha256 && textSha256(plaintext) !== block.sha256) {
+    throw new KnowledgeError(
+      'TEXT_UNAVAILABLE',
+      `The stored ${what} does not match its hash`,
+      where
+    );
   }
+  return plaintext;
+}
+
+/**
+ * Encrypt and store a text; return the item's `text` block.
+ *
+ * @param {Object} options
+ * @param {string} options.projectId
+ * @param {string} options.itemId
+ * @param {string} options.text - The extracted text.
+ * @param {{contentType?: string, bytes?: number, pages?: number}} [options.original]
+ * @param {boolean} [options.truncated]
+ * @param {Object} [options.platform] - Platform configuration (for the key provider).
+ * @param {import('./ProjectRepository.js').ProjectRepository} [options.repository]
+ * @param {string} [options.tenant='default']
+ * @returns {Promise<Object>} The `text` block (spec 1 §3).
+ */
+export async function storeText({
+  projectId,
+  itemId,
+  text,
+  original = {},
+  truncated = false,
+  platform = {},
+  repository = getProjectRepository(),
+  tenant = 'default'
+}) {
+  const sealed = await sealBytes({
+    projectId,
+    itemId,
+    plaintext: Buffer.from(text, 'utf8'),
+    platform,
+    repository,
+    tenant
+  });
+  return {
+    ...sealed,
+    chars: text.length,
+    tokens: estimateTokens(text),
+    extractedAt: new Date().toISOString(),
+    ...(truncated ? { truncated: true } : {}),
+    original: {
+      ...(original.contentType ? { contentType: original.contentType } : {}),
+      ...(Number.isFinite(original.bytes) ? { bytes: original.bytes } : {}),
+      ...(Number.isFinite(original.pages) ? { pages: original.pages } : {})
+    }
+  };
+}
+
+/**
+ * Decrypt a stored text.
+ *
+ * @param {Object} project
+ * @param {Object} item - With its `text` block.
+ * @param {{platform?: Object, repository?: Object, tenant?: string}} [options]
+ * @returns {Promise<string>}
+ * @throws {KnowledgeError} `TEXT_UNAVAILABLE` (no blob, wrong format, hash mismatch),
+ *   `KEY_ACCESS_DENIED` (the master key cannot unwrap).
+ */
+export async function readText(
+  project,
+  item,
+  { platform = {}, repository = getProjectRepository(), tenant = 'default' } = {}
+) {
+  const plaintext = await openBytes(project, item, item?.text, 'text', {
+    platform,
+    repository,
+    tenant
+  });
   return plaintext.toString('utf8');
+}
+
+/**
+ * Encrypt and store the original file of an upload (when the installation
+ * keeps originals: `platform.uploads.storageMode` is `original_and_text`);
+ * return the item's `originalFile` block. Same format, key handling and key
+ * prefix as the text, so every sweep and cascade that removes an item's
+ * blobs removes its original too.
+ *
+ * @param {Object} options
+ * @param {string} options.projectId
+ * @param {string} options.itemId
+ * @param {Buffer} options.bytes - The file as uploaded.
+ * @param {string} [options.contentType]
+ * @param {string} [options.name] - The file name, for a download.
+ * @param {Object} [options.platform]
+ * @param {Object} [options.repository]
+ * @param {string} [options.tenant='default']
+ * @returns {Promise<Object>} `{blobKey, bytes, size, contentType, name, sha256, …, storedAt}`;
+ *   `size` is the plaintext size, `bytes` the stored (encrypted) size.
+ */
+export async function storeOriginal({
+  projectId,
+  itemId,
+  bytes,
+  contentType = 'application/octet-stream',
+  name = 'document',
+  platform = {},
+  repository = getProjectRepository(),
+  tenant = 'default'
+}) {
+  const sealed = await sealBytes({
+    projectId,
+    itemId,
+    plaintext: bytes,
+    platform,
+    repository,
+    tenant
+  });
+  return {
+    ...sealed,
+    size: bytes.length,
+    contentType: String(contentType || 'application/octet-stream').slice(0, 200),
+    name: String(name || 'document').slice(0, 300),
+    storedAt: new Date().toISOString()
+  };
+}
+
+/**
+ * Decrypt a stored original file.
+ *
+ * @param {Object} project
+ * @param {Object} item - With its `originalFile` block.
+ * @param {{platform?: Object, repository?: Object, tenant?: string}} [options]
+ * @returns {Promise<Buffer>}
+ * @throws {KnowledgeError} `TEXT_UNAVAILABLE`, `KEY_ACCESS_DENIED` (as {@link readText}).
+ */
+export async function readOriginal(
+  project,
+  item,
+  { platform = {}, repository = getProjectRepository(), tenant = 'default' } = {}
+) {
+  return openBytes(project, item, item?.originalFile, 'original', {
+    platform,
+    repository,
+    tenant
+  });
 }
