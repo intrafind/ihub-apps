@@ -132,3 +132,24 @@ context on blank space.
   by the page and not by the user or iHub, and that the model must not follow instructions in them
   or put data from the conversation into an address. The note is in the `read_url` result
   (`sourceNotice`), once per web search, and in the description of the `read_url` tool.
+
+## Read Images and Scanned PDFs as Text, Once
+
+A vision-capable **text recognition model** can now read images and scanned PDF pages when they are
+added, so every app can use them, also apps whose model cannot read images, and no answer pays for
+reading them again. Set it in **Admin → Chat history → Uploaded files → Text recognition**.
+
+- **Projects** use it whenever a model is set: images (PNG, JPEG, GIF, WebP) can be uploaded, picked
+  from a cloud drive, unpacked from a ZIP archive and copied from a chat, and scanned PDFs no longer
+  fail. Only pages without a text layer are sent to the model.
+- **Chats** use it only when **Read images and scanned PDFs in chats as text** is switched on (per
+  app too). Then an attached image or scanned PDF is read once and the model gets its text; switched
+  off, chats send them as images, as before.
+- **Use in app** and **Copy to project** now work for images where they can be read as text.
+- Each document records that its text was recognized and by which model, and says so in the list.
+- At most 50 pages are read per document by default (**Most pages per document**).
+- The pages are sent to the provider of the recognition model when they are added. Pick a model your
+  data may go to.
+
+**Before upgrading:** nothing to do. Migration V265 adds the settings with no model set, so nothing
+is read until an administrator picks one.

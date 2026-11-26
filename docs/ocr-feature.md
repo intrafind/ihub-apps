@@ -9,6 +9,13 @@ adminPage: /admin/features
 
 The OCR (Optical Character Recognition) feature converts PDF documents and images into structured, searchable markdown text. It is part of the **Tools Service**, a preview feature that must be enabled before use.
 
+> [!TIP]
+> To read images and scanned PDFs **when they are added** to a project or a chat, without a separate
+> OCR job, set a text recognition model in **Admin → Chat history → Uploaded files → Text
+> recognition**. See [Projects → Images and scanned PDFs](projects.md#images-and-scanned-pdfs) and
+> [Chat files → Text recognition in chats](chat-files.md#text-recognition-in-chats). It uses the same
+> page rendering and prompt as this tool, and reads only pages without a text layer.
+
 ## Enabling OCR
 
 OCR is disabled by default. Enable it in **Admin → Features → Tools Service** (preview category).

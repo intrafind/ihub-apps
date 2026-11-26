@@ -43,7 +43,7 @@ This page is a starting point for a security officer or procurement team. It lis
 iHub gives you the controls above. The following stay with you:
 
 - **Hosting.** The servers, network, TLS certificates, backups, disk or volume encryption, access to `contents/`, and protection of the encryption key.
-- **Model and integration providers.** Contracts, data processing terms, data location and retention at each LLM provider or connected system you enable. Prompts and files leave iHub for these providers when you configure them.
+- **Model and integration providers.** Contracts, data processing terms, data location and retention at each LLM provider or connected system you enable. Prompts and files leave iHub for these providers when you configure them. With a text recognition model set (`platform.ocr.modelId`), the pages of images and scanned PDFs go to its provider when they are added to a project, and to a chat where text recognition is switched on; see [Projects → Images and scanned PDFs](projects.md#images-and-scanned-pdfs).
 - **Retention choices.** The defaults are a starting point. Set retention for chats, audit log, usage data, feedback and provenance records to match your own policy.
 - **Identity.** Your identity provider or directory, and who you put in admin groups.
 - **AI Act wording and policy.** The notice text, the AI-use statement and policy link, and which models you declare as watermarked or marked by their provider.
