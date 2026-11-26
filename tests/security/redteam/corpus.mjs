@@ -30,6 +30,7 @@ export const PAGES_APP = 'inj-pages';
 export const CORPUS_EXFIL_ORIGIN = 'https://collect.invalid';
 
 let cached;
+let cachedHidden;
 
 /**
  * @returns {{source: Object, cases: Array<{id: string, category: string, template: string,
@@ -38,6 +39,22 @@ let cached;
 export function loadCorpus() {
   cached ||= JSON.parse(fs.readFileSync(path.join(here, 'corpus', 'cases.json'), 'utf8'));
   return cached;
+}
+
+/**
+ * The pages whose payload sits where a reader is expected to drop it (HTML comment, `display:none`
+ * block, image alt text). The red team does not ask a model about them; the extraction tests
+ * (`server/tests/page-extraction-corpus.test.js`) pin what the page reader and the website
+ * corpus extraction make of them.
+ *
+ * @returns {{source: Object, cases: Array<{id: string, category: string, template: string,
+ *   delivery: string, canary: string, exfil: boolean, page: string, html: string}>}}
+ */
+export function loadHiddenCorpus() {
+  cachedHidden ||= JSON.parse(
+    fs.readFileSync(path.join(here, 'corpus', 'cases-hidden.json'), 'utf8')
+  );
+  return cachedHidden;
 }
 
 /**
