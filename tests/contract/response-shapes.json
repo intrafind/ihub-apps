@@ -722,6 +722,7 @@
     "status": 200,
     "shape": {
       "generatedAt": "string",
+      "ocrModels": [],
       "settings": {
         "chats": {
           "enabled": "boolean",
@@ -736,6 +737,10 @@
         "evidence": {
           "enabled": "boolean",
           "maxContentBytes": "number"
+        },
+        "ocr": {
+          "maxPages": "number",
+          "modelId": "null"
         },
         "runLog": {
           "cleanupEnabled": "boolean",
@@ -766,6 +771,7 @@
           "evictOldestOriginalsOnQuota": "boolean",
           "originalRetentionDays": "number",
           "quotas": "object",
+          "recognizeText": "boolean",
           "storageMode": "string"
         }
       },
@@ -1041,6 +1047,10 @@
           "clients": "boolean"
         }
       },
+      "ocr": {
+        "maxPages": "number",
+        "modelId": "null"
+      },
       "officeIntegration": {
         "calendarStarterPrompts": ["object"],
         "defaultMailAction": "string",
@@ -1295,6 +1305,9 @@
         "allowUnsigned": "boolean",
         "maxUploadSizeMB": "number",
         "trustedPublicKeys": []
+      },
+      "uploads": {
+        "recognizeText": "boolean"
       },
       "usageLimits": {
         "allModels": {},
@@ -3436,6 +3449,7 @@
           "localAuth": "object",
           "logging": "object",
           "ntlmAuth": "object",
+          "ocr": "object",
           "oidcAuth": "object",
           "projects": "object",
           "provenance": "object",
@@ -5324,7 +5338,11 @@
           "maxServerBytes": "number",
           "maxUserBytes": "number"
         },
-        "storageMode": "string"
+        "storageMode": "string",
+        "textRecognition": {
+          "available": "boolean",
+          "chats": "boolean"
+        }
       },
       "userPrompts": {
         "enabled": "boolean",
@@ -6292,6 +6310,10 @@
         "allowEveryone": "boolean",
         "allowGroups": "boolean",
         "allowUsers": "boolean"
+      },
+      "textRecognition": {
+        "enabled": "boolean",
+        "maxPages": "number"
       },
       "tierPolicy": "string",
       "tiers": ["string"],
