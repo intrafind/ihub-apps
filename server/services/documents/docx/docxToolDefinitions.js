@@ -18,7 +18,9 @@ export const CREATE_DOCX_TOOL = {
     de: String.raw`Erstellt ein bearbeitbares Word-Dokument (.docx) auf dem Server und stellt es dem Benutzer als Download bereit. Inhalt als Markdown schreiben (Überschriften, Absätze, Listen, GFM-Tabellen, Code, Zitate, GitHub-Hinweise wie "> [!NOTE]"; "\pagebreak" in einer eigenen Zeile beginnt eine neue Seite). Überschriften werden echte Word-Überschriften, sodass der Benutzer das Dokument umformatieren und das Inhaltsverzeichnis aktualisieren kann. Der Benutzer sieht im Chat eine Download-Karte – keinen Link einfügen, stattdessen den Dateinamen nennen. Für Hinweise zuerst den Skill "docx" aktivieren.`
   },
   usesDocumentTemplate: true,
+  templateGuide: 'docx',
   brandParameters: ['primaryColor', 'accentColor', 'font'],
+  fieldParameters: ['fields'],
   parameters: {
     type: 'object',
     properties: {
@@ -36,7 +38,7 @@ export const CREATE_DOCX_TOOL = {
       date: {
         type: 'string',
         description:
-          'Optional date for the cover page and the {date} / {{date}} placeholder (defaults to today).'
+          'Optional date for the cover page and the {{date}} placeholder; {{year}} is its year (defaults to today).'
       },
       showTitle: {
         type: 'boolean',
@@ -59,7 +61,13 @@ export const CREATE_DOCX_TOOL = {
       toc: {
         type: 'boolean',
         description:
-          'Add a table of contents built from the headings (Word updates the page numbers when the file is opened).'
+          'Add a table of contents built from the headings (Word updates the page numbers when the file is opened; other viewers show it empty). A template with a {{toc}} placeholder shows one where it wants it unless you set this to false; leave it unset to follow the template.'
+      },
+      fields: {
+        type: 'object',
+        additionalProperties: { type: 'string' },
+        description:
+          'Values of the template\'s own fields, as {"name": "value"}. The fields a template has, and which of them are required, are listed in this tool\'s description. Ask the user for a required value you do not know; do not invent one.'
       },
       header: {
         type: 'string',
@@ -102,8 +110,8 @@ export const EDIT_DOCX_TOOL = {
   id: 'edit_docx',
   name: { en: 'Edit Word document', de: 'Word-Dokument bearbeiten' },
   description: {
-    en: 'Change a Word document this chat created with create_docx instead of writing it again: exact text replacements in its Markdown ("edits"), new settings ("set": title, subtitle, author, date, header, footer, toc, coverPage, pageNumbers, …), or both. Each oldText must occur exactly once; all edits apply or none. The document is rendered again under the same name, in the same template. If you do not have its Markdown, read it with chat_artifacts_read first. Use create_docx only for a new document or a rewrite.',
-    de: 'Ändert ein Word-Dokument, das dieser Chat mit create_docx erstellt hat, statt es neu zu schreiben: exakte Textersetzungen im Markdown ("edits"), neue Einstellungen ("set": title, subtitle, author, date, header, footer, toc, coverPage, pageNumbers, …) oder beides. Jeder oldText muss genau einmal vorkommen; alle Änderungen werden übernommen oder keine. Das Dokument wird unter demselben Namen in derselben Vorlage neu erzeugt. Fehlt das Markdown, zuerst mit chat_artifacts_read lesen. create_docx nur für ein neues Dokument oder eine Neufassung.'
+    en: 'Change a Word document this chat created with create_docx instead of writing it again: exact text replacements in its Markdown ("edits"), new settings ("set": title, subtitle, author, date, header, footer, toc, coverPage, pageNumbers, fields, …), or both. Each oldText must occur exactly once; all edits apply or none. The document is rendered again under the same name, in the same template. If you do not have its Markdown, read it with chat_artifacts_read first. Use create_docx only for a new document or a rewrite.',
+    de: 'Ändert ein Word-Dokument, das dieser Chat mit create_docx erstellt hat, statt es neu zu schreiben: exakte Textersetzungen im Markdown ("edits"), neue Einstellungen ("set": title, subtitle, author, date, header, footer, toc, coverPage, pageNumbers, fields, …) oder beides. Jeder oldText muss genau einmal vorkommen; alle Änderungen werden übernommen oder keine. Das Dokument wird unter demselben Namen in derselben Vorlage neu erzeugt. Fehlt das Markdown, zuerst mit chat_artifacts_read lesen. create_docx nur für ein neues Dokument oder eine Neufassung.'
   },
   parameters: {
     type: 'object',

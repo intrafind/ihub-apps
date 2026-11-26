@@ -74,7 +74,7 @@ const LABELS = {
   nl: { page: 'Pagina {page} van {pages}', contents: 'Inhoud' }
 };
 
-function labelsFor(language) {
+export function labelsFor(language) {
   const key = typeof language === 'string' ? language.slice(0, 2).toLowerCase() : 'en';
   return LABELS[key] || LABELS.en;
 }

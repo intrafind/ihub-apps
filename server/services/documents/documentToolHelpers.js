@@ -72,7 +72,8 @@ export function toolFailure(error, fallback) {
   return {
     success: false,
     error: known ? error.message : fallback,
-    ...(known && error.code ? { code: error.code } : {})
+    ...(known && error.code ? { code: error.code } : {}),
+    ...(known && error.details ? { details: error.details } : {})
   };
 }
 

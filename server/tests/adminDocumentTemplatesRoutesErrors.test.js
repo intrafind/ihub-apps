@@ -95,7 +95,7 @@ describe('document template administration routes: errors', () => {
   });
 
   it('answers an upload without a file with BAD_REQUEST', async () => {
-    const res = await request(app).post(`${BASE}/t1/files/logo`).send({});
+    const res = await request(app).post(`${BASE}/t1/files/wordTemplate`).send({});
     expectProblem(res, 400, 'BAD_REQUEST');
     expect(res.body.detail).toContain('No file uploaded');
     expect(service.saveTemplateAsset).not.toHaveBeenCalled();
@@ -105,7 +105,7 @@ describe('document template administration routes: errors', () => {
     const { ASSET_SLOTS } = await import('../validators/documentTemplateSchema.js');
     const max = Math.max(...Object.values(ASSET_SLOTS).map(slot => slot.maxBytes));
     const res = await request(app)
-      .post(`${BASE}/t1/files/logo`)
+      .post(`${BASE}/t1/files/wordTemplate`)
       .attach('file', Buffer.alloc(max + 1024), 'big.png');
     expectProblem(res, 413, 'PAYLOAD_TOO_LARGE');
     expect(service.saveTemplateAsset).not.toHaveBeenCalled();

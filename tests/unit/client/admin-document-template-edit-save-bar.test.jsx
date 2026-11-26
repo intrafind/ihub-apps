@@ -19,17 +19,16 @@ const STORED = {
   enabled: true,
   default: false,
   brand: {},
-  fonts: [],
-  document: {},
   pdf: {},
   docx: {},
-  pptx: {}
+  pptx: {},
+  fields: {}
 };
 jest.mock('../../../client/src/api/documentTemplatesAdminApi', () => ({
   createDocumentTemplate: (...a) => mockCreate(...a),
   fetchDocumentTemplate: jest.fn(async () => ({ template: STORED, files: {} })),
-  fetchDocumentTemplateFile: jest.fn(),
   fetchDocumentTemplateSample: jest.fn(),
+  readDocumentTemplateBrand: jest.fn(),
   removeDocumentTemplateFile: jest.fn(),
   saveDocumentTemplate: (...a) => mockSave(...a),
   uploadDocumentTemplateFile: jest.fn()
@@ -44,7 +43,7 @@ jest.mock('../../../client/src/features/admin/components/AdminBreadcrumb', () =>
 jest.mock('../../../client/src/features/admin/components/document-templates/TemplateFileSlot', () =>
   stub()
 );
-jest.mock('../../../client/src/features/admin/components/document-templates/TemplateSlots', () =>
+jest.mock('../../../client/src/features/admin/components/document-templates/TemplateFields', () =>
   stub()
 );
 jest.mock('react-i18next', () => {

@@ -24,16 +24,17 @@ import { getAdminApiErrorMessage } from '../../../api/adminApi';
 /** What a template customises, as badges. */
 function templateParts(template, t) {
   const parts = [];
-  if (template.brand?.logo) parts.push(t('admin.documentTemplates.parts.logo', 'Logo'));
-  if (template.fonts?.length) parts.push(t('admin.documentTemplates.parts.fonts', 'Fonts'));
-  if (template.pdf?.letterhead) {
-    parts.push(t('admin.documentTemplates.parts.letterhead', 'Letterhead'));
-  }
   if (template.docx?.template) {
     parts.push(t('admin.documentTemplates.parts.word', 'Word template'));
   }
   if (template.pptx?.template) {
     parts.push(t('admin.documentTemplates.parts.powerpoint', 'PowerPoint template'));
+  }
+  const fieldCount = Object.keys(template.fields || {}).length;
+  if (fieldCount) {
+    parts.push(
+      t('admin.documentTemplates.parts.fields', '{{count}} fields', { count: fieldCount })
+    );
   }
   return parts;
 }
@@ -106,7 +107,7 @@ export default function AdminDocumentTemplatesPage() {
           <p className="mt-1 text-sm text-gray-600 dark:text-gray-400 max-w-3xl">
             {t(
               'admin.documentTemplates.subtitle',
-              'Your corporate design for the PDF, Word and PowerPoint files iHub creates: colours, fonts, logo, letterhead, and your own Word and PowerPoint templates. The default template applies everywhere; an app can use a template of its own.'
+              'Your corporate design for the PDF, Word and PowerPoint files iHub creates: your own Word and PowerPoint templates, the company name, the brand colours and the fields of your documents. The default template applies everywhere; an app can use a template of its own.'
             )}
           </p>
         </div>

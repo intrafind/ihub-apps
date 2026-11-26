@@ -19,16 +19,14 @@ import {
  * Positions a layout leaves to its master are resolved from the master, so
  * every placeholder has a rectangle. Layout kinds come from the layout's
  * type (`title`, `secHead`, `obj`, `twoObj`, `titleOnly`, `blank`), else from
- * its placeholders, else from its name; an admin can name the layout for a
- * kind in the document template (`pptx.layouts`).
+ * its placeholders, else from its name.
  *
  * A layout can also carry **text slots**: small text placeholders next to its
  * title that a slide fills besides its title and content — a label above the
  * title (`kicker`), an introduction under it (`lead`), the presenter on a title
- * slide. A slot is an ordinary body placeholder that the document template
- * names in `pptx.slots` (by the placeholder's name in the layout), or that
- * follows a naming convention (`Kicker`/`Eyebrow`, `Lead`/`Einleitung`). Slots
- * are not content areas. The layout of a slide with slots is the one of its
+ * slide. A slot is an ordinary body placeholder that follows a naming
+ * convention (`Kicker`/`Eyebrow`, `Lead`/`Einleitung`). Slots are not content
+ * areas. The layout of a slide with slots is the one of its
  * kind that has the most of them.
  */
 
@@ -61,9 +59,6 @@ export const CONVENTIONAL_SLOTS = Object.freeze({
     }
   }
 });
-
-/** Placeholder types a slot can be (a text placeholder). */
-const SLOT_PLACEHOLDER_TYPES = new Set(['body', 'obj', 'tx']);
 
 const KIND_BY_TYPE = {
   title: 'title',
@@ -114,39 +109,22 @@ function levelSize(listStyle, level = 1) {
 }
 
 /**
- * The slots to look for in a template: the ones the document template
- * declares (placeholder name, compared without case), and the conventional
- * ones unless the template declares a slot of that id itself.
+ * The slots to look for in a template: the conventional ones, found by the
+ * name of a body placeholder.
  *
- * @param {Object<string, { placeholder: string }>} [declared] - `pptx.slots`.
- * @returns {Array<{ id: string, explicit: boolean, matches: (name: string) => boolean }>}
+ * @returns {Array<{ id: string, matches: (name: string) => boolean }>}
  */
-function slotMatchers(declared = {}) {
-  const matchers = Object.entries(declared || {}).map(([id, slot]) => {
-    const wanted = String(slot.placeholder || '')
-      .trim()
-      .toLowerCase();
-    return {
-      id,
-      explicit: true,
-      matches: name => wanted !== '' && name.trim().toLowerCase() === wanted
-    };
-  });
-  for (const [id, { pattern }] of Object.entries(CONVENTIONAL_SLOTS)) {
-    if (declared?.[id]) continue;
-    matchers.push({ id, explicit: false, matches: name => pattern.test(name) });
-  }
-  return matchers;
+function slotMatchers() {
+  return Object.entries(CONVENTIONAL_SLOTS).map(([id, { pattern }]) => ({
+    id,
+    matches: name => pattern.test(name)
+  }));
 }
 
 /** The slot a placeholder is, by its name, or undefined. */
 function slotOf(type, name, matchers) {
-  for (const matcher of matchers) {
-    // A conventional name only counts on a body placeholder; a declared one on any text placeholder.
-    const typeFits = matcher.explicit ? SLOT_PLACEHOLDER_TYPES.has(type) : type === 'body';
-    if (typeFits && matcher.matches(name)) return matcher.id;
-  }
-  return undefined;
+  if (type !== 'body') return undefined;
+  return matchers.find(matcher => matcher.matches(name))?.id;
 }
 
 /**
@@ -193,7 +171,7 @@ function masterPlaceholderFor(master, ph) {
   return master.placeholders.find(p => p.type === kind) || null;
 }
 
-function themeOf(doc) {
+export function themeOf(doc) {
   const colors = {};
   const scheme = descendants(doc?.documentElement, 'clrScheme')[0];
   for (const child of childElements(scheme)) {
@@ -227,18 +205,79 @@ function titleSize(masterDoc) {
   return levelSize(descendants(masterDoc.documentElement, 'titleStyle')[0]) || 3200;
 }
 
+/** The slide size of a presentation part, in EMU (16:9 widescreen when it names none). */
+function slideSizeOf(presentation) {
+  const size = firstChild(presentation.documentElement, 'sldSz');
+  return {
+    cx: Number(size?.getAttribute('cx')) || 12192000,
+    cy: Number(size?.getAttribute('cy')) || 6858000
+  };
+}
+
+/**
+ * One layout of a master: its placeholders (with the rectangle and size they
+ * inherit from the master), name and type; null when its part is missing.
+ */
+async function readLayout(zip, { layoutId, rels, master, matchers }) {
+  const relId = layoutId.getAttributeNS(NS_R, 'id') || layoutId.getAttribute('r:id');
+  const rel = rels.find(r => r.id === relId);
+  if (!rel) return null;
+  const layoutPath = resolveTarget(master.path, rel.target);
+  const layoutDoc = await readXmlPart(zip, layoutPath);
+  if (!layoutDoc) return null;
+  const placeholders = placeholdersOf(layoutDoc, matchers).map(ph => {
+    const inherited = masterPlaceholderFor(master, ph);
+    return {
+      ...ph,
+      rect: ph.rect || inherited?.rect || null,
+      size: ph.size || inherited?.size
+    };
+  });
+  return {
+    path: layoutPath,
+    master,
+    name: attr(firstChild(layoutDoc.documentElement, 'cSld'), 'name') || '',
+    type: attr(layoutDoc.documentElement, 'type') || 'cust',
+    placeholders
+  };
+}
+
+/**
+ * One slide master with its theme and its layouts; null when its part is
+ * missing.
+ */
+async function readMaster(zip, { masterId, relTarget, matchers }) {
+  const path = relTarget(masterId.getAttributeNS(NS_R, 'id') || masterId.getAttribute('r:id'));
+  const doc = path ? await readXmlPart(zip, path) : null;
+  if (!doc) return null;
+  const rels = await readRels(zip, path);
+  const themeRel = rels.find(r => r.type === REL_TYPES.theme);
+  const master = {
+    path,
+    placeholders: placeholdersOf(doc, matchers),
+    theme: themeRel
+      ? themeOf(await readXmlPart(zip, resolveTarget(path, themeRel.target)))
+      : themeOf(null),
+    bodySizes: bodySizes(doc),
+    titleSize: titleSize(doc)
+  };
+  const layouts = await Promise.all(
+    descendants(doc.documentElement, 'sldLayoutId').map(layoutId =>
+      readLayout(zip, { layoutId, rels, master, matchers })
+    )
+  );
+  return { master, layouts: layouts.filter(Boolean) };
+}
+
 /**
  * Open and read a template.
  *
  * @param {Buffer|Uint8Array} buffer
- * @param {Object} [options]
- * @param {Object<string, { placeholder: string }>} [options.slots] - The slots the
- *   document template declares (`pptx.slots`).
  * @returns {Promise<Object>} `{ zip, slideSize, masters, layouts, slideIds,
  *   notesMaster }` — the package is ready to be filled.
  */
-export async function loadPresentationTemplate(buffer, { slots } = {}) {
-  const matchers = slotMatchers(slots);
+export async function loadPresentationTemplate(buffer) {
+  const matchers = slotMatchers();
   const zip = await openPackage(buffer);
   const presentation = await readXmlPart(zip, PRESENTATION);
   if (!presentation) throw new Error('The file has no presentation part.');
@@ -247,54 +286,15 @@ export async function loadPresentationTemplate(buffer, { slots } = {}) {
     const rel = presRels.find(r => r.id === id);
     return rel ? resolveTarget(PRESENTATION, rel.target) : null;
   };
-  const size = firstChild(presentation.documentElement, 'sldSz');
-  const slideSize = {
-    cx: Number(size?.getAttribute('cx')) || 12192000,
-    cy: Number(size?.getAttribute('cy')) || 6858000
-  };
-  const masters = [];
-  const layouts = [];
-  const masterIds = descendants(presentation.documentElement, 'sldMasterId');
-  for (const masterId of masterIds) {
-    const path = relTarget(masterId.getAttributeNS(NS_R, 'id') || masterId.getAttribute('r:id'));
-    const doc = path ? await readXmlPart(zip, path) : null;
-    if (!doc) continue;
-    const rels = await readRels(zip, path);
-    const themeRel = rels.find(r => r.type === REL_TYPES.theme);
-    const master = {
-      path,
-      placeholders: placeholdersOf(doc, matchers),
-      theme: themeRel
-        ? themeOf(await readXmlPart(zip, resolveTarget(path, themeRel.target)))
-        : themeOf(null),
-      bodySizes: bodySizes(doc),
-      titleSize: titleSize(doc)
-    };
-    masters.push(master);
-    for (const layoutId of descendants(doc.documentElement, 'sldLayoutId')) {
-      const relId = layoutId.getAttributeNS(NS_R, 'id') || layoutId.getAttribute('r:id');
-      const rel = rels.find(r => r.id === relId);
-      if (!rel) continue;
-      const layoutPath = resolveTarget(path, rel.target);
-      const layoutDoc = await readXmlPart(zip, layoutPath);
-      if (!layoutDoc) continue;
-      const placeholders = placeholdersOf(layoutDoc, matchers).map(ph => {
-        const inherited = masterPlaceholderFor(master, ph);
-        return {
-          ...ph,
-          rect: ph.rect || inherited?.rect || null,
-          size: ph.size || inherited?.size
-        };
-      });
-      layouts.push({
-        path: layoutPath,
-        master,
-        name: attr(firstChild(layoutDoc.documentElement, 'cSld'), 'name') || '',
-        type: attr(layoutDoc.documentElement, 'type') || 'cust',
-        placeholders
-      });
-    }
-  }
+  const slideSize = slideSizeOf(presentation);
+  const read = await Promise.all(
+    descendants(presentation.documentElement, 'sldMasterId').map(masterId =>
+      readMaster(zip, { masterId, relTarget, matchers })
+    )
+  );
+  const found = read.filter(Boolean);
+  const masters = found.map(entry => entry.master);
+  const layouts = found.flatMap(entry => entry.layouts);
   if (!layouts.length) throw new Error('The template has no slide layouts.');
   const notesRel = presRels.find(r => r.type === REL_TYPES.notesMaster);
   return {
@@ -362,29 +362,27 @@ export function layoutKind(layout) {
   return kindFromPlaceholders(layout) || kindFromName(layout);
 }
 
+/** The layouts that can serve a kind of slide: by type, else by placeholders, else by name. */
+function layoutsOfKind(layouts, kind) {
+  return [
+    ...layouts.filter(l => KIND_BY_TYPE[l.type] === kind),
+    ...layouts.filter(l => KIND_BY_TYPE[l.type] === undefined && kindFromPlaceholders(l) === kind),
+    ...layouts.filter(l => kindFromName(l) === kind)
+  ];
+}
+
 /**
  * The layout for each kind of slide, with fallbacks.
  *
  * @param {Array} layouts - From {@link loadPresentationTemplate}.
- * @param {Object} [overrides] - Layout names by kind (`pptx.layouts`).
  * @returns {Object<string, Object>} Kind → layout.
  */
-export function chooseLayouts(layouts, overrides = {}) {
+export function chooseLayouts(layouts) {
   const chosen = {};
-  for (const [kind, name] of Object.entries(overrides || {})) {
-    const layout = layouts.find(l => l.name.toLowerCase() === String(name).toLowerCase());
-    if (layout) chosen[kind] = layout;
-  }
   // A layout with a kicker or lead placeholder is for the slides that have one:
   // the plain layouts of a kind come first.
   const candidates = kind => {
-    const all = [
-      ...layouts.filter(l => KIND_BY_TYPE[l.type] === kind),
-      ...layouts.filter(
-        l => KIND_BY_TYPE[l.type] === undefined && kindFromPlaceholders(l) === kind
-      ),
-      ...layouts.filter(l => kindFromName(l) === kind)
-    ];
+    const all = layoutsOfKind(layouts, kind);
     return [...all.filter(l => !hasTextSlots(l)), ...all.filter(hasTextSlots)];
   };
   for (const kind of ['title', 'section', 'content', 'twoColumn', 'titleOnly', 'blank']) {
@@ -416,7 +414,8 @@ export function chooseLayouts(layouts, overrides = {}) {
  */
 export function chooseLayoutForSlots(layouts, kind, base, slotIds) {
   if (!slotIds.length) return base;
-  const candidates = [base, ...layouts.filter(l => l !== base && layoutKind(l) === kind)];
+  // The same rules as for the layout of the kind, so a layout chosen by its name is a candidate too.
+  const candidates = [...new Set([base, ...layoutsOfKind(layouts, kind)])];
   let best = null;
   for (const layout of candidates) {
     const ids = layoutSlotIds(layout);
@@ -492,8 +491,8 @@ function describeLayout(layout, template) {
     });
 }
 
-/** The slots of a template: the declared ones and the ones layouts have by convention. */
-function summarizeSlots(layouts, declared = {}) {
+/** The slots of a template: the ones its layouts have by convention. */
+function summarizeSlots(layouts) {
   const found = new Map();
   for (const layout of layouts) {
     for (const id of layoutSlotIds(layout)) {
@@ -502,137 +501,12 @@ function summarizeSlots(layouts, declared = {}) {
       found.set(id, entry);
     }
   }
-  const ids = new Set([...Object.keys(declared || {}), ...found.keys()]);
-  return [...ids].map(id => {
-    const config = declared?.[id];
-    const conventional = CONVENTIONAL_SLOTS[id];
-    return {
-      id,
-      source: config ? 'config' : 'convention',
-      placeholder: config?.placeholder || null,
-      description: config?.description || conventional?.description || {},
-      ifMissing: config?.ifMissing || conventional?.ifMissing || 'drop',
-      layouts: found.get(id) || []
-    };
-  });
-}
-
-/**
- * Words PowerPoint puts into the names of placeholders nobody named: a name
- * made of these says nothing about what belongs in the placeholder.
- */
-const GENERIC_NAME_WORDS = new Set([
-  'content',
-  'text',
-  'body',
-  'object',
-  'inhalt',
-  'inhalts',
-  'objekt',
-  'contenu',
-  'texte',
-  'platzhalter',
-  'placeholder',
-  'textplatzhalter',
-  'inhaltsplatzhalter',
-  'objektplatzhalter',
-  'textfeld',
-  'espace',
-  'reserve',
-  'left',
-  'right',
-  'links',
-  'rechts',
-  'top',
-  'bottom',
-  'oben',
-  'unten',
-  'de',
-  'du',
-  'and',
-  'und'
-]);
-
-function isGenericName(name) {
-  const words = String(name || '')
-    .toLowerCase()
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .replace(/[^a-z\s]/g, ' ')
-    .split(/\s+/)
-    .filter(Boolean);
-  return words.every(word => GENERIC_NAME_WORDS.has(word));
-}
-
-/** A slot id from a placeholder name: "Kicker (Label above the title)" → `kicker`, "Referent/in" → `referentIn`. */
-function slotIdFromName(name) {
-  const words = String(name || '')
-    .replace(/\s*[([].*$/, '')
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .replace(/ß/g, 'ss')
-    .split(/[^A-Za-z0-9]+/)
-    .filter(Boolean);
-  const id = words
-    .map((word, i) =>
-      i ? word[0].toUpperCase() + word.slice(1).toLowerCase() : word.toLowerCase()
-    )
-    .join('');
-  const clean = /^[a-z]/.test(id) ? id : `slot${id}`;
-  return clean.slice(0, 32);
-}
-
-/** The tallest a text placeholder is to count as a slot rather than a content area (inches). */
-const SLOT_MAX_HEIGHT = 1.3;
-
-/**
- * Text placeholders that look like slots a template author meant, though no
- * slot is declared for them: named by hand (not "Content Placeholder 3"),
- * small (a label or a sentence, not a content area) and not the subtitle of a
- * title or section slide. Suggestions only: the admin decides which become
- * slots.
- *
- * @param {Array} layouts - Described layouts (`kind`, `name`, `elements`).
- * @param {Set<string>} taken - Slot ids already in use.
- * @returns {Array<{ id: string, placeholder: string, prompt: string, position: string, capacity: Object, layouts: Array<{ name: string, kind: string }> }>}
- */
-function suggestSlots(layouts, taken) {
-  const byName = new Map();
-  for (const layout of layouts) {
-    const texts = layout.elements.filter(
-      e => e.role === 'content' && ['body', 'obj', 'tx'].includes(e.type)
-    );
-    // On a title or section slide the text placeholder under the title is its subtitle.
-    const headline = layout.kind === 'title' || layout.kind === 'section';
-    const hasSubtitle = layout.elements.some(e => e.role === 'subtitle');
-    const subtitle =
-      headline && !hasSubtitle
-        ? [...texts].sort((a, b) => a.left - b.left || a.top - b.top)[0]
-        : null;
-    for (const element of texts) {
-      if (element === subtitle || element.height > SLOT_MAX_HEIGHT) continue;
-      if (!element.name || isGenericName(element.name)) continue;
-      const key = element.name.trim().toLowerCase();
-      const entry = byName.get(key) || { element, layouts: [] };
-      entry.layouts.push({ name: layout.name, kind: layout.kind });
-      byName.set(key, entry);
-    }
-  }
-  const used = new Set(taken);
-  return [...byName.values()].map(({ element, layouts: where }) => {
-    const base = slotIdFromName(element.name) || 'slot';
-    let id = base;
-    for (let n = 2; used.has(id); n += 1) id = `${base.slice(0, 29)}${n}`;
-    used.add(id);
-    return {
-      id,
-      placeholder: element.name,
-      prompt: element.prompt || '',
-      position: element.position,
-      capacity: element.capacity,
-      layouts: where
-    };
-  });
+  return [...found.keys()].map(id => ({
+    id,
+    description: CONVENTIONAL_SLOTS[id]?.description || {},
+    ifMissing: CONVENTIONAL_SLOTS[id]?.ifMissing || 'drop',
+    layouts: found.get(id)
+  }));
 }
 
 /**
@@ -640,14 +514,11 @@ function suggestSlots(layouts, taken) {
  * its layouts, the one chosen for each kind of slide, and its text slots.
  *
  * @param {Buffer} buffer
- * @param {Object} [overrides]
- * @param {Object} [options]
- * @param {Object} [options.slots] - The slots the document template declares (`pptx.slots`).
  * @returns {Promise<Object>}
  */
-export async function analyzePowerpointTemplate(buffer, overrides, { slots } = {}) {
-  const template = await loadPresentationTemplate(buffer, { slots });
-  const chosen = chooseLayouts(template.layouts, overrides);
+export async function analyzePowerpointTemplate(buffer) {
+  const template = await loadPresentationTemplate(buffer);
+  const chosen = chooseLayouts(template.layouts);
   const ratio = template.slideSize.cx / template.slideSize.cy;
   const theme = template.masters[0]?.theme || { colors: {}, fonts: {} };
   const layouts = template.layouts.map(layout => ({
@@ -657,7 +528,7 @@ export async function analyzePowerpointTemplate(buffer, overrides, { slots } = {
     placeholders: layout.placeholders.map(ph => ph.type),
     elements: describeLayout(layout, template)
   }));
-  const slotSummary = summarizeSlots(template.layouts, slots);
+  const slotSummary = summarizeSlots(template.layouts);
   return {
     slideSize: {
       width: Math.round((template.slideSize.cx / 914400) * 100) / 100,
@@ -674,11 +545,6 @@ export async function analyzePowerpointTemplate(buffer, overrides, { slots } = {
       Object.entries(chosen).map(([kind, layout]) => [kind, layout.name])
     ),
     slots: slotSummary,
-    // Placeholders that look like slots but are not declared: for the admin to adopt.
-    suggestedSlots: suggestSlots(
-      layouts,
-      new Set([...slotSummary.map(slot => slot.id), ...Object.keys(CONVENTIONAL_SLOTS)])
-    ),
     theme: { colors: theme.colors, fonts: theme.fonts },
     hasNotesMaster: Boolean(template.notesMaster)
   };

@@ -437,6 +437,18 @@ function saturation(hex) {
   return d === 0 ? 0 : d / (1 - Math.abs(2 * l - 1));
 }
 
+/**
+ * Whether a theme colour is a real colour and not a grey, so it makes a good
+ * highlight, primary or chart colour.
+ *
+ * @param {string} value - A hex colour, with or without `#`.
+ * @returns {boolean}
+ */
+export function isColourfulAccent(value) {
+  const hex = cleanHex(value);
+  return Boolean(hex) && saturation(hex) >= NEUTRAL_SATURATION;
+}
+
 /** WCAG contrast ratio of two hex colours. */
 function contrast(a, b) {
   const [light, dark] = [luminance(a), luminance(b)].sort((x, y) => y - x);
@@ -458,10 +470,7 @@ export function metricCardStyle(colors = {}) {
   const fill = lt2 && luminance(lt2) > 0.8 ? lt2 : METRIC_FALLBACK_FILL;
   const dk2 = cleanHex(colors.dk2);
   const text = dk2 && contrast(dk2, fill) >= 4.5 ? dk2 : METRIC_FALLBACK_TEXT;
-  const role =
-    ACCENT_ROLES.find(
-      name => cleanHex(colors[name]) && saturation(cleanHex(colors[name])) >= NEUTRAL_SATURATION
-    ) || 'accent1';
+  const role = ACCENT_ROLES.find(name => isColourfulAccent(colors[name])) || 'accent1';
   const accentHex = cleanHex(colors[role]);
   const readable = accentHex && contrast(accentHex, fill) >= 4.5;
   return {
