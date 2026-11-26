@@ -226,7 +226,10 @@ export default async function searchWithExtraction({
       : undefined;
   const extras = {
     ...(filters ? { filters } : {}),
-    ...(note ? { note } : {})
+    ...(note ? { note } : {}),
+    // Titles, descriptions and pages are the sites' own words: said once for the whole search,
+    // with or without content extraction, and not at all when nothing was found.
+    ...(results.length ? { sourceNotice: PAGE_SOURCE_NOTICE } : {})
   };
 
   if (!extractContent) {
@@ -319,8 +322,6 @@ export default async function searchWithExtraction({
     query,
     results,
     extractedContent,
-    // Titles, descriptions and pages are the sites' own words: said once for the whole search.
-    ...(results.length ? { sourceNotice: PAGE_SOURCE_NOTICE } : {}),
     summary: `Found ${results.length} results for "${query}". Extracted content from ${successCount} of ${resultsToProcess.length} pages.${blockedNote}`,
     stats: {
       totalSearchResults: results.length,

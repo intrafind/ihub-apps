@@ -240,6 +240,16 @@ describe('extractHtmlPage', () => {
       assert.match(markdown, /```\nif \(x\) \{\n {4}run\(a, {4}b\);\n\}\n```/);
     });
 
+    it('keeps the layout of code in a blockquote and in a nested list', () => {
+      const quoted = page('<blockquote><pre><code>x = 1\n    y = "a  b"</code></pre></blockquote>');
+      assert.match(quoted, /^> {5}y = "a {2}b"$/m);
+      const nested = page(
+        '<ul><li>Step<ul><li>Run<pre><code>cmd  --flag   x\n  more</code></pre></li></ul></li></ul>'
+      );
+      assert.match(nested, /^ {4}cmd {2}--flag {3}x$/m);
+      assert.match(nested, /^ {6}more$/m);
+    });
+
     it('keeps zero-width joiners that scripts need', () => {
       const markdown = page('<p>\u0645\u06cc\u200c\u062e\u0648\u0627\u0647\u0645</p>');
       assert.match(markdown, /\u200c/);
@@ -623,6 +633,12 @@ describe('search result shape and filters', () => {
         };
       }
     }
+    class EmptyProvider extends FakeProvider {
+      async search() {
+        return { results: [] };
+      }
+    }
+    webSearchService.registerProvider(new EmptyProvider('empty'));
     webSearchService.registerProvider(new FakeProvider('plain'));
     webSearchService.registerProvider(
       new FakeProvider('native', { freshness: true, domains: true })
@@ -630,6 +646,27 @@ describe('search result shape and filters', () => {
 
     beforeEach(() => {
       calls.length = 0;
+    });
+
+    it('says once that titles and descriptions are the sites’ own words, with or without extraction', async () => {
+      const { PAGE_SOURCE_NOTICE } = await import('../services/pageReader/sourceNotice.js');
+      const withoutExtraction = await searchWithExtraction({
+        query: 'release notes',
+        provider: 'plain',
+        component: 'Test'
+      });
+      assert.equal(withoutExtraction.sourceNotice, PAGE_SOURCE_NOTICE);
+      assert.equal(withoutExtraction.results.length, 3);
+    });
+
+    it('leaves the notice out when nothing was found', async () => {
+      const result = await searchWithExtraction({
+        query: 'release notes',
+        provider: 'empty',
+        component: 'Test'
+      });
+      assert.equal(result.results.length, 0);
+      assert.equal('sourceNotice' in result, false);
     });
 
     it('falls back to site: and post-filtering for a provider without the filters', async () => {

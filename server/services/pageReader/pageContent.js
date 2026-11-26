@@ -277,7 +277,12 @@ const UNICODE_SPACES = /[\u00A0\u1680\u2000-\u200A\u202F\u205F\u3000]/g;
 /** Characters that render as nothing: soft hyphen, zero-width space, word joiner, BOM. */
 const INVISIBLE = /[\u00AD\u200B\u2060\uFEFF]/g;
 
-const FENCE = /^ {0,3}(`{3,}|~{3,})/;
+/**
+ * A fence line: Turndown writes fenced code only, so any line that starts with three backticks or
+ * tildes after its container prefix (blockquote markers `>`, list indentation) opens or closes a
+ * code block, however deeply the block is nested.
+ */
+const FENCE = /^[ \t>]*(`{3,}|~{3,})/;
 
 /**
  * Tidy converted Markdown so a page does not spend the model's budget on
