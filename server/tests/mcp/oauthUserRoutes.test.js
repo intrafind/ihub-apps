@@ -85,7 +85,11 @@ const sdk = {
   selectResourceURL: jest.fn()
 };
 
-jest.unstable_mockModule('@modelcontextprotocol/sdk/client/auth.js', () => ({
+// The SDK's auth helpers are stubbed; the rest of the client package stays real
+// (loaded before the mock is registered, see the note below).
+const actualMcpClient = await import('@modelcontextprotocol/client');
+jest.unstable_mockModule('@modelcontextprotocol/client', () => ({
+  ...actualMcpClient,
   ...sdk,
   UnauthorizedError: FakeUnauthorizedError
 }));

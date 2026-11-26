@@ -39,7 +39,7 @@
  * @module services/mcp/McpUserOAuthProvider
  */
 import crypto from 'node:crypto';
-import { UnauthorizedError } from '@modelcontextprotocol/sdk/client/auth.js';
+import { UnauthorizedError } from '@modelcontextprotocol/client';
 import credentialService from '../CredentialService.js';
 import { safeFetch } from './safeFetch.js';
 import {
@@ -351,6 +351,10 @@ export class McpUserOAuthProvider {
     if (Number.isFinite(payload.expires_in)) tokens.expires_in = payload.expires_in;
     if (typeof payload.scope === 'string') tokens.scope = payload.scope;
     if (typeof payload.id_token === 'string') tokens.id_token = payload.id_token;
+    // The authorization server the tokens were issued by, as the SDK stamped
+    // it when they were saved: handing it back lets the SDK check the tokens
+    // belong to the server it is talking to (SEP-2352).
+    if (typeof payload.issuer === 'string') tokens.issuer = payload.issuer;
     return tokens;
   }
 

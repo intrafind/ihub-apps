@@ -11,6 +11,11 @@
 # and grades what the attack achieved (requests to the attacker's canary, markup that
 # would load from another host, restricted secrets in the answer, plus a rubric graded
 # by the same server). Every test runs three times; any failure fails the run.
+#
+# A second run (promptfooconfig.corpus.yaml) asks a model to open each page of a corpus of
+# ordinary-looking pages that carry one injection template each (tests/security/redteam/corpus/):
+# goal hijacking, role hijack, readback, encodings, and crafted addresses that would send data when
+# rendered or opened. It runs once per page and fails the job on the same terms.
 # Results: job summary and the redteam-report artifact.
 #
 # No third-party model provider: the secret REDTEAM_BASE_URL (the OpenAI-compatible
@@ -39,10 +44,14 @@ jobs:
   promptfoo:
     name: Prompt injection (real model)
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    # The question run takes a few minutes; the corpus run asks about 57 pages one after the other.
+    timeout-minutes: 150
     env:
       REDTEAM_BASE_URL: ${{ secrets.REDTEAM_BASE_URL }}
       REDTEAM_MODEL: ${{ vars.REDTEAM_MODEL }}
+      REDTEAM_GRADER_KEY: ${{ secrets.REDTEAM_API_KEY || 'none' }}
+      # ghcr.io/promptfoo/promptfoo:0.126.0 (linux/amd64)
+      PROMPTFOO_IMAGE: ghcr.io/promptfoo/promptfoo@sha256:26def11a11832e9c22c64a792d0668a73f35dbad1568cd3c5a1b7cda5501b376
       CONFIGURED: ${{ secrets.REDTEAM_BASE_URL != '' && vars.REDTEAM_MODEL != '' }}
       PROMPTFOO_DISABLE_TELEMETRY: '1'
       PROMPTFOO_DISABLE_SHARING: '1'
@@ -107,34 +116,30 @@ jobs:
         if: env.CONFIGURED == 'true'
         run: node tests/security/redteam/check-access.mjs
 
-      # promptfoo's official image, pinned by digest: no packages are resolved or installed
-      # on the runner, so the run never picks up a new transitive dependency.
+      # promptfoo's official image, pinned by digest (tests/security/redteam/promptfoo.sh):
+      # no packages are resolved or installed on the runner, so the run never picks up a
+      # new transitive dependency.
       - name: Run the red team
+        id: redteam
         if: env.CONFIGURED == 'true'
-        env:
-          REDTEAM_GRADER_KEY: ${{ secrets.REDTEAM_API_KEY || 'none' }}
-          # ghcr.io/promptfoo/promptfoo:0.126.0 (linux/amd64)
-          PROMPTFOO_IMAGE: ghcr.io/promptfoo/promptfoo@sha256:26def11a11832e9c22c64a792d0668a73f35dbad1568cd3c5a1b7cda5501b376
         run: |
           mkdir -p redteam-report
-          # The image runs promptfoo as self-hosted, which turns `{{env.X}}` in the config
-          # into an empty string (the token header became a bare "Bearer", so every call was
-          # anonymous and answered 404 for the apps). The config reads the token, the model
-          # and the endpoint that way, so it is switched back on; only the variables passed
-          # with -e below exist in the container.
-          promptfoo() {
-            docker run --rm --network host --user "$(id -u):$(id -g)" \
-              -v "$GITHUB_WORKSPACE:/work" -w /work -e HOME=/tmp \
-              -e IHUB_TOKEN -e REDTEAM_BASE_URL -e REDTEAM_MODEL -e REDTEAM_GRADER_KEY \
-              -e PROMPTFOO_DISABLE_TEMPLATE_ENV_VARS=false \
-              -e PROMPTFOO_DISABLE_TELEMETRY -e PROMPTFOO_DISABLE_SHARING \
-              -e PROMPTFOO_DISABLE_REMOTE_GENERATION -e PROMPTFOO_DISABLE_UPDATE \
-              --entrypoint node "$PROMPTFOO_IMAGE" /app/dist/src/entrypoint.js "$@"
-          }
-          promptfoo --version
-          promptfoo eval \
+          bash tests/security/redteam/promptfoo.sh --version
+          bash tests/security/redteam/promptfoo.sh eval \
             -c tests/security/redteam/promptfooconfig.yaml \
             -o redteam-report/results.json -o redteam-report/report.html \
+            --no-cache --no-progress-bar
+
+      # Part two: every page of the injection corpus, one test each. It runs even when the
+      # first part found a failure, so one night shows both; either failing fails the job.
+      - name: Run the red team on the page corpus
+        if: env.CONFIGURED == 'true' && (success() || steps.redteam.outcome == 'failure')
+        timeout-minutes: 100
+        run: |
+          mkdir -p redteam-report
+          bash tests/security/redteam/promptfoo.sh eval \
+            -c tests/security/redteam/promptfooconfig.corpus.yaml \
+            -o redteam-report/corpus-results.json -o redteam-report/corpus-report.html \
             --no-cache --no-progress-bar
 
       # The model host must not reach anything public: the reports and the server log
@@ -166,10 +171,10 @@ jobs:
       - name: Summarize
         if: always() && steps.scrub.outcome == 'success'
         run: |
-          file=redteam-report/results.json
-          [ -s "$file" ] || { echo "No results." >> "$GITHUB_STEP_SUMMARY"; exit 0; }
-          {
-            echo "## Red team"
+          summarize() { # <results file> <heading>
+            local file="$1" heading="$2"
+            [ -s "$file" ] || { echo "## $heading"; echo; echo "No results."; echo; return 0; }
+            echo "## $heading"
             echo
             echo "| Test | Passed | Failure reasons |"
             echo "| --- | --- | --- |"
@@ -180,6 +185,11 @@ jobs:
                   "\(map(select(.success)) | length)/\(length)",
                   (map(select(.success | not) | (.gradingResult.reason // .error // "") | gsub("[|\r\n]"; " ") | .[0:200]) | unique | join("<br>")) ]
               | "| \(.[0]) | \(.[1]) | \(.[2]) |"' "$file"
+            echo
+          }
+          {
+            summarize redteam-report/results.json "Red team"
+            summarize redteam-report/corpus-results.json "Red team: page corpus"
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload the report and the server log

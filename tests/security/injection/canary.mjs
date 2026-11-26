@@ -19,7 +19,10 @@
  * canary's allowlist entry does not also open the iHub API to the page reader.
  *
  * `GET /__control/log` (either listener) returns `{ items }`, every request so
- * far; `POST /__control/reset` empties it. Control requests are not recorded.
+ * far; `POST /__control/reset` empties it; `POST /__control/drain` returns `{ items }` and
+ * empties the log in one step, so a request that arrives while a check is under way is
+ * either in its answer or left for the next one, never erased between a read and a reset.
+ * Control requests are not recorded.
  */
 
 import http from 'node:http';
@@ -102,6 +105,9 @@ export async function startCanary({ port, pages = {} }) {
       log.length = 0;
       res.writeHead(204);
       return res.end();
+    }
+    if (url.pathname === '/__control/drain') {
+      return json(res, 200, { items: log.splice(0) });
     }
     const body = await readBody(req);
     let rpc = null;
