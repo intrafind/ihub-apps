@@ -53,6 +53,20 @@ for the models you added from that region.
 - A region on the provider that is not an AWS region stops the sync with a message instead of
   reading another region.
 
+## Chat: A Message That Is Too Large Says So
+
+When a message with its attachments is refused for its size, the chat now says who refused it and
+what to do, instead of "Request failed with status code 413" or "Payload Too Large".
+
+- A reverse proxy in front of iHub refused it (nginx allows only 1 MB per request unless
+  `client_max_body_size` is raised): the chat asks the user to remove or shrink an attachment and
+  names the proxy's request limit as the thing to tell the administrator if small files fail too.
+- iHub refused it (`requestBodyLimitMB` in `platform.json`): the chat says the message is larger
+  than iHub accepts.
+- A document that a proxy refused while it was saved to the chat shows "Too large for the
+  connection to iHub" instead of the general "Could not be saved", and is still sent with the
+  message.
+
 ## Use a Generated File in Another App, or Keep It in a Project
 
 A file the assistant generated in a chat, such as a summary, a report or a spreadsheet, can now be

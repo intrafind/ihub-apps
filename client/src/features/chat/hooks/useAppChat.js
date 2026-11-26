@@ -107,6 +107,22 @@ const CHAT_REFUSAL_MESSAGES = {
 };
 
 /**
+ * What the chat says when the message with its attachments was refused for its size, by who
+ * refused it (`requestTooLargeBy`). The attachments are what makes a message large, and the
+ * user can remove or shrink them; only a proxy's limit is the administrator's to change.
+ */
+const REQUEST_TOO_LARGE_MESSAGES = {
+  proxy: [
+    'error.requestTooLargeProxy',
+    'Your message with its attachments was too large and was refused before it reached iHub. Remove or shrink an attachment and try again. If this happens with small files, tell your administrator: the reverse proxy in front of iHub limits the size of a request.'
+  ],
+  server: [
+    'error.requestTooLargeServer',
+    'Your message with its attachments is larger than iHub accepts. Remove or shrink an attachment and try again.'
+  ]
+};
+
+/**
  * High level hook combining chat message management with streaming
  * communication for both chat and canvas pages.
  *
@@ -481,6 +497,9 @@ function useAppChat({
           // A refusal of the chat itself, not of this message: the server's
           // English reason would tell the user nothing they can act on.
           const [key, fallback] = CHAT_REFUSAL_MESSAGES[error.code];
+          errorMessage = t(key, fallback);
+        } else if (REQUEST_TOO_LARGE_MESSAGES[error.requestTooLarge]) {
+          const [key, fallback] = REQUEST_TOO_LARGE_MESSAGES[error.requestTooLarge];
           errorMessage = t(key, fallback);
         } else {
           // Use the userFriendlyMessage from the enhanced error, or fall back to a generic message

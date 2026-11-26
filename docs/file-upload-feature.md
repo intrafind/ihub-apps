@@ -386,6 +386,8 @@ With `storageMode: client_text_only` all file processing happens **client-side**
 
 **The request body.** What is sent in a chat request must fit `requestBodyLimitMB` in `platform.json` (default: 50 MB): images, audio and videos sent as they are, and extracted audio sent to a multimodal model, all as base64. That does not limit the video itself, which is never uploaded, nor audio that an app [transcribes](voice-transcription.md) in the browser (only the text is sent). Raise the limit of a type beyond that only where it does not apply.
 
+**A reverse proxy in front of iHub has its own limit** that is checked first. nginx refuses anything above 1 MB (`client_max_body_size`) with an HTML `413` page, which is why images (sent as base64 inside the chat request, and unresized for PNG screenshots or with `resizeImages: false`) fail behind an untuned nginx while short texts pass. Raise it to at least `requestBodyLimitMB`; see [Request Body Size](production-reverse-proxy-guide.md#request-body-size).
+
 ## Example Configurations
 
 ### Full-featured (all upload types)

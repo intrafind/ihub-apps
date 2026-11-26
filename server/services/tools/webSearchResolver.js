@@ -101,7 +101,7 @@ function engineSearchTool(engine, tools) {
  * `provider` is `app.websearch.provider`:
  *
  * - `auto` (or unset): the first engine that is enabled and that the user's
- *   groups grant, in the order Brave, Staan, Qwant, then every other
+ *   groups grant, in the order Brave, Staan, then every other
  *   installation of type `web-search` by id (`sortWebSearchEngines`);
  * - an installation id: that engine, and nothing when it is missing, disabled
  *   or not granted to the user. It never falls back to another engine, so an
@@ -118,8 +118,8 @@ function engineSearchTool(engine, tools) {
  *   engine whose search action an admin switched off
  * @returns {Object|null} The engine installation, or null
  * @example
- * // brave disabled, staan not granted to the user, qwant enabled and granted
- * resolveWebSearchEngine('auto', { user })?.id;  // → 'qwant'
+ * // brave disabled, staan enabled and granted
+ * resolveWebSearchEngine('auto', { user })?.id;  // → 'staan'
  * resolveWebSearchEngine('brave', { user });     // → null (no fallback)
  */
 export function resolveWebSearchEngine(provider = AUTO_ENGINE, { user, tools } = {}) {
@@ -179,7 +179,7 @@ export async function resolveWebSearchEngineToolId(
  * Whether web search can work for an app, as the chat's model picker needs to
  * know it: which providers run it natively (when the app allows native
  * search), and whether the app's engine is available to the user and has
- * what it needs to answer (Brave and Staan need a key; Qwant needs none). A
+ * what it needs to answer (Brave and Staan need a key). A
  * model supports web search in the app when it is on one of the native
  * providers, or when it can call tools and an engine works.
  *
@@ -263,13 +263,13 @@ export function resolveAppNativeWebSearch(app, modelProvider, websearchEnabled, 
  * Clone an engine's search tool definition with an app's `websearch`
  * parameter defaults applied (never mutates the cached definition).
  *
- * Each engine's tool declares its own bounds — Qwant returns at most 10
- * results per search where Brave allows 20 — so an admin value is clamped to
+ * Each engine's tool declares its own bounds (the most results per search
+ * differ between engines), so an admin value is clamped to
  * what the chosen tool accepts instead of being written through verbatim and
  * failing schema validation at call time. A parameter the engine does not
  * declare (a third-party engine without `extractContent`) is left alone.
  *
- * @param {Object} toolDef - The engine's search tool (braveSearch, staanSearch, qwantSearch, …)
+ * @param {Object} toolDef - The engine's search tool (braveSearch, staanSearch, …)
  * @param {Object} [websearch] - app.websearch config
  * @returns {Object} tool definition ready to offer to the model
  */
@@ -315,7 +315,7 @@ function clampToSchema(value, schema) {
  */
 export async function resolveNativeWebSearchFallbackTools(directive, { app, language, user } = {}) {
   // With an app in hand, fall back to the engine that app is configured for —
-  // an app set to Qwant should not silently answer from Brave just because
+  // an app set to Staan should not silently answer from Brave just because
   // the model turned native search down.
   const provider = app?.websearch
     ? app.websearch.provider

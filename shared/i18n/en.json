@@ -30,6 +30,7 @@
       "chatQuota": "This chat has no room for more saved files; the file is sent with the message only",
       "storageQuota": "Your file storage is full; the file is sent with the message only",
       "fileTooLarge": "Too large to save; the file is sent with the message only",
+      "proxyBodyLimit": "Too large for the connection to iHub, so it was not saved to the chat; the file is sent with the message only",
       "unsupportedType": "This file type cannot be saved to the chat; the file is sent with the message only",
       "unreadable": "The server could not read this file, so it was not saved to the chat; the file is sent with the message only",
       "scanRejected": "Rejected by the security scan, so it was not saved to the chat; the file is sent with the message only",
@@ -3408,7 +3409,7 @@
         },
         "WebSearch": {
           "name": "Web Search",
-          "description": "Web search requests to Brave, Staan, Qwant and other search engines"
+          "description": "Web search requests to Brave, Staan and other search engines"
         },
         "McpClientManager": {
           "name": "MCP Clients",
@@ -3966,7 +3967,7 @@
         "websearchEnabled": "Enable Web Search",
         "websearchProvider": "Search engine",
         "websearchProviderAuto": "Auto",
-        "websearchProviderDesc": "Models with native search (Google, OpenAI, Anthropic) search themselves when Use Native Search is on; no engine is needed for that. On other models the app uses this engine. Auto takes the first engine the user may use: Brave, Staan, Qwant, then any other engine.",
+        "websearchProviderDesc": "Models with native search (Google, OpenAI, Anthropic) search themselves when Use Native Search is on; no engine is needed for that. On other models the app uses this engine. Auto takes the first engine the user may use: Brave, Staan, then any other engine.",
         "websearchEngineDisabledOption": "{{name}} — disabled",
         "websearchEngineMissingOption": "{{name}} — not installed",
         "websearchEngineMissing": "The engine \"{{engine}}\" is not installed. The app searches natively where the model can and not at all on other models. Install it under Integrations or pick Auto.",
@@ -5281,7 +5282,6 @@
         },
         "secretSet": "set",
         "secretNotSet": "not set",
-        "noKeyNeeded": "no key needed",
         "yes": "yes",
         "no": "no",
         "directoryType": "Directory type",
@@ -5343,12 +5343,11 @@
         },
         "webSearch": {
           "engineSection": "Search engine",
-          "engineSectionHelp": "Apps with web search on use this engine when they name it, or on Auto when it is the first engine a user may use (Brave, Staan, Qwant, then any other engine). Models with native search do not need an engine.",
+          "engineSectionHelp": "Apps with web search on use this engine when they name it, or on Auto when it is the first engine a user may use (Brave, Staan, then any other engine). Models with native search do not need an engine.",
           "apiKey": "API key",
           "apiKeyHelp": "A credential of type secret holding the {{engine}} API key. Add one under Admin → Integrations → Credentials.",
           "envFallback": "Without a credential, the server uses the environment variable {{env}} when it is set. A picked credential always wins.",
           "noKeyNeeded": "{{engine}} needs no API key.",
-          "egressHint": "Qwant blocks many data-centre IP addresses. Run Test connection to see whether it answers this server.",
           "testResults": "Search engine test",
           "testHelp": "The test checks the API key of the values above (unsaved) and runs one live search from this server."
         },
@@ -10209,6 +10208,8 @@
     "chatStorageUnavailable": "Chats cannot be stored right now, so this message was not sent. Please try again later or contact your administrator.",
     "clientHistoryNotAllowed": "This page is out of date. Reload it to continue the chat.",
     "guestCookieMissing": "This chat cannot be continued because your browser does not keep cookies for this site. Allow cookies for this site to continue chats here.",
+    "requestTooLargeProxy": "Your message with its attachments was too large and was refused before it reached iHub. Remove or shrink an attachment and try again. If this happens with small files, tell your administrator: the reverse proxy in front of iHub limits the size of a request.",
+    "requestTooLargeServer": "Your message with its attachments is larger than iHub accepts. Remove or shrink an attachment and try again.",
     "sessionExpiredReconnecting": "Session expired. Reconnecting to authentication provider...",
     "chunkLoadTitle": "Page failed to load",
     "chunkLoadDescription": "A required resource could not be loaded. This may be due to a network issue or an application update.",

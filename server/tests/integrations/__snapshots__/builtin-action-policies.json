@@ -155,12 +155,6 @@
       "dataFlow": "internal"
     }
   },
-  "com.intrafind/qwant-search": {
-    "search": {
-      "sideEffect": "read",
-      "dataFlow": "external"
-    }
-  },
   "com.intrafind/staan-search": {
     "search": {
       "sideEffect": "read",

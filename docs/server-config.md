@@ -254,7 +254,7 @@ When enabled, the proxy configuration applies to:
 - **LLM Providers**: OpenAI, Anthropic, Google, Mistral, custom endpoints
 - **Authentication**: OIDC, OAuth2, Azure AD, LDAP
 - **Integrations**: Jira, Microsoft Graph (Entra ID)
-- **Tools**: Web search (Brave, Staan, Qwant), web content extraction
+- **Tools**: Web search (Brave, Staan), web content extraction
 - **Sources**: External URL sources, iFinder integrations
 
 ### Troubleshooting

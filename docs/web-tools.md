@@ -13,7 +13,7 @@ This document describes the web tools available in the iHub Apps platform for se
 
 iHub Apps provides a unified web search system that automatically selects the best search provider based on the active model. Web search is configured per-app through the `websearch` configuration object rather than through individual tool IDs.
 
-Each search engine is an integration of its own, of type `web-search`, installed under **Admin → Integrations** (group **Web search**, see [Integrations](integrations.md)): **Brave Search** (`com.intrafind/brave-search`, installation `brave`), **Staan** (`com.intrafind/staan-search`, `staan`) and **Qwant** (`com.intrafind/qwant-search`, `qwant`). An engine installation holds what that engine needs (Brave and Staan: the API key); a third party can ship its own engine (see [Writing your own engine](#writing-your-own-engine)). Apps switch web search on in their own settings and pick an engine or **Auto**.
+Each search engine is an integration of its own, of type `web-search`, installed under **Admin → Integrations** (group **Web search**, see [Integrations](integrations.md)): **Brave Search** (`com.intrafind/brave-search`, installation `brave`) and **Staan** (`com.intrafind/staan-search`, `staan`). An engine installation holds what that engine needs (Brave and Staan: the API key); a third party can ship its own engine (see [Writing your own engine](#writing-your-own-engine)). Apps switch web search on in their own settings and pick an engine or **Auto**.
 
 **No engine is needed for native search.** A fresh install ships no engine: an app with web search on searches with the model's own search on Google, OpenAI Responses and Anthropic models, and gets no web search on other models until an engine is installed. The page reader `read_url` belongs to the web search feature, not to an engine.
 
@@ -26,7 +26,6 @@ Each search engine is an integration of its own, of type `web-search`, installed
 | **Anthropic Web Search** | Native (Claude models) | Web-augmented responses with inline citations |
 | **Brave Search** | Engine (installation `brave`) | Privacy-focused search, any model (needs an API key) |
 | **Staan Search** | Engine (installation `staan`) | European search index, any model, works from cloud hosting (needs an API key) |
-| **Qwant Search** | Engine (installation `qwant`) | Privacy-focused search, any model, **no API key required** |
 | Your own | Engine (any `web-search` installation) | A `script` or `openapi` definition of type `web-search` |
 
 ### Additional Web Tools
@@ -66,7 +65,7 @@ Add a `websearch` object to your app configuration:
 | Property | Type | Default | Description |
 |----------|------|---------|-------------|
 | `enabled` | Boolean | `false` | Enable web search for this app |
-| `provider` | String | `"auto"` | Engine used when native search does not apply: `"auto"` or the id of an engine installation (`"brave"`, `"staan"`, `"qwant"`, a third-party engine's id). `"auto"` takes the first engine that is enabled and that the user's groups grant, in the order Brave, Staan, Qwant, then any other engine by id. A named engine that is missing, disabled or not granted means no tool-based search (native search still works); it never falls back to another engine |
+| `provider` | String | `"auto"` | Engine used when native search does not apply: `"auto"` or the id of an engine installation (`"brave"`, `"staan"`, a third-party engine's id). `"auto"` takes the first engine that is enabled and that the user's groups grant, in the order Brave, Staan, then any other engine by id. A named engine that is missing, disabled or not granted means no tool-based search (native search still works); it never falls back to another engine |
 | `required` | Boolean | `false` | Hide the app while its engine is not available: on `"auto"` while no engine is installed and enabled, on a named engine while that one is missing or disabled. Off, the app stays available and searches natively where the model can |
 | `useNativeSearch` | Boolean | `true` | Prefer native search (Google Search for Gemini, OpenAI Web Search for GPT, Anthropic Web Search for Claude) when available |
 | `maxResults` | Number | `5` | Maximum number of search results (1-20) |
@@ -100,8 +99,8 @@ The system automatically selects the best search tool at runtime based on the mo
 │  Otherwise → the engine of `provider`:           │
 │    "auto"  → the first engine that is enabled    │
 │              and granted to the user: Brave,     │
-│              Staan, Qwant, then any other        │
-│              engine by id                        │
+│              Staan, then any other engine by id  │
+│                                                  │
 │    an id   → that engine, if it is installed,    │
 │              enabled and granted                 │
 │    none    → no web search on this model         │
@@ -225,7 +224,7 @@ replaces the built-in text (up to 4,000 characters).
 
 How much the model can act on it depends on the search path:
 
-- **Engines (Brave, Staan, Qwant, your own)**: each search is a tool call, so several searches
+- **Engines (Brave, Staan, your own)**: each search is a tool call, so several searches
   show up as several tool calls in the turn.
 - **OpenAI and Anthropic native search**: the provider runs the searches; the model can search
   several times per model call (Anthropic up to `maxSearches`).
@@ -290,7 +289,7 @@ ordinary link. How the links get into the answer depends on the search path:
 
 | Path | Citations come from |
 |------|---------------------|
-| Brave, Staan, Qwant, your own engine | The model, which the source guidance (below) asks to cite with `[n](url)` links |
+| Brave, Staan, your own engine | The model, which the source guidance (below) asks to cite with `[n](url)` links |
 | Anthropic | Claude's `citations`: a marker follows each cited text block. Uncited search results are listed under *Also considered*, the `cited_text` on the card |
 | Google | The grounding supports: markers go after the passage each one backs. A grounding chunk no support rests on is listed under *Also considered* |
 | OpenAI Responses | The links OpenAI writes into the text. A `url_citation` annotation whose range does not link its source gets a marker after the range. Streamed annotations and `web_search_call` items are read into the same grounding metadata as the other providers |
@@ -375,8 +374,9 @@ Migration V204 makes every engine its own installation and removes
 - `brave` is installed where a Brave key was configured (the credential
   `websearch` referenced, which moves to the engine's **API key** field, or
   `BRAVE_SEARCH_API_KEY`); `staan` likewise (`STAAN_API_KEY`)
-- `qwant` is installed where Qwant was reachable: the default engine was
-  `auto` without any key, or `qwant`, or an app named `qwant`
+- `qwant` was installed where Qwant was reachable: the default engine was
+  `auto` without any key, or `qwant`, or an app named `qwant` (the Qwant
+  engine no longer exists; migration V264 removes it, see below)
 - each engine takes over the enabled state of `websearch`; an engine or page
   reader action `websearch` had switched off stays off (the page reader
   through `contents/tools/read_url.json` with `enabled: false`)
@@ -387,9 +387,16 @@ Migration V204 makes every engine its own installation and removes
   removed
 - a fresh install gets no engine
 
+Migration V264 removes the Qwant engine, which was blocked from most
+data-centre IP addresses: the `qwant` installation is deleted, apps with
+`websearch.provider: "qwant"` are set to `auto`, and grants of `qwant` (or
+`com.intrafind/qwant-search`) are dropped from the groups. Nothing replaces it —
+install Brave Search or Staan under **Admin → Integrations**; until then an app
+searches only on models with native search.
+
 No manual action is required — the migrations run automatically. Check the
-server log for the `V204` lines: they name each engine installed or not, and
-why.
+server log for the `V204` and `V264` lines: they name each engine installed or
+removed, and why.
 
 ## Answer Source Attribution
 
@@ -425,9 +432,7 @@ shows no chip.
 
 ### API Key Setup
 
-Brave Search and Staan Search each require an API key. **Qwant requires none**
-and works as soon as its engine is installed (from a host Qwant accepts, see
-below). The keys belong to the engine installations — there is no web search
+Brave Search and Staan Search each require an API key. The keys belong to the engine installations — there is no web search
 category under **Admin → Providers**, and the keys are not in `providers.json`.
 
 #### Installation and Credentials (Recommended)
@@ -462,7 +467,7 @@ The environment variable applies when the engine installation references no cred
 ### Search Language
 
 Every engine searches in **the user's language**. It is resolved once, the same
-way for all three:
+way for both:
 
 1. The language of the request — the chat/app language, which comes from the
    client's explicit choice and otherwise from the browser's `Accept-Language`.
@@ -477,7 +482,6 @@ falls back to its own default only when the engine does not serve that language:
 |----------|-------|---------------|
 | Brave | `search_lang` (ISO 639-1) and `country` (2-letter), when the language is one Brave lists | no language parameters — an untargeted search |
 | Staan | `market` (`de-de`, `en-gb`, …) | `en-us` |
-| Qwant | `locale` (`de_DE`, `en_GB`, …) | `en_US` |
 
 Step 2 is what makes a German install behave correctly in the places where no
 user language exists — a workflow or agent run, which has no browser request
@@ -496,15 +500,13 @@ A model can still override the language for one search by passing the tool's
 ### Connectivity Test (Admin UI)
 
 Whether a search provider *can be reached from this server* is a separate
-question from whether it is configured correctly, and for Qwant it is the one
-that usually decides the outcome. The **Test** button of an engine
+question from whether it is configured correctly. The **Test** button of an engine
 installation — on its tile under **Admin → Integrations**, on its page and in
 its editor (with the values as entered, unsaved) — answers it directly. It
 reports two steps:
 
 - **API key**: where the key comes from (the credential, or the environment
-  variable), a referenced credential that is empty, or that there is none
-  (Qwant needs none).
+  variable), a referenced credential that is empty, or that there is none.
 - **Search with …**: one live search with that engine and that key. An engine
   without a key fails before it searches.
 
@@ -516,29 +518,19 @@ do next, with remediation hints:
 |--------|-------|-----------|
 | **OK** | The engine answered with results | Nothing — search works from this server |
 | **Warning** | It answered, but returned nothing, or rate-limited the request | Try again later, or retest |
-| **Blocked** | Bot protection (DataDome) refused this server's IP | Change egress, or use Brave or Staan — see below |
 | **Failed** | No API key, a rejected key, or the request never arrived | Fix the credential, or check proxy/TLS settings |
-
-A **Blocked** result is deliberately not a configuration problem. It means the
-request reached Qwant and Qwant declined to answer *this IP address*; no setting
-on the engine will change that, and retrying will not either. The hints
-point at the egress IP and the outbound proxy's exit address, because that is
-the variable in play.
 
 The same check is available without the UI:
 
 ```bash
-node tests/manual/manual-test-qwant-search.js "your query" [--language=de]
 node tests/manual/manual-test-staan-search.js "your query" [--language=de] [--max-results=20]
 ```
 
-All three engines also accept an endpoint override, which is only needed to
+Both engines also accept an endpoint override, which is only needed to
 point at a different host:
 
 ```env
 BRAVE_SEARCH_ENDPOINT=https://api.search.brave.com/res/v1/web/search
-QWANT_SEARCH_ENDPOINT=https://api.qwant.com/v3/search/
-QWANT_SEARCH_USER_AGENT=          # override the browser UA Qwant is sent
 STAAN_SEARCH_ENDPOINT=https://api.staan.ai/v2/search/web
 WEB_READER_USER_AGENT=            # override the browser UA the page reader sends
 ```
@@ -566,11 +558,10 @@ The billable search count (`server_tool_use.web_search_requests`) is recorded as
 
 ## Tools Reference
 
-The three search tools are the **Search the web** action (`search`) of their
-engine installations, not tool files: `braveSearch` (`brave`), `staanSearch`
-(`staan`) and `qwantSearch` (`qwant`) keep their ids, but there is no
-`contents/tools/braveSearch.json` (or `staanSearch.json`, `qwantSearch.json`)
-any more. They are switched
+The two search tools are the **Search the web** action (`search`) of their
+engine installations, not tool files: `braveSearch` (`brave`) and `staanSearch`
+(`staan`) keep their ids, but there is no `contents/tools/braveSearch.json`
+(or `staanSearch.json`) any more. They are switched
 on and off, and restricted to groups, on their engine under **Admin →
 Integrations → Web search**. Their throttling is unchanged (Brave: one request
 at a time, 1100 ms apart). The page reader `read_url` is a platform tool of the
@@ -594,51 +585,16 @@ web search feature, read from `server/defaults/tools/read_url.json` (see
 
 **Returns**: Search results with title, URL, description and hostname, plus the page's date (`publishedDate` from Brave's `page_age`, and Brave's `age` label), extra snippets (on plans that include them) and the site's favicon; optionally extracted page content. See [Result Shape and Filters](#result-shape-and-filters).
 
-### Qwant Search (`qwantSearch`)
-
-**Purpose**: Search the web using Qwant for up-to-date information, without an API key or an account.
-
-Qwant is the keyless counterpart to `braveSearch`. It returns the same result
-shape, so an app can switch `websearch.provider` between the two without the
-model seeing a different contract. Like `braveSearch`, it is injected from the
-app's `websearch` config.
-
-**Parameters**:
-
-- `query` (string, required): Search query
-- `extractContent` (boolean, optional): Extract full content from top results (default: configured by app)
-- `maxResults` (number, optional): Maximum results to return (default: configured by app, max: 10 — one Qwant web request pages in tens)
-- `contentMaxLength` (number, optional): Maximum content length per page (default: configured by app)
-- `focus` (string, optional): The question being researched. With `extractContent`, a result page longer than `contentMaxLength` contributes the sections that answer it, verbatim, instead of its first `contentMaxLength` characters — see [Focused reading](#focused-reading-focus)
-- `language` (string, optional): Language or locale for the results, e.g. `en`, `de`, `de-CH` (default: `en_US`)
-- `freshness` (string, optional): Only results from the last `day`, `week`, `month` or `year`. Qwant has no such parameter: dated results outside the window are dropped, undated ones kept, and the result says so
-- `includeDomains` (string[], optional): Only results from these domains (max 10; sent as `site:` operators in the query)
-
-**Returns**: Search results with title, URL, description, hostname and an optional `publishedDate`, and optionally extracted page content.
-
-> [!WARNING]
-> **Egress IP matters.** Qwant fronts its API with DataDome, which answers
-> requests from data-centre IP ranges with a captcha instead of results. On a
-> cloud VM or behind a hosting-network egress proxy, `qwantSearch` fails with
-> `QWANT_CAPTCHA` however it is configured — that is a property of where the
-> server runs, not of the setup. Check it before enabling Qwant with the
-> [connectivity test](#connectivity-test-admin-ui) in the admin UI, and use
-> Brave Search where Qwant is blocked.
-
 ### Staan Search (`staanSearch`)
 
 **Purpose**: Search the web using [Staan](https://docs.staan.ai/docs/web-search) for up-to-date information.
 
 Staan is the second keyed engine alongside `braveSearch`. It returns the same
-result shape as the other two, so an app can switch `websearch.provider`
-between them without the model seeing a different contract, and like them it is
-injected from the app's `websearch` config. Two things set it apart:
-
-- It answers requests from data-centre IP ranges, so it works on the cloud
-  hosting where Qwant is blocked.
-- It takes **domain scoping** as a request parameter (`include_domains` /
-  `exclude_domains`); the others restrict domains through `site:` in the query,
-  and only Staan can exclude them.
+result shape, so an app can switch `websearch.provider` between them without
+the model seeing a different contract, and like Brave it is injected from the
+app's `websearch` config. It takes **domain scoping** as a request parameter
+(`include_domains` / `exclude_domains`); Brave restricts domains through
+`site:` in the query, and only Staan can exclude them.
 
 **Parameters**:
 
@@ -926,32 +882,23 @@ The page reader includes protection against Server-Side Request Forgery (SSRF):
      pick it in the **API key** field of the `brave` engine (Admin → Integrations → Web search →
      Brave Search) (recommended)
    - Or set the `BRAVE_SEARCH_API_KEY` environment variable and restart the server
-   - Or install Qwant, which needs no key, and switch the app to it (`websearch.provider:
-     "qwant"`), or uninstall or disable Brave so that `"auto"` takes the next engine
+   - Or switch the app to Staan (`websearch.provider: "staan"`), or uninstall or disable
+     Brave so that `"auto"` takes the next engine
 
-2. **Qwant search fails with `QWANT_CAPTCHA`**
-   - Qwant's API is behind DataDome, which challenges data-centre IP ranges —
-     so this is about where the server sends its traffic from, not how it is
-     configured, and no retry or setting will clear it
-   - Confirm it for the host with **Test** on the `qwant` engine
-     (Admin → Integrations), or `node tests/manual/manual-test-qwant-search.js`
-   - Route outbound search traffic through an egress IP Qwant accepts, or
-     configure Brave or Staan Search for that install
-
-3. **"Failed to extract content"**
+2. **"Failed to extract content"**
    - Check if the URL is accessible
    - Some websites may block automated requests
    - Try with a different URL to test functionality
 
-4. **"Request timeout"**
+3. **"Request timeout"**
    - The webpage is taking too long to load
    - Consider increasing timeout or trying a different URL
 
-5. **Web search not working after upgrade**
+4. **Web search not working after upgrade**
    - Migration V025 automatically converts old tool-based configs to the new `websearch` format
    - Migrations V195 and V204 move the Brave and Staan keys from **Admin → Providers** into the
      credentials `integration-websearch-brave` / `integration-websearch-staan` and install one
-     engine per key (and Qwant where it was reachable); check under **Admin → Integrations → Web
+     engine per key; check under **Admin → Integrations → Web
      search** that the app's engine exists and is enabled, and that one of the user's groups
      grants it (**Admin → Groups → Integrations**). Without an engine the app searches only on
      models with native search

@@ -251,13 +251,13 @@ const BRAVE_DETAIL = engineDetail('brave', 'Brave Search', { apiKeyRef: 'brave-k
     title: { en: 'API key' }
   }
 ]);
-const QWANT_DETAIL = engineDetail('qwant', 'Qwant', {}, []);
+const KEYLESS_ENGINE_DETAIL = engineDetail('staan', 'Staan', {}, []);
 
 const DETAILS = {
   ifinder: IFINDER_DETAIL,
   govdata: CKAN_DETAIL,
   brave: BRAVE_DETAIL,
-  qwant: QWANT_DETAIL
+  staan: KEYLESS_ENGINE_DETAIL
 };
 
 const APPS = [
