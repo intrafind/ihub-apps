@@ -8768,6 +8768,8 @@
         "keysMatch": "Passed: the detector recognised the active key {{keyId}} ({{n}} tokens scored).",
         "retiredKey": "Failed: the text matches the retired key {{keyId}}. vLLM still runs the old key. Update vLLM with the current option and run the test again.",
         "notFound": "Failed: no key of this installation was found in the sample text. vLLM probably runs another key or no --watermark-config. Update vLLM with the current option and run the test again.",
+        "notFoundModel": "Failed: the model image's detector found no watermark in the sample text. The image probably runs without a key file, or detects with another key than it generated with. Check the image's watermark configuration and run the test again.",
+        "notFoundGateway": "Failed: the iFinder Model Gateway found no watermark in the sample text. The model image probably runs without a key file, or none of the gateway's detectors knows its key. Check the image's watermark configuration and the gateway's detectors, then run the test again.",
         "tooShort": "Inconclusive: the sample text was too short ({{n}} tokens scored). Run the test again.",
         "unreachable": "Failed: the detector could not be reached or rejected the request. Use \"Test connection\" for details.",
         "notApplied": "Failed: the model did not apply the watermark to the sample ({{reason}}).",

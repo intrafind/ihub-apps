@@ -411,6 +411,24 @@ describe('WatermarkKeysCard', () => {
     expect(onChanged).toHaveBeenCalled();
     expect(screen.getByText('Uses about 400 tokens.')).toBeInTheDocument();
   });
+
+  test.each([
+    ['ihub', /vLLM probably runs another key or no --watermark-config/],
+    ['model', /model image's detector found no watermark/],
+    ['gateway', /iFinder Model Gateway found no watermark/]
+  ])('self-test: "no watermark found" names the cause for a %s detector', async (api, text) => {
+    mockApi.fetchWatermarkDetectors.mockResolvedValue({
+      items: [
+        { modelId: 'vl', detectorApi: api, detectorUrl: 'https://det.example', urlPolicyOk: true }
+      ]
+    });
+    mockApi.runWatermarkSelfTest.mockResolvedValue({ ok: false, diagnosis: 'no_watermark_found' });
+    renderInRouter(<WatermarkKeysCard statusModels={[]} />);
+    await screen.findByText('https://det.example');
+    fireEvent.click(screen.getByRole('button', { name: /Run self-test/ }));
+    expect(await screen.findByText(text)).toBeInTheDocument();
+    if (api !== 'ihub') expect(screen.queryByText(/--watermark-config/)).not.toBeInTheDocument();
+  });
 });
 
 describe('AcknowledgementsCard', () => {

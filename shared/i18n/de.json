@@ -9268,6 +9268,8 @@
         "keysMatch": "Bestanden: Der Detektor hat den aktiven Schlüssel {{keyId}} erkannt ({{n}} Tokens bewertet).",
         "retiredKey": "Fehlgeschlagen: Der Text passt zum ausgemusterten Schlüssel {{keyId}}. vLLM läuft noch mit dem alten Schlüssel. Aktualisieren Sie vLLM mit der aktuellen Option und führen Sie den Test erneut aus.",
         "notFound": "Fehlgeschlagen: Im Beispieltext wurde kein Schlüssel dieser Installation gefunden. vLLM läuft wahrscheinlich mit einem anderen Schlüssel oder ohne --watermark-config. Aktualisieren Sie vLLM mit der aktuellen Option und führen Sie den Test erneut aus.",
+        "notFoundModel": "Fehlgeschlagen: Der Detektor des Modell-Images hat im Beispieltext kein Wasserzeichen gefunden. Vermutlich läuft das Image ohne Schlüsseldatei oder erkennt mit einem anderen Schlüssel als dem, mit dem es erzeugt hat. Prüfen Sie die Wasserzeichen-Konfiguration des Images und führen Sie den Test erneut aus.",
+        "notFoundGateway": "Fehlgeschlagen: Das iFinder Model Gateway hat im Beispieltext kein Wasserzeichen gefunden. Vermutlich läuft das Modell-Image ohne Schlüsseldatei, oder keiner der Detektoren des Gateways kennt seinen Schlüssel. Prüfen Sie die Wasserzeichen-Konfiguration des Images und die Detektoren des Gateways und führen Sie den Test erneut aus.",
         "tooShort": "Nicht eindeutig: Der Beispieltext war zu kurz ({{n}} Tokens bewertet). Führen Sie den Test erneut aus.",
         "unreachable": "Fehlgeschlagen: Der Detektor war nicht erreichbar oder hat die Anfrage abgelehnt. Details zeigt „Verbindung testen“.",
         "notApplied": "Fehlgeschlagen: Das Modell hat das Wasserzeichen im Beispiel nicht angewendet ({{reason}}).",

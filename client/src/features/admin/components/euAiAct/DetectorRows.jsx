@@ -38,8 +38,28 @@ function credentialLabel(t, detector) {
   return t('admin.euAiAct.detector.credentialNone', 'None');
 }
 
+/** "No watermark found" for keys the model image holds: no iHub key or vLLM option involved. */
+function notFoundText(t, detectorApi) {
+  if (detectorApi === 'gateway') {
+    return t(
+      'admin.euAiAct.selfTest.notFoundGateway',
+      "Failed: the iFinder Model Gateway found no watermark in the sample text. The model image probably runs without a key file, or none of the gateway's detectors knows its key. Check the image's watermark configuration and the gateway's detectors, then run the test again."
+    );
+  }
+  if (detectorApi === 'model') {
+    return t(
+      'admin.euAiAct.selfTest.notFoundModel',
+      "Failed: the model image's detector found no watermark in the sample text. The image probably runs without a key file, or detects with another key than it generated with. Check the image's watermark configuration and run the test again."
+    );
+  }
+  return t(
+    'admin.euAiAct.selfTest.notFound',
+    'Failed: no key of this installation was found in the sample text. vLLM probably runs another key or no --watermark-config. Update vLLM with the current option and run the test again.'
+  );
+}
+
 /** Self-test diagnosis (server-side step 4) -> level and sentence. Never over-claims. */
-function describeSelfTest(result, t) {
+function describeSelfTest(result, t, detectorApi) {
   const n = result.scoredTokens ?? 0;
   switch (result.diagnosis) {
     case 'keys_match':
@@ -70,13 +90,7 @@ function describeSelfTest(result, t) {
         )
       };
     case 'no_watermark_found':
-      return {
-        level: 'error',
-        text: t(
-          'admin.euAiAct.selfTest.notFound',
-          'Failed: no key of this installation was found in the sample text. vLLM probably runs another key or no --watermark-config. Update vLLM with the current option and run the test again.'
-        )
-      };
+      return { level: 'error', text: notFoundText(t, detectorApi) };
     case 'too_short':
       return {
         level: 'warn',
@@ -222,7 +236,11 @@ function DetectorRow({ detector, modelStatus, onChanged }) {
           type="button"
           disabled={Boolean(busy) || paused}
           aria-busy={busy === 'selfTest'}
-          onClick={() => run('selfTest', runWatermarkSelfTest, describeSelfTest)}
+          onClick={() =>
+            run('selfTest', runWatermarkSelfTest, (result, tr) =>
+              describeSelfTest(result, tr, detector.detectorApi)
+            )
+          }
           className={BUTTON_SECONDARY}
         >
           <Icon
