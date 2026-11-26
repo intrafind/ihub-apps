@@ -101,8 +101,8 @@ export function copyTargetProjects(projects) {
  *   memberCount?: number}|null|undefined} project
  * @returns {{kind: 'everyone'|'catalog'|'members'|'private', count: number}}
  *   `everyone`: shared with everyone signed in; `catalog`: published, so everyone
- *   signed in can read it; `members`: shared with `count` members; `private`: only
- *   the caller.
+ *   signed in can read it; `members`: shared with `count` members, each a user or
+ *   a whole group; `private`: only the caller.
  */
 export function projectAudienceOf(project) {
   const count = memberCountOf(project);
@@ -127,7 +127,10 @@ export function projectAudienceLabel(project, t) {
     case 'catalog':
       return t('projects.import.audience.catalog', 'Everyone signed in (published in the catalog)');
     case 'members':
-      return t('projects.import.audience.members', '{{count}} members', { count });
+      // A member is a user or a whole group: the count is of grants, not people.
+      return t('projects.import.audience.members', 'Shared with {{count}} people or groups', {
+        count
+      });
     default:
       return t('projects.import.audience.private', 'Only you');
   }

@@ -65,7 +65,8 @@ export function problemDetailOf(error) {
  * @param {(content: string, isError?: boolean) => void} options.addSystemMessage
  * @param {{enabled: boolean, ephemeral?: boolean}} options.serverFiles - Whether the chat keeps
  *   files on the server (`useChatFilePreUpload().enabled`), and whether it is temporary.
- * @param {() => void} [options.onDone] - Called once a run ended (attached or not).
+ * @param {(result: {attached: boolean}) => void} [options.onDone] - Called once a run ended,
+ *   with whether the file was attached.
  * @returns {void}
  */
 export default function useSourceFileAttachment({
@@ -113,6 +114,10 @@ export default function useSourceFileAttachment({
 
     const run = async () => {
       const live = liveRef.current;
+      // One registration per run: an earlier run that is still waiting must not
+      // clear the busy state of a newer one when it ends.
+      const busyId = `${BUSY_ID}:${key}`;
+      let attached = false;
       const { attachment } = live.pending;
       const uploader = live.fileUploadHandler;
       const startedChatId = live.chatId;
@@ -138,7 +143,7 @@ export default function useSourceFileAttachment({
       };
 
       try {
-        uploader.setAttachmentProcessing?.(BUSY_ID, true);
+        uploader.setAttachmentProcessing?.(busyId, true);
         placeholder = {
           type: 'document',
           source: attachment.source.kind,
@@ -149,17 +154,20 @@ export default function useSourceFileAttachment({
         };
         uploader.setSelectedFile(placeholder);
 
+        // Whichever way the file is copied, the chat's model has to take documents
+        // (a transcription model takes audio only: the message would never send).
+        if (!modelTakesFileKind('document', live.currentModel)) {
+          uploader.clearSelectedFile();
+          say(
+            live.t(
+              'useInApp.attach.modelCannot',
+              'The file could not be attached: the selected model cannot take this kind of file.'
+            )
+          );
+          return undefined;
+        }
+
         if (fromArtifact && !live.serverFiles?.enabled) {
-          if (!modelTakesFileKind('document', live.currentModel)) {
-            uploader.clearSelectedFile();
-            say(
-              live.t(
-                'useInApp.attach.modelCannot',
-                'The file could not be attached: the selected model cannot take this kind of file.'
-              )
-            );
-            return;
-          }
           // By the chat it lives in, or by the share it was opened through.
           const { chatId: sourceChatId, shareId, artifactId } = attachment.source.ref;
           const blob = shareId
@@ -171,6 +179,7 @@ export default function useSourceFileAttachment({
           const processed = await processCloudFile(file, uploadConfig);
           if (stale()) return dropPlaceholder();
           uploader.setSelectedFile({ ...processed, source: attachment.source.kind });
+          attached = true;
           return undefined;
         }
 
@@ -215,6 +224,7 @@ export default function useSourceFileAttachment({
             descriptor
           )
         );
+        attached = true;
         return undefined;
       } catch (error) {
         console.error('Failed to attach the handed-over file:', error);
@@ -230,8 +240,8 @@ export default function useSourceFileAttachment({
         );
         return undefined;
       } finally {
-        uploader.setAttachmentProcessing?.(BUSY_ID, false);
-        if (!stale()) liveRef.current.onDone?.();
+        uploader.setAttachmentProcessing?.(busyId, false);
+        if (!stale()) liveRef.current.onDone?.({ attached });
       }
     };
 

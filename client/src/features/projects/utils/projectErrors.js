@@ -204,6 +204,11 @@ export function projectErrorMessage(error, t) {
       return t('projects.errors.invalidRef', 'The item could not be added: {{message}}', {
         message
       });
+    case 'DOWNLOAD_NOT_SAVED':
+      return t(
+        'projects.errors.downloadNotSaved',
+        'The file arrived, but the browser did not save it. Please try again.'
+      );
     default:
       return message || t('projects.errors.generic', 'Something went wrong. Please try again.');
   }

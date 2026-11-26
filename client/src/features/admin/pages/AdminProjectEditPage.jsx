@@ -290,7 +290,14 @@ function AdminProjectEditPageContent({ id }) {
     try {
       await saveItemOriginal(fetchAdminProjectItemOriginal, id, item);
     } catch (err) {
-      setDownloadError(adminErrorMessage(err));
+      setDownloadError(
+        err?.code === 'DOWNLOAD_NOT_SAVED'
+          ? t(
+              'projects.errors.downloadNotSaved',
+              'The file arrived, but the browser did not save it. Please try again.'
+            )
+          : adminErrorMessage(err)
+      );
     } finally {
       setBusyItemId(null);
     }

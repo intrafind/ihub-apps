@@ -13132,7 +13132,8 @@
       "ifinderWritePartial": "iFinder reported an error after part of the change went through: {{done}} done, {{not}} not. Reload the collection and try again.",
       "ifinderWriteNone": "iFinder reported an error and nothing was changed. Try again in a moment.",
       "ifinderWriteUnknown": "iFinder did not answer, so it is not known whether the change went through. Reload the collection to see.",
-      "kindNotAllowed": "A smart collection from iFinder holds iFinder documents only."
+      "kindNotAllowed": "A smart collection from iFinder holds iFinder documents only.",
+      "downloadNotSaved": "The file arrived, but the browser did not save it. Please try again."
     },
     "form": {
       "description": "Description",
@@ -13556,10 +13557,11 @@
       "audience": {
         "everyone": "Everyone signed in",
         "catalog": "Everyone signed in (published in the catalog)",
-        "members_one": "{{count}} member",
-        "members_other": "{{count}} members",
+        "members_one": "Shared with {{count}} person or group",
+        "members_other": "Shared with {{count}} people or groups",
         "private": "Only you"
-      }
+      },
+      "doneTitle": "Copied to project"
     }
   },
   "integrationScopes": {

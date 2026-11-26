@@ -19,9 +19,11 @@ import { filenameFromContentDisposition, saveBlobAs } from '../../../utils/exter
  *   contentDisposition: string|null}>} fetchOriginal
  * @param {string} projectId
  * @param {{id: string, name?: string, original?: {name?: string}}} item
- * @returns {Promise<boolean>} Whether the browser took the download.
+ * @returns {Promise<true>} Resolves once the browser took the download.
+ * @throws {Error} The request's error, or one saying the browser did not save the file.
  */
 export async function saveItemOriginal(fetchOriginal, projectId, item) {
+  let saved;
   try {
     const { blob, contentDisposition } = await fetchOriginal(projectId, item.id);
     const name =
@@ -29,7 +31,7 @@ export async function saveItemOriginal(fetchOriginal, projectId, item) {
       item.original?.name ||
       item.name ||
       'download';
-    return saveBlobAs(blob, name);
+    saved = saveBlobAs(blob, name);
   } catch (error) {
     const response = error?.response;
     if (typeof Blob !== 'undefined' && response?.data instanceof Blob) {
@@ -41,4 +43,12 @@ export async function saveItemOriginal(fetchOriginal, projectId, item) {
     }
     throw error;
   }
+  if (saved === false) {
+    // The file arrived but the browser could not be handed it (no object URLs, a
+    // blocked download): an error the pages show, not a silent success.
+    throw Object.assign(new Error('The browser could not save the file.'), {
+      code: 'DOWNLOAD_NOT_SAVED'
+    });
+  }
+  return true;
 }

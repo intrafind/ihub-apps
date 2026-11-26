@@ -5,7 +5,6 @@ import { Suspense, useCallback, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import lazyWithRetry from '../../../utils/lazyWithRetry';
 import { useProjectsAvailability } from '../../projects/hooks/useProjects';
-import ProjectImportToast from '../../projects/components/ProjectImportToast';
 import { canCopyArtifactToProject } from '../../projects/utils/projectImport';
 import { openAppWithAttachment } from '../openAppWithAttachment';
 import { artifactDisplayName } from '../utils/artifactFiles';
@@ -25,14 +24,14 @@ const CopyToProjectDialog = lazyWithRetry(
 /**
  * "Use in app…" and "Copy to project…" for the generated files of one chat
  * (the owner's chat page) or one share (a shared chat, a shared file): the
- * handlers the workspace pane and the cards call, and the dialogs and the toast
+ * handlers the workspace pane and the cards call, and the dialogs
  * they open. Every page that shows artifacts mounts the same flow through it.
  *
  * - **Use in app**: never for pictures or ZIP archives (`canUseArtifactInApp`); the app picker; the chosen app opens a new chat with a copy
  *   of the file attached (`openAppWithAttachment`). `onUseInCurrentApp` lets the
  *   page that *is* that app start the new chat itself.
- * - **Copy to project**: the project dialog, then a toast with how many documents
- *   were added, what was skipped and why, and a link to the project. Offered only
+ * - **Copy to project**: the project dialog, which then says how many documents
+ *   were added, what was skipped and why, and links to the project. Offered only
  *   where user projects are on, never for pictures.
  *
  * @param {Object} options
@@ -46,7 +45,7 @@ const CopyToProjectDialog = lazyWithRetry(
  *   onCopyToProject: ((artifact: Object) => void)|null,
  *   menuItems: (artifact: Object, t: Function) => Array<Object>, elements: JSX.Element}}
  *   `menuItems` are ⋯ items (`PaneHeader`'s `MenuAction`) for a viewer outside a workspace
- *   pane (a shared file page); `elements` are the dialogs and the toast, to render once.
+ *   pane (a shared file page); `elements` are the dialogs, to render once.
  *
  * @example
  * const reuse = useArtifactReuse({ owner: { chatId }, enabled: !embedded });
@@ -63,7 +62,6 @@ export default function useArtifactReuse({
   const { userProjectsEnabled } = useProjectsAvailability();
   const [attachment, setAttachment] = useState(null);
   const [copyTarget, setCopyTarget] = useState(null);
-  const [imported, setImported] = useState(null);
   const chatId = owner?.chatId || null;
   const shareId = owner?.shareId || null;
   const active = Boolean(enabled && (chatId || shareId));
@@ -152,19 +150,8 @@ export default function useArtifactReuse({
             source={copyTarget.source}
             fileName={copyTarget.name}
             onClose={() => setCopyTarget(null)}
-            onCopied={outcome => {
-              setCopyTarget(null);
-              setImported(outcome);
-            }}
           />
         </Suspense>
-      )}
-      {imported && (
-        <ProjectImportToast
-          project={imported.project}
-          summary={imported.summary}
-          onClose={() => setImported(null)}
-        />
       )}
     </>
   );

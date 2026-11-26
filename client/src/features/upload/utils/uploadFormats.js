@@ -155,19 +155,23 @@ function listAccepts(formats, type, { allowTextWildcard = false } = {}) {
   });
 }
 
-/** The formats of one upload category, or its defaults. */
+/**
+ * The formats of one upload category, or its defaults when it lists none. As in
+ * the composer (`createUploadConfig`): only a missing list takes the defaults;
+ * an empty list (`[]`) takes no format.
+ */
 function formatsOf(category, defaults) {
-  return Array.isArray(category?.supportedFormats) && category.supportedFormats.length > 0
-    ? category.supportedFormats
-    : defaults;
+  return Array.isArray(category?.supportedFormats) ? category.supportedFormats : defaults;
 }
 
 /**
  * Whether an app's upload settings take a file of this type, the way the
- * composer's local upload does: uploads not switched off for the app, the
- * matching category (`imageUpload`, `audioUpload`, `videoUpload`, `fileUpload`)
- * switched on explicitly, and the type in its `supportedFormats` (or the
- * defaults above). `fileUpload.supportedFormats` may hold `text/*`.
+ * composer's local upload does (`createUploadConfig`): uploads not switched off
+ * for the app, local upload on (at least one category switched on explicitly),
+ * the matching category on — `imageUpload`, `audioUpload`, `videoUpload`
+ * explicitly, `fileUpload` unless explicitly off — and the type in its
+ * `supportedFormats` (or the defaults above when it lists none).
+ * `fileUpload.supportedFormats` may hold `text/*`.
  *
  * @param {Object|null|undefined} app - An app as `GET /api/apps` lists it (with `upload`).
  * @param {{mimeType?: string, name?: string}} file
@@ -199,8 +203,13 @@ export function appUploadAccepts(app, file) {
       listAccepts(formatsOf(upload.videoUpload, DEFAULT_VIDEO_FORMATS), type)
     );
   }
+  // Documents: on unless switched off, once the composer offers a local upload at all.
+  const localUpload = ['imageUpload', 'audioUpload', 'videoUpload', 'fileUpload'].some(
+    category => upload[category]?.enabled === true
+  );
   return (
-    upload.fileUpload?.enabled === true &&
+    localUpload &&
+    upload.fileUpload?.enabled !== false &&
     listAccepts(formatsOf(upload.fileUpload, DEFAULT_FILE_FORMATS), type, {
       allowTextWildcard: true
     })

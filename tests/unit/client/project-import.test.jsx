@@ -170,7 +170,7 @@ describe('project audience', () => {
 
   it('turns it into a label', () => {
     expect(projectAudienceLabel(null, t)).toBe('Only you');
-    expect(projectAudienceLabel({ memberCount: 4 }, t)).toBe('4 members');
+    expect(projectAudienceLabel({ memberCount: 4 }, t)).toBe('Shared with 4 people or groups');
     expect(projectAudienceLabel({ audience: { everyone: true } }, t)).toBe('Everyone signed in');
   });
 });
