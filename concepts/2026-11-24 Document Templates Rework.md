@@ -4,8 +4,9 @@ Continues [`2026-10-29 Document Templates and Office System Skills`](<2026-10-29
 Admin documentation today: [`docs/document-templates.md`](../docs/document-templates.md),
 [`docs/powerpoint-template-guide.md`](../docs/powerpoint-template-guide.md).
 
-Status: draft, decided in conversation. Step 1 of the plan is implemented (brand resolution from the
-themes, `fields` and `pdf.margins` in the schema). The rest is not.
+Status: draft, decided in conversation. Steps 1 and 2 of the plan are implemented (brand resolution
+from the themes, `fields` and `pdf.margins` in the schema, and the placeholder engine of the Word
+merge). The rest is not.
 
 Related issues: [#3605](https://github.com/intrafind/ihub-apps/issues/3605) (create a template
 automatically from uploaded brand documents, see "Relation to #3605") and
@@ -356,7 +357,9 @@ One release, built in this order (as pull requests, or as commits on one branch)
    migration and the removal of the old keys from the schema move to step 4, because the migration
    deletes files and has to land together with the code that stops reading them.
 2. Placeholder engine: built-ins, custom fields, `{{toc}}`, `{{page}}`, `{{pages}}`, tests with split
-   runs.
+   runs. Done for Word templates (`wordTemplate.js`, `renderDocx.js`, `templateFields.js`). The header
+   and footer text of PDFs and of Word without a template still use the single-brace form until
+   those settings are removed in step 4.
 3. Tools: arguments, `fields`, the missing-fields error, the skill texts (`docx`, `pdf`, `pptx`,
    `xlsx`, `web-artifacts`).
 4. PDF without letterhead, fonts and base design; the export dialog.

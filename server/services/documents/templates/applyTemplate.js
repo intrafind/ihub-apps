@@ -4,6 +4,7 @@
 import { officeFontName } from '../officeFonts.js';
 import { loadTemplateBundle, resolveTemplateId } from './DocumentTemplateService.js';
 import { imageInfo } from './templateAssets.js';
+import { resolveFieldValues } from './templateFields.js';
 import { specifiedBrand } from './themeBrand.js';
 
 /**
@@ -154,6 +155,8 @@ export function applyTemplateToDocxSpec(spec, bundle) {
       ...spec,
       author: spec.author || brand.companyName || undefined,
       company: brand.companyName || '',
+      // The values of the template's own fields: what was given, else the defaults.
+      fields: resolveFieldValues(template.fields, spec.fields).values,
       colors: {
         primary: pick(brand.primaryColor, spec.colors?.primary),
         accent: pick(brand.accentColor, spec.colors?.accent),

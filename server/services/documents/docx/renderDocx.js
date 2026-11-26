@@ -2,8 +2,13 @@
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
 import { assertWellFormed, openPackage } from '../ooxml/opcPackage.js';
-import { buildDocx } from './buildDocx.js';
+import { buildDocx, labelsFor } from './buildDocx.js';
 import { mergeIntoWordTemplate, readWordTemplateLayout } from './wordTemplate.js';
+
+/** The year in a date such as `2026-11-26` or `26 November 2026`; this year when there is none. */
+function yearOf(date) {
+  return /\b(?:19|20)\d{2}\b/.exec(String(date))?.[0] || String(new Date().getFullYear());
+}
 
 /**
  * Render a Word document spec, in the current thread (the render worker
@@ -18,6 +23,10 @@ import { mergeIntoWordTemplate, readWordTemplateLayout } from './wordTemplate.js
  * @param {Uint8Array} [assets.wordTemplate]
  * @param {string} [spec.templateMode] - `auto`, `styles_only`, `fill_placeholders`
  *   or `append` for a template that is an uploaded document.
+ * @param {Object<string, string>} [spec.fields] - Values of the template's own
+ *   fields (`{{department}}` …), by name.
+ * @param {boolean} [spec.toc] - A table of contents. A template with `{{toc}}`
+ *   shows one there unless this is `false`.
  * @returns {Promise<{ buffer: Buffer, meta: Object, warnings: string[] }>}
  */
 export async function renderDocx(spec, assets = {}) {
@@ -32,8 +41,17 @@ export async function renderDocx(spec, assets = {}) {
       ...spec.colors,
       primary: spec.colors?.primary || (layout.accent ? `#${layout.accent}` : undefined)
     };
+    // A template with `{{toc}}` decides where the table of contents goes: the
+    // content then has none of its own.
+    const tocInTemplate = layout.placeholders.has('toc');
+    const tocWanted = tocInTemplate ? spec.toc !== false : Boolean(spec.toc);
     const built = await buildDocx(
-      { ...spec, colors, titleInTemplate: layout.placeholders.has('title') },
+      {
+        ...spec,
+        colors,
+        toc: tocWanted && !tocInTemplate,
+        titleInTemplate: layout.placeholders.has('title')
+      },
       { forTemplate: true, setupOverride: layout.setup }
     );
     warnings = built.warnings;
@@ -46,16 +64,22 @@ export async function renderDocx(spec, assets = {}) {
           ? 'fill_placeholders'
           : 'styles_only'
         : spec.templateMode;
+    const date = spec.date || new Date().toISOString().slice(0, 10);
     buffer = await mergeIntoWordTemplate(built.buffer, template, {
       mode,
       values: {
+        // The template's own fields first: a built-in placeholder wins.
+        ...spec.fields,
         title: spec.title || '',
         subtitle: spec.subtitle || '',
         author: spec.author || '',
-        date: spec.date || new Date().toISOString().slice(0, 10),
+        date,
+        year: yearOf(date),
         company: spec.company || ''
       },
-      updateFields: Boolean(spec.toc),
+      toc: tocWanted,
+      tocTitle: labelsFor(spec.language).contents,
+      updateFields: tocWanted,
       accent: layout.accent,
       properties: {
         title: spec.title,

@@ -15,6 +15,7 @@ import {
 import { GeneratedFileError, holdGeneratedFile } from '../generatedFiles.js';
 import { DocumentGenerationError, renderInWorker } from '../renderService.js';
 import { applyTemplateToDocxSpec, templateBundleFor } from '../templates/applyTemplate.js';
+import { givenFieldsOf } from '../templates/templateFields.js';
 import {
   DOCX_FILE_MIME,
   loadUploadedFileOriginal,
@@ -50,7 +51,9 @@ export function docxSpecFromToolArgs(args) {
     language: optionalString(args.language, 20),
     markdown: typeof args.markdown === 'string' ? args.markdown : '',
     coverPage: args.coverPage === true,
-    toc: args.toc === true,
+    // Unset leaves the table of contents to the template: one at `{{toc}}`, none otherwise.
+    toc: typeof args.toc === 'boolean' ? args.toc : undefined,
+    fields: givenFieldsOf(args.fields),
     header: optionalString(args.header, 300),
     footer: optionalString(args.footer, 300),
     pageNumbers: args.pageNumbers !== false,
