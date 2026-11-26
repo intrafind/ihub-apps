@@ -788,24 +788,30 @@ function AppChat({
    *
    * @returns {string} The new chat id.
    */
-  const startNewChat = useCallback(() => {
-    if (leavingTemporaryChatRef.current) {
-      deleteChat(chatId).catch(() => {
-        // Gone already, or never stored: the retention sweep is the backstop.
-      });
-    }
-    const nextChatId = embedded ? mintChatId() : resetChatId(appId);
-    // Minted here, so the store has never heard of it: skip the hydration
-    // round trip that could only 404.
-    mintedChatIdsRef.current.add(nextChatId);
-    // Leaving `/c/:chatId` below re-resolves the chat; this is the one it
-    // has to land on.
-    if (!embedded) freshChatRef.current = { appId, id: nextChatId };
-    setChatId(nextChatId);
-    // `?project=` started the chat being left; the new one is not in it.
-    if (routeChatId || projectParam) navigate(`/apps/${appId}`, { replace: true });
-    return nextChatId;
-  }, [appId, navigate, routeChatId, embedded, chatId, projectParam]);
+  // `options.keepTemporary`: the caller deletes the temporary chat being left
+  // itself, later ("Use in app" in this same app still copies a file out of it).
+  // Called as an event handler too, so only a plain `true` counts.
+  const startNewChat = useCallback(
+    options => {
+      if (leavingTemporaryChatRef.current && options?.keepTemporary !== true) {
+        deleteChat(chatId).catch(() => {
+          // Gone already, or never stored: the retention sweep is the backstop.
+        });
+      }
+      const nextChatId = embedded ? mintChatId() : resetChatId(appId);
+      // Minted here, so the store has never heard of it: skip the hydration
+      // round trip that could only 404.
+      mintedChatIdsRef.current.add(nextChatId);
+      // Leaving `/c/:chatId` below re-resolves the chat; this is the one it
+      // has to land on.
+      if (!embedded) freshChatRef.current = { appId, id: nextChatId };
+      setChatId(nextChatId);
+      // `?project=` started the chat being left; the new one is not in it.
+      if (routeChatId || projectParam) navigate(`/apps/${appId}`, { replace: true });
+      return nextChatId;
+    },
+    [appId, navigate, routeChatId, embedded, chatId, projectParam]
+  );
   // Whether the chat on screen is a temporary chat the store already holds —
   // the one `startNewChat` deletes on the way out. A ref, synced after each
   // commit further down once both halves are known.
@@ -1519,7 +1525,16 @@ function AppChat({
     fileUploadHandler,
     addSystemMessage,
     serverFiles: { enabled: chatFileUploads.enabled, ephemeral },
-    onDone: () => setPendingSourceAttachment(null)
+    onDone: () => {
+      // A temporary chat the file was copied out of goes once the copy is made.
+      const leftTemporary = pendingSourceAttachment?.deleteAfter;
+      if (leftTemporary) {
+        deleteChat(leftTemporary).catch(() => {
+          // Gone already: the retention sweep is the backstop.
+        });
+      }
+      setPendingSourceAttachment(null);
+    }
   });
 
   // Auto-start conversation if app.autoStart is enabled
@@ -2064,10 +2079,17 @@ function AppChat({
   // copy at once. Not from an embedded chat: another app's chat opens through the router.
   const useFileInThisApp = useCallback(
     attachment => {
-      startNewChat();
-      setPendingSourceAttachment({ key: Date.now(), attachment });
+      // A temporary chat is deleted when it is left, but the copy still reads
+      // the file out of it: it goes once the copy is made (`onDone` above).
+      const leftTemporary = leavingTemporaryChatRef.current ? chatId : null;
+      startNewChat({ keepTemporary: true });
+      setPendingSourceAttachment({
+        key: Date.now(),
+        attachment,
+        ...(leftTemporary ? { deleteAfter: leftTemporary } : {})
+      });
     },
-    [startNewChat]
+    [startNewChat, chatId]
   );
   const artifactReuse = useArtifactReuse({
     owner: chatId ? { chatId } : null,

@@ -587,6 +587,7 @@ export default function SharedChatPage() {
             )}
           </main>
         </WorkspaceLayout>
+        {artifactReuse.elements}
       </div>
     </ArtifactViewerHost>
   );

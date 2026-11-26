@@ -18,11 +18,16 @@
  * every entry is inflated against a hard ceiling (the per-file limit, and
  * what is left of the project's room), so a "zip bomb" stops at the limit.
  * Folder entries and the metadata macOS adds (`__MACOSX/`, `.DS_Store`) are
- * passed over silently.
+ * passed over silently. Entries are inflated one at a time, off the event loop,
+ * and each is written to an ingest temp file and handed over as an upload is
+ * (`path` + `cleanupDir`): one entry is in memory at a time, never the archive's
+ * whole content.
  *
  * @module services/projects/itemImport
  */
+import fs from 'node:fs/promises';
 import path from 'node:path';
+import { promisify } from 'node:util';
 import zlib from 'node:zlib';
 import JSZip from 'jszip';
 import { acceptedTypeOf, sniffBytes } from './extractText.js';
@@ -36,6 +41,8 @@ export const MAX_ARCHIVE_ENTRIES = 2000;
 
 /** Longest item name; an entry's path inside the archive is its name. */
 const MAX_NAME_CHARS = 300;
+
+const inflateRaw = promisify(zlib.inflateRaw);
 
 const DEFLATE = '\u0008\u0000';
 const STORE = '\u0000\u0000';
@@ -68,13 +75,13 @@ function isNoise(entryName) {
 }
 
 /**
- * The bytes of one entry, inflated with a hard ceiling.
+ * The bytes of one entry, inflated with a hard ceiling, asynchronously.
  *
- * @returns {Buffer|null} null when the entry is larger than `maxBytes`.
+ * @returns {Promise<Buffer|null>} null when the entry is larger than `maxBytes`.
  * @throws {ProjectError} `UNSUPPORTED_TYPE` for a compression method other
  *   than deflate or store, or a damaged entry.
  */
-function inflateEntry(entry, maxBytes) {
+async function inflateEntry(entry, maxBytes) {
   const data = entry._data;
   const magic = data?.compression?.magic;
   const raw = data?.compressedContent;
@@ -86,7 +93,7 @@ function inflateEntry(entry, maxBytes) {
   }
   if (magic === STORE) return raw.length > maxBytes ? null : Buffer.from(raw);
   try {
-    return zlib.inflateRawSync(raw, { maxOutputLength: Math.max(1, maxBytes) });
+    return await inflateRaw(raw, { maxOutputLength: Math.max(1, maxBytes) });
   } catch (error) {
     if (error?.code === 'ERR_BUFFER_TOO_LARGE') return null;
     throw new ProjectError('UNSUPPORTED_TYPE', `${entry.name} is damaged`);
@@ -94,19 +101,21 @@ function inflateEntry(entry, maxBytes) {
 }
 
 /**
- * Unpack a ZIP archive into the files a project could take.
+ * Unpack a ZIP archive into the files a project could take, handing each to
+ * `onFile` as soon as it is inflated (so the caller can store it before the
+ * next one is read).
  *
  * @param {Buffer} bytes
  * @param {Object} limits
- * @param {number} limits.maxFiles - Files to return at most (the room left in the project).
+ * @param {number} limits.maxFiles - Files to hand over at most (the room left in the project).
  * @param {number} limits.maxFileBytes - Largest file, unpacked.
  * @param {number} limits.maxTotalBytes - All files together, unpacked (the room left).
- * @returns {Promise<{files: Array<{name: string, fileName: string, bytes: Buffer}>,
- *   skipped: Array<{name: string, code: string, message: string}>}>}
+ * @param {(file: {name: string, fileName: string, bytes: Buffer}) => Promise<void>} onFile
+ * @returns {Promise<{skipped: Array<{name: string, code: string, message: string}>}>}
  * @throws {ProjectError} `UNSUPPORTED_TYPE` for an archive that cannot be read
  *   (damaged, encrypted, too many entries).
  */
-export async function unpackZip(bytes, { maxFiles, maxFileBytes, maxTotalBytes }) {
+export async function unpackZip(bytes, { maxFiles, maxFileBytes, maxTotalBytes }, onFile) {
   let archive;
   try {
     archive = await JSZip.loadAsync(bytes, { checkCRC32: false });
@@ -125,15 +134,15 @@ export async function unpackZip(bytes, { maxFiles, maxFileBytes, maxTotalBytes }
       `The ZIP archive has more than ${MAX_ARCHIVE_ENTRIES} entries`
     );
   }
-  const files = [];
   const skipped = [];
+  let handed = 0;
   let total = 0;
   const skip = (name, code, message) => skipped.push({ name, code, message });
   for (const entry of entries) {
     if (entry.dir || isNoise(entry.name)) continue;
     const name = entry.name.replace(/^\/+/, '').slice(0, MAX_NAME_CHARS);
     const fileName = path.posix.basename(entry.name);
-    if (files.length >= maxFiles) {
+    if (handed >= maxFiles) {
       skip(name, 'QUOTA_FILES', 'The project has no room for more documents');
       continue;
     }
@@ -149,7 +158,7 @@ export async function unpackZip(bytes, { maxFiles, maxFileBytes, maxTotalBytes }
     const room = Math.min(maxFileBytes, Math.max(0, maxTotalBytes - total));
     let data;
     try {
-      data = inflateEntry(entry, room);
+      data = await inflateEntry(entry, room);
     } catch (error) {
       skip(name, error.code || 'UNSUPPORTED_TYPE', error.message);
       continue;
@@ -165,9 +174,34 @@ export async function unpackZip(bytes, { maxFiles, maxFileBytes, maxTotalBytes }
       continue;
     }
     total += data.length;
-    files.push({ name, fileName, bytes: data });
+    handed += 1;
+    await onFile({ name, fileName, bytes: data });
   }
-  return { files, skipped };
+  return { skipped };
+}
+
+/**
+ * The `file` of `addItem` for one candidate: written to an ingest temp file,
+ * as multer writes an upload, so its bytes do not wait in memory for the job.
+ * Without the pipeline (`service.ingest`) the buffer goes as it is and
+ * `addItem` refuses it.
+ *
+ * @returns {Promise<Object>}
+ */
+async function spooled(service, candidate) {
+  const base = { name: candidate.fileName, contentType: candidate.contentType };
+  if (typeof service.ingest?.newTempDir !== 'function') {
+    return { ...base, buffer: candidate.bytes };
+  }
+  const dir = await service.ingest.newTempDir();
+  const filePath = path.join(dir, 'upload');
+  try {
+    await fs.writeFile(filePath, candidate.bytes, { mode: 0o600 });
+  } catch (error) {
+    await fs.rm(dir, { recursive: true, force: true }).catch(() => {});
+    throw error;
+  }
+  return { ...base, path: filePath, cleanupDir: dir, bytes: candidate.bytes.length };
 }
 
 /** Errors that refuse one file without stopping the others. */
@@ -206,28 +240,14 @@ export async function importFile(
   { user, authorize, pinned = false, from = null, limits }
 ) {
   const archive = isZipArchive(file);
-  let candidates;
-  let skipped = [];
-  if (archive) {
-    const used = Number(project?.usage?.bytes) || 0;
-    const count = (project?.items || []).length;
-    ({ files: candidates, skipped } = await unpackZip(file.bytes, {
-      maxFiles: limits.maxFiles > 0 ? Math.max(0, limits.maxFiles - count) : Infinity,
-      maxFileBytes: limits.maxFileBytes > 0 ? limits.maxFileBytes : Infinity,
-      maxTotalBytes: limits.maxProjectBytes > 0 ? limits.maxProjectBytes - used : Infinity
-    }));
-  } else {
-    candidates = [
-      { name: file.name, fileName: file.name, bytes: file.bytes, contentType: file.contentType }
-    ];
-  }
-
   const items = [];
-  for (const candidate of candidates) {
-    const provenanceFrom = {
-      ...(from || {}),
-      ...(archive ? { archive: String(file.name || 'archive.zip').slice(0, MAX_NAME_CHARS) } : {})
-    };
+  const skipped = [];
+  const provenanceFrom = {
+    ...(from || {}),
+    ...(archive ? { archive: String(file.name || 'archive.zip').slice(0, MAX_NAME_CHARS) } : {})
+  };
+
+  const add = async candidate => {
     try {
       // The type and the bytes are checked here as for an upload; `addItem`
       // and the pipeline check them again.
@@ -240,27 +260,55 @@ export async function importFile(
           `${candidate.fileName || 'The file'} is an image, media, archive or binary file, or a type projects do not take`
         );
       }
-      const { item } = await service.addItem(
-        project.id,
-        {
-          kind: 'upload',
-          ref: {},
-          name: candidate.name,
-          pinned: pinned === true,
-          ...(Object.keys(provenanceFrom).length ? { from: provenanceFrom } : {}),
-          file: {
-            buffer: candidate.bytes,
-            name: candidate.fileName,
-            contentType: candidate.contentType
-          }
-        },
-        { user, authorize, wait: false }
-      );
+      const fileInput = await spooled(service, candidate);
+      let item;
+      try {
+        ({ item } = await service.addItem(
+          project.id,
+          {
+            kind: 'upload',
+            ref: {},
+            name: candidate.name,
+            pinned: pinned === true,
+            ...(Object.keys(provenanceFrom).length ? { from: provenanceFrom } : {}),
+            file: fileInput
+          },
+          { user, authorize, wait: false }
+        ));
+      } catch (error) {
+        // Refused before the job took the temp file over: it goes here.
+        if (fileInput.cleanupDir) {
+          await fs.rm(fileInput.cleanupDir, { recursive: true, force: true }).catch(() => {});
+        }
+        throw error;
+      }
       items.push(item);
     } catch (error) {
       if (!archive || !PER_FILE_CODES.has(error?.code)) throw error;
       skipped.push({ name: candidate.name, code: error.code, message: error.message });
     }
+  };
+
+  if (archive) {
+    const used = Number(project?.usage?.bytes) || 0;
+    const count = (project?.items || []).length;
+    const unpacked = await unpackZip(
+      file.bytes,
+      {
+        maxFiles: limits.maxFiles > 0 ? Math.max(0, limits.maxFiles - count) : Infinity,
+        maxFileBytes: limits.maxFileBytes > 0 ? limits.maxFileBytes : Infinity,
+        maxTotalBytes: limits.maxProjectBytes > 0 ? limits.maxProjectBytes - used : Infinity
+      },
+      add
+    );
+    skipped.push(...unpacked.skipped);
+  } else {
+    await add({
+      name: file.name,
+      fileName: file.name,
+      bytes: file.bytes,
+      contentType: file.contentType
+    });
   }
   if (archive && items.length === 0) {
     throw new ProjectError('UNSUPPORTED_TYPE', 'Nothing in the ZIP archive could be added', {

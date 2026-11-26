@@ -640,6 +640,7 @@ function AdminProjectEditPageContent({ id }) {
             onClose={() => setPreviewItem(null)}
             fetchText={fetchAdminItemText}
             onDownloadOriginal={handleDownloadOriginal}
+            downloadError={downloadError}
             onSave={async text => {
               const updated = await updateAdminProjectItemText(id, previewItem.id, text);
               clearEstimate();

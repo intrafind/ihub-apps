@@ -14,8 +14,10 @@
  * is refused too; it stays usable through the project itself.
  *
  * Access is the project route's: the caller must be able to use the project
- * (owner, member, a linked admin project, the catalog), and user projects are
- * dark while `userProjects` is off.
+ * (owner, member, a linked admin project, the catalog); every project is dark
+ * while `projects` is off, and user projects while `userProjects` is off.
+ * The read is audited like a download of the document
+ * (`platform.audit.logReads`): it takes the document out of the project.
  *
  * @module services/projects/projectItemFile
  */
@@ -25,7 +27,9 @@ import { isValidId } from '../../utils/pathSecurity.js';
 import { readOriginal, readText } from './ItemTextStore.js';
 import { getProjectRepository } from './ProjectRepository.js';
 import { loadProjectFor } from './projectLoader.js';
-import { isUserProjectsConfigured } from './projectSettings.js';
+import { isProjectsConfigured, isUserProjectsConfigured } from './projectSettings.js';
+import { projectName } from './projectView.js';
+import { logAudit } from '../AuditLogService.js';
 
 /** An error with the codes `fileSources.js` translates for the routes. */
 function sourceError(code, message) {
@@ -61,6 +65,10 @@ export async function readProjectItemFile(ref, user, { repository = getProjectRe
   if (!isValidId(projectId) || !isValidId(itemId)) {
     throw sourceError('INVALID_REF', 'A project document is { projectId, itemId }');
   }
+  const features = configCache.getFeatures?.() || {};
+  if (!isProjectsConfigured(features)) {
+    throw sourceError('SOURCE_FORBIDDEN', 'Projects are switched off');
+  }
   const loaded = await loadProjectFor(user, projectId, { repository });
   const project = loaded?.project || null;
   const context = callerContext(user);
@@ -68,11 +76,7 @@ export async function readProjectItemFile(ref, user, { repository = getProjectRe
   if (!project || !permissions.canUse) {
     throw sourceError('SOURCE_GONE', 'The project document does not exist or is not yours to use');
   }
-  if (
-    project.ownership === 'user' &&
-    !context.isAdmin &&
-    !isUserProjectsConfigured(configCache.getFeatures())
-  ) {
+  if (project.ownership === 'user' && !context.isAdmin && !isUserProjectsConfigured(features)) {
     throw sourceError('SOURCE_FORBIDDEN', 'User projects are switched off');
   }
   const item = (project.items || []).find(entry => entry.id === itemId);
@@ -94,8 +98,19 @@ export async function readProjectItemFile(ref, user, { repository = getProjectRe
     );
   }
   const platform = configCache.getPlatform?.() || {};
+  const auditRead = what => {
+    if (platform.audit?.logReads !== true) return;
+    logAudit({
+      actor: user,
+      action: 'read',
+      resource: 'projectItem',
+      resourceId: projectId,
+      summary: `Copied the ${what} of "${item.name}" of project "${projectName(project)}" into a chat`
+    });
+  };
   if (item.originalFile?.blobKey) {
     const bytes = await readOriginal(project, item, { platform, repository });
+    auditRead('original');
     return {
       bytes,
       contentType: item.originalFile.contentType || 'application/octet-stream',
@@ -106,6 +121,7 @@ export async function readProjectItemFile(ref, user, { repository = getProjectRe
     };
   }
   const text = await readText(project, item, { platform, repository });
+  auditRead('text');
   return {
     bytes: Buffer.from(text, 'utf8'),
     contentType: 'text/markdown',

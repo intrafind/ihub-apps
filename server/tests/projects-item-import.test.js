@@ -675,6 +675,24 @@ describe('Use in app: copying into a chat as a file', () => {
     }
   });
 
+  it('refuses a project document while projects are switched off', async () => {
+    const project = await createProject(ADA, 'Switched off');
+    const item = await uploadTo(project.id, ADA, 'off.md', Buffer.from('# Off\n'));
+    const features = configCache.getFeatures();
+    configCache.setCacheEntry('config/features.json', { ...features, projects: false });
+    try {
+      await assert.rejects(
+        fetchSourceFile({
+          source: { kind: 'project-item', ref: { projectId: project.id, itemId: item.id } },
+          user: ADA
+        }),
+        error => error.code === 'SOURCE_FORBIDDEN' && error.status === 403
+      );
+    } finally {
+      configCache.setCacheEntry('config/features.json', features);
+    }
+  });
+
   it('refuses a document marked Not for AI, and a project the caller cannot use', async () => {
     const project = await createProject(ADA, 'Mixed');
     const hidden = await uploadTo(project.id, ADA, 'hr.md', Buffer.from('# HR\n'), {

@@ -434,6 +434,7 @@ function ProjectItemsSection({ project, config, editable, setProject, reload }) 
         }
         errorMessage={messageOf}
         onDownloadOriginal={isIFinder ? undefined : downloadOriginal}
+        downloadError={downloadError}
       />
       {useInAppAttachment && (
         <Suspense fallback={null}>
