@@ -24,7 +24,12 @@
  */
 
 /** The known types, in the order the admin lists their groups. */
-export const INTEGRATION_TYPES = Object.freeze(['people-directory', 'web-search', 'storage']);
+export const INTEGRATION_TYPES = Object.freeze([
+  'people-directory',
+  'web-search',
+  'storage',
+  'ocr'
+]);
 
 /** Prefix of an `app.integrations` key that binds every installation of a type. */
 export const TYPE_BINDING_PREFIX = 'type:';
