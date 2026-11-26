@@ -53,18 +53,18 @@ after(() => tearDownWebSearch());
 
 describe('MCP gateway tools', () => {
   it('lists the actions of the installations the groups grant, under their chat tool ids', async () => {
-    useWebSearch({ installed: [engine('brave'), engine('qwant')], groups: OPEN_GROUPS });
-    assert.deepEqual(await registered(user(['*'])), ['braveSearch', 'qwantSearch']);
+    useWebSearch({ installed: [engine('brave'), engine('staan')], groups: OPEN_GROUPS });
+    assert.deepEqual(await registered(user(['*'])), ['braveSearch', 'staanSearch']);
     assert.deepEqual(await registered(user(['brave'])), ['braveSearch']);
   });
 
   it('lists nothing without a grant, for a disabled installation, or with the tools switched off', async () => {
     useWebSearch({
-      installed: [engine('brave'), engine('qwant', { enabled: false })],
+      installed: [engine('brave'), engine('staan', { enabled: false })],
       groups: grantResearchOnly('brave')
     });
     assert.deepEqual(await registered(user([])), []);
-    assert.deepEqual(await registered(user(['qwant'])), []);
+    assert.deepEqual(await registered(user(['staan'])), []);
     assert.deepEqual(await registered(user(['brave']), { tools: false }), []);
   });
 

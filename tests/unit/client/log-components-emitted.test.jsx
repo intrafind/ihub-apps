@@ -64,7 +64,7 @@ test('the web search engines named are the ones iHub ships (Tavily was removed)'
     lookup(de, webSearch.descriptionKey)
   ]) {
     expect(text).not.toMatch(/Tavily/);
-    expect(text).toMatch(/Brave, Staan, Qwant/);
+    expect(text).toMatch(/Brave, Staan/);
   }
 });
 

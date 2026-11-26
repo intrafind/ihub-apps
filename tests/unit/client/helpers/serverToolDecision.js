@@ -17,7 +17,6 @@ const WEB = { kind: 'search', origin: 'web' };
  */
 const DECLARED = {
   braveSearch: WEB,
-  qwantSearch: WEB,
   staanSearch: WEB,
   read_url: { kind: 'fetch', origin: 'web' },
   knowledge_search: { kind: 'search', origin: 'project' },

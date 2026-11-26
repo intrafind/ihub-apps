@@ -7,7 +7,7 @@
  *   - Overview lists the key facts (never a secret), the actions with their
  *     side effects and the apps that bind the installation;
  *   - Settings renders the dedicated iFinder editor for the iFinder
- *     installation, the web search engine editor for Brave and Qwant, and
+ *     installation, the web search engine editor for Brave and Staan, and
  *     the generic form for a CKAN portal;
  *   - the iFinder editor checks its cross-field rules, then saves its values
  *     with the label's other languages and the groups kept;
@@ -250,13 +250,13 @@ const BRAVE_DETAIL = engineDetail('brave', 'Brave Search', { apiKeyRef: 'brave-k
     title: { en: 'API key' }
   }
 ]);
-const QWANT_DETAIL = engineDetail('qwant', 'Qwant', {}, []);
+const KEYLESS_ENGINE_DETAIL = engineDetail('staan', 'Staan', {}, []);
 
 const DETAILS = {
   ifinder: IFINDER_DETAIL,
   govdata: CKAN_DETAIL,
   brave: BRAVE_DETAIL,
-  qwant: QWANT_DETAIL
+  staan: KEYLESS_ENGINE_DETAIL
 };
 
 const APPS = [
@@ -456,17 +456,16 @@ describe('installation page: settings', () => {
     expectNoMissingKeys();
   });
 
-  test('Qwant gets the engine editor without a key field', async () => {
-    renderAt('/admin/integrations/qwant?tab=settings');
+  test('an engine whose definition has no key field says it needs no API key', async () => {
+    renderAt('/admin/integrations/staan?tab=settings');
     const editor = await screen.findByTestId('web-search-engine-editor');
     expect(within(editor).getByTestId('web-search-engine-no-key')).toHaveTextContent(
-      'Qwant needs no API key.'
+      'Staan needs no API key.'
     );
     expect(
       within(editor).queryByTestId('credential-web-search-engine-api-key')
     ).not.toBeInTheDocument();
     expect(within(editor).queryByTestId('web-search-engine-env-hint')).not.toBeInTheDocument();
-    expect(editor).toHaveTextContent('Qwant blocks many data-centre IP addresses');
     expectNoMissingKeys();
   });
 

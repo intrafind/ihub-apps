@@ -5,13 +5,9 @@
 
 /**
  * Search diagnostics specs — the admin connectivity test's whole value is that
- * it tells an admin *which kind* of problem they have, because the two common
- * ones need opposite responses:
- *
- *   - A DataDome block means nothing on the provider page is wrong. Editing
- *     settings or retrying cannot help; the egress IP has to change.
- *   - A missing or rejected key is a configuration problem, fixable on that
- *     very page.
+ * it tells an admin *which kind* of problem they have: a missing or rejected
+ * key is a configuration problem fixable on the provider page, a rate limit
+ * clears on its own, a network failure points at the proxy or TLS setup.
  *
  * Conflating them is the failure mode worth guarding against, so these specs
  * assert the distinction rather than just that "some error" came back.
@@ -29,7 +25,7 @@ import {
 
 /** Build an error the way WebSearchService wraps a provider failure. */
 function wrapped(code, message = 'something went wrong') {
-  const error = new Error(`Search failed with qwant: ${message}`);
+  const error = new Error(`Search failed with staan: ${message}`);
   error.code = code;
   return error;
 }
@@ -37,7 +33,7 @@ function wrapped(code, message = 'something went wrong') {
 describe('providerLabel', () => {
   it('names the providers the test covers', () => {
     assert.equal(providerLabel('brave'), 'Brave Search');
-    assert.equal(providerLabel('qwant'), 'Qwant');
+    assert.equal(providerLabel('staan'), 'Staan');
     assert.equal(providerLabel('staan'), 'Staan');
   });
 
@@ -48,16 +44,15 @@ describe('providerLabel', () => {
 
 describe('diagnoseSearchSuccess', () => {
   it('reports results as ok', () => {
-    const d = diagnoseSearchSuccess({ results: [{ url: 'https://a.test' }] }, 'qwant');
+    const d = diagnoseSearchSuccess({ results: [{ url: 'https://a.test' }] }, 'staan');
     assert.equal(d.status, 'ok');
     assert.equal(d.code, 'OK');
     assert.equal(d.remediation.length, 0);
-    assert.equal(d.blockedBy, null);
   });
 
   it('counts results in the headline, with correct pluralisation', () => {
-    assert.match(diagnoseSearchSuccess({ results: [{}] }, 'qwant').title, /1 result\b/);
-    assert.match(diagnoseSearchSuccess({ results: [{}, {}] }, 'qwant').title, /2 results/);
+    assert.match(diagnoseSearchSuccess({ results: [{}] }, 'staan').title, /1 result\b/);
+    assert.match(diagnoseSearchSuccess({ results: [{}, {}] }, 'staan').title, /2 results/);
   });
 
   it('separates "answered but empty" from "ok", without calling it a failure', () => {
@@ -65,7 +60,7 @@ describe('diagnoseSearchSuccess', () => {
     // the round trip worked. Reporting it as ok would contradict the visibly
     // empty list; reporting it as an error would send the admin debugging
     // a network that is fine.
-    const d = diagnoseSearchSuccess({ results: [] }, 'qwant');
+    const d = diagnoseSearchSuccess({ results: [] }, 'staan');
     assert.equal(d.status, 'empty');
     assert.equal(d.code, 'NO_RESULTS');
     assert.match(d.detail, /connectivity is fine/i);
@@ -73,38 +68,9 @@ describe('diagnoseSearchSuccess', () => {
   });
 
   it('treats a malformed payload as empty rather than throwing', () => {
-    assert.equal(diagnoseSearchSuccess(undefined, 'qwant').status, 'empty');
-    assert.equal(diagnoseSearchSuccess({}, 'qwant').status, 'empty');
-    assert.equal(diagnoseSearchSuccess({ results: 'nope' }, 'qwant').status, 'empty');
-  });
-});
-
-describe('diagnoseSearchError — DataDome', () => {
-  const d = diagnoseSearchError(wrapped('QWANT_CAPTCHA'), 'qwant');
-
-  it('is its own status, not a generic error', () => {
-    assert.equal(d.status, 'blocked');
-    assert.equal(d.code, 'QWANT_CAPTCHA');
-  });
-
-  it('names DataDome so the UI can badge it', () => {
-    assert.equal(d.blockedBy, 'datadome');
-  });
-
-  it('says plainly that this is not a configuration problem', () => {
-    assert.match(d.detail, /not about how the provider is configured/i);
-  });
-
-  it('is not retryable — the egress IP will not change between attempts', () => {
-    assert.equal(d.retryable, false);
-    assert.match(d.detail, /retrying will not/i);
-  });
-
-  it('offers egress and Brave as the actual ways out', () => {
-    const steps = d.remediation.join(' ');
-    assert.match(steps, /egress IP/i);
-    assert.match(steps, /Brave/);
-    assert.match(steps, /proxy/i);
+    assert.equal(diagnoseSearchSuccess(undefined, 'staan').status, 'empty');
+    assert.equal(diagnoseSearchSuccess({}, 'staan').status, 'empty');
+    assert.equal(diagnoseSearchSuccess({ results: 'nope' }, 'staan').status, 'empty');
   });
 });
 
@@ -117,22 +83,14 @@ describe('diagnoseSearchError — configuration', () => {
     assert.equal(d.status, 'unconfigured');
     assert.equal(d.code, 'MISSING_API_KEY');
     assert.equal(d.retryable, false);
-    // The keyless alternative is worth naming right where the key is missing.
-    assert.match(d.remediation.join(' '), /Qwant/);
+    // The other engine is worth naming right where the key is missing.
+    assert.match(d.remediation.join(' '), /Staan/);
   });
 
   it('reads a 401 as a rejected credential, not a network problem', () => {
     const d = diagnoseSearchError(wrapped('HTTP_401'), 'brave');
     assert.equal(d.status, 'unconfigured');
     assert.match(d.detail, /the request arrived but the credential was not accepted/i);
-  });
-
-  it('keeps a 403 distinct from a captcha', () => {
-    const captcha = diagnoseSearchError(wrapped('QWANT_CAPTCHA'), 'qwant');
-    const plain = diagnoseSearchError(wrapped('QWANT_ACCESS_DENIED'), 'qwant');
-    assert.equal(captcha.blockedBy, 'datadome');
-    assert.equal(plain.blockedBy, null);
-    assert.notEqual(captcha.code, plain.code);
   });
 });
 
@@ -143,7 +101,6 @@ describe('diagnoseSearchError — Staan', () => {
     const d = staan('STAAN_UNAUTHORIZED');
     assert.equal(d.status, 'unconfigured');
     assert.equal(d.retryable, false);
-    assert.equal(d.blockedBy, null);
     // The distinction that matters: the request arrived, so egress is fine.
     assert.match(d.detail, /connectivity is fine/i);
     assert.match(d.remediation.join(' '), /key/i);
@@ -176,24 +133,12 @@ describe('diagnoseSearchError — Staan', () => {
     assert.equal(d.status, 'error');
     assert.match(d.remediation.join(' '), /proxy/i);
   });
-
-  it('never blames bot protection — Staan has none', () => {
-    for (const code of [
-      'STAAN_UNAUTHORIZED',
-      'STAAN_RATE_LIMITED',
-      'STAAN_BAD_REQUEST',
-      'STAAN_INVALID_RESPONSE'
-    ]) {
-      assert.equal(staan(code).blockedBy, null, code);
-      assert.notEqual(staan(code).status, 'blocked', code);
-    }
-  });
 });
 
 describe('diagnoseSearchError — transient and transport', () => {
   it('marks rate limiting retryable', () => {
-    for (const code of ['QWANT_RATE_LIMITED', 'HTTP_429']) {
-      const d = diagnoseSearchError(wrapped(code), 'qwant');
+    for (const code of ['STAAN_RATE_LIMITED', 'HTTP_429']) {
+      const d = diagnoseSearchError(wrapped(code), 'staan');
       assert.equal(d.status, 'rate_limited', code);
       assert.equal(d.retryable, true, code);
     }
@@ -201,7 +146,7 @@ describe('diagnoseSearchError — transient and transport', () => {
 
   it('points transport failures at proxy and TLS configuration', () => {
     for (const code of ['NETWORK_ERROR', 'ECONNREFUSED', 'ETIMEDOUT', 'ENOTFOUND']) {
-      const d = diagnoseSearchError(wrapped(code), 'qwant');
+      const d = diagnoseSearchError(wrapped(code), 'staan');
       assert.equal(d.status, 'network', code);
       assert.match(d.remediation.join(' '), /proxy/i);
     }
@@ -210,11 +155,11 @@ describe('diagnoseSearchError — transient and transport', () => {
   it('reads a code off the cause when the wrapper has none', () => {
     const error = new Error('fetch failed');
     error.cause = Object.assign(new Error('connect ECONNREFUSED'), { code: 'ECONNREFUSED' });
-    assert.equal(diagnoseSearchError(error, 'qwant').status, 'network');
+    assert.equal(diagnoseSearchError(error, 'staan').status, 'network');
   });
 
   it('falls back to a usable shape for an unrecognised error', () => {
-    const d = diagnoseSearchError(new Error('who knows'), 'qwant');
+    const d = diagnoseSearchError(new Error('who knows'), 'staan');
     assert.equal(d.status, 'error');
     assert.equal(d.code, 'UNKNOWN');
     assert.match(d.detail, /who knows/);
@@ -223,7 +168,7 @@ describe('diagnoseSearchError — transient and transport', () => {
 
   it('never throws, whatever it is handed', () => {
     for (const input of [null, undefined, 'a string', {}, 42]) {
-      const d = diagnoseSearchError(input, 'qwant');
+      const d = diagnoseSearchError(input, 'staan');
       assert.equal(typeof d.title, 'string');
       assert.equal(typeof d.detail, 'string');
       assert.ok(Array.isArray(d.remediation));
@@ -234,13 +179,9 @@ describe('diagnoseSearchError — transient and transport', () => {
 describe('diagnosis shape', () => {
   it('always carries the fields the UI renders', () => {
     const cases = [
-      diagnoseSearchSuccess({ results: [{}] }, 'qwant'),
-      diagnoseSearchSuccess({ results: [] }, 'qwant'),
+      diagnoseSearchSuccess({ results: [{}] }, 'staan'),
+      diagnoseSearchSuccess({ results: [] }, 'staan'),
       ...[
-        'QWANT_CAPTCHA',
-        'QWANT_RATE_LIMITED',
-        'QWANT_ACCESS_DENIED',
-        'QWANT_INVALID_RESPONSE',
         'STAAN_UNAUTHORIZED',
         'STAAN_RATE_LIMITED',
         'STAAN_BAD_REQUEST',
@@ -249,25 +190,16 @@ describe('diagnosis shape', () => {
         'HTTP_401',
         'HTTP_429',
         'WHATEVER'
-      ].map(code => diagnoseSearchError(wrapped(code), 'qwant'))
+      ].map(code => diagnoseSearchError(wrapped(code), 'staan'))
     ];
 
-    const STATUSES = new Set([
-      'ok',
-      'empty',
-      'blocked',
-      'unconfigured',
-      'rate_limited',
-      'network',
-      'error'
-    ]);
+    const STATUSES = new Set(['ok', 'empty', 'unconfigured', 'rate_limited', 'network', 'error']);
 
     for (const d of cases) {
       assert.ok(STATUSES.has(d.status), `unexpected status ${d.status}`);
       assert.ok(d.title && d.detail, 'title and detail are required');
       assert.ok(Array.isArray(d.remediation));
       assert.equal(typeof d.retryable, 'boolean');
-      assert.ok(d.blockedBy === null || typeof d.blockedBy === 'string');
     }
   });
 });

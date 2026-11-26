@@ -7,10 +7,10 @@ import { STAAN_PAGE_SIZE, STAAN_MAX_WEB_RESULTS } from '../services/search/staan
 /**
  * Perform a web search using Staan (staan.ai), with optional content extraction.
  *
- * Shares its contract with `braveSearch` and `qwantSearch`, so an app can swap
+ * Shares its contract with `braveSearch`, so an app can swap
  * `websearch.provider` without the model seeing a different tool. Staan scopes
  * domains natively — `includeDomains` restricts the search to a set of sites,
- * `excludeDomains` (Staan only) drops them — where the other two fall back to
+ * `excludeDomains` (Staan only) drops them — where Brave falls back to
  * `site:` operators in the query.
  *
  * @param {Object} params - The search parameters

@@ -169,7 +169,7 @@ test('people, ticket and MCP tools called "search" are never shown as a web sear
 test('only the shipped web search engines say their hits are public', () => {
   const engine = id =>
     toolFromAction(resolved(`com.intrafind/${id}-search`), action('search'), 'en');
-  for (const id of ['brave', 'qwant', 'staan']) {
+  for (const id of ['brave', 'staan']) {
     assert.equal(toolDisplayOf(engine(id)).publicHits, true, id);
   }
   // A third-party engine, a tool named like one and the page reader are not public.

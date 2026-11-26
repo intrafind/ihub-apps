@@ -28,7 +28,7 @@ import {
 } from '../services/integrations/iAssistantModelActivation.js';
 
 const BRAVE = 'com.intrafind/brave-search';
-const QWANT = 'com.intrafind/qwant-search';
+const STAAN = 'com.intrafind/staan-search';
 
 const APPS_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), '../defaults/apps');
 
@@ -79,7 +79,7 @@ describe('areAppIntegrationsEnabled', () => {
     );
     assert.equal(
       areAppIntegrationsEnabled(app, {
-        installedIntegrations: [{ id: 'qwant', definition: QWANT }]
+        installedIntegrations: [{ id: 'staan', definition: STAAN }]
       }),
       true
     );
@@ -110,7 +110,7 @@ describe('areAppIntegrationsEnabled', () => {
   it('with required and a named engine, needs that engine', () => {
     const app = { id: 'web', websearch: { enabled: true, required: true, provider: 'brave' } };
     assert.deepEqual(
-      missingAppIntegrations(app, { installedIntegrations: [{ id: 'qwant', definition: QWANT }] }),
+      missingAppIntegrations(app, { installedIntegrations: [{ id: 'staan', definition: STAAN }] }),
       ['brave']
     );
     assert.deepEqual(
@@ -307,7 +307,7 @@ describe('areAppIntegrationsEnabled', () => {
 
   it('accepts any engine installation id as the web search engine', () => {
     const base = { name: { en: 'x' }, description: { en: 'x' }, color: '#4F46E5', icon: 'chat' };
-    for (const provider of ['auto', 'brave', 'staan', 'qwant', 'acme-search']) {
+    for (const provider of ['auto', 'brave', 'staan', 'acme-search']) {
       const parsed = appConfigSchema.safeParse({
         ...base,
         id: 'x',
