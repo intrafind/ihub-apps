@@ -20,8 +20,11 @@
  *     --strict  exit 1 when a removed route is not named in the notes
  *     --list    print every added and removed route
  *
- * The base is checked out into a temporary worktree (dependencies are linked from
- * this checkout), so it must be a ref git knows; the CI checkout needs history.
+ * The base is checked out into a temporary worktree, so it must be a ref git
+ * knows; the CI checkout needs history. Its dependencies are linked from this
+ * checkout, except where the base declares other ones (a PR that adds, removes or
+ * bumps a package): there the base's own are installed from its lockfile, so the
+ * base imports what it imported before.
  */
 
 import fs from 'node:fs';
@@ -36,6 +39,39 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
 const key = r => `${r.method} ${r.path.replace(/:\w+/g, ':')}`;
 
+/** The package directories whose `node_modules` the route dump may load. */
+const PACKAGE_DIRS = ['', 'server', 'client'];
+
+/** The dependencies a `package.json` declares, as one comparable string. */
+function declaredDependencies(packageJsonPath) {
+  try {
+    const pkg = JSON.parse(fs.readFileSync(packageJsonPath, 'utf8'));
+    const sorted = deps =>
+      Object.entries(deps || {}).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
+    return JSON.stringify([
+      sorted(pkg.dependencies),
+      sorted(pkg.devDependencies),
+      sorted(pkg.optionalDependencies)
+    ]);
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Whether the base declares the same dependencies as this checkout in `dir`, so
+ * this checkout's `node_modules` serve it.
+ *
+ * @param {string} baseRoot - The base's worktree
+ * @param {string} headRoot - This checkout
+ * @param {string} dir - Package directory, relative ('' for the root)
+ * @returns {boolean}
+ */
+export function sameDependencies(baseRoot, headRoot, dir) {
+  const base = declaredDependencies(path.join(baseRoot, dir, 'package.json'));
+  return base !== null && base === declaredDependencies(path.join(headRoot, dir, 'package.json'));
+}
+
 /** The route table of `ref`, dumped by this checkout's `dump-routes.js`. */
 export function routesAtRef(ref) {
   const tmp = fs.mkdtempSync(path.join(fs.realpathSync(os.tmpdir()), 'route-base-'));
@@ -43,9 +79,17 @@ export function routesAtRef(ref) {
   const git = (...args) => execFileSync(gitExecutable(), args, { cwd: root, stdio: 'pipe' });
   try {
     git('worktree', 'add', '--detach', work, ref);
-    for (const dir of ['node_modules', 'server/node_modules', 'client/node_modules']) {
-      if (fs.existsSync(path.join(root, dir))) {
-        fs.symlinkSync(path.join(root, dir), path.join(work, dir));
+    for (const dir of PACKAGE_DIRS) {
+      const modules = path.join(dir, 'node_modules');
+      if (!fs.existsSync(path.join(root, modules))) continue;
+      if (sameDependencies(work, root, dir)) {
+        fs.symlinkSync(path.join(root, modules), path.join(work, modules));
+      } else {
+        // The base needs packages this checkout dropped, or other versions.
+        execFileSync('npm', ['ci', '--no-audit', '--no-fund'], {
+          cwd: path.join(work, dir),
+          stdio: 'pipe'
+        });
       }
     }
     fs.copyFileSync(
