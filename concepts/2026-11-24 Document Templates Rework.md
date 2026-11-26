@@ -4,7 +4,8 @@ Continues [`2026-10-29 Document Templates and Office System Skills`](<2026-10-29
 Admin documentation today: [`docs/document-templates.md`](../docs/document-templates.md),
 [`docs/powerpoint-template-guide.md`](../docs/powerpoint-template-guide.md).
 
-Status: draft, decided in conversation, not implemented.
+Status: draft, decided in conversation. Step 1 of the plan is implemented (brand resolution from the
+themes, `fields` and `pdf.margins` in the schema). The rest is not.
 
 Related issues: [#3605](https://github.com/intrafind/ihub-apps/issues/3605) (create a template
 automatically from uploaded brand documents, see "Relation to #3605") and
@@ -349,9 +350,11 @@ Proposal: implement this rework first, then reduce #3605 to that remainder and u
 
 ## Plan
 
-One release, several pull requests, in this order:
+One release, built in this order (as pull requests, or as commits on one branch):
 
-1. Schema, brand resolution from the themes, migration, tests.
+1. Brand resolution from the themes, `fields` and `pdf.margins` in the schema, tests. Done. The
+   migration and the removal of the old keys from the schema move to step 4, because the migration
+   deletes files and has to land together with the code that stops reading them.
 2. Placeholder engine: built-ins, custom fields, `{{toc}}`, `{{page}}`, `{{pages}}`, tests with split
    runs.
 3. Tools: arguments, `fields`, the missing-fields error, the skill texts (`docx`, `pdf`, `pptx`,

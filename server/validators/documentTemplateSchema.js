@@ -27,6 +27,29 @@ export const ASSET_NAME_PATTERN = /^[a-z0-9][a-z0-9._-]{0,120}$/;
 export const FONT_FACES = Object.freeze(['normal', 'bold', 'italics', 'bolditalics']);
 
 /**
+ * The placeholders every Word template can use, written `{{name}}`. Any
+ * other name in a template's Word file is a custom field of the template.
+ */
+export const BUILT_IN_PLACEHOLDERS = Object.freeze([
+  'content',
+  'toc',
+  'title',
+  'subtitle',
+  'author',
+  'date',
+  'year',
+  'company',
+  'page',
+  'pages'
+]);
+
+/** Names of custom fields: a letter, then letters, digits or underscores; lower case. */
+export const FIELD_NAME_PATTERN = /^[a-z][a-z0-9_]{0,31}$/;
+
+/** At most this many custom fields per template. */
+export const MAX_TEMPLATE_FIELDS = 50;
+
+/**
  * The files a template can hold, by slot: the extensions a slot accepts and
  * the name the file is stored under. Font files are stored per family and
  * face (`font-<family>-<face>.<ext>`).
@@ -122,6 +145,11 @@ const documentSchema = z
 
 const pdfSchema = z
   .object({
+    /**
+     * Page margins of PDFs, `[left, top, right, bottom]` in points. When
+     * unset they come from the Word template's last section.
+     */
+    margins: margins.optional(),
     theme: z.enum(['default', 'professional', 'minimal']).optional(),
     letterhead: assetName.optional(),
     letterheadFollowing: assetName.optional()
@@ -183,6 +211,55 @@ const pptxSchema = z
   })
   .strict();
 
+/**
+ * A custom field of a template: a `{{name}}` in its Word file that the model
+ * or the user fills in. A required field without a value stops the document;
+ * the model is told to ask for it.
+ */
+const fieldSchema = z
+  .object({
+    label: localizedString.optional(),
+    description: localizedString.optional(),
+    required: z.boolean().optional(),
+    /** The values a field may take; free text when unset. */
+    options: z.array(z.string().trim().min(1).max(100)).min(1).max(50).optional(),
+    default: z.string().trim().max(500).optional()
+  })
+  .strict()
+  .superRefine((field, ctx) => {
+    if (field.options && field.default !== undefined && !field.options.includes(field.default)) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['default'],
+        message: 'The default must be one of the options'
+      });
+    }
+    if (field.options && new Set(field.options).size !== field.options.length) {
+      ctx.addIssue({ code: 'custom', path: ['options'], message: 'An option is listed twice' });
+    }
+  });
+
+const fieldsSchema = z
+  .record(z.string().regex(FIELD_NAME_PATTERN, 'Field names use a-z, 0-9 and "_"'), fieldSchema)
+  .superRefine((fields, ctx) => {
+    const names = Object.keys(fields);
+    if (names.length > MAX_TEMPLATE_FIELDS) {
+      ctx.addIssue({
+        code: 'custom',
+        message: `At most ${MAX_TEMPLATE_FIELDS} fields per template`
+      });
+    }
+    for (const name of names) {
+      if (BUILT_IN_PLACEHOLDERS.includes(name)) {
+        ctx.addIssue({
+          code: 'custom',
+          path: [name],
+          message: `"${name}" is a built-in placeholder and cannot be a custom field`
+        });
+      }
+    }
+  });
+
 export const documentTemplateSchema = z
   .object({
     id: z
@@ -202,7 +279,8 @@ export const documentTemplateSchema = z
     document: documentSchema.optional().default({}),
     pdf: pdfSchema.optional().default({}),
     docx: docxSchema.optional().default({}),
-    pptx: pptxSchema.optional().default({})
+    pptx: pptxSchema.optional().default({}),
+    fields: fieldsSchema.optional().default({})
   })
   .strict()
   .superRefine((template, ctx) => {

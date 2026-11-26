@@ -21,7 +21,7 @@ const SLIDE_SIZES = Object.freeze({
   '4:3': { cx: 9144000, cy: 6858000 }
 });
 
-const DEFAULT_COLORS = Object.freeze({
+export const DEFAULT_COLORS = Object.freeze({
   primary: '1E3A8A',
   accent: '0F766E',
   text: '1F2937',

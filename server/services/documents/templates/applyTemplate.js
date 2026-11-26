@@ -4,6 +4,7 @@
 import { officeFontName } from '../officeFonts.js';
 import { loadTemplateBundle, resolveTemplateId } from './DocumentTemplateService.js';
 import { imageInfo } from './templateAssets.js';
+import { specifiedBrand } from './themeBrand.js';
 
 /**
  * Apply a document template to a document before it is rendered.
@@ -45,6 +46,16 @@ function withCompany(text, template) {
   return text.replaceAll('{company}', template.brand.companyName || '');
 }
 
+/**
+ * The template's brand settings, with the colours and fonts its Word and
+ * PowerPoint themes give where the template sets none. The neutral defaults
+ * are left out, so that a request's own colours still apply to a template
+ * that has no colours at all.
+ */
+function brandOf(bundle) {
+  return { ...bundle.template.brand, ...specifiedBrand(bundle.brand) };
+}
+
 /** A template setting when it is set, else the request's. */
 function pick(templateValue, requestValue) {
   return templateValue !== undefined && templateValue !== null ? templateValue : requestValue;
@@ -77,7 +88,8 @@ function logoSettings(bundle) {
 export function applyTemplateToPdfSpec(spec, bundle) {
   if (!bundle) return { spec, assets: undefined, templateId: null };
   const { template, assets } = bundle;
-  const { brand, document, pdf } = template;
+  const { document, pdf } = template;
+  const brand = brandOf(bundle);
   const page = spec.page || {};
   const letterhead = assets.letterhead || assets.letterheadFollowing;
   const hasLetterhead = Boolean(letterhead);
@@ -106,7 +118,7 @@ export function applyTemplateToPdfSpec(spec, bundle) {
         orientation: hasLetterhead
           ? document.orientation || letterhead.pageFormat?.orientation || 'portrait'
           : pick(page.orientation, document.orientation),
-        margins: pick(document.margins, page.margins)
+        margins: pick(bundle.pdfMargins, pick(document.margins, page.margins))
       },
       header: document.header !== undefined ? withCompany(document.header, template) : spec.header,
       footer: document.footer !== undefined ? withCompany(document.footer, template) : spec.footer,
@@ -133,7 +145,8 @@ export function applyTemplateToPdfSpec(spec, bundle) {
 export function applyTemplateToDocxSpec(spec, bundle) {
   if (!bundle) return { spec, assets: undefined, templateId: null };
   const { template, assets } = bundle;
-  const { brand, document } = template;
+  const { document } = template;
+  const brand = brandOf(bundle);
   const page = spec.page || {};
   return {
     templateId: template.id,
@@ -177,7 +190,8 @@ export function applyTemplateToDocxSpec(spec, bundle) {
 export function applyTemplateToPptxSpec(spec, bundle) {
   if (!bundle) return { spec, assets: undefined, templateId: null };
   const { template, assets } = bundle;
-  const { brand, pptx } = template;
+  const { pptx } = template;
+  const brand = brandOf(bundle);
   const logo = assets.logo?.data ? imageInfo(Buffer.from(assets.logo.data)) : null;
   return {
     templateId: template.id,
@@ -224,7 +238,7 @@ export function applyTemplateToPptxSpec(spec, bundle) {
 export function applyTemplateToXlsxSpec(spec, bundle) {
   if (!bundle) return { spec, assets: undefined, templateId: null };
   const { template } = bundle;
-  const { brand } = template;
+  const brand = brandOf(bundle);
   return {
     templateId: template.id,
     spec: {

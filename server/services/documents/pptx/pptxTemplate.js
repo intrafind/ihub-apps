@@ -193,7 +193,7 @@ function masterPlaceholderFor(master, ph) {
   return master.placeholders.find(p => p.type === kind) || null;
 }
 
-function themeOf(doc) {
+export function themeOf(doc) {
   const colors = {};
   const scheme = descendants(doc?.documentElement, 'clrScheme')[0];
   for (const child of childElements(scheme)) {

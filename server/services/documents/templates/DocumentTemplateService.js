@@ -17,6 +17,7 @@ import {
   referencedAssets
 } from '../../../validators/documentTemplateSchema.js';
 import { checkTemplateAsset, TemplateAssetError } from './templateAssets.js';
+import { pdfMarginsFromWordSetup, readThemeBrand, resolveBrand } from './themeBrand.js';
 
 /**
  * Document templates: a company's corporate design, applied to every PDF,
@@ -355,13 +356,97 @@ async function optionalAsset(template, name, label) {
   }
 }
 
+/** What was read from a template file, by kind, path, modification time and size. */
+const fileInfoCache = new Map();
+const FILE_INFO_CACHE_ENTRIES = 50;
+
+/**
+ * Something read from a template's Word or PowerPoint file, kept until the
+ * file changes, so that a document does not unpack the template again. A
+ * file that cannot be read gives null and a warning: the brand then comes
+ * from the next source.
+ */
+async function fileInfo(template, name, kind, read) {
+  try {
+    const file = assetPath(template.id, name);
+    const stat = await fs.stat(file);
+    const key = `${kind}:${file}:${stat.mtimeMs}:${stat.size}`;
+    if (fileInfoCache.has(key)) {
+      const hit = fileInfoCache.get(key);
+      fileInfoCache.delete(key);
+      fileInfoCache.set(key, hit);
+      return hit;
+    }
+    const value = await read(await readAsset(template.id, name));
+    fileInfoCache.set(key, value);
+    while (fileInfoCache.size > FILE_INFO_CACHE_ENTRIES) {
+      fileInfoCache.delete(fileInfoCache.keys().next().value);
+    }
+    return value;
+  } catch (error) {
+    logger.warn('A document template file could not be read', {
+      component: COMPONENT,
+      templateId: template.id,
+      file: name,
+      read: kind,
+      error: error.message
+    });
+    return null;
+  }
+}
+
+/**
+ * The brand of a template: its colours, palette and fonts, each from the
+ * template's own value, else the PowerPoint theme, else the Word theme, else
+ * the neutral default (see `themeBrand.js`).
+ *
+ * @param {Object} template - A parsed template.
+ * @returns {Promise<ReturnType<typeof resolveBrand>>}
+ */
+export async function resolveTemplateBrand(template) {
+  const themes = [];
+  for (const [source, format, name] of [
+    ['powerpoint', 'pptx', template.pptx?.template],
+    ['word', 'docx', template.docx?.template]
+  ]) {
+    if (!name) continue;
+    const brand = await fileInfo(template, name, `theme:${format}`, buffer =>
+      readThemeBrand(buffer, format)
+    );
+    if (brand) themes.push({ source, brand });
+  }
+  return resolveBrand({ brand: template.brand, themes });
+}
+
+/**
+ * The page margins of PDFs, `[left, top, right, bottom]` in points: the
+ * template's own `pdf.margins`, else the Word template's last section.
+ * Undefined when neither says: the PDF engine's default applies.
+ *
+ * @param {Object} template - A parsed template.
+ * @returns {Promise<number[]|undefined>}
+ */
+export async function resolvePdfMargins(template) {
+  if (template.pdf?.margins) return template.pdf.margins;
+  // Replaced by `pdf.margins` when the old document settings are removed.
+  if (template.document?.margins) return template.document.margins;
+  const name = template.docx?.template;
+  if (!name) return undefined;
+  const margins = await fileInfo(template, name, 'margins', async buffer => {
+    const { readWordTemplateLayout } = await import('../docx/wordTemplate.js');
+    return pdfMarginsFromWordSetup((await readWordTemplateLayout(buffer)).setup);
+  });
+  return margins || undefined;
+}
+
 /**
  * A template with the files one output format needs.
  *
  * @param {string|Object} idOrTemplate - An enabled template's id, or a
  *   template itself (the admin's sample of a disabled one).
  * @param {'pdf'|'docx'|'pptx'} format
- * @returns {Promise<{ template: Object, assets: Object } | null>}
+ * @returns {Promise<{ template: Object, assets: Object, brand: Object, pdfMargins?: number[] } | null>}
+ *   `brand` is the resolved brand (`resolveTemplateBrand`); `pdfMargins` is set for PDFs.
  */
 export async function loadTemplateBundle(idOrTemplate, format) {
   const template =
@@ -404,7 +489,12 @@ export async function loadTemplateBundle(idOrTemplate, format) {
       'powerpointTemplate'
     );
   }
-  return { template, assets };
+  return {
+    template,
+    assets,
+    brand: await resolveTemplateBrand(template),
+    ...(format === 'pdf' ? { pdfMargins: await resolvePdfMargins(template) } : {})
+  };
 }
 
 // --- Admin writes -----------------------------------------------------------
@@ -683,5 +773,6 @@ export async function readTemplateAsset(id, name) {
 export function clearTemplateCaches() {
   invalidate();
   assetCache.clear();
+  fileInfoCache.clear();
   assetCacheBytes = 0;
 }
