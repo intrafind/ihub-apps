@@ -1178,7 +1178,7 @@ export default function registerAdminIntegrationsRoutes(app) {
    *           type: string
    *     responses:
    *       200:
-   *         description: The skill's item, `status: approved`
+   *         description: "The skill's item, `status: approved`"
    *       400:
    *         description: "`BAD_REQUEST`: not a skill name"
    *       404:

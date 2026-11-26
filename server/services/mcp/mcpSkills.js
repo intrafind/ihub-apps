@@ -119,7 +119,7 @@ function canonical(value) {
   if (value && typeof value === 'object') {
     return Object.fromEntries(
       Object.keys(value)
-        .sort()
+        .sort((a, b) => a.localeCompare(b))
         .map(key => [key, canonical(value[key])])
     );
   }
@@ -334,11 +334,16 @@ export async function approveInstallationSkill(instanceId, name, user, deps = {}
   };
   // What is approved must also be what the server serves.
   try {
-    await d.manager.withUserConnection(instanceId, user, async conn => {
-      for (const resource of approval.resources) {
-        await readVerified(conn, instanceId, approval, skillFilePath(approval, resource.uri));
-      }
-    });
+    // One file after the other: an approval should not flood the server.
+    await d.manager.withUserConnection(instanceId, user, conn =>
+      approval.resources.reduce(
+        (done, resource) =>
+          done.then(() =>
+            readVerified(conn, instanceId, approval, skillFilePath(approval, resource.uri))
+          ),
+        Promise.resolve()
+      )
+    );
   } catch (error) {
     throw new ServiceError('SKILL_UNREADABLE', `The files of "${name}" could not be verified`, {
       details: { instanceId, name, reason: error.message }

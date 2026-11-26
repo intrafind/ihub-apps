@@ -932,7 +932,7 @@ export class InstalledIntegrationService {
         if (!instance)
           throw new IntegrationError('Integration not found', { status: 404, code: 'NOT_FOUND' });
         const before = structuredClone(instance);
-        const approved = { ...(instance.skills?.approved || {}) };
+        const approved = { ...instance.skills?.approved };
         if (cleaned) approved[skillName] = cleaned;
         else delete approved[skillName];
         if (Object.keys(approved).length) instance.skills = { approved };
