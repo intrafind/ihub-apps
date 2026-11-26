@@ -210,7 +210,8 @@ approving. Both may come later.
 
 | Surface                                                                  | Behaviour |
 | ------------------------------------------------------------------------ | --------- |
-| Inference API (OpenAI-compatible), app-as-tool, MCP gateway, A2A gateway | The call is refused with the tool result `APPROVAL_REQUIRED_NO_USER`; the model carries on. |
+| Inference API (OpenAI-compatible), app-as-tool, A2A gateway             | The call is refused with the tool result `APPROVAL_REQUIRED_NO_USER`; the model carries on. |
+| MCP gateway                                                              | The person is asked through their MCP client (elicitation); the call runs once they approve, and ends with `USER_REJECTED` otherwise. A client that cannot ask gets `APPROVAL_REQUIRED_NO_USER` ([MCP Integration](mcp-integration.md#approval-through-the-client-elicitation)). |
 | A client that does not draw the card (an integration posting to the chat API without `toolApprovalCapable: true`, or a chat request without an open stream) | Same: `APPROVAL_REQUIRED_NO_USER`. |
 | An MCP App view in a host that cannot show the card (an embed, a shared chat, Office) | 403 `APPROVAL_REQUIRED_NO_USER` for a gated tool. |
 | Workflow and agent nodes                                                 | Refused, unless the node names approver groups (`config.toolApproval.approverGroups`). Then the approval is parked for them in **Admin → Agents → Approvals**, and the node continues with the stored call once a member approves (or with `USER_REJECTED`). The call runs as the execution's own principal, never as the approver; the approver is recorded as the answer's author. A step that is retried after the approved call ran does not run it again (`APPROVAL_ALREADY_USED`). |

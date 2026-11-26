@@ -80,6 +80,19 @@ Who may use the server is granted on the groups (`groups.json` →
 The file's `security` block (`blockPrivateIps`, `allowedHosts`) applies to
 every integration, MCP servers included (see [Security](#security)).
 
+### Protocol revision
+
+Over Streamable HTTP iHub first asks the server for the **2026-07-28**
+revision (`server/discover`) and speaks it when the server answers; a server
+that predates it gets the 2025 `initialize` handshake, as before. Nothing has
+to be configured. The other transports (`sse`, `websocket`, `stdio`) keep the
+2025 handshake: a probe over `stdio` would start a second copy of the server
+process.
+
+On either revision iHub declares no elicitation, Tasks or Skills support as a
+client, so servers answer it the way they answer any client without them:
+synchronously, without asking the user anything mid-call.
+
 ### Transports
 
 | Transport        | When to use                                                                                                                                                                                                         |
@@ -411,8 +424,9 @@ The server's tool annotations (`readOnlyHint`, `destructiveHint`) are shown as
 the tool's side effect, but they are the server's own claim: a tool that says
 it only reads is still asked for under **Ask unless it only reads** until an
 admin confirms it as a read (an action override with `sideEffect: "read"`).
-Through the inbound MCP gateway nobody can approve: a gated tool answers
-`APPROVAL_REQUIRED_NO_USER` instead of running. An MCP App view's own call to
+Through the inbound MCP gateway the approval is asked of the person through
+their MCP client (see [Approval through the client](#approval-through-the-client-elicitation));
+a client that cannot ask gets `APPROVAL_REQUIRED_NO_USER` instead. An MCP App view's own call to
 a gated tool waits for the user's approval in the chat (the card appears below
 the view, the view gets the result once approved); see
 [Tool Approval → MCP App views](tool-approval.md#mcp-app-views).
@@ -883,6 +897,22 @@ GET    /mcp/.well-known   # Public unauthenticated discovery
 
 While disabled, `/mcp` is hard-404 — no probing leaks gateway existence.
 
+#### Protocol revisions
+
+The endpoint serves both protocol eras on the same URL:
+
+- **2026-07-28** (stateless). A request that carries the per-request `_meta`
+  envelope of this revision is served by a short-lived server built for that
+  one request; there is no session and no `Mcp-Session-Id`, so any worker and
+  any replica can answer it. Clients discover the gateway with `server/discover`.
+- **2025-era** (2024-11-05 … 2025-11-25). Everything else opens a session with
+  `initialize`, as described under [Session model](#session-model).
+
+The extensions below — [Skills](#skills-over-mcp), [Tasks](#long-runs-as-tasks)
+and [approval through the client](#approval-through-the-client-elicitation) —
+work for the clients that declare them; a client that does not gets the
+behaviour it had before.
+
 ### Authentication — OAuth-gated, never anonymous
 
 Every request to `/mcp*` carries an OAuth Bearer token. There is no
@@ -1246,6 +1276,84 @@ callers with the matching scope.
   filesystem access, and these resources replace them for external
   callers.
 
+### Skills over MCP
+
+The skills a caller may use are also served over the MCP Skills extension
+(`io.modelcontextprotocol/skills`), next to the `ihub://skill/...` resources and
+under the same switch (`expose.resources`, scope `mcp:resources:read`) and the
+same grant (`permissions.skills`). A client that loads skills (Claude Code, for
+one) lists them with `skills/list` and reads each file with `resources/read` at
+`skill://<skill>/<path>`:
+
+```
+skill://ifinder-search/SKILL.md
+skill://ifinder-search/references/query-cookbook.md
+```
+
+Each entry carries the skill's frontmatter and the manifest of its files with
+their SHA-256 digests and sizes, so a client can show the skill and ask its
+user to approve it before reading anything, and checks every file it reads
+against the manifest. `SKILL.md` keeps its frontmatter byte for byte; its body
+is what the skill loader resolves. Only the text files a skill bundles
+(`references/`, `scripts/`, `assets/`) are served; binary files are left out of
+the manifest. A skill whose `SKILL.md` has no frontmatter is not served.
+
+### Long runs as tasks
+
+An app or workflow run takes as long as its model calls, often longer than an
+MCP client keeps a request open. A client that declares the MCP Tasks extension
+(`io.modelcontextprotocol/tasks`, 2026-07-28) gets a task handle for an
+`app__*` or `workflow__*` call instead of waiting:
+
+```json
+{ "resultType": "task", "taskId": "3f97e4cc-…", "status": "working",
+  "ttlMs": 90000000, "pollIntervalMs": 5000 }
+```
+
+It polls `tasks/get` until the task is `completed` (with the tool result),
+`failed` (with the error) or `cancelled`, and stops it with `tasks/cancel`. A
+task is visible to the caller who started it only, on every worker and replica
+(tasks are documents in the `mcp-tasks` storage namespace), and is kept for
+25 hours from its start. Cancelling stops an app run; a workflow run goes on
+to its end, but its result is dropped. The actions of installed integrations
+answer directly, as before.
+
+### Approval through the client (elicitation)
+
+A tool whose approval policy needs a person ([Tool Approval](tool-approval.md):
+`always`, or `writes` for a write action) is asked about through the caller's
+MCP client. The first call answers with a question (MCP elicitation, form mode):
+the tool, its integration and its arguments, and an **Approve** checkbox. The
+client shows it to its user and repeats the call with the answer; the tool runs
+only when the user approved. A declined or unchecked answer ends the call with
+`USER_REJECTED`.
+
+The question carries a signed state (HMAC under a key derived from the
+installation's encryption key, valid for 15 minutes) naming the caller, the
+tool and a digest of the arguments. Only an answer that comes back with that
+state counts, so a client cannot approve a call by sending an answer nobody was
+asked for, nor reuse an approval for other arguments.
+
+What the person sees is up to the client, and a client can be set up to answer
+questions on its own (Claude Code's `Elicitation` hook, for one). To keep
+gateway callers from running an action at all, switch the action off on the
+installation or take the integration out of their groups' grants
+(`permissions.integrations`); the approval mode decides only whether a person
+is asked.
+
+A client that declares no form elicitation — and a 2025-era client in
+[stateless mode](#stateless-mode-load-balanced-deployments) or on a session held
+by another worker, where the gateway cannot send it a question — gets the call
+refused with `APPROVAL_REQUIRED_NO_USER`, as before.
+
+### Tool annotations
+
+The actions of installed integrations carry MCP tool annotations from the side
+effect iHub resolves for them: `readOnlyHint: true` for a read, and
+`readOnlyHint: false` with `destructiveHint` for a write or destructive action.
+Clients use them as hints, for example to run read-only calls in parallel or to
+repeat one after a dropped connection.
+
 ### Files through MCP
 
 Files travel both ways; the full behaviour is described in [Chat and Scheduled-Task Files](chat-files.md#inference-api-mcp-and-a2a).
@@ -1284,7 +1392,9 @@ user's grant as the session saw it; a gateway session builds its tool list and
 permissions once, so a grant that is withdrawn keeps working until that session
 ends. Disabling or removing an installation takes effect on the next call.
 A tool whose approval policy needs a person (`always`, or `writes` for a write
-action) is refused for a gateway call, because nobody there can approve it.
+action) is asked about through the client (see
+[Approval through the client](#approval-through-the-client-elicitation)), and
+refused when the client cannot ask anyone.
 There is no separate tool grant and no carrier app.
 
 Left out, as before:
@@ -1311,6 +1421,9 @@ gateway's `expose.tools` switch (Admin → MCP gateway) turns the tool list off
 as a whole.
 
 ### Session model
+
+This section describes 2025-era clients; a 2026-07-28 client never opens a
+session (see [Protocol revisions](#protocol-revisions)).
 
 By default the gateway is stateful: an `initialize` request receives a
 session id, echoed by the client on subsequent requests as
@@ -1716,3 +1829,8 @@ Discovery: `/mcp/.well-known` advertises `a2a_endpoint` when enabled.
   currently run the LLM call synchronously without iHub's tool
   executor; an MCP-side tool loop is a follow-up.
 - **mTLS** for service-to-service — additive layer; optional.
+- **The MCP extensions as a client** — iHub does not yet answer an external
+  server's elicitation in the chat, poll its tasks, or load its skills. Servers
+  answer iHub as a client without those extensions (synchronously, without
+  asking mid-call). The plan is in
+  `concepts/2026-11-26 MCP Extensions on the Client Side.md`.

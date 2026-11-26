@@ -72,8 +72,12 @@ class FakeStreamableHTTPServerTransport {
   }
 }
 
-jest.unstable_mockModule('@modelcontextprotocol/sdk/server/streamableHttp.js', () => ({
-  StreamableHTTPServerTransport: FakeStreamableHTTPServerTransport
+// The rest of the Node adapter stays real (the 2026-07-28 path uses it); the
+// real module is loaded before the mock is registered.
+const actualNodeAdapter = await import('@modelcontextprotocol/node');
+jest.unstable_mockModule('@modelcontextprotocol/node', () => ({
+  ...actualNodeAdapter,
+  NodeStreamableHTTPServerTransport: FakeStreamableHTTPServerTransport
 }));
 
 // Cluster bus stand-in. `remote` holds `<kind>:<key>` entries that another
@@ -144,6 +148,44 @@ describe('MCP gateway session handling', () => {
     bus.published.length = 0;
     bus.requests.length = 0;
     bus.reply = null;
+  });
+
+  it('serves a 2026-07-28 request statelessly, as the authenticated caller', async () => {
+    const { McpServer } = await import('@modelcontextprotocol/server');
+    buildMcpServer.mockImplementation(
+      async () =>
+        new McpServer(
+          { name: 'ihub-apps', version: '1.0.0' },
+          { capabilities: { tools: { listChanged: false } } }
+        )
+    );
+
+    const res = await request(makeApp())
+      .post('/mcp')
+      .set('Accept', 'application/json, text/event-stream')
+      .set('MCP-Protocol-Version', '2026-07-28')
+      .set('Mcp-Method', 'server/discover')
+      .send({
+        jsonrpc: '2.0',
+        id: 1,
+        method: 'server/discover',
+        params: {
+          _meta: {
+            'io.modelcontextprotocol/protocolVersion': '2026-07-28',
+            'io.modelcontextprotocol/clientInfo': { name: 'host', version: '1' },
+            'io.modelcontextprotocol/clientCapabilities': {}
+          }
+        }
+      });
+
+    expect(res.status).toBe(200);
+    expect(res.body.result.supportedVersions).toContain('2026-07-28');
+    // No session: neither a session id nor a transport of the session path.
+    expect(res.headers['mcp-session-id']).toBeUndefined();
+    expect(transports).toHaveLength(0);
+    expect(buildMcpServer).toHaveBeenCalledWith(
+      expect.objectContaining({ era: 'modern', user: expect.objectContaining({ id: 'user-1' }) })
+    );
   });
 
   it('answers 404 Session not found for an unknown session id', async () => {

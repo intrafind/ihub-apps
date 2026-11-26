@@ -5,8 +5,8 @@ import { describe, it, expect, jest, beforeAll, afterAll, beforeEach } from '@je
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { Client } from '@modelcontextprotocol/sdk/client/index.js';
-import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
+import { Client } from '@modelcontextprotocol/client';
+import { InMemoryTransport } from '@modelcontextprotocol/client';
 import { FilesystemStorageProvider } from '../../storage/index.js';
 
 /**
@@ -208,7 +208,8 @@ describe('the files input of app and workflow tools', () => {
       [{ name: 'a.csv', data: 'not base64 !!' }, /not valid base64/],
       [{ name: 'a.csv', data: 'A'.repeat(36 * 1024 * 1024) }, /larger than 25 MB/],
       [{ name: 'a.csv' }, /needs "data"/],
-      [{ data: 'aGk=' }, /files\[0\]\.name/],
+      // Caught by the advertised schema before the handler runs.
+      [{ data: 'aGk=' }, /files\/0 must have required property 'name'/],
       [{ name: 'pic.png', mimeType: 'image/png', data: PNG_B64 }, /unsupported type/]
     ];
     for (const [file, pattern] of cases) {

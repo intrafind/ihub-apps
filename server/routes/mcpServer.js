@@ -1,7 +1,12 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
-import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
+import {
+  NodeStreamableHTTPServerTransport,
+  toNodeHandler,
+  toWebRequest
+} from '@modelcontextprotocol/node';
+import { createMcpHandler, isLegacyRequest } from '@modelcontextprotocol/server';
 import { createHash, randomUUID } from 'node:crypto';
 import express from 'express';
 import mcpAuth from '../middleware/mcpAuth.js';
@@ -9,6 +14,7 @@ import { createRateLimiters } from '../middleware/rateLimiting.js';
 import { buildMcpServer } from '../services/mcp/McpServerService.js';
 import { dispatchA2A, buildAgentCard, A2aError, A2A_ERRORS } from '../services/mcp/a2aHandler.js';
 import { getA2aTaskStore } from '../services/mcp/a2aTaskStore.js';
+import { getMcpTaskStore } from '../services/mcp/mcpTaskStore.js';
 import configCache from '../configCache.js';
 import { buildServerPath } from '../utils/basePath.js';
 import logger from '../utils/logger.js';
@@ -36,7 +42,14 @@ import {
  *   GET  /a2a/skills/:skillId/.well-known/agent-card.json — card bound to one skill
  *   POST /a2a/skills/:skillId                      — JSON-RPC bound to one skill
  *
- * Sessions are stateful by default: an MCP `initialize` request receives a
+ * Two protocol eras share the endpoint. A POST that carries the 2026-07-28
+ * per-request `_meta` envelope is served statelessly by the SDK's
+ * `createMcpHandler`: one short-lived McpServer per request, no session, the
+ * client's capabilities in every request. Everything else is 2025-era traffic
+ * and takes the session path below (`isLegacyRequest` decides, the same check
+ * the SDK's own entry runs).
+ *
+ * 2025-era sessions are stateful by default: an MCP `initialize` request receives a
  * session id that the client echoes back via `Mcp-Session-Id` on subsequent
  * requests. Stateful sessions keep the in-memory `McpServer` registry alive
  * across requests so tool callbacks stay bound to the same authenticated user.
@@ -328,10 +341,10 @@ export default function registerMcpServerRoutes(app) {
    */
   async function createTransport(req, { stateless }) {
     const platform = configCache.getPlatform() || {};
-    const server = await buildMcpServer({ user: req.user, platform });
+    const server = await buildMcpServer({ user: req.user, platform, era: 'legacy' });
     const entry = { transport: null, server, userId: req.user.id, lastSeen: Date.now() };
 
-    const transport = new StreamableHTTPServerTransport({
+    const transport = new NodeStreamableHTTPServerTransport({
       // `undefined` puts the SDK transport in stateless mode: no session id is
       // issued and no session validation is performed.
       sessionIdGenerator: stateless ? undefined : () => mintGatewaySessionId(req.user.id),
@@ -428,12 +441,51 @@ export default function registerMcpServerRoutes(app) {
     }
   }
 
+  // ---- 2026-07-28: one stateless server per request ----------------------
+  // The factory builds the caller's server from the user `mcpAuth`
+  // authenticated, handed over as the pass-through `authInfo` (`req.auth`).
+  const reportModernError = err =>
+    logger.warn('MCP gateway rejected a 2026-07-28 request', {
+      component: 'McpGateway',
+      error: err?.message
+    });
+  const modernHandler = createMcpHandler(
+    async ({ authInfo }) =>
+      buildMcpServer({
+        user: authInfo?.extra?.user,
+        platform: configCache.getPlatform() || {},
+        era: 'modern'
+      }),
+    { legacy: 'reject', onerror: reportModernError }
+  );
+  const serveModern = toNodeHandler(modernHandler, { onerror: reportModernError });
+
+  /** Whether a POST speaks the 2026-07-28 revision (carries the `_meta` envelope). */
+  async function isModernPost(req) {
+    if (req.method !== 'POST') return false;
+    try {
+      return !(await isLegacyRequest(await toWebRequest(req, req.body)));
+    } catch {
+      return false;
+    }
+  }
+
   const streamableHttpHandler = async (req, res) => {
     const cfg = gatewayConfig();
     if (cfg.transports?.streamableHttp?.enabled === false) {
       return res
         .status(404)
         .json({ error: 'not_found', error_description: 'Streamable HTTP transport disabled' });
+    }
+
+    if (await isModernPost(req)) {
+      req.auth = {
+        token: '',
+        clientId: req.user.clientId || req.user.id,
+        scopes: Array.isArray(req.user.scopes) ? req.user.scopes : [],
+        extra: { user: req.user }
+      };
+      return serveModern(req, res, req.body);
     }
 
     const stateless = cfg.transports?.streamableHttp?.stateless === true;
@@ -849,5 +901,11 @@ export default function registerMcpServerRoutes(app) {
     getA2aTaskStore()
       .sweep()
       .catch(() => {});
+    // MCP tasks (2026-07-28 Tasks extension) past their time to live.
+    if (gatewayEnabled()) {
+      getMcpTaskStore()
+        .sweep()
+        .catch(() => {});
+    }
   }, SESSION_SWEEP_INTERVAL_MS).unref();
 }

@@ -2,11 +2,12 @@
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
 import { describe, it, expect } from '@jest/globals';
-import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
-import { Client } from '@modelcontextprotocol/sdk/client/index.js';
-import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
+import { McpServer } from '@modelcontextprotocol/server';
+import { Client } from '@modelcontextprotocol/client';
+import { InMemoryTransport } from '@modelcontextprotocol/client';
 import {
   jsonSchemaToInputSchema,
+  toAdvertisedJsonSchema,
   buildAppInputSchema,
   buildWorkflowMcpParams
 } from '../../services/mcp/McpServerService.js';
@@ -16,7 +17,7 @@ import {
  *
  * The gateway builds a correct JSON Schema (with `message`/`input` + declared
  * variables) but used to hand it to the SDK under a `jsonSchema` config key.
- * SDK 1.x `registerTool` only reads `inputSchema` and requires a Zod raw shape,
+ * SDK 1.x `registerTool` only read `inputSchema` and required a Zod raw shape,
  * so it ignored our schema and every tool advertised `{ properties: {} }`.
  * Clients then stripped all arguments and calls failed with
  * "Missing required argument: 'message'".
@@ -74,7 +75,7 @@ describe('MCP gateway input schema advertisement', () => {
     expect(tool.inputSchema.required).not.toContain('tone');
   });
 
-  it('passes declared args to the handler and strips undeclared ones', async () => {
+  it('passes the arguments to the handler as the client sent them', async () => {
     const app = {
       id: 'web-chat',
       variables: [{ name: 'tone', type: 'string', required: false }]
@@ -99,8 +100,11 @@ describe('MCP gateway input schema advertisement', () => {
 
     expect(received.message).toBe('who is daniel manzke?');
     expect(received.tone).toBe('formal');
-    // Undeclared keys are stripped by the Zod object (default strip behaviour).
-    expect(received.bogus).toBeUndefined();
+    // The schema is advertised and validated as JSON Schema, which lets an
+    // undeclared key through; the handlers drop what they do not read, and
+    // `withTrustedToolContext` strips the identity fields an argument could
+    // try to set.
+    expect(received.bogus).toBe('x');
   });
 
   it('rejects a call missing the required message argument', async () => {
@@ -223,9 +227,46 @@ describe('MCP gateway input schema advertisement', () => {
     expect(received.payload).toEqual({ a: 1, nested: { b: 'two' } });
   });
 
-  it('omits inputSchema for a paramless definition (no forced validation)', () => {
-    expect(jsonSchemaToInputSchema({ type: 'object', properties: {} })).toEqual({});
-    expect(jsonSchemaToInputSchema(null)).toEqual({});
+  it('gives a paramless definition an empty object schema', async () => {
+    // Without an inputSchema the SDK would pass the handler the request
+    // context as its only argument.
+    const { client } = await connect(server => {
+      server.registerTool(
+        'ping',
+        { description: 'ping', ...jsonSchemaToInputSchema(null) },
+        async args => ({
+          content: [{ type: 'text', text: JSON.stringify(args) }]
+        })
+      );
+    });
+    const { tools } = await client.listTools();
+    expect(tools[0].inputSchema).toEqual({ type: 'object', properties: {} });
+    const result = await client.callTool({ name: 'ping', arguments: {} });
+    expect(result.content[0].text).toBe('{}');
+  });
+
+  it('advertises a localized description as one string, keeping a property named description', () => {
+    const advertised = toAdvertisedJsonSchema({
+      type: 'object',
+      description: { en: 'Search', de: 'Suche' },
+      properties: {
+        description: { type: 'string', description: { en: 'The text', de: 'Der Text' } },
+        filter: {
+          type: 'object',
+          properties: { tag: { type: 'string', description: 'A tag' } }
+        }
+      },
+      required: ['description']
+    });
+    expect(advertised).toEqual({
+      type: 'object',
+      description: 'Search',
+      properties: {
+        description: { type: 'string', description: 'The text' },
+        filter: { type: 'object', properties: { tag: { type: 'string', description: 'A tag' } } }
+      },
+      required: ['description']
+    });
   });
 
   describe('optional model selection on app tools', () => {
