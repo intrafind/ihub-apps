@@ -34,7 +34,7 @@ describe('detector SSL whitelist: decision', () => {
   let mock;
 
   beforeAll(async () => {
-    certificate = createSelfSignedCertificate('ihub-wm-tls-');
+    certificate = createSelfSignedCertificate();
     const server = https.createServer({ key: certificate.key, cert: certificate.cert });
     mock = await startMockDetector({ token: 'tls-token-1234567', server });
     configCache.setCacheEntry('config/credentials.json', {

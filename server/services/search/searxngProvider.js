@@ -34,6 +34,7 @@
  * @module services/search/searxngProvider
  */
 import { SearchProvider } from './SearchProvider.js';
+import { networkFailure, readJsonBody, searchFailure, waitBeforeRetry } from './providerRequest.js';
 import { resolveSearchLanguage } from './searchLanguage.js';
 import { resolveSearxngSettings } from './websearchConfig.js';
 import { emitToolProgress } from '../loop/RunStream.js';
@@ -47,6 +48,10 @@ export const SEARXNG_MAX_WEB_RESULTS = 20;
 
 /** Results returned when the caller does not say. */
 export const SEARXNG_DEFAULT_RESULTS = 10;
+
+/** What to check when the instance cannot be reached. */
+const SELF_HOSTED_HINT =
+  'A self-signed or private-CA certificate needs ssl.ignoreInvalidCertificates and the host in ssl.domainWhitelist (platform.json). With an outbound proxy configured, an instance on the internal network needs a proxy bypass.';
 
 /** Identifies iHub to the instance (and its logs); an operator can allow it by name. */
 export const SEARXNG_USER_AGENT = 'iHub-Apps (web search)';
@@ -364,7 +369,7 @@ class SearxngSearchProvider extends SearchProvider {
 
     while (true) {
       const res = await this.fetchOnce(url, settings);
-      const payload = await readJson(res);
+      const payload = await readJsonBody(res);
       const error = parseSearxngError(payload, res.status);
 
       if (!error) {
@@ -379,34 +384,18 @@ class SearxngSearchProvider extends SearchProvider {
       // rejected credential is a property of the instance, not of this try.
       const retryable = error.code === 'SEARXNG_RATE_LIMITED' || res.status === 503;
       if (retryable && attempt < MAX_RETRIES) {
-        const retryAfter = Number(res.headers?.get?.('retry-after'));
-        const waitMs =
-          Number.isFinite(retryAfter) && retryAfter > 0
-            ? Math.min(retryAfter * 1000, 5000)
-            : this.retryBackoffMs * (attempt + 1);
-        logger.warn('SearXNG search rate-limited; backing off and retrying', {
-          component: 'WebSearch',
+        await waitBeforeRetry({
+          res,
+          attempt,
+          backoffMs: this.retryBackoffMs,
           provider: 'searxng',
-          status: res.status,
-          attempt: attempt + 1,
-          waitMs
+          label: 'SearXNG'
         });
-        await new Promise(resolve => setTimeout(resolve, waitMs));
         attempt += 1;
         continue;
       }
 
-      logger.error('SearXNG search failed', {
-        component: 'WebSearch',
-        provider: 'searxng',
-        status: res.status,
-        errorCode: error.code,
-        errorMessage: error.message
-      });
-      const err = new Error(error.message);
-      err.code = error.code;
-      err.status = res.status;
-      throw err;
+      throw searchFailure({ error, res, provider: 'searxng', label: 'SearXNG' });
     }
   }
 
@@ -423,37 +412,14 @@ class SearxngSearchProvider extends SearchProvider {
     try {
       return await this.fetchImpl(url, { headers });
     } catch (error) {
-      const causeMsg =
-        error?.cause?.message || (typeof error?.cause === 'string' ? error.cause : undefined);
-      logger.error('SearXNG search network request failed', {
-        component: 'WebSearch',
+      throw networkFailure({
+        error,
         provider: 'searxng',
-        instance: settings.baseUrl,
-        errorName: error?.name,
-        errorCode: error?.code || error?.cause?.code,
-        errorMessage: error?.message,
-        errorCause: causeMsg,
-        hint: 'A self-signed or private-CA certificate needs ssl.ignoreInvalidCertificates and the host in ssl.domainWhitelist (platform.json). With an outbound proxy configured, an instance on the internal network needs a proxy bypass.'
+        label: 'SearXNG',
+        details: { instance: settings.baseUrl },
+        hint: SELF_HOSTED_HINT
       });
-      const detailParts = [error?.message];
-      if (error?.code) detailParts.push(`code=${error.code}`);
-      if (causeMsg) detailParts.push(`cause=${causeMsg}`);
-      const wrapped = new Error(
-        `SearXNG search request failed: ${detailParts.filter(Boolean).join(' ')}`
-      );
-      wrapped.code = error?.code || error?.cause?.code || 'NETWORK_ERROR';
-      wrapped.cause = error;
-      throw wrapped;
     }
-  }
-}
-
-/** The body as JSON, or null when it is not JSON (an HTML page of a proxy, a 403 page). */
-async function readJson(res) {
-  try {
-    return await res.json();
-  } catch {
-    return null;
   }
 }
 

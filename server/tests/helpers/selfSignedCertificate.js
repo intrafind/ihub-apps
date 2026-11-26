@@ -17,13 +17,12 @@ export const opensslAvailable = spawnSync('openssl', ['version']).status === 0;
 /**
  * Create a certificate valid for one day for `127.0.0.1` in a new temp directory.
  *
- * @param {string} [prefix] - prefix of the temp directory name
  * @returns {{ dir: string, key: string, cert: string, remove: () => void }} the PEM contents
  *   of the key and certificate, and a function that deletes the directory
  * @throws {Error} when `openssl` fails
  */
-export function createSelfSignedCertificate(prefix = 'ihub-tls-') {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), prefix));
+export function createSelfSignedCertificate() {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ihub-tls-'));
   const keyFile = path.join(dir, 'key.pem');
   const certFile = path.join(dir, 'cert.pem');
   const made = spawnSync('openssl', [

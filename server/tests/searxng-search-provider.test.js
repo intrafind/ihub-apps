@@ -390,7 +390,7 @@ describe('the default transport honours the SSL whitelist', () => {
     await new Promise(resolve => plain.listen(0, '127.0.0.1', resolve));
     plainPort = plain.address().port;
     if (!opensslAvailable) return;
-    certificate = createSelfSignedCertificate('ihub-searxng-tls-');
+    certificate = createSelfSignedCertificate();
     server = https.createServer({ key: certificate.key, cert: certificate.cert }, serve);
     await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
     port = server.address().port;
