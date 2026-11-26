@@ -33,7 +33,8 @@ export const SELF_TEST_STATE = Object.freeze({
  * @returns {'passed'|'failed'|'inconclusive'}
  */
 export function stateOfDiagnosis(diagnosis) {
-  if (diagnosis === 'keys_match') return SELF_TEST_STATE.PASSED;
+  // `watermark_found`: a model whose image holds the key (no iHub key to compare).
+  if (diagnosis === 'keys_match' || diagnosis === 'watermark_found') return SELF_TEST_STATE.PASSED;
   if (diagnosis === 'too_short') return SELF_TEST_STATE.INCONCLUSIVE;
   return SELF_TEST_STATE.FAILED;
 }
@@ -44,15 +45,26 @@ export function stateOfDiagnosis(diagnosis) {
  *
  * @param {string} modelId
  * @param {{diagnosis: string, matchedKeyId?: string}} result
- * @param {{now?: Date, activeKeyId?: string|null}} [options]
+ * @param {{now?: Date, activeKeyId?: string|null, keyHolder?: 'ihub'|'model',
+ *   detector?: {api: string, url: string|null}|null}} [options] - `activeKeyId` and
+ *   `detector` as they were when the test started
  */
-export async function recordSelfTest(modelId, result, { now = new Date(), activeKeyId } = {}) {
+export async function recordSelfTest(
+  modelId,
+  result,
+  { now = new Date(), activeKeyId, keyHolder = 'ihub', detector = null } = {}
+) {
   const entry = {
     at: now.toISOString(),
     diagnosis: result.diagnosis,
     state: stateOfDiagnosis(result.diagnosis),
     // The key that was active when the test ran: a later key change makes it stale.
-    keyId: activeKeyId === undefined ? getActiveKeyId() : activeKeyId
+    keyId: activeKeyId === undefined ? getActiveKeyId() : activeKeyId,
+    // Who held the key: a test of the image's key says nothing about iHub's, and back.
+    keyHolder,
+    // Where the text was detected (image, gateway, iHub's detector): a test of one
+    // route says nothing about another one.
+    ...(detector ? { detector: { api: detector.api, url: detector.url ?? null } } : {})
   };
   try {
     await configStore.updateJson(SELF_TESTS_FILE, current => ({
@@ -67,7 +79,7 @@ export async function recordSelfTest(modelId, result, { now = new Date(), active
   }
 }
 
-/** @returns {Promise<Object<string, {at: string, diagnosis: string, state: string, keyId: string|null}>>} */
+/** @returns {Promise<Object<string, {at: string, diagnosis: string, state: string, keyId: string|null, keyHolder?: string}>>} */
 export async function readSelfTests() {
   try {
     const data = await configStore.readJson(SELF_TESTS_FILE);
@@ -78,15 +90,27 @@ export async function readSelfTests() {
 }
 
 /**
- * The state of a model's last test against the key that is active now.
+ * The state of a model's last test against the key that is active now. A passed
+ * test is stale after a key change, after the key holder changed (an entry
+ * without `keyHolder` predates the image-held keys and tested iHub's key), and
+ * after the detection route or its address changed (an entry without `detector`
+ * cannot tell and is not aged by it).
  *
  * @param {Object|undefined} entry
  * @param {string|null} activeKeyId
+ * @param {'ihub'|'model'} [keyHolder]
+ * @param {{api: string, url: string|null}|null} [detector] - The current route
  */
-export function selfTestSummary(entry, activeKeyId) {
+export function selfTestSummary(entry, activeKeyId, keyHolder = 'ihub', detector = null) {
   if (!entry) return { state: SELF_TEST_STATE.NEVER, at: null, keyId: null, diagnosis: null };
+  const holderChanged = (entry.keyHolder ?? 'ihub') !== keyHolder;
+  const keyChanged = Boolean(entry.keyId) && entry.keyId !== activeKeyId;
+  const routeChanged =
+    Boolean(entry.detector && detector) &&
+    (entry.detector.api !== detector.api ||
+      (entry.detector.url ?? null) !== (detector.url ?? null));
   const stale =
-    entry.state !== SELF_TEST_STATE.FAILED && entry.keyId && entry.keyId !== activeKeyId;
+    entry.state !== SELF_TEST_STATE.FAILED && (holderChanged || keyChanged || routeChanged);
   return {
     state: stale ? SELF_TEST_STATE.STALE : entry.state,
     at: entry.at,

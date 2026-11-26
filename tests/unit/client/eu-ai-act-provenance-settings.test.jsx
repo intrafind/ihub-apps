@@ -5,15 +5,26 @@
  * Admin → EU AI Act → Provenance settings: defaults and units shown, the same
  * bounds as the server, errors tied to their fields, a consequence dialog for a
  * lowered retention and for the verify access, a save that sends a partial block,
- * and a server error shown on its field.
+ * and a server error shown on its field. The watermark sections of the block
+ * (gateway, thresholds) are forms of their own in the card "Text watermark", each
+ * saving only its fields.
  */
 import '@testing-library/jest-dom';
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { fireEvent, render as renderPlain, screen, waitFor, within } from '@testing-library/react';
+import { MemoryRouter } from 'react-router-dom';
+
+// The card links to the credentials page, as it does inside the admin area.
+const render = ui => renderPlain(<MemoryRouter>{ui}</MemoryRouter>);
 
 const mockAdminCall = jest.fn();
 jest.mock('../../../client/src/api/adminApi', () => ({
   __esModule: true,
   makeAdminApiCall: (...a) => mockAdminCall(...a),
+  listCredentials: () =>
+    Promise.resolve([
+      { id: 'ifinder-gateway', type: 'oauth2', name: 'iFinder gateway' },
+      { id: 'basic-x', type: 'basic', name: 'Basic' }
+    ]),
   getAdminApiErrorMessage: err => err?.response?.data?.detail || err?.message || 'error'
 }));
 const t = (key, fallback, options) => {
@@ -34,7 +45,9 @@ import {
   SaveSectionsBar,
   SaveSectionsProvider
 } from '../../../client/src/features/admin/components/SaveSections';
-import ProvenanceSettingsCard from '../../../client/src/features/admin/components/euAiAct/ProvenanceSettingsCard';
+import ProvenanceSettingsCard, {
+  ProvenanceSettingsForm
+} from '../../../client/src/features/admin/components/euAiAct/ProvenanceSettingsCard';
 import {
   buildBody,
   consequences,
@@ -93,29 +106,42 @@ beforeEach(() => jest.clearAllMocks());
 describe('provenance settings form helpers', () => {
   test('bytes are shown as MiB and an untouched size is saved byte-exact', () => {
     const form = toForm({ media: { maxVerifyBytes: 1234567 } });
-    expect(buildBody(form).media.maxVerifyBytes).toBe(1234567);
-    expect(buildBody({ ...form, maxVerifyMib: '2' }).media.maxVerifyBytes).toBe(2 * 1024 * 1024);
+    expect(buildBody(form, 'provenance').media.maxVerifyBytes).toBe(1234567);
+    expect(buildBody({ ...form, maxVerifyMib: '2' }, 'provenance').media.maxVerifyBytes).toBe(
+      2 * 1024 * 1024
+    );
     expect(toForm({}).maxVerifyMib).toBe('50');
   });
 
   test('empty watermark fields mean "default" (null); bounds match the server', () => {
     const form = toForm({});
-    expect(buildBody(form).watermark).toEqual({
-      alpha: null,
-      minScoredTokens: null,
-      detectorTimeoutMs: null
+    expect(buildBody(form, 'thresholds')).toEqual({
+      watermark: { alpha: null, minScoredTokens: null, detectorTimeoutMs: null }
     });
-    expect(validateForm(form)).toEqual({});
-    expect(validateForm({ ...form, retentionDays: '-1' }).retentionDays).toBe('min');
-    expect(validateForm({ ...form, retentionDays: '1.5' }).retentionDays).toBe('integer');
-    expect(validateForm({ ...form, retentionDays: '36501' }).retentionDays).toBe('max');
-    expect(validateForm({ ...form, retentionDays: '' }).retentionDays).toBe('required');
-    expect(validateForm({ ...form, alpha: '0' }).alpha).toBe('min');
-    expect(validateForm({ ...form, alpha: '1' }).alpha).toBe('max');
-    expect(validateForm({ ...form, alpha: 'abc' }).alpha).toBe('number');
-    expect(validateForm({ ...form, detectorTimeoutMs: '999' }).detectorTimeoutMs).toBe('min');
-    expect(validateForm({ ...form, maxVerifyMib: '0.0001' }).maxVerifyBytes).toBe('min');
-    expect(validateForm({ ...form, maxVerifyMib: '1025' }).maxVerifyBytes).toBe('max');
+    expect(buildBody(form, 'gateway')).toEqual({
+      watermark: { gatewayUrl: null, gatewayCredentialRef: null }
+    });
+    expect(buildBody(form, 'provenance')).not.toHaveProperty('watermark');
+    expect(validateForm(form, 'provenance')).toEqual({});
+    const records = field => validateForm({ ...form, ...field }, 'provenance');
+    expect(records({ retentionDays: '-1' }).retentionDays).toBe('min');
+    expect(records({ retentionDays: '1.5' }).retentionDays).toBe('integer');
+    expect(records({ retentionDays: '36501' }).retentionDays).toBe('max');
+    expect(records({ retentionDays: '' }).retentionDays).toBe('required');
+    expect(records({ maxVerifyMib: '0.0001' }).maxVerifyBytes).toBe('min');
+    expect(records({ maxVerifyMib: '1025' }).maxVerifyBytes).toBe('max');
+    const thresholds = field => validateForm({ ...form, ...field }, 'thresholds');
+    expect(thresholds({ alpha: '0' }).alpha).toBe('min');
+    expect(thresholds({ alpha: '1' }).alpha).toBe('max');
+    expect(thresholds({ alpha: 'abc' }).alpha).toBe('number');
+    expect(thresholds({ detectorTimeoutMs: '999' }).detectorTimeoutMs).toBe('min');
+  });
+
+  test('a section only answers for its own fields', () => {
+    const form = { ...toForm({}), alpha: '2', retentionDays: '-1', gatewayUrl: 'ftp://x' };
+    expect(validateForm(form, 'provenance')).toEqual({ retentionDays: 'min' });
+    expect(validateForm(form, 'thresholds')).toEqual({ alpha: 'max' });
+    expect(validateForm(form, 'gateway')).toEqual({ gatewayUrl: 'url' });
   });
 
   test('consequences: lowering the retention (also from "forever") and changing the access', () => {
@@ -139,8 +165,9 @@ describe('ProvenanceSettingsCard', () => {
     expect(await screen.findByLabelText(/Keep records for/)).toHaveValue(365);
     expect(screen.getByLabelText(/Largest file that can be checked/)).toHaveValue(50);
     expect(screen.getByText(/Default: 50 MiB\./)).toBeInTheDocument();
-    expect(screen.getByLabelText(/Shortest text that can be judged/)).toHaveValue(300);
-    expect(screen.getByLabelText(/False-positive limit/)).toHaveAttribute('placeholder', '0.0001');
+    // The watermark settings are in the card "Text watermark".
+    expect(screen.queryByLabelText(/False-positive limit/)).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(/Detection endpoint/)).not.toBeInTheDocument();
     expect(screen.getByText(/No restart is needed|no restart is needed/i)).toBeInTheDocument();
     // Nothing changed: no save bar.
     expect(screen.queryByRole('region', { name: 'Save changes' })).not.toBeInTheDocument();
@@ -150,7 +177,7 @@ describe('ProvenanceSettingsCard', () => {
     setup();
     await screen.findByLabelText(/Keep records for/);
     change(/Keep records for/, '-3');
-    change(/False-positive limit/, '2');
+    change(/Largest file that can be checked/, '5000');
     fireEvent.click(barSave());
     const retention = screen.getByLabelText(/Keep records for/);
     expect(retention).toHaveAttribute('aria-invalid', 'true');
@@ -158,7 +185,10 @@ describe('ProvenanceSettingsCard', () => {
     expect(document.getElementById('provenance-retentionDays-error')).toHaveTextContent(
       'Enter 0 or more.'
     );
-    expect(screen.getByLabelText(/False-positive limit/)).toHaveAttribute('aria-invalid', 'true');
+    expect(screen.getByLabelText(/Largest file that can be checked/)).toHaveAttribute(
+      'aria-invalid',
+      'true'
+    );
     expect(document.activeElement).toBe(retention);
     expect(posts()).toHaveLength(0);
     // Editing a field clears its error.
@@ -180,8 +210,7 @@ describe('ProvenanceSettingsCard', () => {
       storeRecords: true,
       recordUser: 'none',
       verify: { access: 'authenticated' },
-      media: { maxVerifyBytes: 52428800, readC2pa: true },
-      watermark: { alpha: null, minScoredTokens: 300, detectorTimeoutMs: null }
+      media: { maxVerifyBytes: 52428800, readC2pa: true }
     });
     expect(onSaved).toHaveBeenCalled();
     expect(screen.queryByRole('region', { name: 'Save changes' })).not.toBeInTheDocument();
@@ -268,5 +297,82 @@ describe('ProvenanceSettingsCard', () => {
     mockAdminCall.mockResolvedValue({ data: STORED });
     fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
     expect(await screen.findByLabelText(/Keep records for/)).toBeInTheDocument();
+  });
+});
+
+describe('watermark settings forms', () => {
+  const renderSection = section => {
+    mockAdminCall.mockImplementation(async (url, options = {}) => {
+      if (options.method === 'PATCH') return { data: STORED };
+      return { data: STORED };
+    });
+    const onSaved = jest.fn();
+    render(
+      <SaveSectionsProvider>
+        <ProvenanceSettingsForm section={section} onSaved={onSaved} />
+        <SaveSectionsBar />
+      </SaveSectionsProvider>
+    );
+    return { onSaved };
+  };
+
+  test('thresholds: stored value, default as placeholder, a save of the thresholds only', async () => {
+    const { onSaved } = renderSection('thresholds');
+    expect(await screen.findByLabelText(/Shortest text that can be judged/)).toHaveValue(300);
+    expect(screen.getByLabelText(/False-positive limit/)).toHaveAttribute('placeholder', '0.0001');
+    expect(screen.queryByLabelText(/Keep records for/)).not.toBeInTheDocument();
+    change(/False-positive limit/, '0.05');
+    fireEvent.click(barSave());
+    await screen.findByText(/Settings saved/);
+    expect(posts()[0][1].body).toEqual({
+      provenance: {
+        watermark: { alpha: 0.05, minScoredTokens: 300, detectorTimeoutMs: null }
+      }
+    });
+    expect(onSaved).toHaveBeenCalled();
+  });
+
+  test('gateway: a save of the gateway only; a bad address stays local', async () => {
+    renderSection('gateway');
+    const field = await screen.findByLabelText(/Detection endpoint/);
+    fireEvent.change(field, { target: { value: 'ftp://gateway' } });
+    fireEvent.click(barSave());
+    await waitFor(() => expect(field).toHaveAttribute('aria-invalid', 'true'));
+    expect(posts()).toHaveLength(0);
+    fireEvent.change(field, {
+      target: { value: 'https://gateway.internal/v1/gateway/detections/text' }
+    });
+    await waitFor(() => expect(barSave()).toBeEnabled());
+    fireEvent.click(barSave());
+    await screen.findByText(/Settings saved/);
+    expect(posts()[0][1].body).toEqual({
+      provenance: {
+        watermark: {
+          gatewayUrl: 'https://gateway.internal/v1/gateway/detections/text',
+          gatewayCredentialRef: null
+        }
+      }
+    });
+  });
+
+  test('a gateway address is checked, saved with its credential, and empty means none', () => {
+    const form = toForm({
+      watermark: {
+        gatewayUrl: 'https://gateway.internal/v1/gateway/detections/text',
+        gatewayCredentialRef: 'ifinder-gateway'
+      }
+    });
+    expect(buildBody(form, 'gateway').watermark).toEqual({
+      gatewayUrl: 'https://gateway.internal/v1/gateway/detections/text',
+      gatewayCredentialRef: 'ifinder-gateway'
+    });
+    expect(validateForm({ ...form, gatewayUrl: 'ftp://gateway' }, 'gateway')).toEqual({
+      gatewayUrl: 'url'
+    });
+    // Without a gateway, a credential means nothing and is not saved.
+    expect(buildBody({ ...form, gatewayUrl: ' ' }, 'gateway').watermark).toEqual({
+      gatewayUrl: null,
+      gatewayCredentialRef: null
+    });
   });
 });

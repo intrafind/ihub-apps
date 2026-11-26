@@ -15,7 +15,10 @@ import { ServiceError } from '../../utils/ServiceError.js';
 import { logAudit } from '../../services/AuditLogService.js';
 import llmClient from '../../services/loop/LLMClient.js';
 import { getActiveKeyId } from '../../services/provenance/watermark/activeKeySnapshot.js';
-import { listDetectorConfigs } from '../../services/provenance/watermark/detect.js';
+import {
+  detectorConfigOf,
+  listDetectorConfigs
+} from '../../services/provenance/watermark/detect.js';
 import { checkDetectorUrl } from '../../services/provenance/watermark/detectorUrlPolicy.js';
 import { recordSelfTest } from '../../services/euAiAct/selfTestStore.js';
 import { pingDetector, runSelfTest } from '../../services/provenance/watermark/selfTest.js';
@@ -40,7 +43,7 @@ export default function registerAdminWatermarkDetectorRoutes(app) {
    *     tags: [Admin - Watermark]
    *     responses:
    *       200:
-   *         description: "`{ items: [{ modelId, detectorUrl, tokenizer, algorithm, prf, contextWidth, credentialRef, hasActiveKey, urlPolicyOk, urlPolicyProblem? }], nextCursor: null }`"
+   *         description: "`{ items: [{ modelId, keyHolder, detectorApi: ihub|model|gateway, detectorUrl, tokenizer, algorithm, prf, contextWidth, credentialRef, hasActiveKey, urlPolicyOk, urlPolicyProblem? }], nextCursor: null }`"
    */
   app.get(buildServerPath(base), adminAuth, async (req, res) => {
     const configs = listDetectorConfigs({ includeDisabled: true });
@@ -49,6 +52,8 @@ export default function registerAdminWatermarkDetectorRoutes(app) {
     for (const config of configs) {
       const item = {
         modelId: config.modelId,
+        keyHolder: config.keyHolder,
+        detectorApi: config.api,
         detectorUrl: config.detectorUrl,
         tokenizer: config.tokenizer,
         algorithm: config.algorithm,
@@ -118,16 +123,30 @@ export default function registerAdminWatermarkDetectorRoutes(app) {
     requireEuAiActEnabled('watermark'),
     async (req, res) => {
       const model = findIhubModel(req.params.modelId);
+      // The overview page (#3329) shows the last result and marks it outdated after a
+      // change of the key, the key holder or the detection route. Captured before the
+      // generation, so a change during the test does not count as tested. A model
+      // whose image holds the key does not depend on iHub's keys.
+      const tested = detectorConfigOf(model);
+      const modelHeld = tested?.keyHolder === 'model';
+      const activeKeyId = modelHeld ? null : getActiveKeyId();
       const result = await runSelfTest(model, { llmClient, user: req.user });
-      // The overview page (#3329) shows the last result and marks it outdated after a key change.
-      await recordSelfTest(model.id, result);
+      await recordSelfTest(model.id, result, {
+        activeKeyId,
+        keyHolder: modelHeld ? 'model' : 'ihub',
+        detector: tested ? { api: tested.api, url: tested.detectorUrl } : null
+      });
       await logAudit({
         req,
         action: 'execute',
         resource: 'watermarkDetector',
         resourceId: model.id,
         summary: `Watermark self-test of ${model.id}: ${result.diagnosis}`,
-        details: { diagnosis: result.diagnosis, matchedKeyId: result.matchedKeyId }
+        details: {
+          diagnosis: result.diagnosis,
+          matchedKeyId: result.matchedKeyId,
+          matchedKeyLabel: result.matchedKeyLabel
+        }
       });
       res.json(result);
     }

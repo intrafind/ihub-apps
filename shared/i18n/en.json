@@ -1811,7 +1811,9 @@
         "optionNone": "Not marked",
         "optionProvider": "Provider marks the output",
         "optionIhub": "iHub watermark (vLLM)",
-        "credentialNone": "None (no authentication)"
+        "credentialNone": "None (no authentication)",
+        "keyHolderIhub": "Held by iHub (key store)",
+        "keyHolderModel": "Held by the model image (iFinder vLLM image)"
       },
       "status": {
         "enabled": "Enabled",
@@ -1922,7 +1924,8 @@
         "ttsVoices": "Voices per language",
         "ttsVoiceLanguage": "Language",
         "customProviders": "Custom providers",
-        "autoDiscovery": "Auto Discovery"
+        "autoDiscovery": "Auto Discovery",
+        "markingKeyHolder": "Watermark key"
       },
       "toolSupport": {
         "none": "No tools",
@@ -1957,7 +1960,7 @@
         "marking": "Whether this model marks the text it generates as AI generated. Choose \"Provider marks the output\" only when the provider confirmed that in writing; iHub cannot check it. While the EU AI Act features are on, every output still gets a provenance record, whatever you choose here.",
         "markingStatementRef": "A document name or URL of the provider's written statement. It is only kept as a reference, never opened.",
         "imageMarking": "What the provider embeds in the images this model generates (for example SynthID, an invisible watermark, or a C2PA manifest). iHub adds no mark of its own and never re-encodes a generated image, so the provider's mark stays intact. Choose \"Provider marks the output\" only when the provider confirmed that in writing; iHub cannot detect it and records it as declared, never as detected.",
-        "markingIhub": "iHub asks vLLM to watermark every answer with the active key. Greedy sampling (temperature 0) and structured output cannot be watermarked and are recorded as not applied. The settings below are only needed to recognise the watermark again (Verify and the self-test); all of them are optional.",
+        "markingIhub": "iHub asks vLLM to watermark every answer. Greedy sampling (temperature 0) and structured output cannot be watermarked and are recorded as not applied. The settings below are only needed to recognise the watermark again (Verify and the self-test); all of them are optional.",
         "ttsUrl": "Speech endpoint of the provider. It stays server-side and never reaches the browser.",
         "ttsVoice": "Voice id of the provider: a Mistral preset such as en_paul_neutral, gb_jane_neutral or fr_marie_neutral, or the id of a voice saved in your Mistral account. Empty uses en_paul_neutral.",
         "ttsVoiceGoogle": "One of the prebuilt Gemini voices, such as Kore, Puck or Charon. Each speaks every language, which is detected from the text. Empty uses Kore.",
@@ -1965,11 +1968,14 @@
         "ttsVoicesAfterSave": "Save the model once to browse the provider’s voices and create custom voices here.",
         "linkedProvider": "Uses the API key of the provider \"{{provider}}\" and its API type ({{apiType}}).",
         "markingDetectorUrl": "Optional. Without a detector the output is still watermarked, but Verify cannot recognise it and the self-test cannot run.",
-        "markingDetectorCredentialRef": "Optional bearer token, if the detector asks for one.",
+        "markingDetectorCredentialRef": "Optional: a bearer token, or an OAuth2 client whose token iHub fetches (client credentials), if the detector asks for one.",
         "markingTokenizer": "The detector splits a text into the same tokens as the model to find the watermark. Leave empty to use the model ID; set a Hugging Face ID or path only if vLLM serves the model under another name.",
         "markingContextWidth": "Tokens the watermark looks back on, not the context window. Must equal context_width of vLLM (default 4).",
         "autoDiscovery": "Automatically detect the active model from the /v1/models endpoint. Useful for local LLM providers (vLLM, LM Studio, Jan.ai) where the model can change. Only available for OpenAI-compatible providers.",
-        "apiKeyLookupOrder": "Optional. When it is empty the server uses the first key it finds, in this order: this model’s key, the key of its provider, the environment variable {{modelEnv}}, the environment variable {{providerEnv}}. A local server (vLLM, LM Studio, Jan.ai, Ollama) needs no key. Keys are stored encrypted."
+        "apiKeyLookupOrder": "Optional. When it is empty the server uses the first key it finds, in this order: this model’s key, the key of its provider, the environment variable {{modelEnv}}, the environment variable {{providerEnv}}. A local server (vLLM, LM Studio, Jan.ai, Ollama) needs no key. Keys are stored encrypted.",
+        "markingKeyHolderModel": "The vLLM image holds its keys and detects the watermark itself at /watermark/v1/detect, with the API key of this model. iHub needs no key of its own. If an iFinder Model Gateway is set on the EU AI Act page, detection goes there.",
+        "markingKeyHolderIhub": "vLLM runs with the active key of iHub's key store; a detector service gets the text and all keys from iHub.",
+        "markingDetectorUrlModel": "Optional. Leave empty to use the detection endpoint next to the model URL."
       },
       "placeholders": {
         "maxOutputTokens": "Default: {{value}}",
@@ -8713,7 +8719,7 @@
         "notDetected": "Not detected",
         "wmNotDetected": "No watermark detected with the {{k}} keys held by this installation. This does not show that the text is not AI-generated: it may be edited, come from another model or have been generated without a watermark.",
         "tooShort": "Too short to tell",
-        "wmTooShort": "Only {{n}} tokens could be scored; about 200 are needed. No conclusion.",
+        "wmTooShort": "Only {{n}} tokens could be scored, too few for a conclusion.",
         "couldNot": "Could not be checked",
         "wmUnavailable": "The detector is not reachable. No conclusion.",
         "notChecked": "Not checked",
@@ -8734,13 +8740,13 @@
         "headlineMatch": "Match found: see details.",
         "headlineNone": "No match found. This is not proof that the content is not AI-generated.",
         "headlineInconclusive": "No conclusion possible.",
-        "title": "Verification",
+        "title": "Check an output",
         "description": "Check whether a text, image or audio file came from this installation and which marks it carries. The content is hashed and not stored.",
         "kind": "What do you want to check?",
         "modeText": "Text",
         "modeFile": "Image or audio file",
         "textLabel": "Text to check",
-        "textHelp": "Texts shorter than about 200 tokens cannot be judged by the watermark check.",
+        "textHelp": "Short texts cannot be judged by the watermark check. How many tokens it needs depends on the detection settings.",
         "fileLabel": "File to check",
         "removeFile": "Remove file",
         "fileHelp": "Images and audio, up to {{mb}} MB. The file is not stored.",
@@ -8753,12 +8759,18 @@
         "c2paSignedAt": "Signed on {{when}}.",
         "recordTitle": "Provenance record",
         "recordsTitle": "Provenance records ({{count}}, newest first)",
-        "recordHelp": "What this installation stored when it produced the output. It holds a hash, never the content; it names a user only when \"Who a record names\" is set."
+        "recordHelp": "What this installation stored when it produced the output. It holds a hash, never the content; it names a user only when \"Who a record names\" is set.",
+        "wmDetectedGateway": "Watermark detected by the iFinder Model Gateway. Key file: {{keyId}}. p-value {{p}}, {{n}} tokens scored. The gateway checks with all detectors configured there: the text is consistent with the watermark of one of their models, which need not be one of this installation.",
+        "wmDetectedModel": "Watermark detected by the model image. Key file: {{keyId}}. p-value {{p}}, {{n}} tokens scored.",
+        "wmNotDetectedGateway": "No watermark detected by the detectors of the iFinder Model Gateway. This does not show that the text is not AI-generated: it may be edited, come from another model or have been generated without a watermark.",
+        "wmNotDetectedModel": "No watermark detected by the model images. This does not show that the text is not AI-generated: it may be edited, come from another model or have been generated without a watermark."
       },
       "selfTest": {
         "keysMatch": "Passed: the detector recognised the active key {{keyId}} ({{n}} tokens scored).",
         "retiredKey": "Failed: the text matches the retired key {{keyId}}. vLLM still runs the old key. Update vLLM with the current option and run the test again.",
         "notFound": "Failed: no key of this installation was found in the sample text. vLLM probably runs another key or no --watermark-config. Update vLLM with the current option and run the test again.",
+        "notFoundModel": "Failed: the model image's detector found no watermark in the sample text. The image probably runs without a key file, or detects with another key than it generated with. Check the image's watermark configuration and run the test again.",
+        "notFoundGateway": "Failed: the iFinder Model Gateway found no watermark in the sample text. The model image probably runs without a key file, or none of the gateway's detectors knows its key. Check the image's watermark configuration and the gateway's detectors, then run the test again.",
         "tooShort": "Inconclusive: the sample text was too short ({{n}} tokens scored). Run the test again.",
         "unreachable": "Failed: the detector could not be reached or rejected the request. Use \"Test connection\" for details.",
         "notApplied": "Failed: the model did not apply the watermark to the sample ({{reason}}).",
@@ -8772,7 +8784,8 @@
           "failed": "Failed",
           "inconclusive": "Inconclusive",
           "stale": "Outdated (key changed)"
-        }
+        },
+        "watermarkFound": "Passed: the detector found the watermark of the key {{label}} ({{n}} tokens scored)."
       },
       "test": {
         "unreachable": "The detector did not answer ({{reason}}).",
@@ -8791,7 +8804,12 @@
         "test": "Test connection",
         "none": "No model is marked \"iHub watermark\". Set Output marking on a vLLM model to use the watermark.",
         "title": "Detectors and self-test",
-        "credentialNone": "None"
+        "credentialNone": "None",
+        "api": "Detector",
+        "apiGateway": "iFinder Model Gateway (all detectors configured there)",
+        "apiModel": "Model image (holds the keys)",
+        "apiIhub": "Detector service (keys from iHub)",
+        "credentialModel": "The model's API key"
       },
       "ack": {
         "title": "Acknowledgements",
@@ -8820,8 +8838,8 @@
         "deleted": "Key {{id}} deleted.",
         "generate": "Generate key",
         "add": "Add own key…",
-        "title": "Watermark keys",
-        "description": "Keys for the iHub text watermark of vLLM models. Exactly one key is active; retired keys are used for detection only. Showing a key is recorded in the audit log.",
+        "title": "Text watermark",
+        "description": "The iHub text watermark of vLLM models: the keys iHub holds, the detectors that recognise the watermark, and how strict the decision is.",
         "loadError": "Could not load the keys",
         "empty": "No watermark key yet. Keys are only needed for models marked \"iHub watermark\".",
         "tableRegion": "Watermark keys table",
@@ -8873,7 +8891,9 @@
         "activated": "Key {{id}} is now active. {{old}} is retired.",
         "activatedNext": "Next: update the --watermark-config of your vLLM server to key {{id}}, then run the self-test. Until then the self-test shows a mismatch.",
         "activateNotFound": "Key {{id}} no longer exists. The list was refreshed.",
-        "showOption": "Show key and vLLM option"
+        "showOption": "Show key and vLLM option",
+        "keysTitle": "Keys",
+        "keysIntro": "Only for models whose watermark key iHub holds. Exactly one key is active; retired keys are used for detection only. Showing a key is recorded in the audit log."
       },
       "summary": {
         "failing": "{{count}} failing",
@@ -8933,7 +8953,10 @@
           "selfTestStale": "{{model}}: the key changed since the last self-test. Update vLLM, then run it again.",
           "selfTestNever": "{{model}}: the self-test has not been run.",
           "detectorNotSet": "{{model}}: no detector URL. Verify cannot detect the watermark and the self-test cannot run.",
-          "detectorCredentialMissing": "{{model}}: the detector credential cannot be read. Check it on the Credentials page."
+          "detectorCredentialMissing": "{{model}}: the detector credential cannot be read. Check it on the Credentials page.",
+          "keyHeldByModel": "{{model}}: the model image holds the watermark key.",
+          "selfTestFailedModel": "{{model}}: the last self-test failed: the watermark was not found in the sample text.",
+          "selfTestPassedModel": "{{model}}: the self-test found the watermark."
         }
       },
       "level": {
@@ -8944,7 +8967,7 @@
       },
       "settings": {
         "title": "Provenance settings",
-        "description": "How long output records are kept, who may check an output, and how strict the watermark detector is. Changes apply immediately; no restart is needed. Every save is written to the audit log.",
+        "description": "How long output records are kept and who may check an output. Changes apply immediately; no restart is needed. Every save is written to the audit log.",
         "loadError": "Could not load the settings",
         "records": "Output records",
         "storeRecords": "Keep a record of every output",
@@ -8963,8 +8986,9 @@
         "maxVerifyHelp": "Applies to image and audio uploads on the check form. Larger files are refused.",
         "readC2pa": "Read C2PA marks of images",
         "readC2paHelp": "Reads the provider mark (C2PA manifest) of generated and uploaded images. Default: on.",
-        "detection": "Text watermark detection",
-        "detectionIntro": "Leave a field empty to use its default. The defaults suit most installations; change them only for a reason.",
+        "detection": "Detection thresholds",
+        "detectionIntro": "How iHub decides whether a text carries the watermark, for models whose key iHub holds and for model images iHub asks itself. Where an iFinder Model Gateway decides, it uses its own thresholds; only the time limit applies there too. Leave a field empty to use its default.",
+        "detectionGatewayNote": "An iFinder Model Gateway is set. For models whose key the model image holds, the gateway decides, so the false-positive limit and the shortest text do not apply to them.",
         "alpha": "False-positive limit",
         "alphaHelp": "The chance that a text is wrongly called \"consistent with our watermark\". Smaller is stricter. Between 0 and 1, for example 0.0001.",
         "minTokens": "Shortest text that can be judged",
@@ -8988,7 +9012,8 @@
           "max": "Enter {{max}} or less.",
           "aboveExclusive": "Enter a number greater than {{min}}.",
           "belowExclusive": "Enter a number less than {{max}}.",
-          "invalid": "This value is not allowed."
+          "invalid": "This value is not allowed.",
+          "url": "Enter an http or https address."
         },
         "recordUser": "Who a record names",
         "recordUserHelp": "Applies to records written from now on. Only admins see it when checking an output; it is never part of what a user or API caller receives. It stays in the record when the user is deleted.",
@@ -8999,7 +9024,13 @@
         "recordUserPseudonymous": "Pseudonymous (hash of the user id)",
         "recordUserPseudonymousHelp": "A plain SHA-256 of the user id. Whoever knows a user id can compute it and so attribute the record.",
         "recordUserIdentified": "Identified (user id)",
-        "recordUserIdentifiedHelp": "The user id, never the name or email. The records then hold personal data: cover them in your data protection documentation."
+        "recordUserIdentifiedHelp": "The user id, never the name or email. The records then hold personal data: cover them in your data protection documentation.",
+        "gateway": "iFinder Model Gateway",
+        "gatewayIntro": "Only for models whose watermark key the model image holds (iFinder vLLM image). With a gateway set, iHub sends each text there once, and the gateway checks it with all detectors configured in the gateway, including those of models iHub does not use. Which detectors these are is set in the gateway, not here. Without a gateway, iHub asks the image of each such model itself.",
+        "gatewayUrl": "Detection endpoint",
+        "gatewayUrlHelp": "The address of …/v1/gateway/detections/text. Leave empty to ask each model image itself.",
+        "gatewayCredential": "Gateway credential",
+        "gatewayCredentialHelp": "A bearer token, or an OAuth2 client whose token iHub fetches (client credentials), if the gateway asks for one."
       },
       "master": {
         "title": "EU AI Act features",

@@ -90,9 +90,13 @@ const samplingSchema = z
 
 // Image generation configuration schema
 // How a model's output is marked as AI generated (EU AI Act Art. 50(2)).
-// `by: "ihub"` is iHub's own text watermark for self-hosted vLLM (#3331): the
-// detector fields say how verify reaches the detector service and must equal
-// the vLLM server's watermark settings.
+// `by: "ihub"` is iHub's own text watermark for self-hosted vLLM (#3331).
+// `keyHolder` says who holds the key: `ihub` (default; iHub's key store, the
+// detector fields say how verify reaches a detector of iHub's contract and must
+// equal the vLLM server's watermark settings) or `model` (iFinder's if-vllm image
+// holds its keys and detects at its own `/watermark/v1/detect`, which
+// `detectorUrl` can override; tokenizer and settings are the image's own, the
+// credential is the model's API key).
 const detectorUrlSchema = z
   .string()
   .max(500)
@@ -108,12 +112,24 @@ const detectorUrlSchema = z
     { message: 'detectorUrl must be an http(s) URL' }
   );
 
+/** Who holds a watermark key; see `markingSchema`. */
+export const KEY_HOLDERS = ['ihub', 'model'];
+/** Fields of iHub's detector contract, which the if-vllm image brings itself. */
+const MODEL_HELD_REFUSED_FIELDS = [
+  'detectorCredentialRef',
+  'tokenizer',
+  'algorithm',
+  'prf',
+  'contextWidth'
+];
+
 const markingSchema = z
   .object({
     by: z.enum(['ihub', 'provider', 'none']),
     scheme: z.string().max(64).optional(),
     keyId: z.string().max(64).optional(),
     statementRef: z.string().max(500).optional(),
+    keyHolder: z.enum(KEY_HOLDERS).optional(),
     detectorUrl: detectorUrlSchema.optional(),
     // Id of a `bearer` entry in credentials.json; the token is never inline.
     detectorCredentialRef: z.string().max(100).optional(),
@@ -146,8 +162,20 @@ const markingSchema = z
           path: ['keyId']
         });
       }
+      if (value.keyHolder === 'model') {
+        for (const field of MODEL_HELD_REFUSED_FIELDS) {
+          if (value[field] !== undefined) {
+            ctx.addIssue({
+              code: z.ZodIssueCode.custom,
+              message: `contentMarking: ${field} is not used with keyHolder "model" (the model image detects with its own settings and the model's API key)`,
+              path: [field]
+            });
+          }
+        }
+      }
     } else {
       for (const field of [
+        'keyHolder',
         'detectorUrl',
         'detectorCredentialRef',
         'tokenizer',

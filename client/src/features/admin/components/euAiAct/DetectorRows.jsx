@@ -11,8 +11,55 @@ import CheckStatus from './CheckStatus';
 import { BUTTON_SECONDARY } from './KeyDialogs';
 import { useEuAiActEnabled } from './EuAiActStateNote';
 
+/** Who answers for a detector row: the Model Gateway, the model image, or a detector service. */
+function detectorApiLabel(t, detector) {
+  if (detector.detectorApi === 'gateway') {
+    return t(
+      'admin.euAiAct.detector.apiGateway',
+      'iFinder Model Gateway (all detectors configured there)'
+    );
+  }
+  if (detector.detectorApi === 'model') {
+    return t('admin.euAiAct.detector.apiModel', 'Model image (holds the keys)');
+  }
+  return t('admin.euAiAct.detector.apiIhub', 'Detector service (keys from iHub)');
+}
+
+/** How a detector row authenticates. */
+function credentialLabel(t, detector) {
+  if (detector.detectorApi === 'model') {
+    return t('admin.euAiAct.detector.credentialModel', "The model's API key");
+  }
+  if (detector.credentialRef) {
+    return t('admin.euAiAct.detector.credentialSet', 'Set ({{ref}})', {
+      ref: detector.credentialRef
+    });
+  }
+  return t('admin.euAiAct.detector.credentialNone', 'None');
+}
+
+/** "No watermark found" for keys the model image holds: no iHub key or vLLM option involved. */
+function notFoundText(t, detectorApi) {
+  if (detectorApi === 'gateway') {
+    return t(
+      'admin.euAiAct.selfTest.notFoundGateway',
+      "Failed: the iFinder Model Gateway found no watermark in the sample text. The model image probably runs without a key file, or none of the gateway's detectors knows its key. Check the image's watermark configuration and the gateway's detectors, then run the test again."
+    );
+  }
+  if (detectorApi === 'model') {
+    return t(
+      'admin.euAiAct.selfTest.notFoundModel',
+      "Failed: the model image's detector found no watermark in the sample text. The image probably runs without a key file, or detects with another key than it generated with. Check the image's watermark configuration and run the test again."
+    );
+  }
+  return t(
+    'admin.euAiAct.selfTest.notFound',
+    'Failed: no key of this installation was found in the sample text. vLLM probably runs another key or no --watermark-config. Update vLLM with the current option and run the test again.'
+  );
+}
+
 /** Self-test diagnosis (server-side step 4) -> level and sentence. Never over-claims. */
-function describeSelfTest(result, t) {
+function describeSelfTest(result, t, detectorApi) {
   const n = result.scoredTokens ?? 0;
   switch (result.diagnosis) {
     case 'keys_match':
@@ -22,6 +69,15 @@ function describeSelfTest(result, t) {
           'admin.euAiAct.selfTest.keysMatch',
           'Passed: the detector recognised the active key {{keyId}} ({{n}} tokens scored).',
           { keyId: result.matchedKeyId, n }
+        )
+      };
+    case 'watermark_found':
+      return {
+        level: 'ok',
+        text: t(
+          'admin.euAiAct.selfTest.watermarkFound',
+          'Passed: the detector found the watermark of the key {{label}} ({{n}} tokens scored).',
+          { label: result.matchedKeyLabel || '-', n }
         )
       };
     case 'matches_retired_key':
@@ -34,13 +90,7 @@ function describeSelfTest(result, t) {
         )
       };
     case 'no_watermark_found':
-      return {
-        level: 'error',
-        text: t(
-          'admin.euAiAct.selfTest.notFound',
-          'Failed: no key of this installation was found in the sample text. vLLM probably runs another key or no --watermark-config. Update vLLM with the current option and run the test again.'
-        )
-      };
+      return { level: 'error', text: notFoundText(t, detectorApi) };
     case 'too_short':
       return {
         level: 'warn',
@@ -141,9 +191,13 @@ function DetectorRow({ detector, modelStatus, onChanged }) {
         (last.at ? ` (${new Date(last.at).toLocaleDateString()})` : '');
 
   return (
-    <li className="border-t border-gray-200 dark:border-gray-700 pt-4 first:border-t-0 first:pt-0">
+    <li className="border-t border-dashed border-gray-200 dark:border-gray-700 pt-4 first:border-t-0 first:pt-0">
       <h4 className="text-sm font-semibold text-gray-900 dark:text-gray-100">{modelId}</h4>
       <dl className="mt-2 grid grid-cols-1 sm:grid-cols-[10rem_1fr] gap-x-4 gap-y-1 text-sm">
+        <dt className="text-gray-600 dark:text-gray-400">
+          {t('admin.euAiAct.detector.api', 'Detector')}
+        </dt>
+        <dd className="text-gray-900 dark:text-gray-100">{detectorApiLabel(t, detector)}</dd>
         <dt className="text-gray-600 dark:text-gray-400">
           {t('admin.euAiAct.detector.url', 'Detector URL')}
         </dt>
@@ -158,13 +212,7 @@ function DetectorRow({ detector, modelStatus, onChanged }) {
         <dt className="text-gray-600 dark:text-gray-400">
           {t('admin.euAiAct.detector.credential', 'Credential')}
         </dt>
-        <dd className="text-gray-900 dark:text-gray-100">
-          {detector.credentialRef
-            ? t('admin.euAiAct.detector.credentialSet', 'Set ({{ref}})', {
-                ref: detector.credentialRef
-              })
-            : t('admin.euAiAct.detector.credentialNone', 'None')}
-        </dd>
+        <dd className="text-gray-900 dark:text-gray-100">{credentialLabel(t, detector)}</dd>
         <dt className="text-gray-600 dark:text-gray-400">
           {t('admin.euAiAct.detector.lastSelfTest', 'Last self-test')}
         </dt>
@@ -188,7 +236,11 @@ function DetectorRow({ detector, modelStatus, onChanged }) {
           type="button"
           disabled={Boolean(busy) || paused}
           aria-busy={busy === 'selfTest'}
-          onClick={() => run('selfTest', runWatermarkSelfTest, describeSelfTest)}
+          onClick={() =>
+            run('selfTest', runWatermarkSelfTest, (result, tr) =>
+              describeSelfTest(result, tr, detector.detectorApi)
+            )
+          }
           className={BUTTON_SECONDARY}
         >
           <Icon

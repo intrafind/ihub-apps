@@ -2287,7 +2287,9 @@
         "optionNone": "Nicht gekennzeichnet",
         "optionProvider": "Der Anbieter kennzeichnet die Ausgabe",
         "optionIhub": "iHub-Wasserzeichen (vLLM)",
-        "credentialNone": "Keine (ohne Authentifizierung)"
+        "credentialNone": "Keine (ohne Authentifizierung)",
+        "keyHolderIhub": "Von iHub gehalten (Schlüsselspeicher)",
+        "keyHolderModel": "Vom Modell-Image gehalten (iFinder-vLLM-Image)"
       },
       "status": {
         "enabled": "Aktiviert",
@@ -2398,7 +2400,8 @@
         "ttsVoices": "Stimmen pro Sprache",
         "ttsVoiceLanguage": "Sprache",
         "customProviders": "Eigene Anbieter",
-        "autoDiscovery": "Automatische Erkennung"
+        "autoDiscovery": "Automatische Erkennung",
+        "markingKeyHolder": "Wasserzeichen-Schlüssel"
       },
       "toolSupport": {
         "none": "Keine Tools",
@@ -2433,7 +2436,7 @@
         "marking": "Ob dieses Modell den erzeugten Text als KI-generiert kennzeichnet. Wählen Sie „Der Anbieter kennzeichnet die Ausgabe“ nur, wenn der Anbieter das schriftlich bestätigt hat; iHub kann es nicht prüfen. Solange die Funktionen zum EU AI Act eingeschaltet sind, erhält jede Ausgabe unabhängig davon einen Herkunftsnachweis.",
         "markingStatementRef": "Dokumentname oder URL der schriftlichen Erklärung des Anbieters. Sie wird nur als Verweis gespeichert und nie geöffnet.",
         "imageMarking": "Was der Anbieter in die von diesem Modell erzeugten Bilder einbettet (zum Beispiel SynthID, ein unsichtbares Wasserzeichen, oder ein C2PA-Manifest). iHub fügt keine eigene Kennzeichnung hinzu und kodiert erzeugte Bilder nie neu, sodass die Kennzeichnung des Anbieters erhalten bleibt. Wählen Sie „Der Anbieter kennzeichnet die Ausgabe“ nur, wenn der Anbieter das schriftlich bestätigt hat; iHub kann sie nicht erkennen und erfasst sie als angegeben, nie als erkannt.",
-        "markingIhub": "iHub weist vLLM an, jede Antwort mit dem aktiven Schlüssel zu kennzeichnen. Greedy-Sampling (Temperatur 0) und strukturierte Ausgaben lassen sich nicht kennzeichnen und werden als „nicht angewendet“ erfasst. Die folgenden Einstellungen werden nur gebraucht, um das Wasserzeichen wiederzuerkennen (Prüfen und Selbsttest); alle sind optional.",
+        "markingIhub": "iHub weist vLLM an, jede Antwort zu kennzeichnen. Greedy-Sampling (Temperatur 0) und strukturierte Ausgaben lassen sich nicht kennzeichnen und werden als „nicht angewendet“ erfasst. Die folgenden Einstellungen werden nur gebraucht, um das Wasserzeichen wiederzuerkennen (Prüfen und Selbsttest); alle sind optional.",
         "ttsUrl": "Sprach-Endpunkt des Anbieters. Er bleibt auf dem Server und erreicht nie den Browser.",
         "ttsVoice": "Stimmen-ID des Anbieters: eine Mistral-Vorlage wie en_paul_neutral, gb_jane_neutral oder fr_marie_neutral oder die ID einer in Ihrem Mistral-Konto gespeicherten Stimme. Leer verwendet en_paul_neutral.",
         "ttsVoiceGoogle": "Eine der vorgefertigten Gemini-Stimmen, etwa Kore, Puck oder Charon. Jede spricht alle Sprachen; die Sprache wird am Text erkannt. Leer bedeutet Kore.",
@@ -2441,11 +2444,14 @@
         "ttsVoicesAfterSave": "Speichern Sie das Modell einmal, um hier die Stimmen des Anbieters anzuzeigen und eigene Stimmen anzulegen.",
         "linkedProvider": "Verwendet den API-Schlüssel des Anbieters „{{provider}}“ und dessen API-Typ ({{apiType}}).",
         "markingDetectorUrl": "Optional. Ohne Detektor wird die Ausgabe trotzdem gekennzeichnet, aber „Prüfen“ kann das Wasserzeichen nicht erkennen und der Selbsttest kann nicht laufen.",
-        "markingDetectorCredentialRef": "Optionales Bearer-Token, falls der Detektor eines verlangt.",
+        "markingDetectorCredentialRef": "Optional: ein Bearer-Token oder ein OAuth2-Client, dessen Token iHub abruft (Client Credentials), falls der Detektor eines verlangt.",
         "markingTokenizer": "Der Detektor zerlegt einen Text in dieselben Tokens wie das Modell, um das Wasserzeichen zu finden. Leer lassen, um die Modell-ID zu verwenden; eine Hugging-Face-ID oder einen Pfad nur angeben, wenn vLLM das Modell unter einem anderen Namen bereitstellt.",
         "markingContextWidth": "Anzahl der vorherigen Tokens, auf die das Wasserzeichen zurückblickt, nicht das Kontextfenster. Muss context_width von vLLM entsprechen (Standard 4).",
         "autoDiscovery": "Erkennt das aktive Modell automatisch über den Endpunkt /v1/models. Nützlich für lokale LLM-Anbieter (vLLM, LM Studio, Jan.ai), bei denen das Modell wechseln kann. Nur für OpenAI-kompatible Anbieter verfügbar.",
-        "apiKeyLookupOrder": "Optional. Ist das Feld leer, verwendet der Server den ersten Schlüssel, den er findet, in dieser Reihenfolge: den Schlüssel dieses Modells, den Schlüssel seines Anbieters, die Umgebungsvariable {{modelEnv}}, die Umgebungsvariable {{providerEnv}}. Ein lokaler Server (vLLM, LM Studio, Jan.ai, Ollama) braucht keinen Schlüssel. Schlüssel werden verschlüsselt gespeichert."
+        "apiKeyLookupOrder": "Optional. Ist das Feld leer, verwendet der Server den ersten Schlüssel, den er findet, in dieser Reihenfolge: den Schlüssel dieses Modells, den Schlüssel seines Anbieters, die Umgebungsvariable {{modelEnv}}, die Umgebungsvariable {{providerEnv}}. Ein lokaler Server (vLLM, LM Studio, Jan.ai, Ollama) braucht keinen Schlüssel. Schlüssel werden verschlüsselt gespeichert.",
+        "markingKeyHolderModel": "Das vLLM-Image hält seine Schlüssel und erkennt das Wasserzeichen selbst unter /watermark/v1/detect, mit dem API-Schlüssel dieses Modells. iHub braucht keinen eigenen Schlüssel. Ist auf der EU-AI-Act-Seite ein iFinder Model Gateway eingetragen, geht die Erkennung dorthin.",
+        "markingKeyHolderIhub": "vLLM läuft mit dem aktiven Schlüssel aus dem Schlüsselspeicher von iHub; ein Detektor-Dienst erhält Text und alle Schlüssel von iHub.",
+        "markingDetectorUrlModel": "Optional. Leer lassen, um den Erkennungs-Endpunkt neben der Modell-URL zu verwenden."
       },
       "placeholders": {
         "maxOutputTokens": "Standard: {{value}}",
@@ -9215,7 +9221,7 @@
         "notDetected": "Nicht erkannt",
         "wmNotDetected": "Mit den {{k}} Schlüsseln dieser Installation wurde kein Wasserzeichen erkannt. Das zeigt nicht, dass der Text nicht KI-erzeugt ist: Er kann bearbeitet worden sein, von einem anderen Modell stammen oder ohne Wasserzeichen erzeugt worden sein.",
         "tooShort": "Zu kurz für eine Aussage",
-        "wmTooShort": "Nur {{n}} Tokens konnten bewertet werden, etwa 200 werden benötigt. Keine Aussage möglich.",
+        "wmTooShort": "Nur {{n}} Tokens konnten bewertet werden, zu wenige für eine Aussage.",
         "couldNot": "Konnte nicht geprüft werden",
         "wmUnavailable": "Der Detektor ist nicht erreichbar. Keine Aussage möglich.",
         "notChecked": "Nicht geprüft",
@@ -9237,13 +9243,13 @@
         "headlineMatch": "Treffer gefunden: siehe Details.",
         "headlineNone": "Kein Treffer. Dies ist kein Beweis, dass der Inhalt nicht KI-erzeugt ist.",
         "headlineInconclusive": "Keine Aussage möglich.",
-        "title": "Prüfung",
+        "title": "Ausgabe prüfen",
         "description": "Prüfen Sie, ob ein Text, ein Bild oder eine Audiodatei aus dieser Installation stammt und welche Kennzeichen sie trägt. Der Inhalt wird gehasht und nicht gespeichert.",
         "kind": "Was möchten Sie prüfen?",
         "modeText": "Text",
         "modeFile": "Bild oder Audiodatei",
         "textLabel": "Zu prüfender Text",
-        "textHelp": "Texte unter etwa 200 Tokens kann die Wasserzeichen-Prüfung nicht beurteilen.",
+        "textHelp": "Kurze Texte kann die Wasserzeichen-Prüfung nicht beurteilen. Wie viele Tokens sie braucht, hängt von den Erkennungseinstellungen ab.",
         "fileLabel": "Zu prüfende Datei",
         "removeFile": "Datei entfernen",
         "fileHelp": "Bilder und Audio bis {{mb}} MB. Die Datei wird nicht gespeichert.",
@@ -9255,12 +9261,18 @@
         "c2paSignedAt": "Signiert am {{when}}.",
         "recordTitle": "Herkunftsnachweis",
         "recordsTitle": "Herkunftsnachweise ({{count}}, neueste zuerst)",
-        "recordHelp": "Was diese Installation gespeichert hat, als sie die Ausgabe erzeugt hat. Er enthält einen Hash, nie den Inhalt; einen Benutzer nennt er nur, wenn „Wen ein Nachweis nennt“ gesetzt ist."
+        "recordHelp": "Was diese Installation gespeichert hat, als sie die Ausgabe erzeugt hat. Er enthält einen Hash, nie den Inhalt; einen Benutzer nennt er nur, wenn „Wen ein Nachweis nennt“ gesetzt ist.",
+        "wmDetectedGateway": "Wasserzeichen vom iFinder Model Gateway erkannt. Schlüsseldatei: {{keyId}}. p-Wert {{p}}, {{n}} Tokens bewertet. Das Gateway prüft mit allen dort konfigurierten Detektoren: Der Text passt zum Wasserzeichen eines ihrer Modelle, das nicht zu dieser Installation gehören muss.",
+        "wmDetectedModel": "Wasserzeichen vom Modell-Image erkannt. Schlüsseldatei: {{keyId}}. p-Wert {{p}}, {{n}} Tokens bewertet.",
+        "wmNotDetectedGateway": "Die Detektoren des iFinder Model Gateway haben kein Wasserzeichen erkannt. Das zeigt nicht, dass der Text nicht KI-generiert ist: Er kann bearbeitet sein, von einem anderen Modell stammen oder ohne Wasserzeichen erzeugt worden sein.",
+        "wmNotDetectedModel": "Die Modell-Images haben kein Wasserzeichen erkannt. Das zeigt nicht, dass der Text nicht KI-generiert ist: Er kann bearbeitet sein, von einem anderen Modell stammen oder ohne Wasserzeichen erzeugt worden sein."
       },
       "selfTest": {
         "keysMatch": "Bestanden: Der Detektor hat den aktiven Schlüssel {{keyId}} erkannt ({{n}} Tokens bewertet).",
         "retiredKey": "Fehlgeschlagen: Der Text passt zum ausgemusterten Schlüssel {{keyId}}. vLLM läuft noch mit dem alten Schlüssel. Aktualisieren Sie vLLM mit der aktuellen Option und führen Sie den Test erneut aus.",
         "notFound": "Fehlgeschlagen: Im Beispieltext wurde kein Schlüssel dieser Installation gefunden. vLLM läuft wahrscheinlich mit einem anderen Schlüssel oder ohne --watermark-config. Aktualisieren Sie vLLM mit der aktuellen Option und führen Sie den Test erneut aus.",
+        "notFoundModel": "Fehlgeschlagen: Der Detektor des Modell-Images hat im Beispieltext kein Wasserzeichen gefunden. Vermutlich läuft das Image ohne Schlüsseldatei oder erkennt mit einem anderen Schlüssel als dem, mit dem es erzeugt hat. Prüfen Sie die Wasserzeichen-Konfiguration des Images und führen Sie den Test erneut aus.",
+        "notFoundGateway": "Fehlgeschlagen: Das iFinder Model Gateway hat im Beispieltext kein Wasserzeichen gefunden. Vermutlich läuft das Modell-Image ohne Schlüsseldatei, oder keiner der Detektoren des Gateways kennt seinen Schlüssel. Prüfen Sie die Wasserzeichen-Konfiguration des Images und die Detektoren des Gateways und führen Sie den Test erneut aus.",
         "tooShort": "Nicht eindeutig: Der Beispieltext war zu kurz ({{n}} Tokens bewertet). Führen Sie den Test erneut aus.",
         "unreachable": "Fehlgeschlagen: Der Detektor war nicht erreichbar oder hat die Anfrage abgelehnt. Details zeigt „Verbindung testen“.",
         "notApplied": "Fehlgeschlagen: Das Modell hat das Wasserzeichen im Beispiel nicht angewendet ({{reason}}).",
@@ -9274,7 +9286,8 @@
           "failed": "Fehlgeschlagen",
           "inconclusive": "Nicht eindeutig",
           "stale": "Veraltet (Schlüssel geändert)"
-        }
+        },
+        "watermarkFound": "Bestanden: Der Detektor hat das Wasserzeichen des Schlüssels {{label}} gefunden ({{n}} Tokens bewertet)."
       },
       "test": {
         "unreachable": "Der Detektor hat nicht geantwortet ({{reason}}).",
@@ -9293,7 +9306,12 @@
         "test": "Verbindung testen",
         "none": "Kein Modell ist mit „iHub-Wasserzeichen“ markiert. Stellen Sie bei einem vLLM-Modell die Ausgabe-Kennzeichnung ein, um das Wasserzeichen zu nutzen.",
         "title": "Detektoren und Selbsttest",
-        "credentialNone": "Keine"
+        "credentialNone": "Keine",
+        "api": "Detektor",
+        "apiGateway": "iFinder Model Gateway (alle dort konfigurierten Detektoren)",
+        "apiModel": "Modell-Image (hält die Schlüssel)",
+        "apiIhub": "Detektor-Dienst (Schlüssel von iHub)",
+        "credentialModel": "Der API-Schlüssel des Modells"
       },
       "ack": {
         "title": "Bestätigungen",
@@ -9322,8 +9340,8 @@
         "deleted": "Schlüssel {{id}} gelöscht.",
         "generate": "Schlüssel erzeugen",
         "add": "Eigenen Schlüssel hinzufügen…",
-        "title": "Wasserzeichen-Schlüssel",
-        "description": "Schlüssel für das iHub-Textwasserzeichen von vLLM-Modellen. Genau ein Schlüssel ist aktiv; ausgemusterte Schlüssel dienen nur der Erkennung. Das Anzeigen eines Schlüssels wird im Audit-Log festgehalten.",
+        "title": "Text-Wasserzeichen",
+        "description": "Das iHub-Textwasserzeichen von vLLM-Modellen: die Schlüssel, die iHub hält, die Detektoren, die das Wasserzeichen erkennen, und wie streng die Entscheidung ist.",
         "loadError": "Die Schlüssel konnten nicht geladen werden",
         "empty": "Noch kein Wasserzeichen-Schlüssel. Schlüssel werden nur für Modelle mit „iHub-Wasserzeichen“ gebraucht.",
         "tableRegion": "Tabelle der Wasserzeichen-Schlüssel",
@@ -9375,7 +9393,9 @@
         "activated": "Schlüssel {{id}} ist jetzt aktiv. {{old}} ist zurückgezogen.",
         "activatedNext": "Nächster Schritt: Tragen Sie Schlüssel {{id}} in der --watermark-config Ihres vLLM-Servers ein und führen Sie dann den Selbsttest aus. Bis dahin meldet der Selbsttest eine Abweichung.",
         "activateNotFound": "Schlüssel {{id}} existiert nicht mehr. Die Liste wurde aktualisiert.",
-        "showOption": "Schlüssel und vLLM-Option anzeigen"
+        "showOption": "Schlüssel und vLLM-Option anzeigen",
+        "keysTitle": "Schlüssel",
+        "keysIntro": "Nur für Modelle, deren Wasserzeichen-Schlüssel iHub hält. Genau ein Schlüssel ist aktiv; ausgemusterte Schlüssel dienen nur der Erkennung. Das Anzeigen eines Schlüssels wird im Audit-Log festgehalten."
       },
       "summary": {
         "failing": "{{count}} fehlerhaft",
@@ -9435,7 +9455,10 @@
           "selfTestStale": "{{model}}: Der Schlüssel hat sich seit dem letzten Selbsttest geändert. Aktualisieren Sie vLLM und führen Sie ihn erneut aus.",
           "selfTestNever": "{{model}}: Der Selbsttest wurde noch nicht ausgeführt.",
           "detectorNotSet": "{{model}}: keine Detektor-URL. „Prüfen“ kann das Wasserzeichen nicht erkennen und der Selbsttest kann nicht laufen.",
-          "detectorCredentialMissing": "{{model}}: Die Detektor-Zugangsdaten können nicht gelesen werden. Prüfen Sie sie auf der Seite Zugangsdaten."
+          "detectorCredentialMissing": "{{model}}: Die Detektor-Zugangsdaten können nicht gelesen werden. Prüfen Sie sie auf der Seite Zugangsdaten.",
+          "keyHeldByModel": "{{model}}: Das Modell-Image hält den Wasserzeichen-Schlüssel.",
+          "selfTestFailedModel": "{{model}}: Der letzte Selbsttest ist fehlgeschlagen: Das Wasserzeichen wurde im Beispieltext nicht gefunden.",
+          "selfTestPassedModel": "{{model}}: Der Selbsttest hat das Wasserzeichen gefunden."
         }
       },
       "level": {
@@ -9446,7 +9469,7 @@
       },
       "settings": {
         "title": "Provenienz-Einstellungen",
-        "description": "Wie lange Ausgabe-Nachweise aufbewahrt werden, wer eine Ausgabe prüfen darf und wie streng der Wasserzeichen-Detektor ist. Änderungen gelten sofort; ein Neustart ist nicht nötig. Jedes Speichern wird im Audit-Log protokolliert.",
+        "description": "Wie lange Ausgabe-Nachweise aufbewahrt werden und wer eine Ausgabe prüfen darf. Änderungen gelten sofort; ein Neustart ist nicht nötig. Jedes Speichern wird im Audit-Log protokolliert.",
         "loadError": "Die Einstellungen konnten nicht geladen werden",
         "records": "Ausgabe-Nachweise",
         "storeRecords": "Für jede Ausgabe einen Nachweis speichern",
@@ -9465,8 +9488,9 @@
         "maxVerifyHelp": "Gilt für Bild- und Audio-Uploads im Prüfformular. Größere Dateien werden abgelehnt.",
         "readC2pa": "C2PA-Kennzeichen von Bildern lesen",
         "readC2paHelp": "Liest das Anbieter-Kennzeichen (C2PA-Manifest) erzeugter und hochgeladener Bilder. Standard: an.",
-        "detection": "Erkennung von Text-Wasserzeichen",
-        "detectionIntro": "Ein leeres Feld verwendet den Standardwert. Die Standardwerte passen für die meisten Installationen; ändern Sie sie nur mit Grund.",
+        "detection": "Schwellen der Erkennung",
+        "detectionIntro": "Wie iHub entscheidet, ob ein Text das Wasserzeichen trägt, für Modelle, deren Schlüssel iHub hält, und für Modell-Images, die iHub selbst fragt. Wo ein iFinder Model Gateway entscheidet, verwendet es seine eigenen Schwellen; dort gilt von diesen Feldern nur das Zeitlimit. Ein leeres Feld verwendet den Standardwert.",
+        "detectionGatewayNote": "Ein iFinder Model Gateway ist eingetragen. Für Modelle, deren Schlüssel das Modell-Image hält, entscheidet das Gateway; die Fehlalarmgrenze und der kürzeste Text gelten für sie nicht.",
         "alpha": "Grenze für Fehlalarme",
         "alphaHelp": "Die Wahrscheinlichkeit, dass ein Text fälschlich als \"mit unserem Wasserzeichen vereinbar\" gilt. Kleiner ist strenger. Zwischen 0 und 1, zum Beispiel 0.0001.",
         "minTokens": "Kürzester beurteilbarer Text",
@@ -9490,7 +9514,8 @@
           "max": "Geben Sie höchstens {{max}} ein.",
           "aboveExclusive": "Geben Sie eine Zahl größer als {{min}} ein.",
           "belowExclusive": "Geben Sie eine Zahl kleiner als {{max}} ein.",
-          "invalid": "Dieser Wert ist nicht zulässig."
+          "invalid": "Dieser Wert ist nicht zulässig.",
+          "url": "Geben Sie eine http- oder https-Adresse ein."
         },
         "recordUser": "Wen ein Nachweis nennt",
         "recordUserHelp": "Gilt für Nachweise, die ab jetzt geschrieben werden. Nur Administratoren sehen den Wert bei der Prüfung einer Ausgabe; er ist nie Teil dessen, was Benutzer oder API-Aufrufer erhalten. Er bleibt im Nachweis, wenn der Benutzer gelöscht wird.",
@@ -9501,7 +9526,13 @@
         "recordUserPseudonymous": "Pseudonym (Hash der Benutzer-ID)",
         "recordUserPseudonymousHelp": "Ein einfacher SHA-256-Hash der Benutzer-ID. Wer eine Benutzer-ID kennt, kann ihn berechnen und den Nachweis so zuordnen.",
         "recordUserIdentified": "Identifiziert (Benutzer-ID)",
-        "recordUserIdentifiedHelp": "Die Benutzer-ID, nie Name oder E-Mail. Die Nachweise enthalten dann personenbezogene Daten: Berücksichtigen Sie das in Ihrer Datenschutzdokumentation."
+        "recordUserIdentifiedHelp": "Die Benutzer-ID, nie Name oder E-Mail. Die Nachweise enthalten dann personenbezogene Daten: Berücksichtigen Sie das in Ihrer Datenschutzdokumentation.",
+        "gateway": "iFinder Model Gateway",
+        "gatewayIntro": "Nur für Modelle, deren Wasserzeichen-Schlüssel das Modell-Image hält (iFinder-vLLM-Image). Mit gesetztem Gateway schickt iHub jeden Text einmal dorthin, und das Gateway prüft ihn mit allen im Gateway konfigurierten Detektoren, auch denen von Modellen, die iHub nicht nutzt. Welche das sind, wird im Gateway festgelegt, nicht hier. Ohne Gateway fragt iHub das Image jedes solchen Modells selbst.",
+        "gatewayUrl": "Erkennungs-Endpunkt",
+        "gatewayUrlHelp": "Die Adresse von …/v1/gateway/detections/text. Leer lassen, um jedes Modell-Image selbst zu fragen.",
+        "gatewayCredential": "Zugangsdaten des Gateways",
+        "gatewayCredentialHelp": "Ein Bearer-Token oder ein OAuth2-Client, dessen Token iHub abruft (Client Credentials), falls das Gateway eines verlangt."
       },
       "master": {
         "title": "EU AI Act-Funktionen",

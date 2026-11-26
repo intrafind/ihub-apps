@@ -78,9 +78,9 @@ test.describe('Admin EU AI Act page', () => {
     for (const name of [
       'Configuration check',
       'Acknowledgements',
-      'Watermark keys',
+      'Text watermark',
       'Provenance settings',
-      'Verification'
+      'Check an output'
     ]) {
       await expect(page.getByRole('heading', { level: 2, name })).toBeVisible();
     }
@@ -162,7 +162,7 @@ test.describe('Admin EU AI Act page', () => {
   test('rotation: the old key is retired and can be deleted after a confirmation', async ({
     page
   }) => {
-    await page.goto('/admin/eu-ai-act#watermark-keys');
+    await page.goto('/admin/eu-ai-act#text-watermark');
     await page.getByRole('button', { name: 'Generate key' }).first().click();
     // A key is active already: the pre-dialog names what becomes retired.
     await expect(page.getByText(/becomes retired/)).toBeVisible();
@@ -183,7 +183,7 @@ test.describe('Admin EU AI Act page', () => {
   test('reveal shows the key and records it, and the key leaves the page when closed', async ({
     page
   }) => {
-    await page.goto('/admin/eu-ai-act#watermark-keys');
+    await page.goto('/admin/eu-ai-act#text-watermark');
     await page
       .getByRole('button', { name: /^Reveal key wm-/ })
       .first()
@@ -197,7 +197,7 @@ test.describe('Admin EU AI Act page', () => {
 
   test('self-test runs and reports in words', async ({ page }) => {
     test.setTimeout(120_000);
-    await page.goto('/admin/eu-ai-act#watermark-keys');
+    await page.goto('/admin/eu-ai-act#text-watermark');
     await page.getByRole('button', { name: `Run self-test ${MODEL_ID}` }).click();
     // The e2e model is not a real vLLM, so the test fails or errors: either way the page
     // answers with a level badge and a sentence, never silence.
@@ -250,7 +250,7 @@ test.describe('Admin EU AI Act page', () => {
     expect(
       (await page.request.post('/api/admin/eu-ai-act/watermark-keys', { data: {} })).ok()
     ).toBeTruthy();
-    await page.goto('/admin/eu-ai-act#watermark-keys');
+    await page.goto('/admin/eu-ai-act#text-watermark');
     const before = await (await page.request.get('/api/admin/eu-ai-act/watermark-keys')).json();
     const retired = before.items.find(k => k.status === 'retired');
     const current = before.items.find(k => k.status === 'active');
@@ -285,23 +285,29 @@ test.describe('Admin EU AI Act page', () => {
     const original = await read();
     try {
       await page.goto('/admin/eu-ai-act#provenance-settings');
-      const retention = page.getByLabel(/Keep records for/);
+      // The watermark card has forms of its own; this test is about the provenance card.
+      const card = page.locator('#provenance-settings');
+      // The page saves through its bottom bar, not a button per card.
+      const barSave = page
+        .getByRole('region', { name: 'Save changes' })
+        .getByRole('button', { name: 'Save Changes' });
+      const retention = card.getByLabel(/Keep records for/);
       await expect(retention).toBeVisible();
 
       await retention.fill('-1');
-      await page.getByRole('button', { name: 'Save', exact: true }).click();
+      await barSave.click();
       await expect(retention).toHaveAttribute('aria-invalid', 'true');
       await expect(page.locator('#provenance-retentionDays-error')).toContainText('0 or more');
 
       // A lowered retention asks first; cancelling changes nothing.
       await retention.fill('1');
-      await page.getByRole('button', { name: 'Save', exact: true }).click();
+      await barSave.click();
       const dialog = page.getByRole('alertdialog');
       await expect(dialog).toContainText('deleted at the next daily clean-up');
       await dialog.getByRole('button', { name: 'Cancel' }).click();
       expect((await read()).retentionDays).toBe(original.retentionDays);
 
-      await page.getByRole('button', { name: 'Save', exact: true }).click();
+      await barSave.click();
       await page.getByRole('alertdialog').getByRole('button', { name: 'Save' }).click();
       await expect(page.getByText(/Settings saved/)).toBeVisible();
       const saved = await read();

@@ -100,7 +100,7 @@ export async function buildStatus({ refresh = false, deps = {} } = {}) {
   const urlPolicy = new Map();
   await Promise.all(
     probeable.map(async model => {
-      const url = model.contentMarking.text.detectorUrl;
+      const url = detectorConfigOf(model).detectorUrl;
       urlPolicy.set(model.id, await (deps.checkUrl || checkDetectorUrl)(url));
     })
   );
@@ -111,7 +111,15 @@ export async function buildStatus({ refresh = false, deps = {} } = {}) {
   const checks = platformChecks({ platform, acknowledgements, provenance });
   const models = [];
   for (const model of enabled) {
-    const selfTest = selfTestSummary(selfTests[model.id], activeKeyId);
+    // The image holds the key of a "model" key holder: iHub's key changes do not age its self-test.
+    const modelHeld = markingOf(model, 'text').keyHolder === 'model';
+    const route = detectorConfigOf(model);
+    const selfTest = selfTestSummary(
+      selfTests[model.id],
+      modelHeld ? null : activeKeyId,
+      modelHeld ? 'model' : 'ihub',
+      route ? { api: route.api, url: route.detectorUrl } : null
+    );
     const probe = probes.get(model.id);
     checks.push(
       ...modelChecks(model, {
@@ -144,8 +152,8 @@ export async function buildStatus({ refresh = false, deps = {} } = {}) {
       detector:
         text.by === 'ihub'
           ? {
-              configured: Boolean(text.detectorUrl),
-              hasCredential: Boolean(text.detectorCredentialRef),
+              configured: Boolean(detectorConfigOf(model)?.detectorUrl),
+              hasCredential: Boolean(detectorConfigOf(model)?.credentialRef),
               urlOk: urlPolicy.get(model.id)?.ok !== false,
               reachable: probe
                 ? probe.reachable && probe.authenticated && probe.contractValid
@@ -154,7 +162,8 @@ export async function buildStatus({ refresh = false, deps = {} } = {}) {
               checkedAt: probe?.checkedAt ?? null
             }
           : null,
-      activeKeyId: text.by === 'ihub' ? activeKeyId : null,
+      keyHolder: keyHolderOf(text, modelHeld),
+      activeKeyId: text.by === 'ihub' && !modelHeld ? activeKeyId : null,
       selfTest: text.by === 'ihub' ? selfTest : null
     });
   }
@@ -177,3 +186,9 @@ export async function buildStatus({ refresh = false, deps = {} } = {}) {
 }
 
 export { LEVEL };
+
+/** Who holds the watermark key of a model iHub marks: the model image or iHub. */
+function keyHolderOf(text, modelHeld) {
+  if (text.by !== 'ihub') return null;
+  return modelHeld ? 'model' : 'ihub';
+}

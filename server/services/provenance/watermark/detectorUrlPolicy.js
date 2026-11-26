@@ -116,3 +116,36 @@ export async function assertDetectorUrlAllowed(url, options) {
   }
   return result;
 }
+
+/**
+ * A `lookup` for the detector request that answers with the addresses
+ * {@link checkDetectorUrl} accepted, so a second DNS answer cannot point the
+ * request elsewhere. Unlike `createPinnedLookup` of the SSRF guard it keeps
+ * loopback addresses, which this policy allows (a detector or token endpoint on
+ * `localhost`); forbidden addresses are dropped again as a second line of defence.
+ *
+ * @param {string[]} addresses - From {@link checkDetectorUrl}
+ * @returns {Function} A `dns.lookup`-compatible function
+ */
+export function pinnedDetectorLookup(addresses) {
+  const allowed = [...new Set(addresses || [])].filter(addr => !isForbiddenAddress(addr));
+  return function lookup(hostname, options, callback) {
+    if (typeof options === 'function') {
+      callback = options;
+      options = {};
+    } else if (typeof options === 'number') {
+      options = { family: options };
+    }
+    const wanted = options?.family || 0;
+    const entries = allowed
+      .map(address => ({ address, family: net.isIP(address) }))
+      .filter(entry => !wanted || entry.family === wanted);
+    if (!entries.length) {
+      const error = new Error(`pinned lookup: no accepted address for ${hostname}`);
+      error.code = 'ENOTFOUND';
+      return callback(error);
+    }
+    if (options?.all) return callback(null, entries);
+    return callback(null, entries[0].address, entries[0].family);
+  };
+}

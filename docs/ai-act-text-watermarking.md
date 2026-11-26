@@ -26,6 +26,15 @@ iHub  -- watermarking:true -->  vLLM (--watermark-config key, enforce)   answer 
 iHub  -- text + all keys  -->   detector (HTTPS/internal, bearer)         p-value per key
 ```
 
+With iFinder's vLLM image the image holds the keys instead, and iHub sends only the text (see
+[Keys held by the model image](#keys-held-by-the-model-image)):
+
+```
+iHub  -- watermarking:true -->  if-vllm image (its own key files)            answer is watermarked
+iHub  -- text only        -->   image: /watermark/v1/detect                  p-value per key file
+                          or    iFinder Model Gateway: /v1/gateway/detections/text   verdict
+```
+
 - **Server-owned.** iHub adds `watermarking: true` to the request of every model marked `by: "ihub"`. Nothing a
   client sends (`watermarking: false`, `extra_body`, the flattened SDK form) reaches vLLM; with `enforce: true`
   on the vLLM side a client could not switch it off either.
@@ -75,8 +84,10 @@ iHub  -- text + all keys  -->   detector (HTTPS/internal, bearer)         p-valu
    provider fails validation, because the `watermarking` request field would be rejected by a hosted API.
    The detector fields are optional and only used to recognise the watermark again (Verify and the self-test):
    without `detectorUrl` the output is still watermarked, and the configuration check shows *Attention*, not
-   *Failing*. `detectorCredentialRef` is the id of a `bearer` credential (**Admin → Credentials**); leave it out for
-   a detector that asks for no token. `tokenizer` defaults to the model's `modelId`: set it only when vLLM serves
+   *Failing*. `detectorCredentialRef` is the id of a `bearer` credential, or of an `oauth2` credential whose token
+   iHub fetches with client credentials (**Admin → Credentials**); leave it out for a detector that asks for no
+   token. For iFinder's vLLM image, which holds its keys itself, see
+   [Keys held by the model image](#keys-held-by-the-model-image). `tokenizer` defaults to the model's `modelId`: set it only when vLLM serves
    the model under a name the detector cannot load as a Hugging Face id or path. `contextWidth` (default 4) is
    vLLM's watermark `context_width`, the number of preceding tokens that seed the watermark, not the model's
    context window. `keyId` is not used with `ihub`: the key store decides.
@@ -93,10 +104,69 @@ iHub  -- text + all keys  -->   detector (HTTPS/internal, bearer)         p-valu
 | `no_watermark_found` | Key mismatch, vLLM without watermarking, or tokenizer/context-width mismatch. |
 | `too_short` | The answer had too few scored tokens to decide. |
 | `detector_unreachable` | See `_test`. |
+| `watermark_found` | `keyHolder: "model"` only: the image or the gateway found the watermark, of the key file in `matchedKeyLabel`. |
 | `not_applied` / `no_keys` | iHub did not request a mark (see `reason`) / no key exists yet. |
 
 `POST /api/admin/eu-ai-act/watermark-detectors/{modelId}/_test` checks URL, TLS, token and response contract with a
 throwaway random key; no real key leaves iHub.
+
+## Keys held by the model image
+
+iFinder's vLLM image (if-vllm) holds its watermark keys itself, in key files, and has a detection
+endpoint built in (`POST /watermark/v1/detect`, next to the chat API). iHub then needs no key of
+its own, neither for generating nor for detecting:
+
+```json
+"contentMarking": { "text": {
+  "by": "ihub", "scheme": "vllm-gumbel",
+  "keyHolder": "model"
+} }
+```
+
+- **Generation.** iHub still sends `watermarking: true` and records the answer as watermarked,
+  without an iHub key. The record names no key (`key_id` is absent): neither the image's answer nor
+  an iFinder Model Gateway says which key file the image used. iAssistant records it the same way.
+- **Detection at the image.** The detection endpoint is the model URL's server plus
+  `/watermark/v1/detect` (a path before `/v1`, such as a proxy prefix, is kept);
+  `detectorUrl` overrides it. iHub sends the text with the model's own API key as bearer token,
+  as for the chat API; the image checks it when `VLLM_API_KEY` is set. `tokenizer`, `prf`,
+  `contextWidth` and `detectorCredentialRef` are refused with `keyHolder: "model"`.
+- **The verdict.** The image answers with an uncorrected p-value per key file and algorithm
+  (`gumbel`, `dual_key_gumbel`). iHub decides with the rule of an iFinder Model Gateway, with its
+  own thresholds: a check that several images report with the same result counts once (same
+  tokenizer, algorithm, parameters and scored tokens, and the p-value up to rounding; the key file
+  name and the vLLM version do not matter), the strongest check's p-value times the number of
+  distinct checks must be below `alpha` (Bonferroni), otherwise the text is *too short* (a check
+  scored fewer than `minScoredTokens`), *unavailable* (an image did not answer, or answered
+  without results) or *not detected*. The `_verify` answer names the key file
+  (`watermark.keyLabel`), the algorithm, the number of checks (`watermark.checksMade`) and the
+  route that decided (`watermark.source`: `ihub`, `model` or `gateway`). With several routes, a
+  detection wins, then *too short*; otherwise a route that could not answer makes the result
+  *unavailable*, so *not detected* means that every route answered.
+- **Through an iFinder Model Gateway.** Where iFinder runs alongside iHub, set the gateway's
+  detection endpoint in **Admin → EU AI Act → Text watermark → Detectors and self-test**
+  (`provenance.watermark.gatewayUrl`, with `gatewayCredentialRef`: a `bearer` credential, or an
+  `oauth2` client whose token iHub fetches with client credentials). Detection of all models with
+  `keyHolder: "model"` then goes there, once per text, and iHub takes the gateway's verdict
+  (`DETECTED`, `NOT_DETECTED`, `UNCLEAR`: too few tokens or a detector down). The answer also
+  carries `watermark.gateway` (`verdict`, `alpha`, `textSha256`, `detectedAt`, `gatewayVersion`).
+  On this path the gateway decides with its own thresholds (by default alpha 0.01 and 50 scored
+  tokens); iHub's `alpha` and `minScoredTokens` do not apply, `detectorTimeoutMs` does.
+  The gateway checks with **all** detectors in its own configuration
+  (`intrafind.modelgateway.watermark-detection.detectors`), including those of models iHub does
+  not use, and asks none that are only registered in iHub. A *detected* is therefore evidence, not
+  proof of origin: the text is consistent with a watermark that one of the gateway's detectors
+  recognises, which need not be one of this iHub's models; the output record answers whether it
+  came through this iHub. Likewise a passing self-test shows that one of the gateway's detectors
+  knows the model's key, not under which detector the model is listed; a model whose key no
+  detector knows shows up as a failed self-test.
+- **Self-test.** It generates as usual and passes with `watermark_found` (and the key file in
+  `matchedKeyLabel`) when the image or the gateway finds the watermark. The result is marked
+  outdated when the route changes afterwards (a gateway is set or removed, or its address or the
+  image's detection endpoint changes), as it is after a change of the key holder.
+
+iHub's key store and the `ihub` key holder stay as they are for vLLM servers started with
+`--watermark-config` by hand.
 
 ## Rotation
 
@@ -230,7 +300,7 @@ marked too but are not in the answer.
 | Hosted models | Not watermarked by iHub; use `by: "provider"` with a written statement. |
 | Greedy decoding (temperature 0, `topK` 1) | No watermark; recorded `applied: false`, `reason: "greedy"`. |
 | Structured output (JSON schema, `json_object`) | Grammar-constrained decoding gives a weak mark; recorded `applied: false`, `reason: "structured_output"`. |
-| Fewer than about 200 scored tokens | Cannot be decided: "too short to tell". |
+| Fewer scored tokens than the minimum (iHub: 200 by default; a gateway: its own) | Cannot be decided: "too short to tell". |
 | Paraphrase, translation, heavy editing, summaries | The mark weakens or disappears. A miss is not proof of human origin. |
 | Beam search, some speculative-decoding setups | Not marked or weak (iHub never sends beam search). |
 | One key set for the installation | All `by: "ihub"` models share it; two vLLM servers on different keys give permanent "not detected" for one. |

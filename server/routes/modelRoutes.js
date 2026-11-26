@@ -15,6 +15,15 @@ import { assertValidId } from '../utils/pathSecurity.js';
 import { findByIdCaseInsensitive } from '../utils/resourceLookup.js';
 import { getTranscriptionProvider } from '../transcription/index.js';
 
+// Fields of `contentMarking.text` that stay on the server.
+const PRIVATE_TEXT_MARKING_FIELDS = [
+  'statementRef',
+  'keyHolder',
+  'detectorUrl',
+  'detectorCredentialRef',
+  'tokenizer'
+];
+
 /**
  * Strip server-side secrets before a model is sent to the browser.
  * - `apiKey` (an encrypted ciphertext blob) is removed for EVERY model.
@@ -30,13 +39,8 @@ function sanitizeModelForPublic(model) {
   // are the operator's own (document names, internal hostnames); the public list
   // keeps `by` and `scheme` only.
   if (clean.contentMarking?.text) {
-    const {
-      statementRef: _statementRef,
-      detectorUrl: _detectorUrl,
-      detectorCredentialRef: _detectorCredentialRef,
-      tokenizer: _tokenizer,
-      ...text
-    } = clean.contentMarking.text;
+    const text = { ...clean.contentMarking.text };
+    for (const field of PRIVATE_TEXT_MARKING_FIELDS) delete text[field];
     clean.contentMarking = { ...clean.contentMarking, text };
   }
   if (clean.modelType === 'transcription' || clean.modelType === 'tts') {

@@ -33,6 +33,50 @@ function rowTitle(row, t) {
   }[row.id];
 }
 
+/** The text of a detected watermark, by the route that decided (see verificationResult). */
+function detectedText(t, source, values) {
+  if (source === 'gateway') {
+    return t(
+      'admin.euAiAct.verify.wmDetectedGateway',
+      'Watermark detected by the iFinder Model Gateway. Key file: {{keyId}}. p-value {{p}}, {{n}} tokens scored. The gateway checks with all detectors configured there: the text is consistent with the watermark of one of their models, which need not be one of this installation.',
+      values
+    );
+  }
+  if (source === 'model') {
+    return t(
+      'admin.euAiAct.verify.wmDetectedModel',
+      'Watermark detected by the model image. Key file: {{keyId}}. p-value {{p}}, {{n}} tokens scored.',
+      values
+    );
+  }
+  return t(
+    'admin.euAiAct.verify.wmDetected',
+    'Watermark detected. Technique: iHub text watermark. Key ID: {{keyId}}. p-value {{p}}, {{n}} tokens scored.',
+    values
+  );
+}
+
+/** The text of an undetected watermark, by the route that decided. */
+function notDetectedText(t, row) {
+  if (row.source === 'gateway') {
+    return t(
+      'admin.euAiAct.verify.wmNotDetectedGateway',
+      'No watermark detected by the detectors of the iFinder Model Gateway. This does not show that the text is not AI-generated: it may be edited, come from another model or have been generated without a watermark.'
+    );
+  }
+  if (row.source === 'model') {
+    return t(
+      'admin.euAiAct.verify.wmNotDetectedModel',
+      'No watermark detected by the model images. This does not show that the text is not AI-generated: it may be edited, come from another model or have been generated without a watermark.'
+    );
+  }
+  return t(
+    'admin.euAiAct.verify.wmNotDetected',
+    'No watermark detected with the {{k}} keys held by this installation. This does not show that the text is not AI-generated: it may be edited, come from another model or have been generated without a watermark.',
+    { k: row.keysChecked ?? '-' }
+  );
+}
+
 /** Badge word and sentence of one row. Negatives never claim an origin. */
 function describeRow(row, t) {
   if (row.id === 'record') {
@@ -60,30 +104,28 @@ function describeRow(row, t) {
   }
   if (row.id === 'watermark') {
     switch (row.state) {
-      case 'detected':
+      case 'detected': {
+        const values = {
+          keyId: row.keyId || '-',
+          p: row.pValue ?? '-',
+          n: row.scoredTokens ?? '-'
+        };
         return {
           word: t('admin.euAiAct.verify.detected', 'Detected'),
-          text: t(
-            'admin.euAiAct.verify.wmDetected',
-            'Watermark detected. Technique: iHub text watermark. Key ID: {{keyId}}. p-value {{p}}, {{n}} tokens scored.',
-            { keyId: row.keyId || '-', p: row.pValue ?? '-', n: row.scoredTokens ?? '-' }
-          )
+          text: detectedText(t, row.source, values)
         };
+      }
       case 'not_detected':
         return {
           word: t('admin.euAiAct.verify.notDetected', 'Not detected'),
-          text: t(
-            'admin.euAiAct.verify.wmNotDetected',
-            'No watermark detected with the {{k}} keys held by this installation. This does not show that the text is not AI-generated: it may be edited, come from another model or have been generated without a watermark.',
-            { k: row.keysChecked ?? '-' }
-          )
+          text: notDetectedText(t, row)
         };
       case 'too_short':
         return {
           word: t('admin.euAiAct.verify.tooShort', 'Too short to tell'),
           text: t(
             'admin.euAiAct.verify.wmTooShort',
-            'Only {{n}} tokens could be scored; about 200 are needed. No conclusion.',
+            'Only {{n}} tokens could be scored, too few for a conclusion.',
             { n: row.scoredTokens ?? 0 }
           )
         };
@@ -272,7 +314,7 @@ export default function VerificationCard({ maxFileBytes = DEFAULT_MAX_FILE_BYTES
   return (
     <EuAiActCard
       id="verification"
-      title={t('admin.euAiAct.verify.title', 'Verification')}
+      title={t('admin.euAiAct.verify.title', 'Check an output')}
       description={t(
         'admin.euAiAct.verify.description',
         'Check whether a text, image or audio file came from this installation and which marks it carries. The content is hashed and not stored.'
@@ -334,7 +376,7 @@ export default function VerificationCard({ maxFileBytes = DEFAULT_MAX_FILE_BYTES
               <p id="verify-text-help" className="mt-1 text-xs text-gray-600 dark:text-gray-400">
                 {t(
                   'admin.euAiAct.verify.textHelp',
-                  'Texts shorter than about 200 tokens cannot be judged by the watermark check.'
+                  'Short texts cannot be judged by the watermark check. How many tokens it needs depends on the detection settings.'
                 )}
               </p>
             </div>

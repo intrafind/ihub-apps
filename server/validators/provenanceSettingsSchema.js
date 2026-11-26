@@ -18,6 +18,20 @@ import {
 
 const B = PROVENANCE_BOUNDS;
 
+const httpUrl = z
+  .string()
+  .max(500)
+  .refine(
+    value => {
+      try {
+        return ['http:', 'https:'].includes(new URL(value).protocol);
+      } catch {
+        return false;
+      }
+    },
+    { message: 'must be an http(s) URL' }
+  );
+
 export const provenanceSettingsSaveSchema = z
   .object({
     retentionDays: z.number().int().min(B.retentionDays.min).max(B.retentionDays.max).optional(),
@@ -55,7 +69,10 @@ export const provenanceSettingsSaveSchema = z
           .min(B.detectorTimeoutMs.min)
           .max(B.detectorTimeoutMs.max)
           .nullable()
-          .optional()
+          .optional(),
+        // The detection endpoint of an iFinder Model Gateway and its credential.
+        gatewayUrl: httpUrl.nullable().optional(),
+        gatewayCredentialRef: z.string().min(1).max(100).nullable().optional()
       })
       .passthrough()
       .optional()

@@ -12,7 +12,7 @@ import EuAiActCard from './EuAiActCard';
 const ORDER = { error: 0, warn: 1, ok: 2 };
 const byLevel = (a, b) => ORDER[a.level] - ORDER[b.level];
 
-/** A fix link keeps the in-page anchor (`/admin/eu-ai-act#watermark-keys`) as a hash. */
+/** A fix link keeps the in-page anchor (`/admin/eu-ai-act#text-watermark`) as a hash. */
 function FixLink({ fix, label }) {
   const { t } = useTranslation();
   const text = t(fix.labelKey, 'Open');

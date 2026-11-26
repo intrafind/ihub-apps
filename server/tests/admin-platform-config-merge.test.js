@@ -500,6 +500,29 @@ describe('POST /api/admin/configs/platform provenance block', () => {
     expect(saved.provenance.watermark).toBeUndefined();
   });
 
+  test('the Model Gateway of the watermark detection is saved, and null removes it', async () => {
+    const res = await post({
+      provenance: {
+        watermark: {
+          gatewayUrl: 'https://gateway.internal/v1/gateway/detections/text',
+          gatewayCredentialRef: 'ifinder-gateway'
+        }
+      }
+    });
+    expect(res.status).toBe(200);
+    expect((await readPlatform()).provenance.watermark).toEqual({
+      alpha: 0.001,
+      minScoredTokens: 300,
+      gatewayUrl: 'https://gateway.internal/v1/gateway/detections/text',
+      gatewayCredentialRef: 'ifinder-gateway'
+    });
+    await post({ provenance: { watermark: { gatewayUrl: null, gatewayCredentialRef: null } } });
+    expect((await readPlatform()).provenance.watermark).toEqual({
+      alpha: 0.001,
+      minScoredTokens: 300
+    });
+  });
+
   test('a body without provenance leaves the block untouched', async () => {
     await post({ chats: { enabled: false } });
     expect((await readPlatform()).provenance).toEqual(stored.provenance);
@@ -518,7 +541,9 @@ describe('POST /api/admin/configs/platform provenance block', () => {
     [{ watermark: { alpha: 1 } }, 'watermark.alpha'],
     [{ watermark: { minScoredTokens: 0 } }, 'watermark.minScoredTokens'],
     [{ watermark: { detectorTimeoutMs: 999 } }, 'watermark.detectorTimeoutMs'],
-    [{ watermark: { detectorTimeoutMs: 120001 } }, 'watermark.detectorTimeoutMs']
+    [{ watermark: { detectorTimeoutMs: 120001 } }, 'watermark.detectorTimeoutMs'],
+    [{ watermark: { gatewayUrl: 'ftp://gateway/detect' } }, 'watermark.gatewayUrl'],
+    [{ watermark: { gatewayUrl: 'gateway.internal/detect' } }, 'watermark.gatewayUrl']
   ])('rejects %j with 400 naming %s and writes nothing', async (provenance, field) => {
     const res = await post({ provenance });
     expect(res.status).toBe(400);

@@ -14,6 +14,18 @@
  * @param {Object} result - The response body
  * @returns {{headline: 'match'|'none'|'inconclusive', rows: Array<Object>, records: Array<Object>, caveats: string[]}}
  */
+/**
+ * Who decided on the watermark: the Model Gateway (over all detectors configured
+ * there), the model images, or detector services with iHub's keys. The server names
+ * it; an answer without `source` is read from its fields.
+ */
+function watermarkSource(watermark) {
+  if (watermark.source) return watermark.source;
+  if (watermark.gateway) return 'gateway';
+  if (watermark.keyId || watermark.keysChecked > 0) return 'ihub';
+  return 'model';
+}
+
 export function summarizeVerification(result) {
   const rows = [];
   const isMedia = Boolean(result.contentHash);
@@ -40,7 +52,10 @@ export function summarizeVerification(result) {
         id: 'watermark',
         status: map[watermark.status] || 'info',
         state: watermark.status,
-        keyId: watermark.keyId || null,
+        source: watermarkSource(watermark),
+        // A model image or a Model Gateway names the key by its file name.
+        keyId: watermark.keyId || watermark.keyLabel || null,
+        checksMade: watermark.checksMade ?? null,
         pValue: watermark.pValue ?? null,
         scoredTokens: watermark.scoredTokens ?? null,
         keysChecked: watermark.keysChecked ?? null,

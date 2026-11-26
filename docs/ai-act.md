@@ -198,7 +198,8 @@ it; "Not found" only means there is no record, not that a person wrote it.
   check on this page flags a model whose provider declares a mark but the model does not say so, with a **Sync with
   provider** link that opens the model and its sync dialog (see [Models](models.md#syncing-a-single-model)). Nothing is
   changed until you apply.
-- **Platform:** edit these in **Admin → EU AI Act → Provenance settings** (see below) or in `platform.json`.
+- **Platform:** edit these in **Admin → EU AI Act → Provenance settings** (records and checking outputs) and
+  **Text watermark** (the `provenance.watermark.*` rows; see below) or in `platform.json`.
   Defaults and bounds (the form and the server refuse values outside them):
 
   | Setting | Default | Allowed | Meaning |
@@ -251,19 +252,22 @@ master switch, these cards:
   current version; see [AI-use acknowledgement](#ai-use-acknowledgement).
 - **Acknowledgements.** Counts for registered users and the same actions as the Users page (shared component),
   including **Request again**.
-- **Watermark keys.** Generate, add, reveal, delete retired keys and **Make active** on a retired key
+- **Text watermark** (`#text-watermark`). Three parts. *Keys* (only for models whose key iHub holds): generate, add, reveal, delete retired keys and **Make active** on a retired key
   (rollback, for example when vLLM was not updated in time). Making a key active retires the current one,
   asks you to update vLLM's `--watermark-config` (the printed option can be shown again, which is audited) and
   until then the self-test shows a mismatch. Per model: test connection and self-test (about 400 tokens). The last
-  self-test result is kept per model; after a key change it shows as outdated until run again. Detector URL,
-  credential, tokenizer and watermark context are edited in the model editor; all of them are optional.
-- **Provenance settings.** The settings of the table above as a form, with defaults and units next to each
+  self-test result is kept per model; after a key change, when the model switches between iHub's key and the image's, or when its detection route changes (gateway set or removed, detection address changed), it shows as outdated until run again. Detector URL,
+  credential, tokenizer and watermark context are edited in the model editor; all of them are optional. *Detectors and
+  self-test* starts with the iFinder Model Gateway (`provenance.watermark.gatewayUrl`, credential), which decides
+  the route of the detectors listed below it. *Detection thresholds* holds alpha, the minimum of scored tokens and
+  the detector time limit; with a gateway set, it notes that alpha and the minimum do not apply to the models the gateway decides for. Gateway and thresholds are forms of their own, each saving only its fields.
+- **Provenance settings.** The records and checking-outputs settings of the table above as a form, with defaults and units next to each
   field. The save validates on the client and the server with the same bounds and merges into `platform.json`,
   so keys the form does not own are kept. Lowering the retention (records older than the new limit are deleted
   at the next daily clean-up, irreversibly) and changing who may check outputs ask for a confirmation that names
   the consequence. Every change is written to the audit log (resource `provenanceSettings`, old and new values),
   and the configuration check refreshes after saving.
-- **Verification.** Text or image/audio upload against `POST /api/eu-ai-act/provenance/_verify`. Rows: output record, watermark
+- **Check an output** (`#verification`). Text or image/audio upload against `POST /api/eu-ai-act/provenance/_verify`. Rows: output record, watermark
   (text), C2PA (media: signer, claim generator, signing time, digital source type, signature intact; trust not
   evaluated), SynthID "declared, not detectable". Too short or detector unreachable is "no conclusion", never
   "not watermarked". A match shows the full stored provenance record field by field (output ID, time, model,
@@ -271,7 +275,7 @@ master switch, these cards:
   with **Copy JSON**.
 
 The fix links of the configuration check jump to the card that fixes them (`/admin/eu-ai-act#ai-notice`,
-`#ai-acknowledgement`, `#watermark-keys`).
+`#ai-acknowledgement`, `#text-watermark`).
 
 Image marking is declared per model in the model editor (*Image marking*, shown for image-generating models).
 

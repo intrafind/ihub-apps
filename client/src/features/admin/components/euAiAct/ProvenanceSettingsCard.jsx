@@ -13,6 +13,7 @@ import {
 import AdminLoadError from '../AdminLoadError';
 import EuAiActCard from './EuAiActCard';
 import { INPUT } from './KeyDialogs';
+import { CredentialRefSelect } from '../OpenApiToolEditor';
 import {
   SERVER_FIELD,
   buildBody,
@@ -35,7 +36,8 @@ const FIELD_ORDER = [
   'maxVerifyBytes',
   'alpha',
   'minScoredTokens',
-  'detectorTimeoutMs'
+  'detectorTimeoutMs',
+  'gatewayUrl'
 ];
 // The size field shows MiB; its error key stays `maxVerifyBytes`.
 const INPUT_ID = field => `provenance-${field}`;
@@ -84,10 +86,14 @@ function Field({ field, label, help, error, unit, children }) {
   );
 }
 
-function Group({ title, children }) {
+function Group({ title, hideLegend = false, children }) {
   return (
     <fieldset className="space-y-4">
-      <legend className="text-base font-semibold text-gray-900 dark:text-gray-100 mb-1">
+      <legend
+        className={
+          hideLegend ? 'sr-only' : 'text-base font-semibold text-gray-900 dark:text-gray-100 mb-1'
+        }
+      >
         {title}
       </legend>
       {children}
@@ -96,14 +102,28 @@ function Group({ title, children }) {
 }
 
 /**
- * Card 5: the platform `provenance.*` settings. Edits only what it owns: the save
- * sends a partial block and the server merges it into the stored one. Everything
- * applies at once; no restart.
+ * A form over one section of the platform `provenance.*` settings (see
+ * `SECTION_FIELDS`). Edits only what the section owns: the save sends a partial
+ * block and the server merges it into the stored one. Everything applies at once;
+ * no restart.
+ *
+ * - `provenance`: records and checking outputs, in the card "Provenance settings";
+ * - `gateway`: the iFinder Model Gateway, among the detectors of "Text watermark";
+ * - `thresholds`: how iHub decides on a watermark, in "Text watermark".
  *
  * @param {Object} props
+ * @param {'provenance'|'gateway'|'thresholds'} props.section
+ * @param {boolean} [props.hideLegend] - The surrounding heading already names the group
  * @param {() => void} [props.onSaved] - Called after a save so the status checks refresh
+ * @param {boolean} [props.gatewayActive] - An iFinder Model Gateway is set: the thresholds say
+ *   which of their fields it ignores
  */
-export default function ProvenanceSettingsCard({ onSaved }) {
+export function ProvenanceSettingsForm({
+  section,
+  hideLegend = false,
+  onSaved,
+  gatewayActive = false
+}) {
   const { t } = useTranslation();
   const [form, setForm] = useState(null);
   const [saved, setSaved] = useState(null);
@@ -167,6 +187,8 @@ export default function ProvenanceSettingsCard({ onSaved }) {
               params
             )
           : t('admin.euAiAct.settings.error.min', 'Enter {{min}} or more.', params);
+      case 'url':
+        return t('admin.euAiAct.settings.error.url', 'Enter an http or https address.');
       case 'max':
         return bounds.exclusive
           ? t(
@@ -200,7 +222,7 @@ export default function ProvenanceSettingsCard({ onSaved }) {
       // the stored one, and nothing else in platform.json is sent or touched.
       const result = await makeAdminApiCall('/admin/configs/platform', {
         method: 'PATCH',
-        body: { provenance: buildBody(form) }
+        body: { provenance: buildBody(form, section) }
       });
       const next = toForm(result.data?.provenance || {});
       setForm(next);
@@ -248,7 +270,7 @@ export default function ProvenanceSettingsCard({ onSaved }) {
   // The bar's Save: validate, ask for confirmation when the change is consequential (the save
   // then waits for the answer), then write. Resolves false when nothing was saved.
   const save = async () => {
-    const problems = validateForm(form);
+    const problems = validateForm(form, section);
     if (Object.keys(problems).length > 0) {
       setErrors(
         Object.fromEntries(
@@ -307,8 +329,9 @@ export default function ProvenanceSettingsCard({ onSaved }) {
   const d = PROVENANCE_DEFAULTS;
   const defaultText = value =>
     t('admin.euAiAct.settings.default', 'Default: {{value}}.', { value });
-  const dirty = form && saved ? isDirty(form, saved) : false;
-  useSaveSection('provenance', {
+  const dirty = form && saved ? isDirty(form, saved, section) : false;
+  // Each section is its own entry in the page's save bar.
+  useSaveSection(`provenance-${section}`, {
     dirty,
     saving,
     error: message?.type === 'error' ? message.text : null,
@@ -317,16 +340,8 @@ export default function ProvenanceSettingsCard({ onSaved }) {
   });
 
   return (
-    <EuAiActCard
-      id="provenance-settings"
-      title={t('admin.euAiAct.settings.title', 'Provenance settings')}
-      description={t(
-        'admin.euAiAct.settings.description',
-        'How long output records are kept, who may check an output, and how strict the watermark detector is. Changes apply immediately; no restart is needed. Every save is written to the audit log.'
-      )}
-    >
+    <>
       <UnsavedChangesDialog blocker={blocker} />
-      <EuAiActStateNote hideWhenOn className="mb-4" />
       {loadError && !form ? (
         <AdminLoadError
           framed={false}
@@ -337,285 +352,355 @@ export default function ProvenanceSettingsCard({ onSaved }) {
       ) : !form ? null : (
         <form ref={formRef} onSubmit={submit} noValidate className="space-y-8">
           <ImplicitSubmit disabled={saving} />
-          <Group title={t('admin.euAiAct.settings.records', 'Output records')}>
-            <Checkbox
-              id="provenance-storeRecords"
-              checked={form.storeRecords}
-              onChange={storeRecords => set({ storeRecords })}
-              label={t('admin.euAiAct.settings.storeRecords', 'Keep a record of every output')}
-              help={t(
-                'admin.euAiAct.settings.storeRecordsHelp',
-                'A record holds a hash of the output, never its text. Without records, "did this installation produce this text?" cannot be answered. Default: on.'
-              )}
-            />
-            <Field
-              field="retentionDays"
-              label={t('admin.euAiAct.settings.retentionDays', 'Keep records for')}
-              unit={t('admin.euAiAct.settings.days', 'days')}
-              error={errors.retentionDays}
-              help={`${t(
-                'admin.euAiAct.settings.retentionHelp',
-                '0 keeps records forever. Older records are deleted by a daily clean-up.'
-              )} ${defaultText(d.retentionDays)}`}
-            >
-              <input
-                {...fieldProps('retentionDays')}
-                type="number"
-                inputMode="numeric"
-                min={PROVENANCE_BOUNDS.retentionDays.min}
-                max={PROVENANCE_BOUNDS.retentionDays.max}
-                step={1}
-                value={form.retentionDays}
-                onChange={e => set({ retentionDays: e.target.value }, 'retentionDays')}
-                className={INPUT}
+          {section === 'provenance' && (
+            <Group title={t('admin.euAiAct.settings.records', 'Output records')}>
+              <Checkbox
+                id="provenance-storeRecords"
+                checked={form.storeRecords}
+                onChange={storeRecords => set({ storeRecords })}
+                label={t('admin.euAiAct.settings.storeRecords', 'Keep a record of every output')}
+                help={t(
+                  'admin.euAiAct.settings.storeRecordsHelp',
+                  'A record holds a hash of the output, never its text. Without records, "did this installation produce this text?" cannot be answered. Default: on.'
+                )}
               />
-            </Field>
-            <div role="radiogroup" aria-labelledby="provenance-recordUser-label">
-              <p
-                id="provenance-recordUser-label"
-                className="text-sm font-medium text-gray-900 dark:text-gray-100"
+              <Field
+                field="retentionDays"
+                label={t('admin.euAiAct.settings.retentionDays', 'Keep records for')}
+                unit={t('admin.euAiAct.settings.days', 'days')}
+                error={errors.retentionDays}
+                help={`${t(
+                  'admin.euAiAct.settings.retentionHelp',
+                  '0 keeps records forever. Older records are deleted by a daily clean-up.'
+                )} ${defaultText(d.retentionDays)}`}
               >
-                {t('admin.euAiAct.settings.recordUser', 'Who a record names')}
-              </p>
-              <p className="text-xs text-gray-600 dark:text-gray-400">
+                <input
+                  {...fieldProps('retentionDays')}
+                  type="number"
+                  inputMode="numeric"
+                  min={PROVENANCE_BOUNDS.retentionDays.min}
+                  max={PROVENANCE_BOUNDS.retentionDays.max}
+                  step={1}
+                  value={form.retentionDays}
+                  onChange={e => set({ retentionDays: e.target.value }, 'retentionDays')}
+                  className={INPUT}
+                />
+              </Field>
+              <div role="radiogroup" aria-labelledby="provenance-recordUser-label">
+                <p
+                  id="provenance-recordUser-label"
+                  className="text-sm font-medium text-gray-900 dark:text-gray-100"
+                >
+                  {t('admin.euAiAct.settings.recordUser', 'Who a record names')}
+                </p>
+                <p className="text-xs text-gray-600 dark:text-gray-400">
+                  {t(
+                    'admin.euAiAct.settings.recordUserHelp',
+                    'Applies to records written from now on. Only admins see it when checking an output; it is never part of what a user or API caller receives. It stays in the record when the user is deleted.'
+                  )}
+                </p>
+                {[
+                  [
+                    'none',
+                    t('admin.euAiAct.settings.recordUserNone', 'Nobody'),
+                    t(
+                      'admin.euAiAct.settings.recordUserNoneHelp',
+                      'The record describes the output only. Default.'
+                    )
+                  ],
+                  [
+                    'anonymous',
+                    t('admin.euAiAct.settings.recordUserAnonymous', 'Anonymous (secured hash)'),
+                    t(
+                      'admin.euAiAct.settings.recordUserAnonymousHelp',
+                      'A hash keyed with a secret only the server holds (usr_…). Records of one person share the value, but the user cannot be determined from it.'
+                    )
+                  ],
+                  [
+                    'pseudonymous',
+                    t(
+                      'admin.euAiAct.settings.recordUserPseudonymous',
+                      'Pseudonymous (hash of the user id)'
+                    ),
+                    t(
+                      'admin.euAiAct.settings.recordUserPseudonymousHelp',
+                      'A plain SHA-256 of the user id. Whoever knows a user id can compute it and so attribute the record.'
+                    )
+                  ],
+                  [
+                    'identified',
+                    t('admin.euAiAct.settings.recordUserIdentified', 'Identified (user id)'),
+                    t(
+                      'admin.euAiAct.settings.recordUserIdentifiedHelp',
+                      'The user id, never the name or email. The records then hold personal data: cover them in your data protection documentation.'
+                    )
+                  ]
+                ].map(([value, label, help]) => (
+                  <div key={value} className="mt-2 flex items-start gap-3">
+                    <input
+                      id={`provenance-recordUser-${value}`}
+                      type="radio"
+                      name="provenance-recordUser"
+                      className="mt-1 h-4 w-4 border-gray-300"
+                      checked={form.recordUser === value}
+                      onChange={() => set({ recordUser: value }, 'recordUser')}
+                      aria-describedby={`provenance-recordUser-${value}-help`}
+                    />
+                    <div>
+                      <label
+                        htmlFor={`provenance-recordUser-${value}`}
+                        className="block text-sm text-gray-900 dark:text-gray-100"
+                      >
+                        {label}
+                      </label>
+                      <p
+                        id={`provenance-recordUser-${value}-help`}
+                        className="text-xs text-gray-600 dark:text-gray-400"
+                      >
+                        {help}
+                      </p>
+                    </div>
+                  </div>
+                ))}
+                {errors.recordUser && (
+                  <p className="mt-1 text-sm text-red-700 dark:text-red-300">{errors.recordUser}</p>
+                )}
+              </div>
+            </Group>
+          )}
+
+          {section === 'provenance' && (
+            <Group title={t('admin.euAiAct.settings.verification', 'Checking outputs')}>
+              <div role="radiogroup" aria-labelledby="provenance-verifyAccess-label">
+                <p
+                  id="provenance-verifyAccess-label"
+                  className="text-sm font-medium text-gray-900 dark:text-gray-100"
+                >
+                  {t('admin.euAiAct.settings.verifyAccess', 'Who may check an output')}
+                </p>
+                {[
+                  [
+                    'authenticated',
+                    t('admin.euAiAct.settings.accessAuthenticated', 'Signed-in users only'),
+                    t(
+                      'admin.euAiAct.settings.accessAuthenticatedHelp',
+                      'Anonymous visitors get a sign-in request. Default.'
+                    )
+                  ],
+                  [
+                    'public',
+                    t('admin.euAiAct.settings.accessPublic', 'Anyone, without signing in'),
+                    t(
+                      'admin.euAiAct.settings.accessPublicHelp',
+                      'Third parties such as journalists or platforms can check a text or file. Anyone can then find out whether a text came from this installation.'
+                    )
+                  ]
+                ].map(([value, label, help]) => (
+                  <div key={value} className="mt-2 flex items-start gap-3">
+                    <input
+                      id={`provenance-verifyAccess-${value}`}
+                      type="radio"
+                      name="provenance-verifyAccess"
+                      className="mt-1 h-4 w-4 border-gray-300"
+                      checked={form.verifyAccess === value}
+                      onChange={() => set({ verifyAccess: value }, 'verifyAccess')}
+                      aria-describedby={`provenance-verifyAccess-${value}-help`}
+                    />
+                    <div>
+                      <label
+                        htmlFor={`provenance-verifyAccess-${value}`}
+                        className="block text-sm text-gray-900 dark:text-gray-100"
+                      >
+                        {label}
+                      </label>
+                      <p
+                        id={`provenance-verifyAccess-${value}-help`}
+                        className="text-xs text-gray-600 dark:text-gray-400"
+                      >
+                        {help}
+                      </p>
+                    </div>
+                  </div>
+                ))}
+                {errors.verifyAccess && (
+                  <p className="mt-1 text-sm text-red-700 dark:text-red-300">
+                    {errors.verifyAccess}
+                  </p>
+                )}
+              </div>
+              <Field
+                field="maxVerifyBytes"
+                label={t('admin.euAiAct.settings.maxVerify', 'Largest file that can be checked')}
+                unit="MiB"
+                error={errors.maxVerifyBytes}
+                help={`${t(
+                  'admin.euAiAct.settings.maxVerifyHelp',
+                  'Applies to image and audio uploads on the check form. Larger files are refused.'
+                )} ${defaultText(`${d.maxVerifyBytes / MIB} MiB`)}`}
+              >
+                <input
+                  {...fieldProps('maxVerifyBytes')}
+                  type="number"
+                  inputMode="decimal"
+                  min={PROVENANCE_BOUNDS.maxVerifyBytes.min / MIB}
+                  max={PROVENANCE_BOUNDS.maxVerifyBytes.max / MIB}
+                  step="any"
+                  value={form.maxVerifyMib}
+                  onChange={e => set({ maxVerifyMib: e.target.value }, 'maxVerifyBytes')}
+                  className={INPUT}
+                />
+              </Field>
+              <Checkbox
+                id="provenance-readC2pa"
+                checked={form.readC2pa}
+                onChange={readC2pa => set({ readC2pa })}
+                label={t('admin.euAiAct.settings.readC2pa', 'Read C2PA marks of images')}
+                help={t(
+                  'admin.euAiAct.settings.readC2paHelp',
+                  'Reads the provider mark (C2PA manifest) of generated and uploaded images. Default: on.'
+                )}
+              />
+            </Group>
+          )}
+
+          {section === 'thresholds' && (
+            <Group
+              title={t('admin.euAiAct.settings.detection', 'Detection thresholds')}
+              hideLegend={hideLegend}
+            >
+              <p className="text-sm text-gray-600 dark:text-gray-400">
                 {t(
-                  'admin.euAiAct.settings.recordUserHelp',
-                  'Applies to records written from now on. Only admins see it when checking an output; it is never part of what a user or API caller receives. It stays in the record when the user is deleted.'
+                  'admin.euAiAct.settings.detectionIntro',
+                  'How iHub decides whether a text carries the watermark, for models whose key iHub holds and for model images iHub asks itself. Where an iFinder Model Gateway decides, it uses its own thresholds; only the time limit applies there too. Leave a field empty to use its default.'
                 )}
               </p>
-              {[
-                [
-                  'none',
-                  t('admin.euAiAct.settings.recordUserNone', 'Nobody'),
-                  t(
-                    'admin.euAiAct.settings.recordUserNoneHelp',
-                    'The record describes the output only. Default.'
-                  )
-                ],
-                [
-                  'anonymous',
-                  t('admin.euAiAct.settings.recordUserAnonymous', 'Anonymous (secured hash)'),
-                  t(
-                    'admin.euAiAct.settings.recordUserAnonymousHelp',
-                    'A hash keyed with a secret only the server holds (usr_…). Records of one person share the value, but the user cannot be determined from it.'
-                  )
-                ],
-                [
-                  'pseudonymous',
-                  t(
-                    'admin.euAiAct.settings.recordUserPseudonymous',
-                    'Pseudonymous (hash of the user id)'
-                  ),
-                  t(
-                    'admin.euAiAct.settings.recordUserPseudonymousHelp',
-                    'A plain SHA-256 of the user id. Whoever knows a user id can compute it and so attribute the record.'
-                  )
-                ],
-                [
-                  'identified',
-                  t('admin.euAiAct.settings.recordUserIdentified', 'Identified (user id)'),
-                  t(
-                    'admin.euAiAct.settings.recordUserIdentifiedHelp',
-                    'The user id, never the name or email. The records then hold personal data: cover them in your data protection documentation.'
-                  )
-                ]
-              ].map(([value, label, help]) => (
-                <div key={value} className="mt-2 flex items-start gap-3">
-                  <input
-                    id={`provenance-recordUser-${value}`}
-                    type="radio"
-                    name="provenance-recordUser"
-                    className="mt-1 h-4 w-4 border-gray-300"
-                    checked={form.recordUser === value}
-                    onChange={() => set({ recordUser: value }, 'recordUser')}
-                    aria-describedby={`provenance-recordUser-${value}-help`}
-                  />
-                  <div>
-                    <label
-                      htmlFor={`provenance-recordUser-${value}`}
-                      className="block text-sm text-gray-900 dark:text-gray-100"
-                    >
-                      {label}
-                    </label>
-                    <p
-                      id={`provenance-recordUser-${value}-help`}
-                      className="text-xs text-gray-600 dark:text-gray-400"
-                    >
-                      {help}
-                    </p>
-                  </div>
-                </div>
-              ))}
-              {errors.recordUser && (
-                <p className="mt-1 text-sm text-red-700 dark:text-red-300">{errors.recordUser}</p>
+              {gatewayActive && (
+                <p
+                  role="note"
+                  className="rounded-md border border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-900/30 p-3 text-sm text-blue-900 dark:text-blue-200"
+                >
+                  {t(
+                    'admin.euAiAct.settings.detectionGatewayNote',
+                    'An iFinder Model Gateway is set. For models whose key the model image holds, the gateway decides, so the false-positive limit and the shortest text do not apply to them.'
+                  )}
+                </p>
               )}
-            </div>
-          </Group>
-
-          <Group title={t('admin.euAiAct.settings.verification', 'Checking outputs')}>
-            <div role="radiogroup" aria-labelledby="provenance-verifyAccess-label">
-              <p
-                id="provenance-verifyAccess-label"
-                className="text-sm font-medium text-gray-900 dark:text-gray-100"
+              <Field
+                field="alpha"
+                label={t('admin.euAiAct.settings.alpha', 'False-positive limit')}
+                error={errors.alpha}
+                help={`${t(
+                  'admin.euAiAct.settings.alphaHelp',
+                  'The chance that a text is wrongly called "consistent with our watermark". Smaller is stricter. Between 0 and 1, for example 0.0001.'
+                )} ${defaultText(d.alpha)}`}
               >
-                {t('admin.euAiAct.settings.verifyAccess', 'Who may check an output')}
-              </p>
-              {[
-                [
-                  'authenticated',
-                  t('admin.euAiAct.settings.accessAuthenticated', 'Signed-in users only'),
-                  t(
-                    'admin.euAiAct.settings.accessAuthenticatedHelp',
-                    'Anonymous visitors get a sign-in request. Default.'
-                  )
-                ],
-                [
-                  'public',
-                  t('admin.euAiAct.settings.accessPublic', 'Anyone, without signing in'),
-                  t(
-                    'admin.euAiAct.settings.accessPublicHelp',
-                    'Third parties such as journalists or platforms can check a text or file. Anyone can then find out whether a text came from this installation.'
-                  )
-                ]
-              ].map(([value, label, help]) => (
-                <div key={value} className="mt-2 flex items-start gap-3">
-                  <input
-                    id={`provenance-verifyAccess-${value}`}
-                    type="radio"
-                    name="provenance-verifyAccess"
-                    className="mt-1 h-4 w-4 border-gray-300"
-                    checked={form.verifyAccess === value}
-                    onChange={() => set({ verifyAccess: value }, 'verifyAccess')}
-                    aria-describedby={`provenance-verifyAccess-${value}-help`}
-                  />
-                  <div>
-                    <label
-                      htmlFor={`provenance-verifyAccess-${value}`}
-                      className="block text-sm text-gray-900 dark:text-gray-100"
-                    >
-                      {label}
-                    </label>
-                    <p
-                      id={`provenance-verifyAccess-${value}-help`}
-                      className="text-xs text-gray-600 dark:text-gray-400"
-                    >
-                      {help}
-                    </p>
-                  </div>
-                </div>
-              ))}
-              {errors.verifyAccess && (
-                <p className="mt-1 text-sm text-red-700 dark:text-red-300">{errors.verifyAccess}</p>
-              )}
-            </div>
-            <Field
-              field="maxVerifyBytes"
-              label={t('admin.euAiAct.settings.maxVerify', 'Largest file that can be checked')}
-              unit="MiB"
-              error={errors.maxVerifyBytes}
-              help={`${t(
-                'admin.euAiAct.settings.maxVerifyHelp',
-                'Applies to image and audio uploads on the check form. Larger files are refused.'
-              )} ${defaultText(`${d.maxVerifyBytes / MIB} MiB`)}`}
-            >
-              <input
-                {...fieldProps('maxVerifyBytes')}
-                type="number"
-                inputMode="decimal"
-                min={PROVENANCE_BOUNDS.maxVerifyBytes.min / MIB}
-                max={PROVENANCE_BOUNDS.maxVerifyBytes.max / MIB}
-                step="any"
-                value={form.maxVerifyMib}
-                onChange={e => set({ maxVerifyMib: e.target.value }, 'maxVerifyBytes')}
-                className={INPUT}
-              />
-            </Field>
-            <Checkbox
-              id="provenance-readC2pa"
-              checked={form.readC2pa}
-              onChange={readC2pa => set({ readC2pa })}
-              label={t('admin.euAiAct.settings.readC2pa', 'Read C2PA marks of images')}
-              help={t(
-                'admin.euAiAct.settings.readC2paHelp',
-                'Reads the provider mark (C2PA manifest) of generated and uploaded images. Default: on.'
-              )}
-            />
-          </Group>
+                <input
+                  {...fieldProps('alpha')}
+                  type="text"
+                  inputMode="decimal"
+                  autoComplete="off"
+                  placeholder={String(d.alpha)}
+                  value={form.alpha}
+                  onChange={e => set({ alpha: e.target.value }, 'alpha')}
+                  className={INPUT}
+                />
+              </Field>
+              <Field
+                field="minScoredTokens"
+                label={t('admin.euAiAct.settings.minTokens', 'Shortest text that can be judged')}
+                unit={t('admin.euAiAct.settings.tokens', 'tokens')}
+                error={errors.minScoredTokens}
+                help={`${t(
+                  'admin.euAiAct.settings.minTokensHelp',
+                  'Shorter texts are reported as "too short to tell" instead of "not watermarked".'
+                )} ${defaultText(d.minScoredTokens)}`}
+              >
+                <input
+                  {...fieldProps('minScoredTokens')}
+                  type="number"
+                  inputMode="numeric"
+                  min={PROVENANCE_BOUNDS.minScoredTokens.min}
+                  max={PROVENANCE_BOUNDS.minScoredTokens.max}
+                  step={1}
+                  placeholder={String(d.minScoredTokens)}
+                  value={form.minScoredTokens}
+                  onChange={e => set({ minScoredTokens: e.target.value }, 'minScoredTokens')}
+                  className={INPUT}
+                />
+              </Field>
+              <Field
+                field="detectorTimeoutMs"
+                label={t('admin.euAiAct.settings.timeout', 'Detector time limit')}
+                unit={t('admin.euAiAct.settings.milliseconds', 'milliseconds')}
+                error={errors.detectorTimeoutMs}
+                help={`${t(
+                  'admin.euAiAct.settings.timeoutHelp',
+                  'How long to wait for the detector of a model. Between 1000 and 120000.'
+                )} ${defaultText(d.detectorTimeoutMs)}`}
+              >
+                <input
+                  {...fieldProps('detectorTimeoutMs')}
+                  type="number"
+                  inputMode="numeric"
+                  min={PROVENANCE_BOUNDS.detectorTimeoutMs.min}
+                  max={PROVENANCE_BOUNDS.detectorTimeoutMs.max}
+                  step={100}
+                  placeholder={String(d.detectorTimeoutMs)}
+                  value={form.detectorTimeoutMs}
+                  onChange={e => set({ detectorTimeoutMs: e.target.value }, 'detectorTimeoutMs')}
+                  className={INPUT}
+                />
+              </Field>
+            </Group>
+          )}
 
-          <Group title={t('admin.euAiAct.settings.detection', 'Text watermark detection')}>
-            <p className="text-sm text-gray-600 dark:text-gray-400">
-              {t(
-                'admin.euAiAct.settings.detectionIntro',
-                'Leave a field empty to use its default. The defaults suit most installations; change them only for a reason.'
-              )}
-            </p>
-            <Field
-              field="alpha"
-              label={t('admin.euAiAct.settings.alpha', 'False-positive limit')}
-              error={errors.alpha}
-              help={`${t(
-                'admin.euAiAct.settings.alphaHelp',
-                'The chance that a text is wrongly called "consistent with our watermark". Smaller is stricter. Between 0 and 1, for example 0.0001.'
-              )} ${defaultText(d.alpha)}`}
+          {section === 'gateway' && (
+            <Group
+              title={t('admin.euAiAct.settings.gateway', 'iFinder Model Gateway')}
+              hideLegend={hideLegend}
             >
-              <input
-                {...fieldProps('alpha')}
-                type="text"
-                inputMode="decimal"
-                autoComplete="off"
-                placeholder={String(d.alpha)}
-                value={form.alpha}
-                onChange={e => set({ alpha: e.target.value }, 'alpha')}
-                className={INPUT}
+              <p className="text-sm text-gray-600 dark:text-gray-400">
+                {t(
+                  'admin.euAiAct.settings.gatewayIntro',
+                  'Only for models whose watermark key the model image holds (iFinder vLLM image). With a gateway set, iHub sends each text there once, and the gateway checks it with all detectors configured in the gateway, including those of models iHub does not use. Which detectors these are is set in the gateway, not here. Without a gateway, iHub asks the image of each such model itself.'
+                )}
+              </p>
+              <Field
+                field="gatewayUrl"
+                label={t('admin.euAiAct.settings.gatewayUrl', 'Detection endpoint')}
+                error={errors.gatewayUrl}
+                help={t(
+                  'admin.euAiAct.settings.gatewayUrlHelp',
+                  'The address of …/v1/gateway/detections/text. Leave empty to ask each model image itself.'
+                )}
+              >
+                <input
+                  {...fieldProps('gatewayUrl')}
+                  type="url"
+                  autoComplete="off"
+                  spellCheck={false}
+                  placeholder="https://gateway.internal/v1/gateway/detections/text"
+                  value={form.gatewayUrl}
+                  onChange={e => set({ gatewayUrl: e.target.value }, 'gatewayUrl')}
+                  className={INPUT}
+                />
+              </Field>
+              <CredentialRefSelect
+                id={INPUT_ID('gatewayCredentialRef')}
+                value={form.gatewayCredentialRef || ''}
+                onChange={value =>
+                  set({ gatewayCredentialRef: value || '' }, 'gatewayCredentialRef')
+                }
+                types={['bearer', 'oauth2']}
+                label={t('admin.euAiAct.settings.gatewayCredential', 'Gateway credential')}
+                emptyLabel={t('admin.models.marking.credentialNone', 'None (no authentication)')}
+                help={t(
+                  'admin.euAiAct.settings.gatewayCredentialHelp',
+                  'A bearer token, or an OAuth2 client whose token iHub fetches (client credentials), if the gateway asks for one.'
+                )}
               />
-            </Field>
-            <Field
-              field="minScoredTokens"
-              label={t('admin.euAiAct.settings.minTokens', 'Shortest text that can be judged')}
-              unit={t('admin.euAiAct.settings.tokens', 'tokens')}
-              error={errors.minScoredTokens}
-              help={`${t(
-                'admin.euAiAct.settings.minTokensHelp',
-                'Shorter texts are reported as "too short to tell" instead of "not watermarked".'
-              )} ${defaultText(d.minScoredTokens)}`}
-            >
-              <input
-                {...fieldProps('minScoredTokens')}
-                type="number"
-                inputMode="numeric"
-                min={PROVENANCE_BOUNDS.minScoredTokens.min}
-                max={PROVENANCE_BOUNDS.minScoredTokens.max}
-                step={1}
-                placeholder={String(d.minScoredTokens)}
-                value={form.minScoredTokens}
-                onChange={e => set({ minScoredTokens: e.target.value }, 'minScoredTokens')}
-                className={INPUT}
-              />
-            </Field>
-            <Field
-              field="detectorTimeoutMs"
-              label={t('admin.euAiAct.settings.timeout', 'Detector time limit')}
-              unit={t('admin.euAiAct.settings.milliseconds', 'milliseconds')}
-              error={errors.detectorTimeoutMs}
-              help={`${t(
-                'admin.euAiAct.settings.timeoutHelp',
-                'How long to wait for the detector of a model. Between 1000 and 120000.'
-              )} ${defaultText(d.detectorTimeoutMs)}`}
-            >
-              <input
-                {...fieldProps('detectorTimeoutMs')}
-                type="number"
-                inputMode="numeric"
-                min={PROVENANCE_BOUNDS.detectorTimeoutMs.min}
-                max={PROVENANCE_BOUNDS.detectorTimeoutMs.max}
-                step={100}
-                placeholder={String(d.detectorTimeoutMs)}
-                value={form.detectorTimeoutMs}
-                onChange={e => set({ detectorTimeoutMs: e.target.value }, 'detectorTimeoutMs')}
-                className={INPUT}
-              />
-            </Field>
-          </Group>
+            </Group>
+          )}
 
           <div className="flex flex-wrap items-center gap-3">
             <div ref={messageRef} role="status" aria-live="polite">
@@ -674,6 +759,30 @@ export default function ProvenanceSettingsCard({ onSaved }) {
         onConfirm={confirmSave}
         onDeny={denySave}
       />
+    </>
+  );
+}
+
+/**
+ * Card 5: the provenance settings: output records and checking outputs. The
+ * watermark settings (gateway, thresholds) are in the card "Text watermark".
+ *
+ * @param {Object} props
+ * @param {() => void} [props.onSaved] - Called after a save so the status checks refresh
+ */
+export default function ProvenanceSettingsCard({ onSaved }) {
+  const { t } = useTranslation();
+  return (
+    <EuAiActCard
+      id="provenance-settings"
+      title={t('admin.euAiAct.settings.title', 'Provenance settings')}
+      description={t(
+        'admin.euAiAct.settings.description',
+        'How long output records are kept and who may check an output. Changes apply immediately; no restart is needed. Every save is written to the audit log.'
+      )}
+    >
+      <EuAiActStateNote hideWhenOn className="mb-4" />
+      <ProvenanceSettingsForm section="provenance" onSaved={onSaved} />
     </EuAiActCard>
   );
 }
