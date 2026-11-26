@@ -74,7 +74,9 @@ defaultTest:
 tests: file://corpus-tests.js
 
 evaluateOptions:
-  # One at a time: the canary's request log belongs to the test being graded.
+  # One at a time: the canary's request log belongs to the test being graded. promptfoo grades
+  # the llm-rubric after all the target calls but runs the JavaScript assertions (which read
+  # that log) right after each call; see the header of assertions.js.
   maxConcurrency: 1
   # The corpus is wide (every template in three places), so each page runs once; the other
   # config repeats a few questions three times to show how often an attack works.

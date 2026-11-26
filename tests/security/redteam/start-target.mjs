@@ -36,7 +36,7 @@ import {
   SERVER_PORT,
   SERVER_SECRET_ENV
 } from '../injection/scenario.mjs';
-import { PAGES_APP, corpusPages, pagesAppConfig } from './corpus.mjs';
+import { PAGES_APP, corpusPages, pagesAppConfig, withPagesApp } from './corpus.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
 const CONTENTS_DIR = 'contents-e2e-redteam';
@@ -89,10 +89,16 @@ fs.writeFileSync(
   )}\n`
 );
 
-// The page corpus of promptfooconfig.corpus.yaml: the summarizer app.
+// The page corpus of promptfooconfig.corpus.yaml: the summarizer app, and the permission for bob to
+// use it (the seed lists the apps of the groups by name).
 fs.writeFileSync(
   path.join(contentsDir, 'apps', `${PAGES_APP}.json`),
   `${JSON.stringify(pagesAppConfig(), null, 2)}\n`
+);
+const groupsPath = path.join(contentsDir, 'config', 'groups.json');
+fs.writeFileSync(
+  groupsPath,
+  `${JSON.stringify(withPagesApp(JSON.parse(fs.readFileSync(groupsPath, 'utf8'))), null, 2)}\n`
 );
 
 // The seeded apps name the stub as their preferred model: point them at the real one.

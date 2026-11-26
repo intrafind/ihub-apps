@@ -81,3 +81,22 @@ export function pagesAppConfig() {
     }
   };
 }
+
+/**
+ * The groups of the seeded contents with the summarizer app added for the groups that may use the
+ * other scenario apps. The injection seed gives `users` and `authenticated` an explicit list of
+ * apps built from its own app names, which does not contain this one, so the nightly user (bob)
+ * could not use it and the access preflight would stop the run. Nothing else changes: the HR app
+ * stays out of the lists, and the admins' permissions are not touched.
+ *
+ * @param {{groups: Record<string, {permissions: {apps: string[]}}>}} groups - `groups.json`
+ * @returns {Object} the same shape, with the app added
+ */
+export function withPagesApp(groups) {
+  const next = structuredClone(groups);
+  for (const id of ['users', 'authenticated']) {
+    const permissions = next.groups[id].permissions;
+    if (!permissions.apps.includes(PAGES_APP)) permissions.apps = [...permissions.apps, PAGES_APP];
+  }
+  return next;
+}

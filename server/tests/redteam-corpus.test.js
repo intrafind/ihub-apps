@@ -10,11 +10,17 @@
 
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
-const { CORPUS_EXFIL_ORIGIN, PAGES_APP, corpusPages, loadCorpus, pagesAppConfig } =
+const { CORPUS_EXFIL_ORIGIN, PAGES_APP, corpusPages, loadCorpus, pagesAppConfig, withPagesApp } =
   await import('../../tests/security/redteam/corpus.mjs');
 const generateTests = (await import('../../tests/security/redteam/corpus-tests.js')).default;
-const { CANARY } = await import('../../tests/security/injection/scenario.mjs');
+const { APPS, BOB, CANARY } = await import('../../tests/security/injection/scenario.mjs');
+const { seedInjectionContents } = await import('../../tests/security/injection/seed.mjs');
+const defaults = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', 'defaults');
 const { appConfigSchema } = await import('../validators/appConfigSchema.js');
 
 const { cases } = loadCorpus();
@@ -108,5 +114,47 @@ describe('the summarizer app', () => {
     assert.equal(app.websearch.enabled, true);
     assert.equal(app.projects, undefined);
     assert.equal(app.preferredModel, 'redteam-model');
+  });
+});
+
+describe('the permission to use the summarizer app', () => {
+  // The nightly user is bob, and the injection seed gives his groups an explicit list of apps
+  // built from its own app names: without the grant the access preflight stops the run.
+  const seeded = () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'redteam-corpus-'));
+    try {
+      fs.cpSync(path.join(defaults, 'config'), path.join(dir, 'config'), { recursive: true });
+      fs.mkdirSync(path.join(dir, 'models'));
+      fs.writeFileSync(path.join(dir, 'models', 'e2e-stub.json'), '{"id":"e2e-stub"}');
+      seedInjectionContents(dir, { passwordHash: password => `hash:${password}` });
+      const read = file => JSON.parse(fs.readFileSync(path.join(dir, 'config', file), 'utf8'));
+      return { groups: read('groups.json'), users: read('users.json') };
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  };
+
+  it('is granted to the groups bob is in, on top of the seeded contents', () => {
+    const { groups, users } = seeded();
+    const granted = withPagesApp(groups);
+    for (const group of users.users[BOB.id].internalGroups) {
+      assert.ok(
+        granted.groups[group].permissions.apps.includes(PAGES_APP),
+        `bob's group ${group} cannot use ${PAGES_APP}`
+      );
+    }
+    for (const id of ['users', 'authenticated']) {
+      const apps = granted.groups[id].permissions.apps;
+      assert.ok(apps.includes(PAGES_APP));
+      assert.ok(apps.includes(APPS.web), 'the scenario apps stay');
+      assert.ok(!apps.includes(APPS.hr), 'the HR app stays admin-only');
+    }
+  });
+
+  it('leaves the other groups alone and can be applied twice', () => {
+    const { groups } = seeded();
+    const granted = withPagesApp(groups);
+    assert.deepEqual(granted.groups.admins, groups.groups.admins);
+    assert.deepEqual(withPagesApp(granted), granted);
   });
 });
