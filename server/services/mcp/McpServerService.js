@@ -317,8 +317,7 @@ export async function gatewayApproval({ server, ctx, tool, args, user }) {
   };
   const state = ctx.mcpReq.requestState?.();
   const answered =
-    state &&
-    state.kind === binding.kind &&
+    state?.kind === binding.kind &&
     state.tool === binding.tool &&
     state.user === binding.user &&
     state.args === binding.args;
@@ -352,11 +351,12 @@ export async function gatewayApproval({ server, ctx, tool, args, user }) {
     preview = `${preview.slice(0, APPROVAL_ARGS_PREVIEW)}…`;
   }
   const name = tool._integration?.name || tool._integration?.instanceId;
+  const integration = name ? ` (${name})` : '';
   return {
     result: inputRequired({
       inputRequests: {
         [APPROVAL_INPUT_KEY]: inputRequired.elicit({
-          message: `iHub needs your approval to run "${tool.id}"${name ? ` (${name})` : ''} with ${preview}`,
+          message: `iHub needs your approval to run "${tool.id}"${integration} with ${preview}`,
           requestedSchema: APPROVAL_REQUESTED_SCHEMA
         })
       },

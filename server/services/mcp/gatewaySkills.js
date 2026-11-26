@@ -48,7 +48,7 @@ const FRONTMATTER = /^---\r?\n[\s\S]*?\r?\n---(?:\r?\n|$)/;
  * @returns {string|null} null when the file has no frontmatter
  */
 export function servedSkillMarkdown(raw, body) {
-  const match = typeof raw === 'string' ? raw.match(FRONTMATTER) : null;
+  const match = typeof raw === 'string' ? FRONTMATTER.exec(raw) : null;
   if (!match) return null;
   const frontmatter = match[0].endsWith('\n') ? match[0] : `${match[0]}\n`;
   return `${frontmatter}${body ?? ''}`;

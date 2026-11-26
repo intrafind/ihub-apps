@@ -21,6 +21,7 @@
  */
 import { createHash, createHmac, randomBytes } from 'node:crypto';
 import { createRequestStateCodec } from '@modelcontextprotocol/server';
+import { compareCodeUnits } from '../../../shared/toolApproval.js';
 import tokenStorageService from '../TokenStorageService.js';
 
 const KEY_LABEL = 'ihub:mcp-gateway:request-state:v1';
@@ -72,7 +73,9 @@ export function argumentsDigest(args) {
     if (value && typeof value === 'object') {
       return Object.fromEntries(
         Object.keys(value)
-          .sort()
+          // Code-unit order, not the locale's: every worker must produce the
+          // same digest for the same arguments.
+          .sort(compareCodeUnits)
           .map(key => [key, canonical(value[key])])
       );
     }

@@ -138,8 +138,7 @@ export class McpTaskStore {
    */
   async get(taskId, ownerId) {
     const record = await this._load(taskId);
-    if (!record || record.ownerId !== ownerId) return null;
-    return record;
+    return record?.ownerId === ownerId ? record : null;
   }
 
   /**

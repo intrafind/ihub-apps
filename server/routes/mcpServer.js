@@ -309,6 +309,16 @@ function registerSessionBusHandlers() {
   });
 }
 
+/** Whether a POST speaks the 2026-07-28 revision (carries the `_meta` envelope). */
+async function isModernPost(req) {
+  if (req.method !== 'POST') return false;
+  try {
+    return !(await isLegacyRequest(await toWebRequest(req, req.body)));
+  } catch {
+    return false;
+  }
+}
+
 export default function registerMcpServerRoutes(app) {
   // unref() so the sweep timer never keeps the process alive on shutdown.
   setInterval(sweepIdleSessions, SESSION_SWEEP_INTERVAL_MS).unref();
@@ -459,16 +469,6 @@ export default function registerMcpServerRoutes(app) {
     { legacy: 'reject', onerror: reportModernError }
   );
   const serveModern = toNodeHandler(modernHandler, { onerror: reportModernError });
-
-  /** Whether a POST speaks the 2026-07-28 revision (carries the `_meta` envelope). */
-  async function isModernPost(req) {
-    if (req.method !== 'POST') return false;
-    try {
-      return !(await isLegacyRequest(await toWebRequest(req, req.body)));
-    } catch {
-      return false;
-    }
-  }
 
   const streamableHttpHandler = async (req, res) => {
     const cfg = gatewayConfig();
