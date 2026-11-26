@@ -38,7 +38,8 @@ function engineTool(id, definition) {
 
 const ENGINES = {
   braveSearch: 'com.intrafind/brave-search',
-  staanSearch: 'com.intrafind/staan-search'
+  staanSearch: 'com.intrafind/staan-search',
+  searxngSearch: 'com.intrafind/searxng-search'
 };
 
 /**

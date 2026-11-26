@@ -8,15 +8,12 @@
  * `DetectorClient`, so a bare `fetch` in it would fail this test.
  */
 import { describe, test, expect, beforeAll, afterAll, afterEach } from '@jest/globals';
-import { spawnSync } from 'node:child_process';
-import fs from 'node:fs';
 import https from 'node:https';
-import os from 'node:os';
-import path from 'node:path';
 import configCache from '../configCache.js';
 import { shouldIgnoreSSLForURL } from '../utils/httpConfig.js';
 import { callDetector } from '../services/provenance/watermark/DetectorClient.js';
 import { startMockDetector } from './helpers/mockWatermarkDetector.js';
+import { createSelfSignedCertificate, opensslAvailable } from './helpers/selfSignedCertificate.js';
 
 const setSsl = ssl => configCache.setCacheEntry('config/platform.json', { ssl });
 
@@ -32,35 +29,13 @@ describe('detector SSL whitelist: decision', () => {
   });
 });
 
-const opensslAvailable = spawnSync('openssl', ['version']).status === 0;
-
 (opensslAvailable ? describe : describe.skip)('detector SSL whitelist: real TLS handshake', () => {
-  let dir;
+  let certificate;
   let mock;
 
   beforeAll(async () => {
-    dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ihub-wm-tls-'));
-    const key = path.join(dir, 'key.pem');
-    const cert = path.join(dir, 'cert.pem');
-    const made = spawnSync('openssl', [
-      'req',
-      '-x509',
-      '-newkey',
-      'rsa:2048',
-      '-nodes',
-      '-keyout',
-      key,
-      '-out',
-      cert,
-      '-days',
-      '1',
-      '-subj',
-      '/CN=127.0.0.1',
-      '-addext',
-      'subjectAltName=IP:127.0.0.1'
-    ]);
-    if (made.status !== 0) throw new Error(`openssl failed: ${made.stderr}`);
-    const server = https.createServer({ key: fs.readFileSync(key), cert: fs.readFileSync(cert) });
+    certificate = createSelfSignedCertificate();
+    const server = https.createServer({ key: certificate.key, cert: certificate.cert });
     mock = await startMockDetector({ token: 'tls-token-1234567', server });
     configCache.setCacheEntry('config/credentials.json', {
       credentials: { d: { id: 'd', type: 'bearer', token: 'tls-token-1234567' } }
@@ -68,7 +43,7 @@ const opensslAvailable = spawnSync('openssl', ['version']).status === 0;
   });
   afterAll(async () => {
     await mock.close();
-    fs.rmSync(dir, { recursive: true, force: true });
+    certificate.remove();
     configCache.setCacheEntry('config/platform.json', {});
   });
 

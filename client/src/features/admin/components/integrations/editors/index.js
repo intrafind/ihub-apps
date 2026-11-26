@@ -72,7 +72,8 @@ const EDITORS = Object.freeze({
   'com.intrafind/entra-directory': EntraDirectoryEditor,
   // The web search engines (`type: "web-search"`) share one editor.
   'com.intrafind/brave-search': WebSearchEngineEditor,
-  'com.intrafind/staan-search': WebSearchEngineEditor
+  'com.intrafind/staan-search': WebSearchEngineEditor,
+  'com.intrafind/searxng-search': WebSearchEngineEditor
 });
 
 /**

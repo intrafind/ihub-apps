@@ -35,6 +35,7 @@ describe('providerLabel', () => {
     assert.equal(providerLabel('brave'), 'Brave Search');
     assert.equal(providerLabel('staan'), 'Staan');
     assert.equal(providerLabel('staan'), 'Staan');
+    assert.equal(providerLabel('searxng'), 'SearXNG');
   });
 
   it('falls back to the raw id for anything else', () => {

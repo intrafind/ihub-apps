@@ -3915,7 +3915,7 @@
         },
         "WebSearch": {
           "name": "Websuche",
-          "description": "Suchanfragen an Brave, Staan und andere Suchmaschinen"
+          "description": "Suchanfragen an Brave, Staan, SearXNG und andere Suchmaschinen"
         },
         "McpClientManager": {
           "name": "MCP-Clients",
@@ -4473,7 +4473,7 @@
         "websearchEnabled": "Websuche aktivieren",
         "websearchProvider": "Suchmaschine",
         "websearchProviderAuto": "Automatisch",
-        "websearchProviderDesc": "Modelle mit eigener Websuche (Google, OpenAI, Anthropic) suchen selbst, wenn „Native Suche verwenden“ an ist; dafür ist keine Suchmaschine nötig. Bei anderen Modellen nutzt die App diese Suchmaschine. „Automatisch“ nimmt die erste Suchmaschine, die der Benutzer nutzen darf: Brave, Staan, dann jede weitere.",
+        "websearchProviderDesc": "Modelle mit eigener Websuche (Google, OpenAI, Anthropic) suchen selbst, wenn „Native Suche verwenden“ an ist; dafür ist keine Suchmaschine nötig. Bei anderen Modellen nutzt die App diese Suchmaschine. „Automatisch“ nimmt die erste Suchmaschine, die der Benutzer nutzen darf: Brave, Staan, SearXNG, dann jede weitere.",
         "websearchEngineDisabledOption": "{{name}} — deaktiviert",
         "websearchEngineMissingOption": "{{name}} — nicht installiert",
         "websearchEngineMissing": "Die Suchmaschine „{{engine}}“ ist nicht installiert. Die App sucht selbst, wo das Modell es kann, und bei anderen Modellen gar nicht. Installieren Sie sie unter Integrationen oder wählen Sie „Automatisch“.",
@@ -5773,6 +5773,8 @@
         "endpoint": "Endpunkt",
         "secretSet": "gesetzt",
         "secretNotSet": "nicht gesetzt",
+        "instanceUrl": "Instanz",
+        "authorization": "Autorisierung",
         "yes": "ja",
         "no": "nein",
         "choices": {
@@ -5849,13 +5851,14 @@
         },
         "webSearch": {
           "engineSection": "Suchmaschine",
-          "engineSectionHelp": "Apps mit eingeschalteter Websuche nutzen diese Suchmaschine, wenn sie sie nennen, oder bei „Automatisch“, wenn sie die erste Suchmaschine ist, die ein Benutzer nutzen darf (Brave, Staan, dann jede weitere). Modelle mit eigener Websuche brauchen keine Suchmaschine.",
+          "engineSectionHelp": "Apps mit eingeschalteter Websuche nutzen diese Suchmaschine, wenn sie sie nennen, oder bei „Automatisch“, wenn sie die erste Suchmaschine ist, die ein Benutzer nutzen darf (Brave, Staan, SearXNG, dann jede weitere). Modelle mit eigener Websuche brauchen keine Suchmaschine.",
           "apiKey": "API-Schlüssel",
           "apiKeyHelp": "Ein Zugangsdaten-Eintrag vom Typ Secret mit dem API-Schlüssel von {{engine}}. Anlegen unter Admin → Integrationen → Zugangsdaten.",
           "envFallback": "Ohne Zugangsdaten nutzt der Server die Umgebungsvariable {{env}}, wenn sie gesetzt ist. Ausgewählte Zugangsdaten haben immer Vorrang.",
           "noKeyNeeded": "{{engine}} braucht keinen API-Schlüssel.",
+          "searxngHint": "SearXNG hat keinen API-Schlüssel. Die Instanz muss json unter search.formats in ihrer settings.yml aufführen, sonst antwortet sie mit HTTP 403. SearXNG leitet jede Anfrage an die in ihm aktivierten Suchmaschinen weiter; welche das sind, wird dort entschieden, nicht in iHub. „Verbindung testen“ prüft die URL und die JSON-Ausgabe.",
           "testResults": "Test der Suchmaschine",
-          "testHelp": "Der Test prüft den API-Schlüssel der Werte oben (ungespeichert) und führt eine echte Suche von diesem Server aus."
+          "testHelp": "Der Test prüft den API-Schlüssel oder die Instanz-URL der Werte oben (ungespeichert) und führt eine echte Suche von diesem Server aus."
         },
         "ifinder": {
           "privateKey": "Privater Schlüssel",

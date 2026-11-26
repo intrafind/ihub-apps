@@ -221,7 +221,7 @@ When a proxy is configured, these outbound requests go through it (subject to `n
 `urlPatterns`):
 
 1. **LLM API requests**: OpenAI, Anthropic, Google, Mistral and other model providers
-2. **Web search**: the Brave and Staan search APIs
+2. **Web search**: the Brave and Staan search APIs, and the SearXNG instance you configured (an instance on the internal network needs a proxy bypass)
 3. **Integrations**: Jira, Entra, iFinder and other external integrations
 4. **Tools**: web content extraction, screenshot tools and similar
 
