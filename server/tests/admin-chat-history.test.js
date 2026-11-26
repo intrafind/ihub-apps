@@ -32,6 +32,12 @@ jest.unstable_mockModule('../configCache.js', () => ({
   default: {
     getPlatform: () => state.stored,
     getFeatures: () => state.features,
+    getModels: () => ({
+      data: [
+        { id: 'vision-model', name: { en: 'Vision' }, supportsImages: true },
+        { id: 'text-model', name: { en: 'Text' } }
+      ]
+    }),
     refreshCacheEntry: async () => {}
   }
 }));
@@ -289,6 +295,41 @@ describe('compaction model setting (platform.chats.compaction)', () => {
   });
 });
 
+describe('text recognition settings (platform.ocr)', () => {
+  test('reads no model and the default page limit, and offers the models that read images', async () => {
+    const response = await request(createTestApp()).get('/api/admin/chat-history');
+    expect(response.status).toBe(200);
+    expect(response.body.settings.ocr).toEqual({ modelId: null, maxPages: 50 });
+    expect(response.body.ocrModels.map(model => model.id)).toEqual(['vision-model']);
+  });
+
+  test('writes the model, the page limit and the chat opt-in', async () => {
+    const response = await request(createTestApp())
+      .put('/api/admin/chat-history/settings')
+      .send({ ocr: { modelId: 'vision-model', maxPages: 20 }, uploads: { recognizeText: true } });
+    expect(response.status).toBe(200);
+    expect(response.body.changed).toEqual(
+      expect.arrayContaining(['ocr.modelId', 'ocr.maxPages', 'uploads.recognizeText'])
+    );
+    expect(state.stored.ocr).toEqual({ modelId: 'vision-model', maxPages: 20 });
+    expect(state.stored.uploads.recognizeText).toBe(true);
+  });
+
+  test('refuses a model that cannot read images, and switches off with an empty id', async () => {
+    const refused = await request(createTestApp())
+      .put('/api/admin/chat-history/settings')
+      .send({ ocr: { modelId: 'text-model' } });
+    expect(refused.status).toBe(400);
+
+    state.stored.ocr = { modelId: 'vision-model' };
+    const off = await request(createTestApp())
+      .put('/api/admin/chat-history/settings')
+      .send({ ocr: { modelId: '' } });
+    expect(off.status).toBe(200);
+    expect(state.stored.ocr.modelId).toBeNull();
+  });
+});
+
 describe('uploaded files settings (platform.uploads)', () => {
   test('reads the effective upload settings with defaults filled in', async () => {
     const response = await request(createTestApp()).get('/api/admin/chat-history');
@@ -299,6 +340,7 @@ describe('uploaded files settings (platform.uploads)', () => {
       storageMode: 'original_and_text',
       originalRetentionDays: 14,
       evictOldestOriginalsOnQuota: true,
+      recognizeText: false,
       quotas: {
         maxFileBytes: 25 * 1024 * 1024,
         maxChatBytes: 100 * 1024 * 1024,
