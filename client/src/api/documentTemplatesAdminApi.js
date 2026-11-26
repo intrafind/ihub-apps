@@ -19,10 +19,11 @@ export async function fetchDocumentTemplates() {
 }
 
 /**
- * One template, with what its Word and PowerPoint templates hold.
+ * One template, with what its Word and PowerPoint templates hold and what it
+ * resolves to (`resolved`: the brand and the PDF margins, with their sources).
  *
  * @param {string} id
- * @returns {Promise<{ template: Object, files: Object }>}
+ * @returns {Promise<{ template: Object, files: Object, resolved: Object }>}
  */
 export async function fetchDocumentTemplate(id) {
   const response = await makeAdminApiCall(`${BASE}/${enc(id)}`);
@@ -41,7 +42,7 @@ export async function createDocumentTemplate(template) {
 /**
  * @param {string} id
  * @param {Object} template
- * @returns {Promise<{ template: Object, files: Object }>}
+ * @returns {Promise<{ template: Object, files: Object, resolved: Object }>}
  */
 export async function saveDocumentTemplate(id, template) {
   const response = await makeAdminApiCall(`${BASE}/${enc(id)}`, { method: 'PUT', body: template });
@@ -57,16 +58,12 @@ export async function deleteDocumentTemplate(id) {
  * Upload a file into a template slot.
  *
  * @param {string} id
- * @param {string} slot - `logo`, `font`, `letterhead`, `letterheadFollowing`,
- *   `wordTemplate`, `powerpointTemplate`.
+ * @param {'wordTemplate'|'powerpointTemplate'} slot
  * @param {File} file
- * @param {{ family?: string, face?: string }} [font] - Font slot only.
- * @returns {Promise<{ template: Object, file: string, info: Object, files: Object }>}
+ * @returns {Promise<{ template: Object, file: string, info: Object, files: Object, resolved: Object }>}
  */
-export async function uploadDocumentTemplateFile(id, slot, file, font = {}) {
+export async function uploadDocumentTemplateFile(id, slot, file) {
   const form = new FormData();
-  if (font.family) form.append('family', font.family);
-  if (font.face) form.append('face', font.face);
   form.append('file', file);
   const response = await makeAdminApiCall(`${BASE}/${enc(id)}/files/${enc(slot)}`, {
     method: 'POST',
@@ -76,31 +73,31 @@ export async function uploadDocumentTemplateFile(id, slot, file, font = {}) {
 }
 
 /**
- * Remove the file of a slot (a font family's style, or the whole family with
- * `face: 'normal'`).
+ * Remove the file of a slot.
  *
- * @returns {Promise<{ template: Object, files: Object }>}
+ * @param {string} id
+ * @param {'wordTemplate'|'powerpointTemplate'} slot
+ * @returns {Promise<{ template: Object, files: Object, resolved: Object }>}
  */
-export async function removeDocumentTemplateFile(id, slot, font = {}) {
-  const params = new URLSearchParams();
-  if (font.family) params.set('family', font.family);
-  if (font.face) params.set('face', font.face);
-  const query = params.toString();
-  const response = await makeAdminApiCall(
-    `${BASE}/${enc(id)}/files/${enc(slot)}${query ? `?${query}` : ''}`,
-    { method: 'DELETE' }
-  );
+export async function removeDocumentTemplateFile(id, slot) {
+  const response = await makeAdminApiCall(`${BASE}/${enc(id)}/files/${enc(slot)}`, {
+    method: 'DELETE'
+  });
   return response.data;
 }
 
 /**
- * The file of a slot as a blob (the logo preview).
+ * The colours and fonts of the theme of a template's Word or PowerPoint file,
+ * for "Take colours from this file". Nothing is saved.
  *
- * @returns {Promise<Blob>}
+ * @param {string} id
+ * @param {'wordTemplate'|'powerpointTemplate'} slot
+ * @returns {Promise<{ primaryColor?: string, accentColor?: string, textColor?: string,
+ *   palette?: string[], headingFont?: string, bodyFont?: string }>}
  */
-export async function fetchDocumentTemplateFile(id, slot) {
-  const response = await makeAdminApiCall(`${BASE}/${enc(id)}/files/${enc(slot)}`, {
-    responseType: 'blob'
+export async function readDocumentTemplateBrand(id, slot) {
+  const response = await makeAdminApiCall(`${BASE}/${enc(id)}/files/${enc(slot)}/_read-brand`, {
+    method: 'POST'
   });
   return response.data;
 }

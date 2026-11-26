@@ -283,7 +283,7 @@ describe('inspecting a Word template', () => {
     const info = await inspectWordTemplate(template);
     assert.equal(info.tocPlaceholder, true);
     assert.equal(info.contentPlaceholder, true);
-    assert.deepEqual(info.customFields, ['classification', 'department']);
+    assert.deepEqual(info.customFields, ['department', 'classification']);
     assert.ok(info.placeholders.includes('page'));
   });
 });

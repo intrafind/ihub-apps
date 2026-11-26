@@ -3,7 +3,6 @@
 
 import { officeFontName } from '../officeFonts.js';
 import { loadTemplateBundle, resolveTemplateId } from './DocumentTemplateService.js';
-import { imageInfo } from './templateAssets.js';
 import { resolveFieldValues } from './templateFields.js';
 import { specifiedBrand } from './themeBrand.js';
 
@@ -12,8 +11,10 @@ import { specifiedBrand } from './themeBrand.js';
  *
  * The template is the company's corporate design, so where it says something
  * it wins over what the model (or an export request) asked for: colours,
- * fonts, logo, page setup, running header and footer, letterhead. What the
- * template leaves open stays with the request.
+ * fonts, page setup. The design lives in the template's Word and PowerPoint
+ * files; the colours and fonts the template does not set come from their
+ * themes (`themeBrand.js`). What the template leaves open stays with the
+ * request.
  *
  * Runs on the main thread: it reads the template's files and passes them to
  * the render worker as `assets`, next to a spec that is still plain data.
@@ -23,7 +24,7 @@ import { specifiedBrand } from './themeBrand.js';
  * The template bundle for a document, or null when none applies.
  *
  * @param {Object} params
- * @param {'pdf'|'docx'|'pptx'} params.format
+ * @param {'pdf'|'docx'|'pptx'|'xlsx'} params.format
  * @param {Object} [params.app] - App config (`documentTemplate` pins one).
  * @param {string} [params.requested] - Template id picked by the model or user.
  * @returns {Promise<{ template: Object, assets: Object } | null>}
@@ -33,25 +34,11 @@ export async function templateBundleFor({ format, app, requested }) {
   return id ? loadTemplateBundle(id, format) : null;
 }
 
-function dataUriOf(asset) {
-  if (!asset?.data) return null;
-  const type = asset.extension === 'png' ? 'png' : 'jpeg';
-  return `data:image/${type};base64,${Buffer.from(asset.data).toString('base64')}`;
-}
-
 /**
- * Text with `{company}` filled in; other placeholders stay for the renderer.
- */
-function withCompany(text, template) {
-  if (typeof text !== 'string') return text;
-  return text.replaceAll('{company}', template.brand.companyName || '');
-}
-
-/**
- * The template's brand settings, with the colours and fonts its Word and
- * PowerPoint themes give where the template sets none. The neutral defaults
- * are left out, so that a request's own colours still apply to a template
- * that has no colours at all.
+ * The template's brand settings (company name and colours), with the colours
+ * and fonts its Word and PowerPoint themes give where the template sets none.
+ * The neutral defaults are left out, so that a request's own colours still
+ * apply to a template that has no colours at all.
  */
 function brandOf(bundle) {
   return { ...bundle.template.brand, ...specifiedBrand(bundle.brand) };
@@ -63,24 +50,9 @@ function pick(templateValue, requestValue) {
 }
 
 /**
- * The logo settings shared by PDF and Word documents.
- *
- * @returns {{ image: string, position: string, width: number, onCover: boolean } | undefined}
- */
-function logoSettings(bundle) {
-  const image = dataUriOf(bundle.assets.logo);
-  if (!image) return undefined;
-  const { document } = bundle.template;
-  return {
-    image,
-    position: document.logoPosition || 'header-right',
-    width: document.logoWidth || 80,
-    onCover: document.coverLogo !== false
-  };
-}
-
-/**
- * Apply a template to a PDF spec.
+ * Apply a template to a PDF spec. A PDF is made by the PDF engine, not from
+ * the Word file: it takes the brand colours, the page of the Word template
+ * (format, orientation, margins) and a footer with the company name.
  *
  * @param {import('../pdf/buildDocument.js').PdfSpec} spec
  * @param {{ template: Object, assets: Object } | null} bundle
@@ -88,56 +60,39 @@ function logoSettings(bundle) {
  */
 export function applyTemplateToPdfSpec(spec, bundle) {
   if (!bundle) return { spec, assets: undefined, templateId: null };
-  const { template, assets } = bundle;
-  const { document, pdf } = template;
+  const { template, pdfPage = {} } = bundle;
   const brand = brandOf(bundle);
   const page = spec.page || {};
-  const letterhead = assets.letterhead || assets.letterheadFollowing;
-  const hasLetterhead = Boolean(letterhead);
   const themeOptions = spec.themeOptions || {};
   return {
     templateId: template.id,
     spec: {
       ...spec,
       author: spec.author || brand.companyName || undefined,
-      theme: pick(pdf.theme, spec.theme),
       themeOptions: {
         primaryColor: pick(brand.primaryColor, themeOptions.primaryColor),
         accentColor: pick(brand.accentColor, themeOptions.accentColor),
         textColor: brand.textColor,
         font: pick(brand.bodyFont, themeOptions.font),
-        headingFont: brand.headingFont,
-        fontSize: pick(brand.fontSize, themeOptions.fontSize)
+        headingFont: brand.headingFont
       },
       page: {
-        // A letterhead is drawn for one page format: the template's, else the
-        // letterhead's own. Without one the request may choose the size and
-        // turn the page for a wide table.
-        size: hasLetterhead
-          ? document.pageSize || letterhead.pageFormat?.size || page.size
-          : pick(document.pageSize, page.size),
-        orientation: hasLetterhead
-          ? document.orientation || letterhead.pageFormat?.orientation || 'portrait'
-          : pick(page.orientation, document.orientation),
-        margins: pick(bundle.pdfMargins, pick(document.margins, page.margins))
+        // The template's format and margins win; the request may turn the
+        // page, for a wide table.
+        size: pick(pdfPage.size, page.size),
+        orientation: pick(page.orientation, pdfPage.orientation),
+        margins: pick(pdfPage.margins, page.margins)
       },
-      header: document.header !== undefined ? withCompany(document.header, template) : spec.header,
-      footer: document.footer !== undefined ? withCompany(document.footer, template) : spec.footer,
-      pageNumbers: pick(document.pageNumbers, spec.pageNumbers),
-      logo: logoSettings(bundle)
+      footer: spec.footer !== undefined ? spec.footer : brand.companyName || undefined
     },
-    assets: {
-      fonts: assets.fonts || [],
-      letterhead: assets.letterhead?.data,
-      letterheadFollowing: assets.letterheadFollowing?.data
-    }
+    assets: undefined
   };
 }
 
 /**
- * Apply a template to a Word document spec. A Word template in the
- * document template wins over the brand settings for styles, header and
- * footer; the brand colours still colour tables and bullets.
+ * Apply a template to a Word document spec. A Word template in the document
+ * template wins over the brand for styles, header and footer; the brand
+ * colours still colour tables and bullets.
  *
  * @param {import('../docx/buildDocx.js').DocxSpec} spec
  * @param {{ template: Object, assets: Object } | null} bundle
@@ -146,9 +101,7 @@ export function applyTemplateToPdfSpec(spec, bundle) {
 export function applyTemplateToDocxSpec(spec, bundle) {
   if (!bundle) return { spec, assets: undefined, templateId: null };
   const { template, assets } = bundle;
-  const { document } = template;
   const brand = brandOf(bundle);
-  const page = spec.page || {};
   return {
     templateId: template.id,
     spec: {
@@ -166,16 +119,8 @@ export function applyTemplateToDocxSpec(spec, bundle) {
         body: pick(brand.bodyFont, spec.fonts?.body),
         heading: pick(brand.headingFont, spec.fonts?.heading)
       },
-      fontSize: pick(brand.fontSize, spec.fontSize),
-      page: {
-        size: pick(document.pageSize, page.size),
-        orientation: pick(page.orientation, document.orientation),
-        margins: pick(document.margins, page.margins)
-      },
-      header: document.header !== undefined ? withCompany(document.header, template) : spec.header,
-      footer: document.footer !== undefined ? withCompany(document.footer, template) : spec.footer,
-      pageNumbers: pick(document.pageNumbers, spec.pageNumbers),
-      logo: logoSettings(bundle)
+      // Without a Word template the document is built from the brand: a footer with the company name.
+      footer: spec.footer !== undefined ? spec.footer : brand.companyName || undefined
     },
     assets: assets.wordTemplate ? { wordTemplate: assets.wordTemplate.data } : undefined
   };
@@ -184,7 +129,7 @@ export function applyTemplateToDocxSpec(spec, bundle) {
 /**
  * Apply a template to a presentation spec. A PowerPoint template in the
  * document template is filled as it is; without one, iHub's built-in
- * template is made from the brand (colours, fonts, logo).
+ * template is made from the brand (colours, fonts).
  *
  * @param {Object} spec - See `../pptx/buildPptx.js`.
  * @param {{ template: Object, assets: Object } | null} bundle
@@ -193,9 +138,7 @@ export function applyTemplateToDocxSpec(spec, bundle) {
 export function applyTemplateToPptxSpec(spec, bundle) {
   if (!bundle) return { spec, assets: undefined, templateId: null };
   const { template, assets } = bundle;
-  const { pptx } = template;
   const brand = brandOf(bundle);
-  const logo = assets.logo?.data ? imageInfo(Buffer.from(assets.logo.data)) : null;
   return {
     templateId: template.id,
     spec: {
@@ -207,26 +150,10 @@ export function applyTemplateToPptxSpec(spec, bundle) {
         accentColor: pick(brand.accentColor, spec.brand?.accentColor),
         textColor: brand.textColor,
         headingFont: officeFontName(brand.headingFont || brand.bodyFont, undefined),
-        bodyFont: officeFontName(brand.bodyFont, undefined),
-        aspectRatio: pick(pptx.aspectRatio, spec.brand?.aspectRatio)
-      },
-      footer: pptx.footer !== undefined ? withCompany(pptx.footer, template) : spec.footer,
-      slideNumbers: pick(pptx.slideNumbers, spec.slideNumbers),
-      layouts: pptx.layouts,
-      slotConfig: pptx.slots
+        bodyFont: officeFontName(brand.bodyFont, undefined)
+      }
     },
-    assets: {
-      powerpointTemplate: assets.powerpointTemplate?.data,
-      logo:
-        logo && assets.logo
-          ? {
-              data: assets.logo.data,
-              extension: logo.type === 'png' ? 'png' : 'jpeg',
-              width: logo.width,
-              height: logo.height
-            }
-          : undefined
-    }
+    assets: { powerpointTemplate: assets.powerpointTemplate?.data }
   };
 }
 
@@ -260,4 +187,4 @@ export function applyTemplateToXlsxSpec(spec, bundle) {
   };
 }
 
-export { dataUriOf, logoSettings, pick, withCompany };
+export { pick };

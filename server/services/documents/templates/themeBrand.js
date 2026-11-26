@@ -219,3 +219,37 @@ export function pdfMarginsFromWordSetup(setup) {
   const { left, top, right, bottom } = setup.margins;
   return [pointsOf(left), pointsOf(top), pointsOf(right), pointsOf(bottom)];
 }
+
+/** The page formats a PDF can have, in twips (short side, long side), as in `PAGE_SIZES` of the PDF engine. */
+const PAGE_FORMATS = Object.freeze({
+  A4: [11906, 16838],
+  A5: [8391, 11906],
+  A3: [16838, 23811],
+  LETTER: [12240, 15840],
+  LEGAL: [12240, 20160]
+});
+
+/** Two page lengths are the same format when they differ by less than this share. */
+const FORMAT_TOLERANCE = 0.02;
+
+/**
+ * The page of a PDF from a Word template's last section: its margins, its
+ * format when it is one a PDF can have, and its orientation.
+ *
+ * @param {{ width: number, height: number, landscape: boolean,
+ *   margins: { left: number, top: number, right: number, bottom: number } }} setup -
+ *   The page setup read from the Word template (twips).
+ * @returns {{ margins: number[], size?: string, orientation: 'portrait'|'landscape' }}
+ */
+export function pdfPageFromWordSetup(setup) {
+  const [short, long] = [Math.min(setup.width, setup.height), Math.max(setup.width, setup.height)];
+  const size = Object.entries(PAGE_FORMATS).find(
+    ([, [w, h]]) =>
+      Math.abs(short - w) / w < FORMAT_TOLERANCE && Math.abs(long - h) / h < FORMAT_TOLERANCE
+  )?.[0];
+  return {
+    margins: pdfMarginsFromWordSetup(setup),
+    ...(size ? { size } : {}),
+    orientation: setup.landscape ? 'landscape' : 'portrait'
+  };
+}

@@ -420,10 +420,8 @@ export async function inspectWordTemplate(buffer) {
     placeholders: [...placeholders].sort((a, b) => a.localeCompare(b)),
     contentPlaceholder: placeholders.has('content'),
     tocPlaceholder: placeholders.has('toc'),
-    // Names that are not built in: the template's own fields.
-    customFields: [...placeholders]
-      .filter(name => !BUILT_IN_PLACEHOLDERS.includes(name))
-      .sort((a, b) => a.localeCompare(b)),
+    // Names that are not built in: the template's own fields, in the order they appear.
+    customFields: [...placeholders].filter(name => !BUILT_IN_PLACEHOLDERS.includes(name)),
     bodyHasContent: hasContent(bodyOf(doc)),
     headerFooterParts: (await headerFooterParts(zip, mainPart)).length,
     page: {

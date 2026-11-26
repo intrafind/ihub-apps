@@ -70,8 +70,7 @@ async function assertPackageIntegrity(buffer) {
 const VALID_TEMPLATE = {
   id: 'acme',
   name: { en: 'ACME' },
-  brand: { primaryColor: '#E30613', bodyFont: 'Brand Serif', companyName: 'ACME GmbH' },
-  document: { header: '{title}', footer: '{company} · Internal' }
+  brand: { primaryColor: '#E30613', companyName: 'ACME GmbH' }
 };
 
 describe('Excel workbook engine (xlsx)', () => {

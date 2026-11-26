@@ -705,8 +705,6 @@ function registerSlides(target, paths) {
  * @param {Buffer|Uint8Array} templateBuffer - The template (.potx/.pptx): its
  *   master, layouts and theme. Its own sample slides are dropped.
  * @param {Object} [options]
- * @param {Object} [options.layouts] - Layout names by kind (`pptx.layouts` of the document template).
- * @param {Object} [options.slots] - The text slots the template declares (`pptx.slots`); they are not content areas.
  * @param {string} [options.footer] - Footer text for slides that have none.
  * @param {boolean} [options.slideNumbers] - Slide numbers for slides that have none.
  * @param {string} [options.title] - Document title (default: kept empty).
@@ -716,7 +714,7 @@ function registerSlides(target, paths) {
  */
 export async function restylePptx(sourceBuffer, templateBuffer, options = {}) {
   const source = await loadPresentationTemplate(sourceBuffer);
-  const target = await loadPresentationTemplate(templateBuffer, { slots: options.slots });
+  const target = await loadPresentationTemplate(templateBuffer);
   await removeTemplateSlides(target);
   const types = await ContentTypes.read(target.zip);
   // A .potx template names its main part a template; the result is a presentation.
@@ -730,7 +728,7 @@ export async function restylePptx(sourceBuffer, templateBuffer, options = {}) {
     target,
     types,
     sourceTypes: await ContentTypes.read(source.zip),
-    chosen: chooseLayouts(target.layouts, options.layouts),
+    chosen: chooseLayouts(target.layouts),
     options,
     notesMaster: hasNotes ? ensureNotesMaster(target, types) : target.notesMaster,
     colorMap: themeColorMap(source.masters[0]?.theme),

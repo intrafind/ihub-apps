@@ -23,13 +23,18 @@ process.env.CONTENTS_DIR = path.join(baseDir, 'contents');
 
 const require = createRequire(import.meta.url);
 const JSZip = require('jszip');
-const { PDFDocument } = require('pdf-lib');
 
 const { documentTemplateSchema, BUILT_IN_PLACEHOLDERS, MAX_TEMPLATE_FIELDS } =
   await import('../validators/documentTemplateSchema.js');
 const templates = await import('../services/documents/templates/DocumentTemplateService.js');
-const { brandFromTheme, readThemeBrand, resolveBrand, specifiedBrand, pdfMarginsFromWordSetup } =
-  await import('../services/documents/templates/themeBrand.js');
+const {
+  brandFromTheme,
+  readThemeBrand,
+  resolveBrand,
+  specifiedBrand,
+  pdfMarginsFromWordSetup,
+  pdfPageFromWordSetup
+} = await import('../services/documents/templates/themeBrand.js');
 const { applyTemplateToDocxSpec, applyTemplateToPdfSpec, applyTemplateToXlsxSpec } =
   await import('../services/documents/templates/applyTemplate.js');
 const { buildBaseTemplate, themeXml } = await import('../services/documents/pptx/baseTemplate.js');
@@ -70,8 +75,9 @@ const OFFICE_REL = 'http://schemas.openxmlformats.org/officeDocument/2006/relati
  * A minimal Word template: one section with the given margins (twips), and a
  * theme with the given accents unless `accents` is null.
  */
-async function wordTemplate(accents, { margins, options } = {}) {
+async function wordTemplate(accents, { margins, options, page } = {}) {
   const m = { top: 1440, right: 1134, bottom: 1134, left: 1701, ...margins };
+  const size = { w: 11906, h: 16838, ...page };
   const zip = new JSZip();
   zip.file(
     '[Content_Types].xml',
@@ -83,7 +89,7 @@ async function wordTemplate(accents, { margins, options } = {}) {
   );
   zip.file(
     'word/document.xml',
-    `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:document xmlns:w="${W}"><w:body><w:p/><w:sectPr><w:pgSz w:w="11906" w:h="16838"/><w:pgMar w:top="${m.top}" w:right="${m.right}" w:bottom="${m.bottom}" w:left="${m.left}" w:header="708" w:footer="708" w:gutter="0"/></w:sectPr></w:body></w:document>`
+    `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:document xmlns:w="${W}"><w:body><w:p/><w:sectPr><w:pgSz w:w="${size.w}" w:h="${size.h}"${size.orient ? ` w:orient="${size.orient}"` : ''}/><w:pgMar w:top="${m.top}" w:right="${m.right}" w:bottom="${m.bottom}" w:left="${m.left}" w:header="708" w:footer="708" w:gutter="0"/></w:sectPr></w:body></w:document>`
   );
   if (accents) {
     zip.file(
@@ -313,6 +319,51 @@ describe('pdfMarginsFromWordSetup', () => {
   });
 });
 
+describe('pdfPageFromWordSetup', () => {
+  const margins = { left: 1134, top: 1134, right: 1134, bottom: 1134 };
+
+  it('names the format of the page, however it is turned', () => {
+    assert.equal(
+      pdfPageFromWordSetup({ width: 11906, height: 16838, landscape: false, margins }).size,
+      'A4'
+    );
+    assert.equal(
+      pdfPageFromWordSetup({ width: 16838, height: 11906, landscape: true, margins }).size,
+      'A4'
+    );
+    assert.equal(
+      pdfPageFromWordSetup({ width: 12240, height: 15840, landscape: false, margins }).size,
+      'LETTER'
+    );
+    assert.equal(
+      pdfPageFromWordSetup({ width: 16838, height: 23811, landscape: false, margins }).size,
+      'A3'
+    );
+  });
+
+  it('allows a page that is a little off, and names none that is far off', () => {
+    assert.equal(
+      pdfPageFromWordSetup({ width: 11950, height: 16800, landscape: false, margins }).size,
+      'A4'
+    );
+    assert.equal(
+      pdfPageFromWordSetup({ width: 10000, height: 16838, landscape: false, margins }).size,
+      undefined
+    );
+  });
+
+  it('reports the orientation Word does', () => {
+    assert.equal(
+      pdfPageFromWordSetup({ width: 16838, height: 11906, landscape: true, margins }).orientation,
+      'landscape'
+    );
+    assert.equal(
+      pdfPageFromWordSetup({ width: 11906, height: 16838, landscape: false, margins }).orientation,
+      'portrait'
+    );
+  });
+});
+
 // --- The template store ---------------------------------------------------------
 
 const BASE = { name: { en: 'Test' } };
@@ -402,21 +453,60 @@ describe("the theme of a format's own file counts first", () => {
   });
 });
 
-describe('PDF margins of a stored template', () => {
-  it("come from the Word template's last section", async () => {
+describe('what the admin page shows of a stored template', () => {
+  it('says where the PDF margins come from: the template, the Word template or the default', async () => {
+    await templates.saveTemplate('shown', { ...BASE, id: 'shown' }, { create: true });
+    const bare = await templates.resolveTemplateSettings(await templates.getTemplate('shown'));
+    assert.deepEqual(bare.pdf, { margins: [50, 62, 50, 62], source: 'default' });
+    assert.equal(bare.brand.sources.primaryColor, 'default');
+
+    await templates.saveTemplateAsset('shown', {
+      slot: 'wordTemplate',
+      data: await wordTemplate([BLUE, AMBER, GREEN, RED, SLATE, GREY1]),
+      originalName: 'letter.dotx'
+    });
+    const word = await templates.resolveTemplateSettings(await templates.getTemplate('shown'));
+    assert.deepEqual(word.pdf, {
+      margins: [85, 72, 57, 57],
+      source: 'word',
+      size: 'A4',
+      orientation: 'portrait'
+    });
+    assert.equal(word.brand.sources.primaryColor, 'word');
+    assert.equal(word.brand.primaryColor, `#${BLUE}`);
+
+    await templates.saveTemplate(
+      'shown',
+      {
+        ...BASE,
+        id: 'shown',
+        pdf: { margins: [30, 40, 30, 40] },
+        docx: { template: 'word-template.dotx' }
+      },
+      {}
+    );
+    const own = await templates.resolveTemplateSettings(await templates.getTemplate('shown'));
+    assert.equal(own.pdf.source, 'template');
+    assert.deepEqual(own.pdf.margins, [30, 40, 30, 40]);
+  });
+});
+
+describe('the PDF page of a stored template', () => {
+  it("comes from the Word template's last section: margins, format and orientation", async () => {
     await templates.saveTemplate('margins', { ...BASE, id: 'margins' }, { create: true });
     await templates.saveTemplateAsset('margins', {
       slot: 'wordTemplate',
       data: await wordTemplate([BLUE, AMBER, GREEN, RED, SLATE, GREY1]),
       originalName: 'letter.dotx'
     });
-    assert.deepEqual(
-      await templates.resolvePdfMargins(await templates.getTemplate('margins')),
-      [85, 72, 57, 57]
-    );
+    assert.deepEqual(await templates.resolvePdfPage(await templates.getTemplate('margins')), {
+      margins: [85, 72, 57, 57],
+      size: 'A4',
+      orientation: 'portrait'
+    });
   });
 
-  it("are the template's own when it sets them", async () => {
+  it("has the template's own margins when it sets them, and the rest from the Word template", async () => {
     await templates.saveTemplate(
       'margins',
       {
@@ -427,38 +517,45 @@ describe('PDF margins of a stored template', () => {
       },
       {}
     );
-    assert.deepEqual(
-      await templates.resolvePdfMargins(await templates.getTemplate('margins')),
-      [40, 50, 40, 50]
-    );
+    assert.deepEqual(await templates.resolvePdfPage(await templates.getTemplate('margins')), {
+      margins: [40, 50, 40, 50],
+      size: 'A4',
+      orientation: 'portrait'
+    });
   });
 
-  it("are left to the engine for a template with a letterhead: the Word template's do not know the stationery", async () => {
-    await templates.saveTemplate('stationery', { ...BASE, id: 'stationery' }, { create: true });
-    await templates.saveTemplateAsset('stationery', {
+  it('knows a Letter page and a landscape page', async () => {
+    await templates.saveTemplate('wide', { ...BASE, id: 'wide' }, { create: true });
+    await templates.saveTemplateAsset('wide', {
       slot: 'wordTemplate',
-      data: await wordTemplate([BLUE, AMBER, GREEN, RED, SLATE, GREY1]),
-      originalName: 'letter.dotx'
+      data: await wordTemplate([BLUE, AMBER, GREEN, RED, SLATE, GREY1], {
+        page: { w: 15840, h: 12240, orient: 'landscape' }
+      }),
+      originalName: 'wide.dotx'
     });
-    assert.deepEqual(
-      await templates.resolvePdfMargins(await templates.getTemplate('stationery')),
-      [85, 72, 57, 57]
+    const { size, orientation } = await templates.resolvePdfPage(
+      await templates.getTemplate('wide')
     );
-    const doc = await PDFDocument.create();
-    doc.addPage([595.28, 841.89]);
-    await templates.saveTemplateAsset('stationery', {
-      slot: 'letterhead',
-      data: Buffer.from(await doc.save()),
-      originalName: 'letterhead.pdf'
-    });
-    assert.equal(
-      await templates.resolvePdfMargins(await templates.getTemplate('stationery')),
-      undefined
-    );
+    assert.equal(size, 'LETTER');
+    assert.equal(orientation, 'landscape');
   });
 
-  it('are left to the PDF engine when nothing says', async () => {
-    assert.equal(await templates.resolvePdfMargins(await templates.getTemplate('bare')), undefined);
+  it('leaves the format to the engine when it is none a PDF has', async () => {
+    await templates.saveTemplate('odd', { ...BASE, id: 'odd' }, { create: true });
+    await templates.saveTemplateAsset('odd', {
+      slot: 'wordTemplate',
+      data: await wordTemplate([BLUE, AMBER, GREEN, RED, SLATE, GREY1], {
+        page: { w: 9000, h: 9000 }
+      }),
+      originalName: 'odd.dotx'
+    });
+    const page = await templates.resolvePdfPage(await templates.getTemplate('odd'));
+    assert.equal(page.size, undefined);
+    assert.ok(page.margins);
+  });
+
+  it("is empty when nothing says, and the PDF engine's default applies", async () => {
+    assert.deepEqual(await templates.resolvePdfPage(await templates.getTemplate('bare')), {});
   });
 });
 
@@ -471,10 +568,9 @@ describe('a template applied to a document', () => {
     assert.equal(spec.themeOptions.textColor, '#1F2937');
 
     const withMargins = await templates.loadTemplateBundle('margins', 'pdf');
-    assert.deepEqual(
-      applyTemplateToPdfSpec({ title: 'T', markdown: 'x' }, withMargins).spec.page.margins,
-      [40, 50, 40, 50]
-    );
+    const { page } = applyTemplateToPdfSpec({ title: 'T', markdown: 'x' }, withMargins).spec;
+    assert.deepEqual(page.margins, [40, 50, 40, 50]);
+    assert.equal(page.size, 'A4');
   });
 
   it("keeps a request's colours for a template that says nothing about them", async () => {

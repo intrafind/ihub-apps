@@ -4,10 +4,7 @@ Continues [`2026-10-29 Document Templates and Office System Skills`](<2026-10-29
 Admin documentation today: [`docs/document-templates.md`](../docs/document-templates.md),
 [`docs/powerpoint-template-guide.md`](../docs/powerpoint-template-guide.md).
 
-Status: draft, decided in conversation. Steps 1 to 3 of the plan are implemented (brand resolution
-from the themes, `fields` and `pdf.margins` in the schema, the placeholder engine of the Word merge,
-and the Word tool with its fields, its failure that asks the user, and its skill text). The rest is
-not.
+Status: decided in conversation and implemented (steps 1 to 5 of the plan).
 
 Related issues: [#3605](https://github.com/intrafind/ihub-apps/issues/3605) (create a template
 automatically from uploaded brand documents, see "Relation to #3605") and
@@ -264,27 +261,28 @@ fields.
 
 ### Export dialog
 
-The built-in PDF designs `professional` and `minimal` go with the base design. The export dialog
-offers the enabled document templates, and one neutral built-in when none exists. A request that names
-an unknown template, including the two old built-ins, uses the default template. This changes the
-`template` values of the export endpoint; external callers that send `professional` or `minimal` get
-the default template without an error. Per the clean-break decision there is no `Deprecation` header
-or alias.
+The built-in chat export designs `default`, `professional` and `minimal` (the platform's
+`pdfExport` setting) are **not** the template's base design and stay: they are what an installation
+without a document template exports with, and the export endpoint and its callers are unchanged. A
+document template does not choose one of them any more (`pdf.theme` is gone); a PDF in a template
+takes the default layout in the template's colours, page and company footer. The export dialog lists
+the enabled document templates as before.
 
 ### Admin page
 
 1. General: name, description, enabled, default.
-2. Company and brand: company name, the three colours with "Take colours from this file", the derived
-   palette and fonts, shown read-only with their source ("from the PowerPoint template").
-3. Word template: upload and what was found: styles, first-page header, placeholders and fields.
-   Below it the four PDF margins, with their source ("from the Word template").
-4. PowerPoint template: upload and what was found: layouts per kind, with a warning where the
-   fallback is used, and the theme colours and fonts.
+2. Word template: upload and what was found: placeholders, fields, page. Below it the four PDF
+   margins, with their source ("from the Word template").
+3. PowerPoint template: upload and what was found: the layout of each kind of slide and the slots.
+4. Company and brand: company name, the three colours with "Take colours from this file", the derived
+   palette and fonts, shown read-only with their source ("from the PowerPoint template"). It comes
+   after the two uploads because the values derive from them.
 5. Fields: the declared fields of the template.
-6. A sample document per format, rendered with sample content and sample field values.
+6. A sample document per format.
 
-The colour field shows black for an empty or non-`#rrggbb` value, and a report says it also stays
-black after a colour was picked. That bug is reproduced first (Playwright) and fixed in this work.
+The colour field showed black for an empty value. It now shows the colour the files give, with its
+source, and a picked colour stays (checked in a browser; the report that a picked colour stays black
+could not be reproduced with the new field).
 
 ## Migration
 

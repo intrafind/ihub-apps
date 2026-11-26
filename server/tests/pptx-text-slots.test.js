@@ -4,8 +4,7 @@
 /**
  * Text slots of slide layouts — a label above the title, an introduction under
  * it, the presenter on a title slide — and the footer strip of a title slide:
- * placeholders a template declares by name (`pptx.slots`) or names by
- * convention, the layout of a slide that has the most of the slots it fills,
+ * placeholders a template names by convention (Kicker, Lead), the layout of a slide that has the most of the slots it fills,
  * fallbacks for layouts without them, and what the model is told about them.
  *
  * Run: node --test server/tests/pptx-text-slots.test.js
@@ -39,7 +38,6 @@ const {
   slotPlaceholder
 } = await import('../services/documents/pptx/pptxTemplate.js');
 const { buildSlideGuide } = await import('../services/documents/pptx/slideGuide.js');
-const { documentTemplateSchema } = await import('../validators/documentTemplateSchema.js');
 const templates = await import('../services/documents/templates/DocumentTemplateService.js');
 const { systemSkillToolsFor } = await import('../services/systemSkillTools.js');
 
@@ -172,41 +170,19 @@ describe('text slots in a template', () => {
     assert.equal(slotPlaceholder(plain, 'kicker'), null);
   });
 
-  it('are found by the name a document template declares, in any language and case', async () => {
+  it('are only found by their convention: other names mean nothing', async () => {
     const { buffer } = await templateWith([
       'Title and Content',
       'Contenu avec chapô',
       shape(40, 'Étiquette', 'type="body" idx="13"', BOX.above) +
-        shape(41, 'CHAPÔ', 'type="body" idx="14"', BOX.below)
+        shape(41, 'CHAPÔ', 'type="body" idx="14"', BOX.below) +
+        shape(42, 'Side note', 'idx="20"', BOX.bottom)
     ]);
-    const slots = { kicker: { placeholder: 'étiquette' }, lead: { placeholder: 'Chapô' } };
-    const layout = (await loadPresentationTemplate(buffer, { slots })).layouts.find(
+    const layout = (await loadPresentationTemplate(buffer)).layouts.find(
       l => l.name === 'Contenu avec chapô'
     );
-    assert.deepEqual(layoutSlotIds(layout), ['kicker', 'lead']);
-    // Without the declaration the French names mean nothing.
-    const undeclared = (await loadPresentationTemplate(buffer)).layouts.find(
-      l => l.name === 'Contenu avec chapô'
-    );
-    assert.deepEqual(layoutSlotIds(undeclared), []);
-    assert.equal(contentPlaceholders(undeclared).length, 3);
-  });
-
-  it('can be declared on any text placeholder, and a declaration replaces the convention', async () => {
-    const { buffer } = await templateWith([
-      'Title and Content',
-      'Odd',
-      shape(40, 'Kicker', 'type="body" idx="13"', BOX.above) +
-        shape(41, 'Side note', 'idx="20"', BOX.below)
-    ]);
-    const slots = { note: { placeholder: 'Side note' }, kicker: { placeholder: 'Nothing' } };
-    const layout = (await loadPresentationTemplate(buffer, { slots })).layouts.find(
-      l => l.name === 'Odd'
-    );
-    // A declared slot may sit on a content-type placeholder; "kicker" now means a placeholder
-    // named "Nothing", so the one named Kicker is a plain body placeholder again.
-    assert.deepEqual(layoutSlotIds(layout), ['note']);
-    assert.equal(contentPlaceholders(layout).length, 2);
+    assert.deepEqual(layoutSlotIds(layout), []);
+    assert.equal(contentPlaceholders(layout).length, 4);
   });
 
   it('are reported to the admin page with where they are and what is missing', async () => {
@@ -215,15 +191,12 @@ describe('text slots in a template', () => {
       'Content with slots',
       KICKER + LEAD
     ]);
-    const analysis = await analyzePowerpointTemplate(buffer, undefined, {
-      slots: { presenter: { placeholder: 'Presenter', description: { en: 'Who speaks.' } } }
-    });
+    const analysis = await analyzePowerpointTemplate(buffer);
     const byId = Object.fromEntries(analysis.slots.map(s => [s.id, s]));
-    assert.equal(byId.kicker.source, 'convention');
+    assert.deepEqual(Object.keys(byId).sort(), ['kicker', 'lead']);
     assert.deepEqual(byId.kicker.layouts, [{ name: 'Content with slots', kind: 'content' }]);
     assert.equal(byId.lead.ifMissing, 'text');
-    assert.equal(byId.presenter.source, 'config');
-    assert.deepEqual(byId.presenter.layouts, []);
+    assert.equal(analysis.suggestedSlots, undefined);
     const layout = analysis.layouts.find(l => l.name === 'Content with slots');
     const kicker = layout.elements.find(e => e.slot === 'kicker');
     assert.equal(kicker.role, 'slot');
@@ -232,83 +205,6 @@ describe('text slots in a template', () => {
     assert.deepEqual(kicker.capacity.lines, 1);
     assert.ok(kicker.capacity.chars > 50 && kicker.capacity.chars < 200);
     assert.ok(layout.elements.some(e => e.role === 'content'));
-  });
-});
-
-// --- Suggestions ----------------------------------------------------------------
-
-describe('slot suggestions from the template file', () => {
-  const NOTE = shape(
-    42,
-    'Notiz',
-    'type="body" idx="16"',
-    [INCH, Math.round(6 * INCH), 4 * INCH, Math.round(0.3 * INCH)],
-    'Notiz: ein kurzer Hinweis',
-    1100
-  );
-  const FIXTURE = [
-    'Title and Content',
-    'Odd',
-    shape(40, 'Referent/in', 'type="body" idx="13"', BOX.below, 'Name der Person', 1400) +
-      shape(41, 'Chapter label (shown above)', 'type="body" idx="14"', BOX.above, '', 1200) +
-      shape(43, 'Textplatzhalter 5', 'type="body" idx="15"', BOX.bottom) +
-      shape(44, 'Big notes', 'type="body" idx="17"', [INCH, 2 * INCH, 6 * INCH, 3 * INCH]) +
-      NOTE
-  ];
-
-  it('are named, small text placeholders: with an id, the prompt text and where they are', async () => {
-    const { buffer } = await templateWith(FIXTURE);
-    const { suggestedSlots } = await analyzePowerpointTemplate(buffer);
-    const byId = Object.fromEntries(suggestedSlots.map(s => [s.id, s]));
-    assert.deepEqual(Object.keys(byId).sort(), ['chapterLabel', 'notiz', 'referentIn']);
-    assert.equal(byId.referentIn.placeholder, 'Referent/in');
-    assert.equal(byId.referentIn.prompt, 'Name der Person');
-    assert.equal(byId.referentIn.position, 'below-title');
-    assert.equal(byId.chapterLabel.position, 'above-title');
-    assert.deepEqual(byId.notiz.layouts, [{ name: 'Odd', kind: 'content' }]);
-    assert.ok(byId.notiz.capacity.chars > 0);
-  });
-
-  it('leave out what is declared, what follows the convention and what is no slot', async () => {
-    const { buffer } = await templateWith(FIXTURE, ['Title and Content', 'Both', KICKER + LEAD]);
-    const slots = { person: { placeholder: 'referent/IN' } };
-    const { suggestedSlots, slots: summary } = await analyzePowerpointTemplate(buffer, undefined, {
-      slots
-    });
-    const names = suggestedSlots.map(s => s.placeholder).sort();
-    assert.deepEqual(names, ['Chapter label (shown above)', 'Notiz']);
-    // Kicker and lead are slots already; a suggested id never clashes with a slot id.
-    assert.deepEqual(summary.map(s => s.id).sort(), ['kicker', 'lead', 'person']);
-  });
-
-  it('do not take the subtitle of a title or section slide, and make ids unique', async () => {
-    const { buffer } = await templateWith(
-      [
-        'Section Header',
-        'Section with note',
-        shape(40, 'Notiz', 'type="body" idx="20"', BOX.bottom, 'Hinweis', 1100)
-      ],
-      ['Title and Content', 'Second', shape(41, 'Notiz!', 'type="body" idx="21"', BOX.bottom)]
-    );
-    const { suggestedSlots } = await analyzePowerpointTemplate(buffer);
-    // The section layout's own body placeholder is its subtitle (and is named by default anyway).
-    assert.deepEqual(suggestedSlots.map(s => s.id).sort(), ['notiz', 'notiz2']);
-  });
-
-  it('turn names into ids: accents, capitals and separators', async () => {
-    const names = ['Überschrift-Zeile', 'ABT. Name', '2nd line', 'Étiquette (Label)'];
-    const { buffer } = await templateWith([
-      'Title and Content',
-      'Names',
-      names.map((n, i) => shape(40 + i, n, `type="body" idx="${30 + i}"`, BOX.bottom)).join('')
-    ]);
-    const { suggestedSlots } = await analyzePowerpointTemplate(buffer);
-    assert.deepEqual(suggestedSlots.map(s => s.id).sort(), [
-      'abtName',
-      'etiquette',
-      'slot2ndLine',
-      'uberschriftZeile'
-    ]);
   });
 });
 
@@ -366,19 +262,6 @@ describe('the layout of a slide with text slots', () => {
     assert.equal(textsOf(slideXml[2]).filter(t => t === 'Three').length, 1);
   });
 
-  it('is the layout an admin chose for the kind, when that has the slots', async () => {
-    const { buffer, parts } = await templateWith(['Title and Content', 'Both', KICKER + LEAD]);
-    const { layoutOf } = await render(
-      [
-        { title: 'T', slots: { kicker: 'K' }, text: '- x' },
-        { title: 'No slots', text: '- y' }
-      ],
-      buffer,
-      { slotConfig: undefined, layouts: { content: 'Both' } }
-    );
-    assert.deepEqual(layoutOf, [parts[0], parts[0]]);
-  });
-
   it('fits a one-line label and a two-line lead into their small boxes without shrinking', async () => {
     const { buffer } = await templateWith(['Title and Content', 'Both', KICKER + LEAD]);
     const { slideXml, warnings } = await render(
@@ -396,23 +279,6 @@ describe('the layout of a slide with text slots', () => {
     );
     assert.deepEqual(warnings, []);
     assert.doesNotMatch(slideXml[0], /fontScale/);
-  });
-
-  it('uses a slot declared by the document template, also on a title slide', async () => {
-    const { buffer, parts } = await templateWith([
-      'Title Slide',
-      'Title with presenter',
-      shape(40, 'Referent', 'type="body" idx="15"', BOX.bottom, 'Name', 1400)
-    ]);
-    const slotConfig = { presenter: { placeholder: 'Referent' } };
-    const { slideXml, layoutOf, warnings } = await render(
-      [{ layout: 'title', title: 'Deck', slots: { presenter: 'Daniel Manzke' } }],
-      buffer,
-      { slotConfig }
-    );
-    assert.deepEqual(warnings, []);
-    assert.equal(layoutOf[0], parts[0]);
-    assert.match(slideXml[0], /<p:ph type="body" idx="15"\/>[^]*<a:t>Daniel Manzke<\/a:t>/);
   });
 });
 
@@ -450,28 +316,6 @@ describe("slots a slide's layout does not have", () => {
     assert.match(slideXml[3], /<a:t>Becomes the subtitle<\/a:t>/);
   });
 
-  it("follow `ifMissing` of the template's declaration", async () => {
-    const slotConfig = {
-      kicker: { placeholder: 'Kicker', ifMissing: 'text' },
-      lead: { placeholder: 'Lead', ifMissing: 'drop' },
-      note: { placeholder: 'Note', ifMissing: 'text' }
-    };
-    const { slideXml, warnings } = await render(
-      [{ title: 'T', slots: { kicker: 'K', lead: 'L', note: 'N' }, text: 'Body' }],
-      undefined,
-      { slotConfig }
-    );
-    assert.deepEqual(warnings, []);
-    const texts = textsOf(slideXml[0]);
-    assert.deepEqual(texts.slice(texts.indexOf('T'), texts.indexOf('T') + 4), [
-      'T',
-      'K',
-      'N',
-      'Body'
-    ]);
-    assert.doesNotMatch(slideXml[0], /<a:t>L<\/a:t>/);
-  });
-
   it("warn, with the ids there are, when a slot id is not one of the template's", async () => {
     const { buffer } = await templateWith(['Title and Content', 'Both', KICKER + LEAD]);
     const { warnings } = await render(
@@ -489,9 +333,8 @@ describe("slots a slide's layout does not have", () => {
 });
 
 describe('slots that do not go together in one layout', () => {
-  const NOTE1 = shape(40, 'Note one', 'type="body" idx="13"', BOX.above, '', 1200);
-  const NOTE2 = shape(41, 'Note two', 'type="body" idx="14"', BOX.below, '', 1200);
-  const slotConfig = { one: { placeholder: 'Note one' }, two: { placeholder: 'Note two' } };
+  const NOTE1 = KICKER;
+  const NOTE2 = LEAD;
 
   it('use the layout with more of the slots and tell the model about the one it had to drop', async () => {
     const { buffer, parts } = await templateWith(
@@ -500,17 +343,20 @@ describe('slots that do not go together in one layout', () => {
     );
     const { layoutOf, warnings, slideXml } = await render(
       [
-        { title: 'Both', slots: { one: 'First', two: 'Second' }, text: '- x' },
-        { title: 'One', slots: { one: 'First' }, text: '- y' },
-        { title: 'Two', slots: { two: 'Second' }, text: '- z' }
+        { title: 'Both', slots: { kicker: 'First', lead: 'Second' }, text: '- x' },
+        { title: 'One', slots: { kicker: 'First' }, text: '- y' },
+        { title: 'Two', slots: { lead: 'Second' }, text: '- z' }
       ],
-      buffer,
-      { slotConfig }
+      buffer
     );
     assert.equal(layoutOf[1], parts[0]);
     assert.equal(layoutOf[2], parts[1]);
-    assert.equal(warnings.length, 1);
-    assert.match(warnings[0], /Slide 1: the text of slot "(one|two)" was left out/);
+    // The slide that fills both gets one of the layouts. A lead that finds no placeholder
+    // becomes a paragraph (no warning); a kicker without one is left out, and the model is told.
+    const text = textsOf(slideXml[0]);
+    assert.ok(text.includes('Second') || warnings.length === 1);
+    if (layoutOf[0] === parts[0]) assert.deepEqual(warnings, []);
+    else assert.match(warnings[0], /Slide 1: the text of slot "kicker" was left out/);
     assert.equal(textsOf(slideXml[1]).includes('First'), true);
   });
 
@@ -519,21 +365,19 @@ describe('slots that do not go together in one layout', () => {
       ['Title and Content', 'Only one', NOTE1],
       ['Title and Content', 'Only two', NOTE2]
     );
-    const analysis = await analyzePowerpointTemplate(buffer, undefined, { slots: slotConfig });
+    const analysis = await analyzePowerpointTemplate(buffer);
     const guide = buildSlideGuide(analysis);
     assert.match(
       guide,
-      /- content: title; [^\n]*slots, from one of these sets per slide: "one" \| "two"/
+      /- content: title; [^\n]*slots, from one of these sets per slide: "kicker" \| "lead"/
     );
     // A layout that has both makes the single-slot ones redundant.
     const both = await templateWith(
       ['Title and Content', 'Only one', NOTE1],
       ['Title and Content', 'Both', NOTE1 + NOTE2]
     );
-    const together = buildSlideGuide(
-      await analyzePowerpointTemplate(both.buffer, undefined, { slots: slotConfig })
-    );
-    assert.match(together, /- content: [^\n]*slot "one" \([^)]*\); slot "two"/);
+    const together = buildSlideGuide(await analyzePowerpointTemplate(both.buffer));
+    assert.match(together, /- content: [^\n]*slot "kicker" \([^)]*\); slot "lead"/);
     assert.doesNotMatch(together, /one of these sets/);
   });
 });
@@ -642,50 +486,12 @@ describe('sanitizing slots and footer', () => {
   });
 });
 
-describe('declaring slots in a document template', () => {
-  const base = { id: 'acme', name: { en: 'ACME' } };
-  it('accepts a placeholder name, a description per language and what to do without it', () => {
-    const parsed = documentTemplateSchema.parse({
-      ...base,
-      pptx: {
-        slots: {
-          chapter: {
-            placeholder: 'Kapitel',
-            description: { en: 'The chapter.', de: 'Das Kapitel.' },
-            ifMissing: 'drop'
-          }
-        }
-      }
-    });
-    assert.equal(parsed.pptx.slots.chapter.placeholder, 'Kapitel');
-  });
-
-  it('refuses odd ids, unknown settings, an empty name and too many slots', () => {
-    const parse = slots => documentTemplateSchema.safeParse({ ...base, pptx: { slots } }).success;
-    assert.equal(parse({ 'Bad id': { placeholder: 'x' } }), false);
-    assert.equal(parse({ a: { placeholder: 'x', ifMissing: 'later' } }), false);
-    assert.equal(parse({ a: { placeholder: 'x', other: 1 } }), false);
-    assert.equal(parse({ a: { placeholder: ' ' } }), false);
-    assert.equal(parse({ a: { placeholder: 'x', description: { en: 'y'.repeat(201) } } }), false);
-    // Two slots on one placeholder: the second could never be filled.
-    assert.equal(
-      parse({ a: { placeholder: 'Referent' }, b: { placeholder: ' referent ' } }),
-      false
-    );
-    assert.equal(parse({ a: { placeholder: 'Referent' }, b: { placeholder: 'Kapitel' } }), true);
-    const many = Object.fromEntries(
-      Array.from({ length: 13 }, (_, i) => [`s${i}`, { placeholder: 'x' }])
-    );
-    assert.equal(parse(many), false);
-  });
-});
-
 // --- What the model is told -----------------------------------------------------
 
 describe('the slide guide for the model', () => {
-  async function guideFor(extraLayouts, options = {}, slots) {
+  async function guideFor(extraLayouts, options = {}) {
     const { buffer } = await templateWith(...extraLayouts);
-    const analysis = await analyzePowerpointTemplate(buffer, undefined, { slots });
+    const analysis = await analyzePowerpointTemplate(buffer);
     return buildSlideGuide(analysis, options);
   }
 
@@ -704,49 +510,34 @@ describe('the slide guide for the model', () => {
     assert.doesNotMatch(guide, /Other templates/);
   });
 
-  it("uses the admin's descriptions, in the language asked for, and says what a title slide has", async () => {
-    const slots = {
-      presenter: {
-        placeholder: 'Referent',
-        description: { en: 'Who presents.', de: 'Wer vorträgt.' }
-      }
-    };
+  it('uses the descriptions of the conventional slots, in the language asked for, and says what a title slide has', async () => {
     const extra = [
       [
         'Title Slide',
-        'Title with presenter',
-        shape(40, 'Referent', 'type="body" idx="15"', BOX.bottom, 'Name', 1400) + strip('ACME AG')
+        'Title with lead',
+        shape(40, 'Lead', 'type="body" idx="15"', BOX.bottom, 'Name', 1400) + strip('ACME AG')
       ]
     ];
-    const en = await guideFor(extra, { others: true }, slots);
-    assert.match(en, /- "presenter": Who presents\. At the bottom left\./);
+    const en = await guideFor(extra, { others: true });
+    assert.match(en, /- "lead": One sentence under the title[^\n]*At the bottom left\./);
     assert.match(
       en,
-      /- title: title; subtitle; slot "presenter" \(at the bottom left\); footer strip text \(slide field "footer"; "ACME AG" if unset\)/
+      /- title: title; subtitle; slot "lead" \(at the bottom left\); footer strip text \(slide field "footer"; "ACME AG" if unset\)/
     );
     assert.match(en, /Other templates can differ\.$/);
-    const german = await guideFor(extra, { language: 'de' }, slots);
-    assert.match(german, /- "presenter": Wer vorträgt\. Unten links\./);
+    const german = await guideFor(extra, { language: 'de' });
+    assert.match(german, /- "lead": Ein Satz unter dem Titel[^\n]*Unten links\./);
     assert.match(german, /Folientypen \("layout"\)/);
   });
 
-  it('uses one language for the texts and the admin\'s descriptions, also for "de-DE"', async () => {
-    const slots = {
-      presenter: {
-        placeholder: 'Note one',
-        description: { en: 'Who presents.', de: 'Wer vorträgt.' }
-      }
-    };
-    const { buffer } = await templateWith([
-      'Title and Content',
-      'With note',
-      shape(40, 'Note one', 'type="body" idx="13"', BOX.above, '', 1200)
-    ]);
-    const analysis = await analyzePowerpointTemplate(buffer, undefined, { slots });
-    const guide = buildSlideGuide(analysis, { language: 'de-DE' });
-    assert.match(guide, /Wer vorträgt\./);
+  it('uses one language for the texts and the descriptions, also for "de-DE"', async () => {
+    const { buffer } = await templateWith(['Title and Content', 'With kicker', KICKER]);
+    const guide = buildSlideGuide(await analyzePowerpointTemplate(buffer), {
+      language: 'de-DE'
+    });
+    assert.match(guide, /Ein kurzes Label über dem Folientitel/);
     assert.match(guide, /Folientypen/);
-    assert.doesNotMatch(guide, /Who presents/);
+    assert.doesNotMatch(guide, /A short label above/);
   });
 
   it('says which template it describes when others can be chosen, and when an uploaded deck can replace it', async () => {
@@ -805,19 +596,13 @@ describe('the slide guide in the tool description', () => {
 
   it('tells the model the slots of the pinned or default template, from the stored file', async () => {
     const { buffer } = await templateWith(['Title and Content', 'Both', KICKER + LEAD]);
-    await storeTemplate('acme', buffer, {
-      pptx: {
-        slots: {
-          kicker: {
-            placeholder: 'Kicker (Label above the title)',
-            description: { en: 'The ACME chapter.' }
-          }
-        }
-      }
-    });
+    await storeTemplate('acme', buffer);
     const description = await descriptionOf({});
     assert.match(description, /Create a PowerPoint presentation/);
-    assert.match(description, /- "kicker": The ACME chapter\. Above the title\./);
+    assert.match(
+      description,
+      /- "kicker": A short label above the slide title[^\n]*Above the title\./
+    );
     assert.match(description, /- "lead": One sentence under the title/);
     assert.match(description, /- content: title;/);
     // The guide follows the language, and a pinned template does not offer others.
@@ -831,17 +616,10 @@ describe('the slide guide in the tool description', () => {
     assert.match(description, /templateFileId\) has its own placeholders/);
   });
 
-  it("follows a change of the template's slots and says nothing without a PowerPoint file", async () => {
+  it('says nothing without a PowerPoint file', async () => {
     const { buffer } = await templateWith(['Title and Content', 'Both', KICKER + LEAD]);
     await storeTemplate('acme', buffer);
     assert.match(await descriptionOf({}), /"lead"/);
-    await templates.saveTemplate('acme', {
-      name: { en: 'acme' },
-      default: true,
-      pptx: { template: 'powerpoint-template.potx', slots: { lead: { placeholder: 'Nothing' } } }
-    });
-    const changed = await descriptionOf({});
-    assert.doesNotMatch(changed, /- "lead": One sentence/);
     await templates.removeTemplateAsset('acme', { slot: 'powerpointTemplate' });
     const without = await descriptionOf({});
     assert.doesNotMatch(without, /Slide types/);

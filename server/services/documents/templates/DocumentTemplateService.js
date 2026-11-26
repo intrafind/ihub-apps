@@ -11,14 +11,14 @@ import logger from '../../../utils/logger.js';
 import {
   ASSET_NAME_PATTERN,
   ASSET_SLOTS,
-  FONT_FACES,
+  MAX_TEMPLATE_FIELDS,
   TEMPLATE_ID_PATTERN,
   documentTemplateSchema,
   referencedAssets
 } from '../../../validators/documentTemplateSchema.js';
 import { checkTemplateAsset, TemplateAssetError } from './templateAssets.js';
 import { fieldsGuide } from './templateFields.js';
-import { pdfMarginsFromWordSetup, readThemeBrand, resolveBrand } from './themeBrand.js';
+import { pdfPageFromWordSetup, readThemeBrand, resolveBrand } from './themeBrand.js';
 
 /**
  * Document templates: a company's corporate design, applied to every PDF,
@@ -237,8 +237,6 @@ export async function slideGuideFor(
     name,
     stat.mtimeMs,
     stat.size,
-    template.pptx.layouts || null,
-    template.pptx.slots || null,
     language,
     others,
     userUploads
@@ -250,11 +248,7 @@ export async function slideGuideFor(
       import('../pptx/pptxTemplate.js'),
       import('../pptx/slideGuide.js')
     ]);
-    const analysis = await analyzePowerpointTemplate(
-      await readAsset(template.id, name),
-      template.pptx.layouts,
-      { slots: template.pptx.slots }
-    );
+    const analysis = await analyzePowerpointTemplate(await readAsset(template.id, name));
     guide = buildSlideGuide(analysis, {
       language,
       others,
@@ -448,26 +442,58 @@ export async function resolveTemplateBrand(template, { first = 'powerpoint' } = 
 }
 
 /**
- * The page margins of PDFs, `[left, top, right, bottom]` in points: the
- * template's own `pdf.margins`, else the Word template's last section.
- * Undefined when neither says: the PDF engine's default applies. A template
- * with a letterhead keeps the engine's margins: the Word template's do not
- * know where the stationery's logo and address block are.
+ * The page of PDFs: margins `[left, top, right, bottom]` in points, format and
+ * orientation. The margins are the template's own `pdf.margins`, else those of
+ * the Word template's last section; format and orientation come from that
+ * section. Nothing is set without a Word template (and without own margins):
+ * the PDF engine's default applies.
  *
  * @param {Object} template - A parsed template.
- * @returns {Promise<number[]|undefined>}
+ * @returns {Promise<{ margins?: number[], size?: string, orientation?: string }>}
  */
-export async function resolvePdfMargins(template) {
-  if (template.pdf?.margins) return template.pdf.margins;
-  // Replaced by `pdf.margins` when the old document settings are removed.
-  if (template.document?.margins) return template.document.margins;
+export async function resolvePdfPage(template) {
+  const own = template.pdf?.margins;
   const name = template.docx?.template;
-  if (!name || template.pdf?.letterhead || template.pdf?.letterheadFollowing) return undefined;
-  const margins = await fileInfo(template, name, 'margins', async buffer => {
-    const { readWordTemplateLayout } = await import('../docx/wordTemplate.js');
-    return pdfMarginsFromWordSetup((await readWordTemplateLayout(buffer)).setup);
-  });
-  return margins || undefined;
+  const fromWord = name
+    ? await fileInfo(template, name, 'page', async buffer => {
+        const { readWordTemplateLayout } = await import('../docx/wordTemplate.js');
+        return pdfPageFromWordSetup((await readWordTemplateLayout(buffer)).setup);
+      })
+    : null;
+  return {
+    ...fromWord,
+    ...(own || fromWord?.margins ? { margins: own || fromWord.margins } : {})
+  };
+}
+
+/** The PDF margins when neither the template nor its Word template sets any (the engine's default). */
+export const DEFAULT_PDF_MARGINS = Object.freeze([50, 62, 50, 62]);
+
+/**
+ * What a template resolves to, for the admin page to show next to what the
+ * admin set: the brand (colours, palette and fonts, each with its source) and
+ * the page of PDFs (margins with their source).
+ *
+ * @param {Object} template - A parsed template.
+ * @returns {Promise<{ brand: Object, pdf: { margins: number[], source: 'template'|'word'|'default', size?: string, orientation?: string } }>}
+ */
+export async function resolveTemplateSettings(template) {
+  const [brand, page] = await Promise.all([
+    resolveTemplateBrand(template),
+    resolvePdfPage(template)
+  ]);
+  let source = 'default';
+  if (template.pdf?.margins) source = 'template';
+  else if (page.margins) source = 'word';
+  return {
+    brand,
+    pdf: {
+      margins: [...(page.margins || DEFAULT_PDF_MARGINS)],
+      source,
+      ...(page.size ? { size: page.size } : {}),
+      ...(page.orientation ? { orientation: page.orientation } : {})
+    }
+  };
 }
 
 /**
@@ -487,31 +513,8 @@ export async function loadTemplateBundle(idOrTemplate, format) {
         ? await getTemplate(idOrTemplate)
         : null;
   if (!template) return null;
-  const assets = { logo: await optionalAsset(template, template.brand.logo, 'logo') };
-  if (format === 'pdf') {
-    assets.letterhead = await optionalAsset(template, template.pdf.letterhead, 'letterhead');
-    assets.letterheadFollowing = await optionalAsset(
-      template,
-      template.pdf.letterheadFollowing,
-      'letterheadFollowing'
-    );
-    const letterhead = assets.letterhead || assets.letterheadFollowing;
-    if (letterhead) {
-      // The page format the letterhead was made for, for templates that do
-      // not set one.
-      const { letterheadPageFormat } = await import('../pdf/letterhead.js');
-      letterhead.pageFormat = await letterheadPageFormat(letterhead.data).catch(() => null);
-    }
-    assets.fonts = [];
-    for (const font of template.fonts) {
-      const faces = {};
-      for (const face of FONT_FACES) {
-        const file = await optionalAsset(template, font[face], `font ${font.family} ${face}`);
-        if (file) faces[face] = file.data;
-      }
-      if (faces.normal) assets.fonts.push({ family: font.family, faces });
-    }
-  } else if (format === 'docx') {
+  const assets = {};
+  if (format === 'docx') {
     assets.wordTemplate = await optionalAsset(template, template.docx.template, 'wordTemplate');
   } else if (format === 'pptx') {
     assets.powerpointTemplate = await optionalAsset(
@@ -526,7 +529,7 @@ export async function loadTemplateBundle(idOrTemplate, format) {
     brand: await resolveTemplateBrand(template, {
       first: format === 'docx' ? 'word' : 'powerpoint'
     }),
-    ...(format === 'pdf' ? { pdfMargins: await resolvePdfMargins(template) } : {})
+    ...(format === 'pdf' ? { pdfPage: await resolvePdfPage(template) } : {})
   };
 }
 
@@ -575,12 +578,8 @@ function withStoredFiles(template, stored) {
     if (value) next[section][key] = value;
     else delete next[section][key];
   };
-  set('brand', 'logo', stored?.brand?.logo);
-  set('pdf', 'letterhead', stored?.pdf?.letterhead);
-  set('pdf', 'letterheadFollowing', stored?.pdf?.letterheadFollowing);
   set('docx', 'template', stored?.docx?.template);
   set('pptx', 'template', stored?.pptx?.template);
-  next.fonts = stored?.fonts ? structuredClone(stored.fonts) : [];
   return next;
 }
 
@@ -668,41 +667,41 @@ export async function deleteTemplate(id) {
 }
 
 /**
- * The file name prefix of a font family's files: the one its regular style
- * already has, else a new one no other family uses (family names that slug
- * alike, or that have no Latin letters, get a number).
+ * The fields a Word template adds to a template: every custom placeholder of
+ * the file that the template does not declare yet, as an optional field. A
+ * file that would take the template past the limit is refused, with the names
+ * that do not fit, so that no placeholder is silently left undeclared.
+ *
+ * @param {Object} template - The template as it is (its `fields`).
+ * @param {string[]} placeholders - The custom placeholders of the Word template.
+ * @returns {Object<string, Object>} The template's fields with the new ones.
  */
-function fontFilePrefix(fonts, entry, family) {
-  if (entry?.normal) return entry.normal.replace(/-normal\.[a-z]+$/, '');
-  const taken = new Set(fonts.map(font => font.normal?.replace(/-normal\.[a-z]+$/, '')));
-  const base = `font-${fontSlug(family)}`;
-  let prefix = base;
-  for (let n = 2; taken.has(prefix); n += 1) prefix = `${base}-${n}`;
-  return prefix;
-}
-
-function fontSlug(family) {
-  const words = family
-    .toLowerCase()
-    .normalize('NFKD')
-    .split(/[^a-z0-9]/)
-    .filter(Boolean);
-  return words.join('-').slice(0, 40) || 'font';
+function withDeclaredFields(template, placeholders) {
+  const fields = { ...template.fields };
+  const added = placeholders.filter(name => !Object.hasOwn(fields, name));
+  const room = MAX_TEMPLATE_FIELDS - Object.keys(fields).length;
+  if (added.length > room) {
+    const over = added.slice(Math.max(room, 0));
+    throw new DocumentTemplateError(
+      `The Word template has more placeholders than a template may have fields (${MAX_TEMPLATE_FIELDS}). These do not fit: ${over.join(', ')}.`
+    );
+  }
+  for (const name of added) fields[name] = {};
+  return fields;
 }
 
 /**
- * Store an uploaded file in a template slot and point the template at it.
+ * Store an uploaded file in a template slot and point the template at it. A
+ * Word template's own placeholders (`{{department}}`) are declared as fields.
  *
  * @param {string} id
  * @param {Object} params
  * @param {string} params.slot - A key of `ASSET_SLOTS`.
  * @param {Buffer} params.data
  * @param {string} params.originalName - For the extension.
- * @param {string} [params.family] - Font slot: the family name.
- * @param {string} [params.face] - Font slot: `normal`, `bold`, `italics`, `bolditalics`.
  * @returns {Promise<{ template: Object, file: string, info: Object }>}
  */
-export async function saveTemplateAsset(id, { slot, data, originalName, family, face }) {
+export async function saveTemplateAsset(id, { slot, data, originalName }) {
   const extension = extensionOf(String(originalName || ''));
   let info;
   try {
@@ -715,26 +714,11 @@ export async function saveTemplateAsset(id, { slot, data, originalName, family, 
     const current = await readTemplateFile(id);
     if (!current) throw new DocumentTemplateError('Template not found.', 404);
     const next = structuredClone(current);
-    let name;
-    if (slot === 'font') {
-      const familyName = String(family || info.familyName || '').trim();
-      if (!familyName) throw new DocumentTemplateError('Name the font family.');
-      if (!FONT_FACES.includes(face)) throw new DocumentTemplateError('Unknown font style.');
-      const entry = next.fonts.find(f => f.family.toLowerCase() === familyName.toLowerCase());
-      if (!entry && face !== 'normal') {
-        throw new DocumentTemplateError('Upload the regular style of a font first.');
-      }
-      name = `${fontFilePrefix(next.fonts, entry, familyName)}-${face}.${extension}`;
-      if (entry) entry[face] = name;
-      else next.fonts.push({ family: familyName, normal: name });
-    } else {
-      name = `${ASSET_SLOTS[slot].baseName}.${extension}`;
-      if (slot === 'logo') next.brand.logo = name;
-      else if (slot === 'letterhead') next.pdf.letterhead = name;
-      else if (slot === 'letterheadFollowing') next.pdf.letterheadFollowing = name;
-      else if (slot === 'wordTemplate') next.docx.template = name;
-      else if (slot === 'powerpointTemplate') next.pptx.template = name;
-    }
+    const name = `${ASSET_SLOTS[slot].baseName}.${extension}`;
+    if (slot === 'wordTemplate') {
+      next.docx.template = name;
+      next.fields = withDeclaredFields(next, info.customFields || []);
+    } else if (slot === 'powerpointTemplate') next.pptx.template = name;
     const template = validate(next, id);
     await atomicWriteFile(assetPath(id, name), data, null);
     await atomicWriteJSON(configPath(id), template);
@@ -751,35 +735,21 @@ export async function saveTemplateAsset(id, { slot, data, originalName, family, 
 }
 
 /**
- * Remove a file from a template slot.
+ * Remove a file from a template slot. The fields stay declared.
  *
  * @param {string} id
  * @param {Object} params
  * @param {string} params.slot
- * @param {string} [params.family] - Font slot.
- * @param {string} [params.face] - Font slot; `normal` removes the family.
  * @returns {Promise<Object>} The template.
  */
-export async function removeTemplateAsset(id, { slot, family, face }) {
+export async function removeTemplateAsset(id, { slot }) {
   return locked(async () => {
     const current = await readTemplateFile(id);
     if (!current) throw new DocumentTemplateError('Template not found.', 404);
     const next = structuredClone(current);
-    if (slot === 'font') {
-      const index = next.fonts.findIndex(
-        f => f.family.toLowerCase() === String(family || '').toLowerCase()
-      );
-      if (index < 0) throw new DocumentTemplateError('Font not found.', 404);
-      if (face === 'normal' || !face) next.fonts.splice(index, 1);
-      else delete next.fonts[index][face];
-    } else if (slot === 'logo') delete next.brand.logo;
-    else if (slot === 'letterhead') delete next.pdf.letterhead;
-    else if (slot === 'letterheadFollowing') delete next.pdf.letterheadFollowing;
-    else if (slot === 'wordTemplate') delete next.docx.template;
-    else if (slot === 'powerpointTemplate') {
-      delete next.pptx.template;
-      delete next.pptx.layouts;
-    } else throw new DocumentTemplateError(`Unknown template file slot "${slot}".`);
+    if (slot === 'wordTemplate') delete next.docx.template;
+    else if (slot === 'powerpointTemplate') delete next.pptx.template;
+    else throw new DocumentTemplateError(`Unknown template file slot "${slot}".`);
     const template = validate(next, id);
     await atomicWriteJSON(configPath(id), template);
     await removeUnusedAssets(id, template);
@@ -788,7 +758,7 @@ export async function removeTemplateAsset(id, { slot, family, face }) {
 }
 
 /**
- * Bytes of a template file, for the admin page (logo preview, re-analysis).
+ * Bytes of a template file, for the admin page (re-analysis).
  *
  * @param {string} id
  * @param {string} name

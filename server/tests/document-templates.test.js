@@ -54,8 +54,7 @@ const { sanitizeChart } = await import('../services/documents/pptx/charts.js');
 const { mergeIntoWordTemplate } = await import('../services/documents/docx/wordTemplate.js');
 const { buildDocx } = await import('../services/documents/docx/buildDocx.js');
 const { openPackage, PACKAGE_LIMITS } = await import('../services/documents/ooxml/opcPackage.js');
-const { applyLetterhead, letterheadPageFormat } =
-  await import('../services/documents/pdf/letterhead.js');
+const { applyLetterhead } = await import('../services/documents/pdf/letterhead.js');
 const { pptxSpecFromToolArgs, runCreatePptx } =
   await import('../services/documents/pptx/pptxTools.js');
 const { runCreateDocx } = await import('../services/documents/docx/docxTools.js');
@@ -88,9 +87,6 @@ async function letterheadBytes() {
   page.drawText('LETTERHEAD ADDRESS LINE', { x: 50, y: 20, size: 8, font });
   return Buffer.from(await doc.save());
 }
-
-const FONT_DIR = path.join(path.dirname(require.resolve('dejavu-fonts-ttf/package.json')), 'ttf');
-const serifFont = () => fsSync.readFileSync(path.join(FONT_DIR, 'DejaVuSerif.ttf'));
 
 /**
  * A Word template as German Word writes one: style ids from the localized
@@ -149,6 +145,18 @@ async function germanWordTemplate() {
   return Packer.toBuffer(document);
 }
 
+/** A plain Word template: one paragraph per text. */
+async function wordTemplateWith(paragraphs) {
+  const { Document, Packer, Paragraph, TextRun } = docx;
+  return Packer.toBuffer(
+    new Document({
+      sections: [
+        { children: paragraphs.map(text => new Paragraph({ children: [new TextRun(text)] })) }
+      ]
+    })
+  );
+}
+
 /**
  * Every internal relationship of a package points at a part that exists, and
  * every part has a content type — what Office checks before it opens a file.
@@ -190,8 +198,7 @@ function wordText(xml) {
 const VALID = {
   id: 'acme',
   name: { en: 'ACME' },
-  brand: { primaryColor: '#E30613', bodyFont: 'Brand Serif', companyName: 'ACME GmbH' },
-  document: { header: '{title}', footer: '{company} · Internal' }
+  brand: { primaryColor: '#E30613', companyName: 'ACME GmbH' }
 };
 
 // --- Schema and store -------------------------------------------------------------
@@ -200,12 +207,13 @@ describe('document template schema', () => {
   it('accepts a template and fills the sections', () => {
     const parsed = documentTemplateSchema.parse(VALID);
     assert.equal(parsed.enabled, true);
-    assert.deepEqual(parsed.fonts, []);
+    assert.deepEqual(parsed.fields, {});
     assert.deepEqual(parsed.pptx, {});
+    assert.deepEqual(parsed.pdf, {});
   });
 
-  it('refuses reserved ids, bad colours, unknown keys and duplicate font families', () => {
-    for (const id of ['default', 'minimal', 'new', 'Has Space', '../x']) {
+  it('refuses reserved ids, bad colours and unknown keys', () => {
+    for (const id of ['default', 'new', 'Has Space', '../x']) {
       assert.equal(documentTemplateSchema.safeParse({ ...VALID, id }).success, false, id);
     }
     assert.equal(
@@ -213,43 +221,57 @@ describe('document template schema', () => {
       false
     );
     assert.equal(documentTemplateSchema.safeParse({ ...VALID, script: 'x' }).success, false);
-    const font = { family: 'A', normal: 'font-a-normal.ttf' };
-    assert.equal(
-      documentTemplateSchema.safeParse({ ...VALID, fonts: [font, { ...font, family: 'a' }] })
-        .success,
-      false
-    );
-    assert.equal(
-      documentTemplateSchema.safeParse({ ...VALID, brand: { logo: '../../etc/passwd' } }).success,
-      false
-    );
     // A file must be of the kind its slot takes.
     assert.equal(
       documentTemplateSchema.safeParse({ ...VALID, docx: { template: 'letterhead.pdf' } }).success,
       false
     );
     assert.equal(
-      documentTemplateSchema.safeParse({
-        ...VALID,
-        fonts: [{ family: 'A', normal: 'logo.png' }]
-      }).success,
+      documentTemplateSchema.safeParse({ ...VALID, pptx: { template: '../../etc/passwd' } })
+        .success,
       false
     );
+  });
+
+  it('refuses the settings the Office files took over', () => {
+    for (const extra of [
+      { fonts: [] },
+      { document: { header: 'x' } },
+      { brand: { ...VALID.brand, logo: 'logo.png' } },
+      { brand: { ...VALID.brand, headingFont: 'Arial' } },
+      { pdf: { theme: 'professional' } },
+      { pdf: { letterhead: 'letterhead.pdf' } },
+      { pptx: { slots: {} } },
+      { pptx: { layouts: {} } },
+      { pptx: { footer: 'x' } },
+      { pptx: { aspectRatio: '4:3' } }
+    ]) {
+      assert.equal(documentTemplateSchema.safeParse({ ...VALID, ...extra }).success, false);
+    }
   });
 });
 
 describe('template files', () => {
   it('accepts what each slot needs and refuses the rest', async () => {
-    assert.equal((await checkTemplateAsset('logo', pngBytes(), 'png')).width, 300);
-    await assert.rejects(checkTemplateAsset('logo', pngBytes(), 'jpg'), TemplateAssetError);
-    await assert.rejects(checkTemplateAsset('letterhead', pngBytes(), 'pdf'), /must be a PDF/);
-    assert.equal((await checkTemplateAsset('letterhead', await letterheadBytes(), 'pdf')).pages, 1);
-    assert.match((await checkTemplateAsset('font', serifFont(), 'ttf')).familyName, /DejaVu/);
-    await assert.rejects(checkTemplateAsset('font', pngBytes(), 'ttf'), /font file/);
     await assert.rejects(
       checkTemplateAsset('wordTemplate', pngBytes(), 'docx'),
       TemplateAssetError
     );
+    await assert.rejects(
+      checkTemplateAsset('powerpointTemplate', pngBytes(), 'pptx'),
+      TemplateAssetError
+    );
+    await assert.rejects(
+      checkTemplateAsset('wordTemplate', await germanWordTemplate(), 'pdf'),
+      /accepts/
+    );
+    // The logo, fonts and letterheads went with the settings of the template.
+    for (const slot of ['logo', 'font', 'letterhead', 'letterheadFollowing']) {
+      await assert.rejects(
+        checkTemplateAsset(slot, pngBytes(), 'png'),
+        /Unknown template file slot/
+      );
+    }
   });
 
   it('refuses Office files with macros', async () => {
@@ -280,52 +302,38 @@ describe('template store', () => {
       }
     );
 
-    const { template, file } = await templates.saveTemplateAsset('acme', {
-      slot: 'logo',
-      data: pngBytes(),
-      originalName: 'Company Logo.PNG'
+    const { template, file, info } = await templates.saveTemplateAsset('acme', {
+      slot: 'wordTemplate',
+      data: await germanWordTemplate(),
+      originalName: 'Company Letter.DOTX'
     });
-    assert.equal(file, 'logo.png');
-    assert.equal(template.brand.logo, 'logo.png');
+    assert.equal(file, 'word-template.dotx');
+    assert.equal(template.docx.template, 'word-template.dotx');
+    assert.equal(info.contentPlaceholder, true);
     await templates.saveTemplateAsset('acme', {
-      slot: 'font',
-      data: serifFont(),
-      originalName: 'serif.ttf',
-      family: 'Brand Serif',
-      face: 'normal'
+      slot: 'powerpointTemplate',
+      data: await buildBaseTemplate({ primaryColor: '#E30613' }),
+      originalName: 'deck.potx'
     });
+    // Only the two Office slots exist.
     await assert.rejects(
       templates.saveTemplateAsset('acme', {
-        slot: 'font',
-        data: serifFont(),
-        originalName: 'serif.ttf',
-        family: 'New Family',
-        face: 'bold'
+        slot: 'logo',
+        data: pngBytes(),
+        originalName: 'logo.png'
       }),
-      /regular style/
+      /Unknown template file slot/
     );
     // Files are set by uploads only: a settings save (an editor opened
-    // before the upload) neither drops the logo nor names another file.
+    // before the upload) neither drops the Word template nor names another file.
     const saved = await templates.saveTemplate('acme', {
       ...VALID,
       default: true,
-      brand: { ...VALID.brand, logo: undefined },
-      pdf: { letterhead: 'letterhead.pdf' }
+      docx: {},
+      pptx: { template: 'other.potx' }
     });
-    assert.equal(saved.brand.logo, 'logo.png');
-    assert.equal(saved.pdf.letterhead, undefined);
-    assert.equal(saved.fonts[0].family, 'Brand Serif');
-
-    // Families whose names slug alike get files of their own.
-    await templates.saveTemplateAsset('acme', {
-      slot: 'font',
-      data: serifFont(),
-      originalName: 'x.ttf',
-      family: 'Brand_Serif',
-      face: 'normal'
-    });
-    const both = (await templates.getTemplate('acme')).fonts.map(font => font.normal);
-    assert.equal(new Set(both).size, 2, both.join());
+    assert.equal(saved.docx.template, 'word-template.dotx');
+    assert.equal(saved.pptx.template, 'powerpoint-template.potx');
 
     // Resolution: the app's pinned template, else the request, else the default.
     assert.deepEqual(await templates.resolveTemplateId({}), { id: 'acme', pinned: false });
@@ -355,19 +363,75 @@ describe('template store', () => {
       ['other']
     );
 
-    const bundle = await templates.loadTemplateBundle('acme', 'pdf');
-    assert.equal(bundle.assets.logo.extension, 'png');
-    assert.equal(bundle.assets.fonts[0].family, 'Brand Serif');
-    assert.equal(bundle.assets.fonts.length, 2);
+    // Each format gets the file it needs.
+    assert.equal(
+      (await templates.loadTemplateBundle('acme', 'docx')).assets.wordTemplate.extension,
+      'dotx'
+    );
+    assert.equal(
+      (await templates.loadTemplateBundle('acme', 'pptx')).assets.powerpointTemplate.extension,
+      'potx'
+    );
+    assert.deepEqual((await templates.loadTemplateBundle('acme', 'pdf')).assets, {});
 
-    // Removing the logo removes its file.
-    await templates.removeTemplateAsset('acme', { slot: 'logo' });
+    // Removing the Word template removes its file.
+    await templates.removeTemplateAsset('acme', { slot: 'wordTemplate' });
     const dir = path.join(process.env.CONTENTS_DIR, 'document-templates', 'acme');
-    assert.equal(fsSync.existsSync(path.join(dir, 'logo.png')), false);
+    assert.equal(fsSync.existsSync(path.join(dir, 'word-template.dotx')), false);
+    await assert.rejects(
+      templates.removeTemplateAsset('acme', { slot: 'logo' }),
+      /Unknown template file slot/
+    );
 
     await templates.deleteTemplate('other');
     assert.equal(await templates.getTemplate('other'), null);
     await assert.rejects(templates.deleteTemplate('../acme'), /Invalid template id/);
+  });
+
+  it("declares the placeholders of an uploaded Word template as the template's fields", async () => {
+    await templates.saveTemplate(
+      'fielded',
+      { ...VALID, id: 'fielded', name: { en: 'F' } },
+      { create: true }
+    );
+    const word = await wordTemplateWith(['Dept: {{department}}', '{{title}} {{content}}']);
+    const { template } = await templates.saveTemplateAsset('fielded', {
+      slot: 'wordTemplate',
+      data: word,
+      originalName: 'letter.dotx'
+    });
+    assert.deepEqual(template.fields, { department: {} });
+    // Fields an admin set up stay, and a new upload adds only what is not declared yet.
+    await templates.saveTemplate('fielded', {
+      ...VALID,
+      id: 'fielded',
+      name: { en: 'F' },
+      fields: { department: { required: true } }
+    });
+    const again = await templates.saveTemplateAsset('fielded', {
+      slot: 'wordTemplate',
+      data: await wordTemplateWith(['{{department}} {{matter}}', '{{content}}']),
+      originalName: 'letter.dotx'
+    });
+    assert.deepEqual(again.template.fields, { department: { required: true }, matter: {} });
+  });
+
+  it('refuses a Word template that would take the template past 50 fields, and names the rest', async () => {
+    await templates.saveTemplate(
+      'big',
+      { ...VALID, id: 'big', name: { en: 'B' } },
+      { create: true }
+    );
+    const names = Array.from({ length: 52 }, (_, i) => `f${i}`);
+    await assert.rejects(
+      templates.saveTemplateAsset('big', {
+        slot: 'wordTemplate',
+        data: await wordTemplateWith([names.map(n => `{{${n}}}`).join(' '), '{{content}}']),
+        originalName: 'letter.dotx'
+      }),
+      /These do not fit: f50, f51/
+    );
+    assert.equal((await templates.getTemplate('big')).docx.template, undefined);
   });
 });
 
@@ -385,49 +449,60 @@ async function pageTexts(buffer) {
 }
 
 describe('PDF with a template', () => {
-  const bundle = async () => ({
+  const bundle = () => ({
     template: documentTemplateSchema.parse({
       ...VALID,
-      document: { ...VALID.document, logoPosition: 'header-left', margins: [60, 90, 60, 70] },
-      pdf: { theme: 'professional' }
+      pdf: { margins: [60, 90, 60, 70] }
     }),
-    assets: {
-      logo: { data: pngBytes(), extension: 'png' },
-      letterhead: { data: await letterheadBytes() },
-      fonts: [{ family: 'Brand Serif', faces: { normal: serifFont() } }]
-    }
+    assets: {},
+    brand: undefined,
+    pdfPage: { margins: [60, 90, 60, 70], size: 'LETTER', orientation: 'portrait' }
   });
 
-  it('takes colours, fonts, page setup and header from the template', async () => {
+  it('takes colours, page and a company footer from the template', () => {
     const { spec, assets } = applyTemplateToPdfSpec(
       {
         title: 'Report',
         markdown: 'Body',
-        theme: 'minimal',
         themeOptions: { primaryColor: '#00ff00', font: 'mono' },
         page: { orientation: 'landscape', margins: [20, 20, 20, 20] },
         header: 'model header'
       },
-      await bundle()
+      bundle()
     );
-    assert.equal(spec.theme, 'professional');
     assert.equal(spec.themeOptions.primaryColor, '#E30613');
-    assert.equal(spec.themeOptions.font, 'Brand Serif');
+    // The template has no font of its own: the request's stays.
+    assert.equal(spec.themeOptions.font, 'mono');
     assert.deepEqual(spec.page.margins, [60, 90, 60, 70]);
-    // A letterhead fixes the orientation it was drawn for.
-    assert.equal(spec.page.orientation, 'portrait');
-    assert.equal(spec.footer, 'ACME GmbH · Internal');
-    assert.equal(spec.header, '{title}');
-    assert.equal(spec.logo.position, 'header-left');
-    assert.equal(assets.fonts.length, 1);
+    assert.equal(spec.page.size, 'LETTER');
+    // The request may turn the page for a wide table.
+    assert.equal(spec.page.orientation, 'landscape');
+    assert.equal(spec.footer, 'ACME GmbH');
+    assert.equal(spec.header, 'model header');
+    assert.equal(assets, undefined);
   });
 
-  it('prints the letterhead under the content and embeds the brand font', async () => {
-    const { spec, assets } = applyTemplateToPdfSpec(
-      { title: 'Quarterly report', markdown: '## Overview\n\nThe body text.', coverPage: true },
-      await bundle()
+  it("keeps the request's footer when it has one, and says nothing without a company", () => {
+    const withFooter = applyTemplateToPdfSpec(
+      { title: 'T', markdown: 'x', footer: 'Draft' },
+      bundle()
     );
-    const { buffer, pages, warnings } = await renderPdfSpec(spec, assets);
+    assert.equal(withFooter.spec.footer, 'Draft');
+    const noCompany = applyTemplateToPdfSpec(
+      { title: 'T', markdown: 'x' },
+      { ...bundle(), template: documentTemplateSchema.parse({ id: 'plain', name: { en: 'P' } }) }
+    );
+    assert.equal(noCompany.spec.footer, undefined);
+  });
+
+  it('prints a letterhead the user uploaded under the content', async () => {
+    const { spec } = applyTemplateToPdfSpec(
+      { title: 'Quarterly report', markdown: '## Overview\n\nThe body text.', coverPage: true },
+      bundle()
+    );
+    const { buffer, pages, warnings } = await renderPdfSpec(spec, {
+      letterhead: await letterheadBytes()
+    });
     assert.equal(pages, 2);
     assert.deepEqual(warnings, []);
     const [cover, body] = await pageTexts(buffer);
@@ -435,7 +510,7 @@ describe('PDF with a template', () => {
     assert.doesNotMatch(cover, /LETTERHEAD ADDRESS LINE/);
     assert.match(body, /LETTERHEAD ADDRESS LINE/);
     assert.match(body, /The body text\./);
-    assert.match(body, /ACME GmbH · Internal/);
+    assert.match(body, /ACME GmbH/);
     // The letterhead is drawn first, under the page's own content.
     const doc = await PDFDocument.load(buffer);
     const contents = doc.getPage(1).node.Contents();
@@ -612,11 +687,11 @@ describe('presentations', () => {
     assert.equal(analysis.mapping.twoColumn, 'Two Content');
 
     const { spec, assets } = applyTemplateToPptxSpec(
-      { title: 'New', slides: SLIDES.slice(0, 2) },
+      { title: 'New', slides: SLIDES.slice(0, 2), footer: 'ACME GmbH' },
       {
         template: documentTemplateSchema.parse({
           ...VALID,
-          pptx: { template: 'powerpoint-template.pptx', footer: '{company}' }
+          pptx: { template: 'powerpoint-template.pptx' }
         }),
         assets: { powerpointTemplate: { data: withSlides.buffer, extension: 'pptx' } }
       }
@@ -636,14 +711,11 @@ describe('presentations', () => {
     assert.equal([...presentation.matchAll(/<p:sldId /g)].length, 2);
   });
 
-  it('use the layouts an admin names', async () => {
+  it('choose a layout for each kind of slide on their own', async () => {
     const template = await loadPresentationTemplate(await buildBaseTemplate());
-    const chosen = chooseLayouts(template.layouts, { content: 'Title Only' });
-    assert.equal(chosen.content.name, 'Title Only');
-    assert.equal(
-      chooseLayouts(template.layouts, { content: 'Missing' }).content.name,
-      'Title and Content'
-    );
+    const chosen = chooseLayouts(template.layouts);
+    assert.equal(chosen.content.name, 'Title and Content');
+    assert.equal(chosen.titleOnly.name, 'Title Only');
   });
 
   it('limit slides, tables and charts from the model', () => {
@@ -831,17 +903,13 @@ describe('Office packages', () => {
 });
 
 describe('letterheads, edge cases', () => {
-  it('use the trim box wherever its origin is, and report their page format', async () => {
+  it('use the trim box wherever its origin is', async () => {
     const doc = await PDFDocument.create();
     const page = doc.addPage([612, 792]);
     page.setMediaBox(100, 100, 612, 792);
     const font = await doc.embedFont(StandardFonts.Helvetica);
     page.drawText('OFFSET LETTERHEAD', { x: 150, y: 150, size: 10, font });
     const letterhead = Buffer.from(await doc.save());
-    assert.deepEqual(await letterheadPageFormat(letterhead), {
-      size: 'LETTER',
-      orientation: 'portrait'
-    });
     const { buffer } = await renderPdfSpec({ title: 'T', markdown: 'Body' });
     const printed = await applyLetterhead(buffer, { first: letterhead });
     const [text] = await pageTexts(printed);
@@ -851,23 +919,6 @@ describe('letterheads, edge cases', () => {
     const item = items.find(i => i.str.includes('OFFSET'));
     // 50 pt in from the box origin, scaled from Letter to A4 width.
     assert.ok(item.transform[4] > 30 && item.transform[4] < 70, `x = ${item.transform[4]}`);
-  });
-
-  it("give templates without a page size the letterhead's format", async () => {
-    const { spec } = applyTemplateToPdfSpec(
-      { title: 'T', markdown: 'x', page: { size: 'A4', orientation: 'landscape' } },
-      {
-        template: documentTemplateSchema.parse(VALID),
-        assets: {
-          letterhead: {
-            data: Buffer.alloc(1),
-            pageFormat: { size: 'LETTER', orientation: 'portrait' }
-          }
-        }
-      }
-    );
-    assert.equal(spec.page.size, 'LETTER');
-    assert.equal(spec.page.orientation, 'portrait');
   });
 });
 

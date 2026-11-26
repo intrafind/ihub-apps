@@ -170,9 +170,14 @@ so a template with just an upload already has a brand.
 - **Palette and fonts:** up to six palette colours and the theme's heading and body fonts are read
   from the files too. The tool descriptions tell the model the brand of the template that applies,
   read-only, with the fonts as names only: the reader's computer may not have them.
-- **PDF margins:** PDFs take the page margins of the Word template's last section, unless the
-  template sets its own `pdf.margins`. A template with a letterhead keeps the engine's margins:
-  the Word template does not know where the stationery's logo and address block are.
+- **PDF margins:** PDFs take the page margins, the page size and the orientation of the Word
+  template's last section, unless the template sets its own margins.
+- **On the template page:** the colour fields show the colour the files give (with its source, such
+  as "From the PowerPoint template") instead of a black swatch while nothing is set, and a picked
+  colour stays. **Take colours from the PowerPoint/Word template** copies the colours of a file's
+  theme into the fields. The palette and the heading and body font are shown read-only. The PDF
+  margins show their source and prefill from the Word template; **Use the Word template's
+  margins** takes your own values back.
 
 ## Word Templates: Year, Page Numbers, Table of Contents and Custom Fields
 
@@ -188,8 +193,10 @@ what a template needs.
 - **Custom fields:** any other `{{name}}` (letters, digits, underscores) is a field of the
   template: a classification, a department, a document number. Declare them under `fields` in
   `contents/document-templates/<id>/template.json` with a label, a description, whether the field
-  is required, the allowed values and a default; the admin page keeps them when it saves, and an
-  editor for them follows.
+  is required, the allowed values and a default. Uploading a Word template declares the
+  placeholders it contains, and the **Fields** section of the template page edits them: a label, a
+  description for the model, the allowed values, a default, "required", and a warning for a field
+  the Word template no longer contains.
 - **The model asks:** the Word tool lists the fields, passes their values in `fields`, and stops
   with `missing_fields` when a required value is missing or not allowed. The model is told to ask
   the user and never to invent a value. `edit_docx` changes one field and keeps the others.

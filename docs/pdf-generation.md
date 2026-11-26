@@ -11,7 +11,7 @@ iHub generates PDF files, Word documents, PowerPoint presentations and Excel wor
 1. **On demand by the model.** The **`pdf`**, **`docx`**, **`pptx`** and **`xlsx` system skills** let the model create a document in a chat — a report, an invoice, a letter, a proposal, a slide deck, a financial model. The **`web-artifacts`** skill builds interactive HTML pages and SVG graphics. The user gets a download card below the answer.
 2. **Exports.** Chat export, the Markdown download menus (workflow output) and agent artifacts produce a real `.pdf` file. They used to open the browser's print dialog, which printed blank pages in the Outlook task pane, the browser extension and some browsers.
 
-The office formats follow the company's **[document template](document-templates.md)**: colours, fonts, logo, letterhead, and the company's own Word and PowerPoint templates.
+The office formats follow the company's **[document template](document-templates.md)**: the company's own Word and PowerPoint templates, the brand colours read from them, and the fields of its documents.
 
 ## System skills
 
@@ -54,7 +54,7 @@ System skills go through the same access check as every other skill (`server/ser
 
 The document tools follow the app's [document template](document-templates.md):
 
-- When the app **pins** a template, the tools do not offer the colour, theme and font parameters, and their description tells the model that the corporate design is applied automatically.
+- When the app **pins** a template, the tools do not offer the colour, theme and font parameters, and their description tells the model that the corporate design is applied automatically. The model is also told the template's colours, palette, font names and fields (read-only).
 - Otherwise, when templates exist, the tools offer a `template` parameter: `default` (the default template, or the built-in design) or one of the enabled templates. The skills tell the model to keep `default` unless the user asks for another one.
 - Where a template sets something, it wins over the model's arguments.
 
@@ -77,7 +77,7 @@ The model then sees the skill in `<available_skills>`, can load its instructions
 - **Layout blocks:** columns, callouts (info/success/warning/danger/note), boxes, tables with merged cells and custom widths, SVG charts and diagrams, canvas shapes, QR codes, named styles. The tool takes `blocks`, `styles` and `images` as JSON text, so the schema works with providers that enforce strict tool schemas.
 - **Document settings:**
   - title, subtitle, author, language
-  - theme (`default`, `professional`, `minimal`) and brand colour
+  - theme (`default`, `professional`, `minimal`) and brand colour (a document template's colours win)
   - font family and size, page size and orientation, margins
   - running header and footer, page numbers
   - cover page, table of contents, watermark
@@ -109,7 +109,7 @@ The skill's instructions and references are in `server/systemSkills/pdf/`:
 - Markdown headings become Word headings (Heading 1–6), so the navigation pane and the table of contents work and the user can restyle the document.
 - Bulleted, numbered (each list restarts at 1) and task lists, GFM tables with column alignment and a repeated header row, code blocks, quotes, GitHub alerts as shaded callouts, horizontal rules, page breaks (`\pagebreak`), links, `<sub>`/`<sup>`, and PNG/JPEG images as `data:` URIs.
 - Document settings: title, subtitle, author, language, cover page, table of contents (updated by Word when the file is opened), header, footer, page numbers, page size and orientation; without a document template also a primary colour and body font.
-- With a document template, the brand's styles, logo, header and footer — or the company's Word template, which the content is merged into (see [Document templates](document-templates.md#word)).
+- With a document template, the brand's styles and a footer — or the company's Word template, which the content is merged into, with its placeholders and **fields** (see [Document templates](document-templates.md#word)). The model passes the values of a template's fields in `fields`; when a required field has no value, no file is created and the model is told to ask the user.
 
 - `showTitle`, `date` and `accentColor` work as for PDFs; with `templateFileId` the model builds on a Word file the user uploaded (`styles_only`, `fill_placeholders` or `append`, see [Document templates](document-templates.md#word)).
 

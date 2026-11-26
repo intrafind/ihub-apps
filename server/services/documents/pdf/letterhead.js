@@ -8,7 +8,6 @@ import {
   popGraphicsState,
   pushGraphicsState
 } from 'pdf-lib';
-import { PAGE_SIZES } from './buildDocument.js';
 
 /**
  * Print a document on the company's letterhead.
@@ -40,26 +39,6 @@ async function embedTrimmed(doc, source, index) {
     right: box.x + box.width,
     top: box.y + box.height
   });
-}
-
-/**
- * The printed size of a letterhead's first page, matched to a page format.
- *
- * @param {Uint8Array} bytes - Letterhead PDF.
- * @returns {Promise<{ size: string, orientation: string } | null>} null when
- *   it matches no format the documents support.
- */
-export async function letterheadPageFormat(bytes) {
-  const source = await PDFDocument.load(bytes, { updateMetadata: false });
-  const { width, height } = source.getPage(0).getTrimBox();
-  const orientation = width > height ? 'landscape' : 'portrait';
-  const [short, long] = [Math.min(width, height), Math.max(width, height)];
-  for (const [size, [w, h]] of Object.entries(PAGE_SIZES)) {
-    if (Math.abs(short - w) / w < 0.02 && Math.abs(long - h) / h < 0.02) {
-      return { size, orientation };
-    }
-  }
-  return null;
 }
 
 /**
