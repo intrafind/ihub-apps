@@ -73,7 +73,6 @@ const EDITORS = Object.freeze({
   // The web search engines (`type: "web-search"`) share one editor.
   'com.intrafind/brave-search': WebSearchEngineEditor,
   'com.intrafind/staan-search': WebSearchEngineEditor,
-  'com.intrafind/qwant-search': WebSearchEngineEditor,
   'com.intrafind/searxng-search': WebSearchEngineEditor
 });
 

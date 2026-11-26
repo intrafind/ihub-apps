@@ -17,7 +17,7 @@
  *     (`read_url`)
  *
  * What the platform's own web search returned is public — it is on the open
- * web. "Own" is the shipped Brave, Qwant and Staan engines, decided by the
+ * web. "Own" is the shipped Brave and Staan engines, decided by the
  * definition or script a tool runs. A third-party web search engine (an
  * integration of type `web-search`) and any other tool that declares itself a
  * web search (`activity: { kind: 'search', origin: 'web' }`: an MCP server, a
@@ -38,7 +38,7 @@ import { categoryOf } from '../../tools/toolCategory.js';
  * The platform's own web search scripts (`server/tools/`, shipped with the
  * server): the only tools whose hits are known to come from the open web.
  */
-const BUILT_IN_WEB_SEARCH_SCRIPTS = new Set(['braveSearch.js', 'qwantSearch.js', 'staanSearch.js']);
+const BUILT_IN_WEB_SEARCH_SCRIPTS = new Set(['braveSearch.js', 'staanSearch.js']);
 
 /** Tool ids `runTool` dispatches by id, before it looks at a script. */
 const DISPATCHED_BY_ID = /^(app__|workflow_)|^(activate_skill|read_skill_resource|find_skill)$/;

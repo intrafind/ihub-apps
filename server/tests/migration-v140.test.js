@@ -84,10 +84,11 @@ async function scratch(name) {
 // The search tools ship as the `search` actions of the built-in engine
 // connectors (V195, V204: one parameters file keyed by engine); the page
 // reader as the platform tool `server/defaults/tools/read_url.json`.
-// NEW_PARAMETERS still keys them by the migration-era tool ids.
+// NEW_PARAMETERS still keys them by the migration-era tool ids. Qwant is no
+// longer shipped (V264): the migration still handles a leftover qwantSearch
+// tool file, but there are no shipped defaults to compare it with.
 const CONNECTOR_ACTION = {
   braveSearch: 'brave',
-  qwantSearch: 'qwant',
   staanSearch: 'staan'
 };
 
@@ -220,6 +221,7 @@ describe('V140 — web tool filters and page reader offset', () => {
 
   it('writes the parameters exactly as the shipped defaults declare them', async () => {
     for (const [id, additions] of Object.entries(NEW_PARAMETERS)) {
+      if (id === 'qwantSearch') continue;
       const shipped = await readDefault(id);
       for (const [name, schema] of Object.entries(additions)) {
         assert.deepEqual(shipped.parameters.properties[name], schema, `${id}.${name}`);

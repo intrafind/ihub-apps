@@ -79,8 +79,8 @@ search traffic of iHub then goes to a gateway under your control instead of a se
 - The instance must list `json` under `search.formats` in its `settings.yml`. SearXNG answers
   HTTP 403 otherwise, and **Test connection** says so, together with the other usual causes (wrong
   path, the limiter, a rejected credential, engines that do not answer).
-- Apps use it with `websearch.provider: "searxng"`. On **Auto** it comes after Brave, Staan and
-  Qwant, so existing installs do not change.
+- Apps use it with `websearch.provider: "searxng"`. On **Auto** it comes after Brave and Staan, so
+  existing installs do not change.
 - SearXNG forwards each query to the engines enabled in it. Queries leave your network if those
   are external engines: the control is yours, the engines' view of the query is decided in the
   instance.

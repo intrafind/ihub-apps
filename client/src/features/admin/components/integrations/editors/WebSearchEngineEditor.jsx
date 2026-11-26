@@ -34,21 +34,17 @@ export const ENGINE_KEY_ENV = Object.freeze({
   'com.intrafind/staan-search': 'STAAN_API_KEY'
 });
 
-/** Shipped engines whose search is known to be blocked from many data-centre IP addresses. */
-const EGRESS_SENSITIVE = new Set(['com.intrafind/qwant-search']);
-
 /** The self-hosted gateway: its address is an install field, and it has no API key of its own. */
 const SEARXNG_DEFINITION = 'com.intrafind/searxng-search';
 
 /**
  * The dedicated editor of a web search engine (`type: "web-search"`): Brave
- * Search, Staan, Qwant and SearXNG, and any engine definition registered for it.
+ * Search, Staan and SearXNG, and any engine definition registered for it.
  *
  * - **API key** (engines with an `apiKeyRef` field): a credential of the
  *   credential store, with the environment variable the server falls back to
  *   when none is picked (`BRAVE_SEARCH_API_KEY`, `STAAN_API_KEY`).
- * - An engine without a key (Qwant) says so, with the hint that its egress IP
- *   decides whether it answers.
+ * - An engine without a key (a third-party engine) says so.
  * - SearXNG (a gateway the customer runs) shows its instance URL and the
  *   optional credential for a reverse proxy in front of it, and says what the
  *   instance must allow (JSON output).
@@ -101,7 +97,7 @@ function WebSearchEngineEditor({ instance, definition, onSaved, onCancel }) {
           title={t(`${K}.engineSection`, 'Search engine')}
           description={t(
             `${K}.engineSectionHelp`,
-            'Apps with web search on use this engine when they name it, or on Auto when it is the first engine a user may use (Brave, Staan, Qwant, SearXNG, then any other engine). Models with native search do not need an engine.'
+            'Apps with web search on use this engine when they name it, or on Auto when it is the first engine a user may use (Brave, Staan, SearXNG, then any other engine). Models with native search do not need an engine.'
           )}
         >
           {keyField ? (
@@ -145,14 +141,6 @@ function WebSearchEngineEditor({ instance, definition, onSaved, onCancel }) {
               {t(
                 `${K}.searxngHint`,
                 'SearXNG has no API key. The instance must list json under search.formats in its settings.yml, or it answers HTTP 403. SearXNG forwards each query to the search engines enabled in it; which ones is decided there, not in iHub. Run Test connection to check the URL and the JSON output.'
-              )}
-            </p>
-          )}
-          {EGRESS_SENSITIVE.has(instance.definition) && (
-            <p className={CALLOUT_CLASS.warning}>
-              {t(
-                `${K}.egressHint`,
-                'Qwant blocks many data-centre IP addresses. Run Test connection to see whether it answers this server.'
               )}
             </p>
           )}

@@ -6,7 +6,7 @@
  *
  * Every search provider needs to answer the same question — *which language and
  * region do I search in?* — and before this module each one answered it with
- * its own hard-coded constant: `en_US` in Qwant, `en-us` in Staan, and nothing
+ * its own hard-coded constant: `en-us` in Staan, and nothing
  * at all in Brave. On a German install that meant a user typing German
  * questions could still get US-market results, and there was no setting
  * anywhere that changed it.
@@ -21,7 +21,7 @@
  *  3. `"en"`, only if the platform config cannot be read at all.
  *
  * Providers then map that one language onto whatever their own API wants —
- * Qwant's `xx_XX` locale, Staan's `xx-xx` market, Brave's `search_lang` +
+ * Staan's `xx-xx` market, Brave's `search_lang` +
  * `country` — and fall back to their own default only when the API does not
  * serve the requested language at all.
  *

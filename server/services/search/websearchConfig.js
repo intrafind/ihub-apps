@@ -42,7 +42,7 @@ function installedIntegrations() {
 
 /**
  * The installed web search engines, enabled or not, in the order
- * `websearch.provider: "auto"` tries them (Brave, Staan, Qwant, SearXNG, then any
+ * `websearch.provider: "auto"` tries them (Brave, Staan, SearXNG, then any
  * other engine by id).
  *
  * @returns {Object[]} installations of type `web-search`
@@ -198,7 +198,7 @@ export function resolveSearxngSettings(values) {
 
 /**
  * Whether an engine has what it needs to answer: a keyed built-in engine
- * (Brave, Staan) needs a key; SearXNG needs the URL of its instance; Qwant and
+ * (Brave, Staan) needs a key; SearXNG needs the URL of its instance;
  * third-party engines need nothing iHub can check here (their own test says
  * more).
  *

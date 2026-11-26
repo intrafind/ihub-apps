@@ -10,7 +10,6 @@
  * | ----------------------------- | ---------------------------- | ------------ | ------------- |
  * | `braveSearch`                 | `com.intrafind/brave-search` | `brave`      | `braveSearch` |
  * | `staanSearch`                 | `com.intrafind/staan-search` | `staan`      | `staanSearch` |
- * | `qwantSearch`                 | `com.intrafind/qwant-search` | `qwant`      | `qwantSearch` |
  * | `searxngSearch`               | `com.intrafind/searxng-search` | `searxng`  | `searxngSearch` |
  *
  * The search runs the shipped scripts (`server/tools/braveSearch.js`, …);
@@ -26,7 +25,6 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import braveSearch from '../../../../../../tools/braveSearch.js';
 import staanSearch from '../../../../../../tools/staanSearch.js';
-import qwantSearch from '../../../../../../tools/qwantSearch.js';
 import searxngSearch from '../../../../../../tools/searxngSearch.js';
 import webSearchService from '../../../../../WebSearchService.js';
 import {
@@ -49,7 +47,6 @@ const PARAMETERS = JSON.parse(
 const RUNNERS = Object.freeze({
   brave: braveSearch,
   staan: staanSearch,
-  qwant: qwantSearch,
   searxng: searxngSearch
 });
 
@@ -225,7 +222,7 @@ async function searchStep(engineId, apiKey, extra = {}) {
 /**
  * The native connector of one built-in engine.
  *
- * @param {'brave'|'staan'|'qwant'|'searxng'} engineId
+ * @param {'brave'|'staan'|'searxng'} engineId
  * @returns {Object} the connector (`id`, `actions.search`, `test`)
  */
 export function createEngineConnector(engineId) {
@@ -268,5 +265,4 @@ export function createEngineConnector(engineId) {
 
 export const braveSearchConnector = createEngineConnector('brave');
 export const staanSearchConnector = createEngineConnector('staan');
-export const qwantSearchConnector = createEngineConnector('qwant');
 export const searxngSearchConnector = createEngineConnector('searxng');

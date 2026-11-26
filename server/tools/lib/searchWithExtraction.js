@@ -9,7 +9,7 @@ import logger from '../../utils/logger.js';
 
 /**
  * Shared body of the script-backed web search tools (`braveSearch`,
- * `staanSearch`, `qwantSearch`): run a query through {@link webSearchService}
+ * `staanSearch`): run a query through {@link webSearchService}
  * and, when asked, fetch and trim the pages behind the top results.
  *
  * The tools differ only in which provider they name and how they log, so the

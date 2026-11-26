@@ -79,7 +79,6 @@ describe('release entries of migrated definitions (#3092)', () => {
       'com.intrafind/ldap-browser',
       'com.intrafind/brave-search',
       'com.intrafind/staan-search',
-      'com.intrafind/qwant-search',
       'com.intrafind/office365',
       'com.intrafind/google-drive',
       'com.intrafind/nextcloud'

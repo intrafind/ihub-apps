@@ -7,9 +7,9 @@
  * Extracted from `BraveSearchProvider` because two callers need it and they sit
  * on opposite sides of an import cycle: the provider, to authenticate a search,
  * and `toolLoader`, to decide whether `websearch.provider: "auto"` should offer
- * Brave or fall back to the keyless Qwant. Importing `WebSearchService` into
+ * Brave or fall back to another engine. Importing `WebSearchService` into
  * `toolLoader` for that one question closes the loop
- * `configCache → toolLoader → WebSearchService → qwantProvider →
+ * `configCache → toolLoader → WebSearchService →
  * requestThrottler → configCache`, and `WebSearchService` builds its singleton
  * at module scope, so whichever module is entered first hits a
  * temporal-dead-zone ReferenceError. This module holds functions only — no

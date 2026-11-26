@@ -155,18 +155,6 @@
       "dataFlow": "internal"
     }
   },
-  "com.intrafind/qwant-search": {
-    "search": {
-      "sideEffect": "read",
-      "dataFlow": "external"
-    }
-  },
-  "com.intrafind/searxng-search": {
-    "search": {
-      "sideEffect": "read",
-      "dataFlow": "external"
-    }
-  },
   "com.intrafind/staan-search": {
     "search": {
       "sideEffect": "read",
@@ -197,6 +185,12 @@
     "request_domain": {
       "sideEffect": "write",
       "dataFlow": "internal"
+    }
+  },
+  "com.intrafind/searxng-search": {
+    "search": {
+      "sideEffect": "read",
+      "dataFlow": "external"
     }
   }
 }

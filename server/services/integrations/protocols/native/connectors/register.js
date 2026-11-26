@@ -11,7 +11,6 @@ import ifinder from './ifinder/index.js';
 import iassistant from './iassistant.js';
 import {
   braveSearchConnector,
-  qwantSearchConnector,
   searxngSearchConnector,
   staanSearchConnector
 } from './websearch/index.js';
@@ -31,7 +30,6 @@ registerConnector(ifinder);
 registerConnector(iassistant);
 registerConnector(braveSearchConnector);
 registerConnector(staanSearchConnector);
-registerConnector(qwantSearchConnector);
 registerConnector(searxngSearchConnector);
 registerConnector(jira);
 registerConnector(entra);

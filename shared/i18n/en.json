@@ -3409,7 +3409,7 @@
         },
         "WebSearch": {
           "name": "Web Search",
-          "description": "Web search requests to Brave, Staan, Qwant, SearXNG and other search engines"
+          "description": "Web search requests to Brave, Staan, SearXNG and other search engines"
         },
         "McpClientManager": {
           "name": "MCP Clients",
@@ -3967,7 +3967,7 @@
         "websearchEnabled": "Enable Web Search",
         "websearchProvider": "Search engine",
         "websearchProviderAuto": "Auto",
-        "websearchProviderDesc": "Models with native search (Google, OpenAI, Anthropic) search themselves when Use Native Search is on; no engine is needed for that. On other models the app uses this engine. Auto takes the first engine the user may use: Brave, Staan, Qwant, SearXNG, then any other engine.",
+        "websearchProviderDesc": "Models with native search (Google, OpenAI, Anthropic) search themselves when Use Native Search is on; no engine is needed for that. On other models the app uses this engine. Auto takes the first engine the user may use: Brave, Staan, SearXNG, then any other engine.",
         "websearchEngineDisabledOption": "{{name}} — disabled",
         "websearchEngineMissingOption": "{{name}} — not installed",
         "websearchEngineMissing": "The engine \"{{engine}}\" is not installed. The app searches natively where the model can and not at all on other models. Install it under Integrations or pick Auto.",
@@ -5282,7 +5282,6 @@
         },
         "secretSet": "set",
         "secretNotSet": "not set",
-        "noKeyNeeded": "no key needed",
         "instanceUrl": "Instance",
         "authorization": "Authorization",
         "yes": "yes",
@@ -5346,12 +5345,11 @@
         },
         "webSearch": {
           "engineSection": "Search engine",
-          "engineSectionHelp": "Apps with web search on use this engine when they name it, or on Auto when it is the first engine a user may use (Brave, Staan, Qwant, SearXNG, then any other engine). Models with native search do not need an engine.",
+          "engineSectionHelp": "Apps with web search on use this engine when they name it, or on Auto when it is the first engine a user may use (Brave, Staan, SearXNG, then any other engine). Models with native search do not need an engine.",
           "apiKey": "API key",
           "apiKeyHelp": "A credential of type secret holding the {{engine}} API key. Add one under Admin → Integrations → Credentials.",
           "envFallback": "Without a credential, the server uses the environment variable {{env}} when it is set. A picked credential always wins.",
           "noKeyNeeded": "{{engine}} needs no API key.",
-          "egressHint": "Qwant blocks many data-centre IP addresses. Run Test connection to see whether it answers this server.",
           "searxngHint": "SearXNG has no API key. The instance must list json under search.formats in its settings.yml, or it answers HTTP 403. SearXNG forwards each query to the search engines enabled in it; which ones is decided there, not in iHub. Run Test connection to check the URL and the JSON output.",
           "testResults": "Search engine test",
           "testHelp": "The test checks the API key or the instance URL of the values above (unsaved) and runs one live search from this server."

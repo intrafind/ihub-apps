@@ -953,7 +953,7 @@ therefore shows what the live one showed, in the same components.
   256 KiB in all, past which the full text of long arguments goes first.
 - **Shared chats** carry it without anything a call found or read with the
   owner's permissions — the reason a share keeps only public sources. Only the public
-  web searches (Brave, Qwant, Staan, a model's own web search) keep their hits;
+  web searches (Brave, Staan, a model's own web search) keep their hits;
   every other call keeps its name, query and status (`shareableActivity`),
   pages read by the page reader included, as it can reach intranet hosts on the
   SSL whitelist.

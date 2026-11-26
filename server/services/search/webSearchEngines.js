@@ -13,7 +13,6 @@
  * | ------------ | ----------------------------- | ------------- | ---------------------- |
  * | `brave`      | `com.intrafind/brave-search`  | `braveSearch` | `BRAVE_SEARCH_API_KEY` |
  * | `staan`      | `com.intrafind/staan-search`  | `staanSearch` | `STAAN_API_KEY`        |
- * | `qwant`      | `com.intrafind/qwant-search`  | `qwantSearch` | —                      |
  * | `searxng`    | `com.intrafind/searxng-search`| `searxngSearch` | —                    |
  *
  * `searxng` is the only engine whose address is an install value
@@ -66,13 +65,6 @@ export const BUILT_IN_ENGINES = Object.freeze([
     definition: 'com.intrafind/staan-search',
     toolId: 'staanSearch',
     keyEnv: 'STAAN_API_KEY',
-    publicHits: true
-  }),
-  Object.freeze({
-    id: 'qwant',
-    definition: 'com.intrafind/qwant-search',
-    toolId: 'qwantSearch',
-    keyEnv: null,
     publicHits: true
   }),
   Object.freeze({
@@ -148,7 +140,7 @@ export function isWebSearchEngineTool(tool) {
 
 /**
  * Whether a loaded tool is the search action of a shipped engine whose hits
- * are known to come from the open web (Brave, Staan, Qwant; not SearXNG, whose
+ * are known to come from the open web (Brave, Staan; not SearXNG, whose
  * instance may search an intranet).
  * @param {{ _integration?: { action?: string, definition?: string } }|null|undefined} tool
  * @returns {boolean}
@@ -164,14 +156,14 @@ export function isBuiltInWebSearchEngineTool(tool) {
 
 /**
  * Engines in the order `auto` tries them: the built-ins (`brave`, `staan`,
- * `qwant`, `searxng`), then every other engine by installation id. Returns a new array.
+ * `searxng`), then every other engine by installation id. Returns a new array.
  *
  * @template {{ id: string }} T
  * @param {T[]} engines
  * @returns {T[]}
  * @example
- * sortWebSearchEngines([{ id: 'zeta' }, { id: 'qwant' }, { id: 'acme' }, { id: 'brave' }])
- *   .map(e => e.id); // → ['brave', 'qwant', 'acme', 'zeta']
+ * sortWebSearchEngines([{ id: 'zeta' }, { id: 'staan' }, { id: 'acme' }, { id: 'brave' }])
+ *   .map(e => e.id); // → ['brave', 'staan', 'acme', 'zeta']
  */
 export function sortWebSearchEngines(engines) {
   const rank = id => {

@@ -9,7 +9,6 @@ import logger from '../utils/logger.js';
 import { getBraveApiKey } from './search/braveApiKey.js';
 import { SearchProvider } from './search/SearchProvider.js';
 import { resolveSearchLanguage } from './search/searchLanguage.js';
-import { QwantSearchProvider } from './search/qwantProvider.js';
 import { StaanSearchProvider } from './search/staanProvider.js';
 import { SearxngSearchProvider } from './search/searxngProvider.js';
 
@@ -454,12 +453,10 @@ class WebSearchService {
     this.defaultProvider = null;
 
     // Register built-in providers. Brave is registered first and so stays the
-    // default; Staan is the other keyed engine, and Qwant the keyless
-    // alternative an install can use with no account or API key at all, and
-    // SearXNG the customer's own gateway (its URL is an install value).
+    // default; Staan is the other keyed engine, and SearXNG the customer's own
+    // gateway (its URL is an install value).
     this.registerProvider(new BraveSearchProvider());
     this.registerProvider(new StaanSearchProvider());
-    this.registerProvider(new QwantSearchProvider());
     this.registerProvider(new SearxngSearchProvider());
   }
 
@@ -578,7 +575,6 @@ export default webSearchService;
 export {
   SearchProvider,
   BraveSearchProvider,
-  QwantSearchProvider,
   StaanSearchProvider,
   SearxngSearchProvider,
   WebSearchService

@@ -10,7 +10,7 @@
  *
  * ```js
  * before(setUpWebSearch);
- * beforeEach(() => useWebSearch({ installed: [engine('qwant')] }));
+ * beforeEach(() => useWebSearch({ installed: [engine('staan')] }));
  * ```
  */
 import configCache from '../../configCache.js';
@@ -29,7 +29,6 @@ import {
 export const ENGINE_DEFINITIONS = Object.freeze({
   brave: 'com.intrafind/brave-search',
   staan: 'com.intrafind/staan-search',
-  qwant: 'com.intrafind/qwant-search',
   searxng: 'com.intrafind/searxng-search'
 });
 
@@ -48,7 +47,7 @@ export const STAFF = Object.freeze({ id: 's', groups: ['staff'] });
 
 /**
  * An engine installation.
- * @param {string} id - `brave`, `staan`, `qwant` or a third-party id
+ * @param {string} id - `brave`, `staan` or a third-party id
  * @param {Object} [extra] - fields to override (`enabled`, `values`, `actions`)
  */
 export function engine(id, extra = {}) {
