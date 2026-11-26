@@ -19,6 +19,11 @@ import { buildChatResume } from '../services/chat/chatResume.js';
 import runLog, { newRunId } from '../services/loop/RunLog.js';
 import { RunStreamEmitter, projectLedgerEvent } from '../services/loop/RunStream.js';
 import {
+  createElicitationHandler,
+  openQuestionFrames,
+  runWithElicitationScope
+} from '../services/mcp/mcpElicitation.js';
+import {
   MAX_PARTIAL_TEXT_BYTES,
   MAX_PARTIAL_TOTAL_BYTES,
   dropRun,
@@ -157,6 +162,81 @@ describe('resume with a ledger', () => {
     // The snapshot's text of step 0 was dropped: the ledger completed it.
     const step0Text = frames.filter(f => f.type === 'step/delta' && f.data.step === 0);
     expect(step0Text).toHaveLength(0);
+  });
+});
+
+describe('a question an MCP server is waiting on', () => {
+  /** An InteractionService stand-in whose answer the test gives. */
+  function interactions() {
+    let settle;
+    return {
+      raise: async params => ({
+        ...params,
+        step: 0,
+        status: 'pending',
+        createdAt: new Date().toISOString()
+      }),
+      waitForAnswer: () => new Promise(resolve => (settle = resolve)),
+      cancel: async () => {},
+      answer: answer => settle({ status: 'answered', answer })
+    };
+  }
+
+  test('comes back to a client that re-attaches mid-question (a reload), and goes once answered', async () => {
+    const chatId = 'chat-resume-question';
+    const turn = await startTurn(chatId);
+    const service = interactions();
+    const handler = createElicitationHandler({
+      serverId: 'billing',
+      serverName: 'Billing',
+      interactionService: service,
+      getStreamRun: () => ({ runId: turn.runId })
+    });
+    // The question is asked while no client is attached: its live frames are lost.
+    const asked = runWithElicitationScope({ chatId, user: { id: 'user-1' } }, () =>
+      handler({
+        params: {
+          message: 'Name the project',
+          requestedSchema: { type: 'object', properties: { name: { type: 'string' } } }
+        }
+      })
+    );
+    let questionRunId;
+    for (let i = 0; i < 100 && !questionRunId; i++) {
+      await new Promise(resolve => setTimeout(resolve, 10));
+      questionRunId = openQuestionFrames(chatId, turn.runId)[0]?.runId;
+    }
+    expect(questionRunId).toBeDefined();
+    // Only under the chat run it belongs to.
+    expect(openQuestionFrames(chatId, 'chat-other-run')).toEqual([]);
+
+    const replay = await replayLedger(turn.runId);
+    const stream = await reattach(chatId, turn.runId, replay.afterLedgerSeq);
+    const card = runOf([...replay.frames, ...stream.frames()], questionRunId);
+    expect(card.parentRunId).toBe(turn.runId);
+    expect(card.status).toBe('paused');
+    expect(card.interactions[card.pendingInteractionId].prompt.message).toBe('Name the project');
+
+    service.answer({ value: 'accept', data: { name: 'Billing' } });
+    expect(await asked).toEqual({ action: 'accept', content: { name: 'Billing' } });
+    stream.close();
+    expect(runOf([...replay.frames, ...stream.frames()], questionRunId).status).toBe('completed');
+    expect(openQuestionFrames(chatId, turn.runId)).toEqual([]);
+
+    // On the ledger the question is a run of its own under the chat run.
+    await runLog.flush();
+    const events = await runLog.readEvents(questionRunId);
+    expect(events.map(e => e.type)).toEqual([
+      RUN_LOG_EVENTS.RUN_START,
+      RUN_LOG_EVENTS.RUN_PAUSED,
+      RUN_LOG_EVENTS.RUN_RESUMED,
+      RUN_LOG_EVENTS.RUN_END
+    ]);
+    expect(events[0].data.parentRunId).toBe(turn.runId);
+    expect(events.at(-1).data).toMatchObject({
+      status: 'completed',
+      finishReason: 'elicitation_accept'
+    });
   });
 });
 

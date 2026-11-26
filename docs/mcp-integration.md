@@ -109,6 +109,9 @@ asked for; the turn keeps running and the tool call waits.
   A question nobody answers within 10 minutes is cancelled, and so is a
   question left open when the user stops the turn.
 - Only the user whose chat it is may answer.
+- A reload, or a second tab on the same chat, shows a question that is still
+  open again. Each question is a run of its own on the run ledger, under the
+  chat run, with its outcome.
 - Where nobody can answer — a workflow, a scheduled run, the inference API, the
   MCP gateway, an MCP App view's own call, an anonymous user — iHub answers
   `cancel` at once, and the server goes on as it does when a person dismisses

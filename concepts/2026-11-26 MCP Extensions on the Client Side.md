@@ -37,12 +37,11 @@ notice, so a server that got `accept` at once would only ask again. A 2025
 server's `notifications/elicitation/complete` ends the question early, and a
 `-32042` refusal is answered by asking for each page and calling again.
 
-Still open: the question's child run is announced on the live chat stream
-only, not written to the run ledger, so a page reload during a question does
-not bring the card back (the question is cancelled after 10 minutes, or when
-the turn is stopped). Questions are offered over Streamable HTTP only; on
-`stdio` and legacy SSE a question arrives outside the call and could not be
-put to the right chat.
+A question's child run is a run of its own on the ledger, and a client that
+re-attaches mid-question (a reload) gets its card back with the resume of the
+turn (`openQuestionFrames` in `chatResume.js`). Questions are offered over
+Streamable HTTP only; on `stdio` and legacy SSE a question arrives outside the
+call and could not be put to the right chat.
 
 The original plan follows.
 

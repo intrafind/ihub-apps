@@ -13,7 +13,10 @@
  * 2. the run's partial state — the text of unfinished steps and the run's
  *    thinking (`services/loop/partialRunState.js`) — as `step/delta` frames,
  *    taken together with the run frame counter they cover (`upTo`), without
- *    the text of a step the ledger above already completed.
+ *    the text of a step the ledger above already completed;
+ * 3. the questions an MCP server is waiting on in the middle of one of the
+ *    run's tool calls (`services/mcp/mcpElicitation.js`), as the frames of
+ *    their child runs, so their cards come back.
  *
  * Ledger first: a step that completed after the client's replay must be
  * completed before the text of the next step is appended, or the reducer
@@ -37,6 +40,7 @@ import runLog from '../loop/RunLog.js';
 import { currentRseq, flushStream, projectLedgerEvent } from '../loop/RunStream.js';
 import { clientEnvelope } from '../loop/clientProjection.js';
 import { snapshotRun, trackedStream } from '../loop/partialRunState.js';
+import { openQuestionFrames } from '../mcp/mcpElicitation.js';
 import { SSE_V2_EVENTS } from '../../../shared/runEvents.js';
 import logger from '../../utils/logger.js';
 
@@ -87,7 +91,10 @@ export async function buildChatResume({ chatId, runId, afterLedgerSeq = 0 }) {
     ledger.filter(f => f.type === SSE_V2_EVENTS.STEP_COMPLETED).map(f => f.data?.step ?? 0)
   );
   const partial = frames.filter(f => !(f.data.kind === 'text' && completed.has(f.data.step)));
-  return { frames: [...ledger, ...partial], upTo, truncated };
+  // Questions an MCP server is waiting on mid-call run as child runs the
+  // ledger replay above does not cover: the client gets their cards again.
+  const questions = openQuestionFrames(chatId, runId).map(clientEnvelope);
+  return { frames: [...ledger, ...partial, ...questions], upTo, truncated };
 }
 
 /**

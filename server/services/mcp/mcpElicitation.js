@@ -43,8 +43,12 @@ import { AsyncLocalStorage } from 'node:async_hooks';
 import { randomUUID } from 'node:crypto';
 import defaultInteractionService from '../loop/InteractionService.js';
 import defaultRunLog, { newRunId } from '../loop/RunLog.js';
-import { RunStreamEmitter, getStreamRun as defaultGetStreamRun } from '../loop/RunStream.js';
-import { SSE_V2_EVENTS } from '../../../shared/runEvents.js';
+import {
+  RunStreamEmitter,
+  buildEnvelope,
+  getStreamRun as defaultGetStreamRun
+} from '../loop/RunStream.js';
+import { RUN_LOG_EVENTS, SSE_V2_EVENTS } from '../../../shared/runEvents.js';
 import { isAnonymousUser, resolvePrincipal } from '../loop/runIdentity.js';
 import logger from '../../utils/logger.js';
 
@@ -60,6 +64,57 @@ const MAX_URL_LENGTH = 2048;
 const STRING_FORMATS = new Set(['email', 'uri', 'date', 'date-time']);
 
 const scope = new AsyncLocalStorage();
+
+/**
+ * The questions waiting for an answer in this process, by chat and by the
+ * question's run: what a client that re-attaches to the turn (a reload) needs
+ * to show them again. A question is registered before its first frame is
+ * emitted and dropped after its last, so a resume snapshot and the live frames
+ * after it cannot both miss it (`services/chat/chatResume.js`).
+ *
+ * @type {Map<string, Map<string, {parentRunId: string, interaction: Object}>>}
+ */
+const openQuestions = new Map();
+
+function openQuestion(chatId, runId, entry) {
+  if (!openQuestions.has(chatId)) openQuestions.set(chatId, new Map());
+  openQuestions.get(chatId).set(runId, entry);
+}
+
+function closeQuestion(chatId, runId) {
+  const open = openQuestions.get(chatId);
+  if (!open) return;
+  open.delete(runId);
+  if (open.size === 0) openQuestions.delete(chatId);
+}
+
+/** The frames that announce a question's child run, as the live stream sent them. */
+function questionFrames({ chatId, runId, parentRunId, interaction }) {
+  const frame = (type, data) => buildEnvelope({ streamId: chatId, runId, type, data });
+  return [
+    frame(SSE_V2_EVENTS.RUN_STARTED, { kind: 'chat', parentRunId, refs: { chatId } }),
+    frame(SSE_V2_EVENTS.INTERACTION_RAISED, { interaction }),
+    frame(SSE_V2_EVENTS.RUN_PAUSED, { reason: 'interaction', interactionId: interaction.id })
+  ];
+}
+
+/**
+ * The questions still open under a chat run, as the frames that show them:
+ * the resume of a turn adds them after its snapshot, so a client that comes
+ * back mid-question (a reload) gets the card again. Only this process knows
+ * them, and it is the one running the call — the one a resume asks.
+ *
+ * @param {string} chatId
+ * @param {string} parentRunId - The chat run being resumed
+ * @returns {Object[]} SSE v2 envelopes
+ */
+export function openQuestionFrames(chatId, parentRunId) {
+  const open = openQuestions.get(chatId);
+  if (!open) return [];
+  return [...open]
+    .filter(([, entry]) => entry.parentRunId === parentRunId)
+    .flatMap(([runId, entry]) => questionFrames({ chatId, runId, ...entry }));
+}
 
 /**
  * Run a tool call with what its server's questions need to reach the person.
@@ -397,8 +452,7 @@ export function createElicitationHandler({
       : resolvePrincipal(call.user);
   }
 
-  async function raise({ call, parent, question, id, runId }) {
-    const principal = await principalOf(call, parent);
+  async function raise({ call, question, id, runId, principal }) {
     const toolId = call.toolId ? { toolId: String(call.toolId).slice(0, 400) } : {};
     return interactionService.raise({
       id,
@@ -428,6 +482,20 @@ export function createElicitationHandler({
         ...(principal?.mode ? { identityMode: principal.mode } : {})
       }
     });
+  }
+
+  /** A write to the question's ledger run: best effort, never in the question's way. */
+  async function ledger(step, write) {
+    try {
+      await write();
+    } catch (error) {
+      logger.warn('MCP question not recorded on the run ledger', {
+        component: COMPONENT,
+        serverId,
+        step,
+        error: error.message
+      });
+    }
   }
 
   /** The person's answer (or its absence) as the MCP result. */
@@ -472,20 +540,42 @@ export function createElicitationHandler({
     const completion = elicitationId
       ? new Promise(resolve => completions.set(elicitationId, resolve))
       : null;
+    const { chatId } = call;
+    let endedOnLedger = false;
     try {
-      const interaction = await raise({ call, parent, question, id, runId });
-      const stream = new RunStreamEmitter({ streamId: call.chatId, runId });
-      stream.emit(SSE_V2_EVENTS.RUN_STARTED, {
-        kind: 'chat',
+      const principal = await principalOf(call, parent);
+      // The question's run is a run of its own on the ledger, under the chat
+      // run, so the interaction raised on it lands in a started run.
+      await ledger('start', () =>
+        runLog.startRun?.({
+          runId,
+          kind: 'chat',
+          principal,
+          parentRunId: parent.runId,
+          refs: { chatId }
+        })
+      );
+      const interaction = await raise({ call, question, id, runId, principal });
+      openQuestion(chatId, runId, { parentRunId: parent.runId, interaction });
+      const stream = new RunStreamEmitter({ streamId: chatId, runId });
+      for (const frame of questionFrames({
+        chatId,
+        runId,
         parentRunId: parent.runId,
-        refs: { chatId: call.chatId }
-      });
-      stream.emit(SSE_V2_EVENTS.INTERACTION_RAISED, { interaction });
-      stream.emit(SSE_V2_EVENTS.RUN_PAUSED, { reason: 'interaction', interactionId: id });
+        interaction
+      })) {
+        stream.emit(frame.type, frame.data);
+      }
+      await ledger('pause', () =>
+        runLog.append?.(runId, RUN_LOG_EVENTS.RUN_PAUSED, {
+          reason: 'interaction',
+          interactionId: id
+        })
+      );
       logger.info('MCP server asked the chat user a question', {
         component: COMPONENT,
         serverId,
-        chatId: call.chatId,
+        chatId,
         interactionId: id,
         mode: question.mode,
         ...(question.url ? { host: new URL(question.url).host } : {})
@@ -498,21 +588,38 @@ export function createElicitationHandler({
       } finally {
         call.onWaitEnd?.();
       }
-      if (result.action !== 'cancel') stream.emit(SSE_V2_EVENTS.RUN_RESUMED, { interactionId: id });
-      stream.emit(SSE_V2_EVENTS.RUN_ENDED, {
+      const ended = {
         status: result.action === 'cancel' ? 'aborted' : 'completed',
         finishReason: `elicitation_${result.action}`
-      });
+      };
+      if (result.action !== 'cancel') {
+        stream.emit(SSE_V2_EVENTS.RUN_RESUMED, { interactionId: id });
+        await ledger('resume', () =>
+          runLog.append?.(runId, RUN_LOG_EVENTS.RUN_RESUMED, { interactionId: id })
+        );
+      }
+      stream.emit(SSE_V2_EVENTS.RUN_ENDED, ended);
+      closeQuestion(chatId, runId);
+      endedOnLedger = true;
+      await ledger('end', () => runLog.endRun?.(runId, ended));
       logger.info('MCP server question answered', {
         component: COMPONENT,
         serverId,
-        chatId: call.chatId,
+        chatId,
         interactionId: id,
         action: result.action
       });
       return result;
     } finally {
+      closeQuestion(chatId, runId);
       if (elicitationId) completions.delete(elicitationId);
+      if (!endedOnLedger) {
+        // The question failed before it could be put (a raise that threw):
+        // its ledger run, if it started, does not stay open.
+        await ledger('end', () =>
+          runLog.endRun?.(runId, { status: 'error', finishReason: 'elicitation_error' })
+        );
+      }
     }
   }
 

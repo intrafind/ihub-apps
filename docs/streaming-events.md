@@ -440,7 +440,10 @@ The worker producing the run answers, before the stream goes live, with:
    every step so far and the text of each step that has not completed, minus
    the text of a step the ledger above completed (at most 256 KB of unfinished
    text and 512 KB of thinking per run; past either a `…` marks where it was
-   cut and the transcript re-read at the end fills it in).
+   cut and the transcript re-read at the end fills it in);
+3. each question an MCP server is waiting on in the middle of one of the run's
+   tool calls, as the frames of its child run (`run/started` with the run as
+   `parentRunId`, `interaction/raised`, `run/paused`), so its card comes back.
 
 The ledger comes first so that a step that completed after the client's replay
 is completed before the next step's text is appended.
