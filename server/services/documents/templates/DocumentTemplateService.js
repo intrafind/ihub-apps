@@ -404,18 +404,20 @@ async function fileInfo(template, name, kind, read) {
  * @returns {Promise<ReturnType<typeof resolveBrand>>}
  */
 export async function resolveTemplateBrand(template) {
-  const themes = [];
-  for (const [source, format, name] of [
-    ['powerpoint', 'pptx', template.pptx?.template],
-    ['word', 'docx', template.docx?.template]
-  ]) {
-    if (!name) continue;
-    const brand = await fileInfo(template, name, `theme:${format}`, buffer =>
-      readThemeBrand(buffer, format)
-    );
-    if (brand) themes.push({ source, brand });
-  }
-  return resolveBrand({ brand: template.brand, themes });
+  const found = await Promise.all(
+    [
+      ['powerpoint', 'pptx', template.pptx?.template],
+      ['word', 'docx', template.docx?.template]
+    ]
+      .filter(([, , name]) => name)
+      .map(async ([source, format, name]) => {
+        const brand = await fileInfo(template, name, `theme:${format}`, buffer =>
+          readThemeBrand(buffer, format)
+        );
+        return brand ? { source, brand } : null;
+      })
+  );
+  return resolveBrand({ brand: template.brand, themes: found.filter(Boolean) });
 }
 
 /**
