@@ -61,6 +61,7 @@ Start here when you see a problem but do not yet know the cause. Each entry list
 
 - The app's `upload` section sets the type and `maxFileSizeMB`; see [File upload size limits](file-upload-feature.md#size-limits).
 - The server also applies `platform.uploads` quotas (per file, chat, user and server; the code default for one file, `quotas.maxFileBytes`, is 25 MB) and `requestBodyLimitMB` (50 MB by default). A file refused with `413` (`UPLOAD_TOO_LARGE`, `PAYLOAD_TOO_LARGE`) usually hit one of these. See [Chat files](chat-files.md#platform-settings-platformuploads).
+- A `413` with an HTML page instead of a JSON body, and no entry in the iHub log, comes from a reverse proxy in front of iHub. Images are the first to fail because nginx allows only 1 MB by default. Raise `client_max_body_size` (nginx), `proxy-body-size` (ingress-nginx; other ingress controllers have their own setting) or the equivalent of your proxy; see [Request Body Size](production-reverse-proxy-guide.md#request-body-size).
 
 ### Unexpectedly signed out
 
