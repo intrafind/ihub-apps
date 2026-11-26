@@ -37,6 +37,13 @@ notice, so a server that got `accept` at once would only ask again. A 2025
 server's `notifications/elicitation/complete` ends the question early, and a
 `-32042` refusal is answered by asking for each page and calling again.
 
+Still open: the question's child run is announced on the live chat stream
+only, not written to the run ledger, so a page reload during a question does
+not bring the card back (the question is cancelled after 10 minutes, or when
+the turn is stopped). Questions are offered over Streamable HTTP only; on
+`stdio` and legacy SSE a question arrives outside the call and could not be
+put to the right chat.
+
 The original plan follows.
 
 **What it gives:** a server can ask the chat user mid-call: confirm a paid action (Supabase), type

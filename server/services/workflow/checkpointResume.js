@@ -52,11 +52,13 @@ export class CheckpointResumeError extends InteractionError {
  * True for interactions that pause a workflow execution on a checkpoint: a
  * `human` node's approval / review / input (`origin: node`) or an `ask_user`
  * question raised inside a prompt / agent node (`origin: tool`). Both carry
- * `source.checkpointId` and `source.executionId`.
+ * `source.checkpointId` and `source.executionId`. A question an MCP server
+ * asks mid-call (`source.mcpElicitation`) never is: no execution waits on it.
  */
 export function isCheckpointInteraction(interaction) {
   return (
     !!interaction &&
+    !interaction.source?.mcpElicitation &&
     typeof interaction.source?.checkpointId === 'string' &&
     interaction.source.checkpointId.length > 0 &&
     typeof interaction.source?.executionId === 'string' &&

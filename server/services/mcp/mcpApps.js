@@ -74,13 +74,21 @@ export function buildClientCapabilities(appsEnabled, { elicitation = false } = {
 
 /**
  * Whether a server may ask the chat user questions mid-call (MCP
- * elicitation). On unless the server config switches it off.
+ * elicitation): on unless the server config switches it off, and only over
+ * Streamable HTTP. There a question arrives on the call's own response stream,
+ * inside the call's scope, which is how it finds its chat; over `stdio` and
+ * the legacy `sse` transport every question arrives on the connection's one
+ * stream, outside any call, so iHub could only answer `cancel`. Such a server
+ * is not offered elicitation and takes its own path without it.
  *
  * @param {Object} serverConfig
  * @returns {boolean}
  */
 export function elicitationEnabledFor(serverConfig) {
-  return serverConfig?.elicitation?.enabled !== false;
+  return (
+    serverConfig?.elicitation?.enabled !== false &&
+    serverConfig?.transport?.type === 'streamableHttp'
+  );
 }
 
 /**

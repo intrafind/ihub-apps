@@ -144,7 +144,14 @@ full address. iHub does not open, fetch or preview the page.
   A server that sends any other address gets `decline` without the person
   being asked.
 
-Elicitation is on for every MCP server unless switched off. On the
+Questions work with servers connected over Streamable HTTP. There a
+question arrives on the call's own response stream, which is how iHub knows
+whose chat it belongs to. Over `stdio` and the legacy SSE transport every
+question arrives on the connection's one stream, outside any call, so iHub
+does not offer elicitation to those servers; they go on as they would
+without it.
+
+Elicitation is on for every Streamable HTTP server unless switched off. On the
 installation (**Admin → Integrations → the server**, section **Actions**), the
 switch **Let the server ask chat users questions during a call** turns it off
 for that server, forms and pages alike: iHub then does not offer elicitation, and a well-behaved

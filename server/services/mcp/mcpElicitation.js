@@ -412,11 +412,10 @@ export function createElicitationHandler({
         fallback: 'deny'
       },
       source: {
+        // Answered by its id on the runs endpoint (`source.mcpElicitation`
+        // keeps it out of the `ask_user` and workflow-checkpoint paths).
+        // No `checkpointId` / `executionId`: no workflow execution waits on it.
         chatId: call.chatId,
-        // A checkpoint of its own child run: answered by its id on the runs
-        // endpoint, not by the next chat message as an `ask_user` question.
-        checkpointId: id,
-        executionId: runId,
         ...toolId,
         mcpElicitation: {
           serverId: String(serverId).slice(0, 200),

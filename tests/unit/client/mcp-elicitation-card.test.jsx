@@ -17,7 +17,9 @@ import {
 } from '../../../client/src/shared/run/interactionToCheckpoint';
 import McpElicitationCard, {
   formAnswer,
-  pageOf
+  initialValues,
+  pageOf,
+  toLocalDateTimeInput
 } from '../../../client/src/features/chat/components/McpElicitationCard';
 import { answerInteraction } from '../../../client/src/api';
 
@@ -84,8 +86,6 @@ const INTERACTION = {
   policy: {},
   source: {
     chatId: 'chat-1',
-    checkpointId: 'elicit-1',
-    executionId: 'chat-child',
     mcpElicitation: { serverId: 'supabase', serverName: 'Supabase' }
   }
 };
@@ -157,6 +157,23 @@ describe('formAnswer', () => {
   });
 });
 
+describe('date-time fields', () => {
+  const SCHEMA = {
+    type: 'object',
+    properties: { at: { type: 'string', format: 'date-time', default: '2026-11-26T09:30:00Z' } }
+  };
+
+  it('answer RFC 3339, not the offset-less value of the browser field', () => {
+    const local = toLocalDateTimeInput('2026-11-26T09:30:00Z');
+    expect(local).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/);
+    // The field shows the default in local time, and the answer is that
+    // instant again, with its offset made explicit.
+    expect(initialValues(SCHEMA).at).toBe(local);
+    expect(formAnswer(SCHEMA, { at: local }).data.at).toBe('2026-11-26T09:30:00.000Z');
+    expect(formAnswer(SCHEMA, { at: 'soon' }).invalid).toEqual(['at']);
+  });
+});
+
 describe('the question card', () => {
   beforeEach(() => answerInteraction.mockClear());
 
@@ -220,7 +237,6 @@ describe('a page to open (URL mode)', () => {
     },
     source: {
       ...INTERACTION.source,
-      checkpointId: 'elicit-2',
       mcpElicitation: {
         serverId: 'billing',
         serverName: 'Billing',

@@ -5643,7 +5643,7 @@
         "alwaysInstalledHelp": "Diese Integration ist immer installiert und aktiv; schalten Sie stattdessen unten einzelne Aktionen ab.",
         "onePerLine": "Ein Eintrag pro Zeile",
         "elicitation": "Dem Server erlauben, Chat-Nutzern während eines Aufrufs Fragen zu stellen",
-        "elicitationHelp": "Der Server kann während eines Tool-Aufrufs um eine Bestätigung oder einen fehlenden Wert bitten; der Chat zeigt dafür ein Formular. Aus: Dem Server wird das nicht angeboten, und er arbeitet ohne Rückfrage weiter."
+        "elicitationHelp": "Der Server kann während eines Tool-Aufrufs um eine Bestätigung oder einen fehlenden Wert bitten oder den Benutzer auf eine eigene Seite schicken; der Chat zeigt das an. Nur für Server, die über Streamable HTTP verbunden sind. Aus: Dem Server wird das nicht angeboten, und er arbeitet ohne Rückfrage weiter."
       },
       "connections": {
         "title": "Verbundene Benutzer",

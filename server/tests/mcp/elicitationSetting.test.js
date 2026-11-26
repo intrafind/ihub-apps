@@ -7,7 +7,7 @@ import { rawServerConfigFor } from '../../services/integrations/protocols/mcp/se
 import { mcpServerConfigSchema } from '../../validators/mcpServerConfigSchema.js';
 import { validateInstalledIntegration } from '../../validators/integrationsConfigSchema.js';
 import { InstalledIntegrationService } from '../../services/integrations/InstalledIntegrationService.js';
-import { buildClientCapabilities } from '../../services/mcp/mcpApps.js';
+import { buildClientCapabilities, elicitationEnabledFor } from '../../services/mcp/mcpApps.js';
 
 /**
  * Whether an MCP server may ask the chat user questions mid-call (MCP
@@ -92,4 +92,12 @@ test('a save that does not name the switch keeps it; null returns to the default
   assert.deepEqual(changed.instance.elicitation, { enabled: true });
   const cleared = await service._prepare({ ...base, elicitation: null }, { existing });
   assert.equal(cleared.instance.elicitation, undefined);
+});
+
+test('questions are offered over Streamable HTTP only, where a question finds its call', () => {
+  const config = (type, enabled = true) => ({ transport: { type }, elicitation: { enabled } });
+  assert.equal(elicitationEnabledFor(config('streamableHttp')), true);
+  assert.equal(elicitationEnabledFor(config('streamableHttp', false)), false);
+  assert.equal(elicitationEnabledFor(config('stdio')), false);
+  assert.equal(elicitationEnabledFor(config('sse')), false);
 });

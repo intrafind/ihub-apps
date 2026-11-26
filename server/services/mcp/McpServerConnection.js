@@ -662,11 +662,16 @@ export class McpServerConnection {
     const sdkTimeout = elicitationEnabledFor(this.config)
       ? timeoutMs + MAX_ELICITATION_ROUNDS * ELICITATION_ANSWER_TIMEOUT_MS
       : timeoutMs;
+    // A question still open when the call ends — whatever ended it, the SDK's
+    // own timeout included — is cancelled with it.
+    const questions = new AbortController();
+    const endQuestions = () => questions.abort();
+    controller.signal.addEventListener('abort', endQuestions, { once: true });
     const callScope = {
       chatId: context.chatId,
       user: context.user,
       toolId: context.toolId,
-      signal: controller.signal,
+      signal: questions.signal,
       onWaitStart: pause,
       onWaitEnd: resume
     };
@@ -681,6 +686,8 @@ export class McpServerConnection {
         )
       );
     } finally {
+      endQuestions();
+      controller.signal.removeEventListener('abort', endQuestions);
       this._callsInFlight.delete(callScope);
       clearTimeout(timer);
       context.signal?.removeEventListener?.('abort', onTurnAbort);

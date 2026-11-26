@@ -16,11 +16,27 @@ const STRING_INPUT_TYPES = {
   'date-time': 'datetime-local'
 };
 
+const pad = number => String(number).padStart(2, '0');
+
+/**
+ * An RFC 3339 date-time as the value of a `datetime-local` input (local time,
+ * to the minute), or '' when it is not one.
+ */
+export function toLocalDateTimeInput(value) {
+  const date = new Date(value);
+  if (typeof value !== 'string' || Number.isNaN(date.getTime())) return '';
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(
+    date.getHours()
+  )}:${pad(date.getMinutes())}`;
+}
+
 /** The starting values of the form: the defaults the server sent. */
 export function initialValues(schema) {
   const values = {};
   for (const [name, field] of Object.entries(schema?.properties || {})) {
-    if (field.default !== undefined) values[name] = field.default;
+    if (field.default !== undefined && field.format === 'date-time') {
+      values[name] = toLocalDateTimeInput(field.default);
+    } else if (field.default !== undefined) values[name] = field.default;
     else if (field.type === 'boolean') values[name] = false;
     else if (field.type === 'array') values[name] = [];
   }
@@ -57,6 +73,12 @@ function typedValue(field, value) {
   }
   if (field.type === 'boolean') return value === true;
   if (field.type === 'array') return value;
+  if (field.format === 'date-time') {
+    // A `datetime-local` value has no offset: send the person's local time
+    // as RFC 3339 (UTC), as the schema's `date-time` asks.
+    const date = new Date(value);
+    return Number.isNaN(date.getTime()) ? undefined : date.toISOString();
+  }
   const text = String(value);
   return outOfLength(text, field) ? undefined : text;
 }

@@ -212,7 +212,7 @@ the server, **Decline** tells it no, and the tool call goes on.
   you are finished there.
 - Where nobody can answer (workflows, scheduled runs, the inference API, the MCP gateway), the
   server is told the question was dismissed, as before.
-- On for every MCP server. Switch it off per server on the installation (**Admin → Integrations →
+- On for every MCP server connected over Streamable HTTP. Switch it off per server on the installation (**Admin → Integrations →
   the server → Actions**, **Let the server ask chat users questions during a call**).
 
 Details: [MCP Integration](../../mcp-integration.md#questions-from-the-server-elicitation).

@@ -5137,7 +5137,7 @@
         "alwaysInstalledHelp": "This integration is always installed and enabled; switch single actions off below instead.",
         "onePerLine": "One entry per line",
         "elicitation": "Let the server ask chat users questions during a call",
-        "elicitationHelp": "The server can ask for a confirmation or a missing value while one of its tools runs; the chat shows a form. Off: the server is not offered this, and goes on without asking."
+        "elicitationHelp": "The server can ask for a confirmation or a missing value, or send the user to a page of its own, while one of its tools runs; the chat shows it. Servers connected over Streamable HTTP only. Off: the server is not offered this, and goes on without asking."
       },
       "connections": {
         "title": "Connected users",

@@ -140,12 +140,13 @@ describe('the elicitation handler', () => {
     expect(raised.prompt.allowSkip).toBe(true);
     expect(raised.source).toMatchObject({
       chatId: 'chat-1',
-      checkpointId: raised.id,
-      executionId: raised.runId,
       principalId: 'alice',
       mcpElicitation: { serverId: 'supabase', serverName: 'Supabase' }
     });
     expect(raised.runId).not.toBe(parentRunId);
+    // Not a workflow checkpoint: nothing resumes an execution on its answer.
+    expect(raised.source.checkpointId).toBeUndefined();
+    expect(raised.source.executionId).toBeUndefined();
 
     // The chat sees a child run: started under the chat run, the question,
     // paused while it waits, then resumed and ended.
