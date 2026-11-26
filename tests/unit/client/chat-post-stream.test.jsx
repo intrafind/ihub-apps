@@ -756,6 +756,34 @@ describe('flag on: the POST streams the turn', () => {
       expect(lastAssistant(result).content).not.toContain('raw server detail');
     });
 
+    test('413 of a proxy in front of iHub names the size and whom to ask', async () => {
+      const { result } = render();
+      send(result);
+      // nginx answers with an HTML page, which no iHub error body comes of
+      await fail(mockStreams[0], new SseHttpError('Request Entity Too Large', 413, undefined));
+      const text = lastAssistant(result).content;
+      expect(text).toMatch(/refused before it reached iHub/);
+      expect(text).toMatch(/Remove or shrink an attachment/);
+      expect(text).toMatch(/reverse proxy/);
+      expect(text).not.toMatch(/status code 413/);
+    });
+
+    test('413 of iHub itself says the message is larger than iHub accepts', async () => {
+      const { result } = render();
+      send(result);
+      await fail(
+        mockStreams[0],
+        new SseHttpError('Payload Too Large', 413, {
+          code: 'PAYLOAD_TOO_LARGE',
+          detail: 'Payload Too Large'
+        })
+      );
+      const text = lastAssistant(result).content;
+      expect(text).toMatch(/larger than iHub accepts/);
+      expect(text).toMatch(/Remove or shrink an attachment/);
+      expect(text).not.toMatch(/reverse proxy/);
+    });
+
     test('a request that never reached the server does not say "Failed to fetch"', async () => {
       const { result } = render();
       send(result);
