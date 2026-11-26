@@ -106,7 +106,9 @@ they are needed, in this order:
 3. The theme of the Word template.
 4. The neutral built-in default.
 
-The PowerPoint theme comes first because its accent colours are ordered for charts. A theme only
+The PowerPoint theme comes first because its accent colours are ordered for charts, except for a
+Word document: there the Word template's own theme comes first, so the colours of the content match
+the styles of the template. A theme only
 provides primary, accent and palette colours when it has at least one colourful accent; a theme
 whose accents are all grey is skipped for them, so the Word theme is tried next, and the neutral
 default is used only when neither has one. The text colour (`dk1`) is always available from a
@@ -140,6 +142,9 @@ bottom]` in points, as today. It is resolved like the brand colours:
 2. The margins of the Word template's last section (`pgMar`), the same values the Word merge
    already reads.
 3. The built-in default `[50, 62, 50, 62]`.
+
+A template with a letterhead skips step 2: the Word template's margins do not know where the
+stationery's logo and address block are. The letterhead itself goes in step 4.
 
 The admin page shows the four values with their source and prefills them when a Word template is
 uploaded, without overwriting values the admin has set. There is no setting for page size or

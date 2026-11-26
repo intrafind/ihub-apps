@@ -31,7 +31,8 @@ export function emptyTemplate() {
     document: {},
     pdf: {},
     docx: {},
-    pptx: {}
+    pptx: {},
+    fields: {}
   };
 }
 
@@ -46,7 +47,8 @@ export function normalizeTemplate(template) {
     document: { ...template?.document },
     pdf: { ...template?.pdf },
     docx: { ...template?.docx },
-    pptx: { ...template?.pptx }
+    pptx: { ...template?.pptx },
+    fields: { ...template?.fields }
   };
 }
 
@@ -100,7 +102,9 @@ export function cleanTemplate(draft) {
     document: compact(document),
     pdf: compact(draft.pdf),
     docx: compact(draft.docx),
-    pptx: compact(draft.pptx)
+    pptx: compact(draft.pptx),
+    // Declared in template.json until the editor has a place for them: saving must keep them.
+    fields: draft.fields || {}
   };
 }
 

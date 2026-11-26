@@ -36,6 +36,7 @@ function paragraph(runs) {
   const xml = []
     .concat(runs)
     .map(run => {
+      if (run.pageBreak) return '<w:r><w:br w:type="page"/></w:r>';
       const { text, bold } = typeof run === 'string' ? { text: run } : run;
       return `<w:r>${bold ? '<w:rPr><w:b/></w:rPr>' : ''}<w:t xml:space="preserve">${text}</w:t></w:r>`;
     })
@@ -179,6 +180,15 @@ describe('page numbers in a Word template', () => {
     assert.match(textOf(document), /See page 1 of 1\./);
   });
 
+  it('leaves a private-use character of the template itself alone', async () => {
+    const template = await wordTemplate({
+      body: [['Icon \uE001 and \uE000 here'], ['Page {{page}}'], ['{{content}}']]
+    });
+    const { document } = await render(template);
+    assert.equal((document.match(/<w:fldSimple /g) || []).length, 1);
+    assert.match(textOf(document), /Icon \uE001 and \uE000 here/);
+  });
+
   it('turns a value that holds the private markers into plain text', async () => {
     const template = await wordTemplate({ body: [['{{title}}'], ['{{content}}']] });
     const { document } = await render(template, { title: 'ABC' });
@@ -231,6 +241,25 @@ describe('{{toc}} in a Word template', () => {
     const { document } = await render(template, { toc: true });
     assert.equal(tocCount(document), 1);
     assert.ok(tocAt(document) < document.indexOf('Introduction'));
+  });
+
+  it('still puts the contents at the start when {{toc}} shares its paragraph and one is asked for', async () => {
+    const template = await wordTemplate({ body: [['Contents: {{toc}}'], ['{{content}}']] });
+    const { document } = await render(template, { toc: true });
+    assert.equal(tocCount(document), 1);
+    assert.match(textOf(document), /Contents: /);
+  });
+
+  it('keeps the page break that ends the paragraph of {{toc}}', async () => {
+    const template = await wordTemplate({
+      body: [['{{toc}}', { pageBreak: true }], ['{{content}}']]
+    });
+    const { document } = await render(template);
+    assert.equal(tocCount(document), 1);
+    const toc = tocAt(document);
+    const pageBreak = document.indexOf('<w:br w:type="page"/>');
+    assert.ok(pageBreak > toc, 'the break follows the table of contents');
+    assert.ok(pageBreak < document.indexOf('Introduction'), 'and comes before the content');
   });
 
   it('has no table of contents for a template without {{toc}} unless asked', async () => {

@@ -419,15 +419,23 @@ async function fileInfo(template, name, kind, read) {
  * template's own value, else the PowerPoint theme, else the Word theme, else
  * the neutral default (see `themeBrand.js`).
  *
+ * The theme of the file of the format that is being made counts first: a
+ * Word document follows the Word template's theme, everything else the
+ * PowerPoint theme, whose accent colours are ordered for charts.
+ *
  * @param {Object} template - A parsed template.
+ * @param {Object} [options]
+ * @param {'powerpoint'|'word'} [options.first] - The theme tried first.
  * @returns {Promise<ReturnType<typeof resolveBrand>>}
  */
-export async function resolveTemplateBrand(template) {
+export async function resolveTemplateBrand(template, { first = 'powerpoint' } = {}) {
+  const sources = [
+    ['powerpoint', 'pptx', template.pptx?.template],
+    ['word', 'docx', template.docx?.template]
+  ];
+  if (first === 'word') sources.reverse();
   const found = await Promise.all(
-    [
-      ['powerpoint', 'pptx', template.pptx?.template],
-      ['word', 'docx', template.docx?.template]
-    ]
+    sources
       .filter(([, , name]) => name)
       .map(async ([source, format, name]) => {
         const brand = await fileInfo(template, name, `theme:${format}`, buffer =>
@@ -442,7 +450,9 @@ export async function resolveTemplateBrand(template) {
 /**
  * The page margins of PDFs, `[left, top, right, bottom]` in points: the
  * template's own `pdf.margins`, else the Word template's last section.
- * Undefined when neither says: the PDF engine's default applies.
+ * Undefined when neither says: the PDF engine's default applies. A template
+ * with a letterhead keeps the engine's margins: the Word template's do not
+ * know where the stationery's logo and address block are.
  *
  * @param {Object} template - A parsed template.
  * @returns {Promise<number[]|undefined>}
@@ -452,7 +462,7 @@ export async function resolvePdfMargins(template) {
   // Replaced by `pdf.margins` when the old document settings are removed.
   if (template.document?.margins) return template.document.margins;
   const name = template.docx?.template;
-  if (!name) return undefined;
+  if (!name || template.pdf?.letterhead || template.pdf?.letterheadFollowing) return undefined;
   const margins = await fileInfo(template, name, 'margins', async buffer => {
     const { readWordTemplateLayout } = await import('../docx/wordTemplate.js');
     return pdfMarginsFromWordSetup((await readWordTemplateLayout(buffer)).setup);
@@ -513,7 +523,9 @@ export async function loadTemplateBundle(idOrTemplate, format) {
   return {
     template,
     assets,
-    brand: await resolveTemplateBrand(template),
+    brand: await resolveTemplateBrand(template, {
+      first: format === 'docx' ? 'word' : 'powerpoint'
+    }),
     ...(format === 'pdf' ? { pdfMargins: await resolvePdfMargins(template) } : {})
   };
 }

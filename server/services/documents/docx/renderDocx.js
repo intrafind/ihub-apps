@@ -43,7 +43,7 @@ export async function renderDocx(spec, assets = {}) {
     };
     // A template with `{{toc}}` decides where the table of contents goes: the
     // content then has none of its own.
-    const tocInTemplate = layout.placeholders.has('toc');
+    const tocInTemplate = layout.tocMarker;
     const tocWanted = tocInTemplate ? spec.toc !== false : Boolean(spec.toc);
     const built = await buildDocx(
       {

@@ -23,13 +23,14 @@ process.env.CONTENTS_DIR = path.join(baseDir, 'contents');
 
 const require = createRequire(import.meta.url);
 const JSZip = require('jszip');
+const { PDFDocument } = require('pdf-lib');
 
 const { documentTemplateSchema, BUILT_IN_PLACEHOLDERS, MAX_TEMPLATE_FIELDS } =
   await import('../validators/documentTemplateSchema.js');
 const templates = await import('../services/documents/templates/DocumentTemplateService.js');
 const { brandFromTheme, readThemeBrand, resolveBrand, specifiedBrand, pdfMarginsFromWordSetup } =
   await import('../services/documents/templates/themeBrand.js');
-const { applyTemplateToPdfSpec, applyTemplateToXlsxSpec } =
+const { applyTemplateToDocxSpec, applyTemplateToPdfSpec, applyTemplateToXlsxSpec } =
   await import('../services/documents/templates/applyTemplate.js');
 const { buildBaseTemplate, themeXml } = await import('../services/documents/pptx/baseTemplate.js');
 
@@ -371,6 +372,36 @@ describe('the brand of a stored template', () => {
   });
 });
 
+describe("the theme of a format's own file counts first", () => {
+  it('gives a Word document the Word theme, and everything else the PowerPoint theme', async () => {
+    await templates.saveTemplate('mixed', { ...BASE, id: 'mixed' }, { create: true });
+    await templates.saveTemplateAsset('mixed', {
+      slot: 'powerpointTemplate',
+      data: await pptxWithAccents([RED, SLATE, BLUE, GREEN, AMBER, GREY1]),
+      originalName: 'deck.potx'
+    });
+    await templates.saveTemplateAsset('mixed', {
+      slot: 'wordTemplate',
+      data: await wordTemplate([GREEN, AMBER, BLUE, RED, SLATE, GREY1]),
+      originalName: 'letter.dotx'
+    });
+    const forWord = await templates.loadTemplateBundle('mixed', 'docx');
+    assert.equal(forWord.brand.primaryColor, `#${GREEN}`);
+    assert.equal(forWord.brand.sources.primaryColor, 'word');
+    for (const format of ['pdf', 'pptx', 'xlsx']) {
+      const bundle = await templates.loadTemplateBundle('mixed', format);
+      assert.equal(bundle.brand.primaryColor, `#${RED}`, format);
+      assert.equal(bundle.brand.sources.primaryColor, 'powerpoint', format);
+    }
+  });
+
+  it('colours the Word document of such a template in the Word theme', async () => {
+    const bundle = await templates.loadTemplateBundle('mixed', 'docx');
+    const { spec } = applyTemplateToDocxSpec({ markdown: 'x' }, bundle);
+    assert.equal(spec.colors.primary, `#${GREEN}`);
+  });
+});
+
 describe('PDF margins of a stored template', () => {
   it("come from the Word template's last section", async () => {
     await templates.saveTemplate('margins', { ...BASE, id: 'margins' }, { create: true });
@@ -399,6 +430,30 @@ describe('PDF margins of a stored template', () => {
     assert.deepEqual(
       await templates.resolvePdfMargins(await templates.getTemplate('margins')),
       [40, 50, 40, 50]
+    );
+  });
+
+  it("are left to the engine for a template with a letterhead: the Word template's do not know the stationery", async () => {
+    await templates.saveTemplate('stationery', { ...BASE, id: 'stationery' }, { create: true });
+    await templates.saveTemplateAsset('stationery', {
+      slot: 'wordTemplate',
+      data: await wordTemplate([BLUE, AMBER, GREEN, RED, SLATE, GREY1]),
+      originalName: 'letter.dotx'
+    });
+    assert.deepEqual(
+      await templates.resolvePdfMargins(await templates.getTemplate('stationery')),
+      [85, 72, 57, 57]
+    );
+    const doc = await PDFDocument.create();
+    doc.addPage([595.28, 841.89]);
+    await templates.saveTemplateAsset('stationery', {
+      slot: 'letterhead',
+      data: Buffer.from(await doc.save()),
+      originalName: 'letterhead.pdf'
+    });
+    assert.equal(
+      await templates.resolvePdfMargins(await templates.getTemplate('stationery')),
+      undefined
     );
   });
 

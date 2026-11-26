@@ -142,7 +142,7 @@ function paragraphText(paragraph) {
  *
  * @returns {boolean} Whether anything was replaced.
  */
-function replaceInParagraph(paragraph, values) {
+function replaceInParagraph(paragraph, values, onField) {
   const texts = descendants(paragraph, 't').filter(t => t.namespaceURI === NS.w);
   if (!texts.length) return false;
   let changed = false;
@@ -158,6 +158,7 @@ function replaceInParagraph(paragraph, values) {
     const start = match.index;
     const end = start + match[0].length;
     const value = String(values[match[1].toLowerCase()] ?? '');
+    if (SENTINELS.test(value)) onField(paragraph);
     let offset = 0;
     let first = true;
     for (const t of texts) {
@@ -177,10 +178,21 @@ function replaceInParagraph(paragraph, values) {
   }
 }
 
+/**
+ * Fill the placeholders under a root.
+ *
+ * @returns {Set<Element>} The paragraphs where a page number placeholder was
+ *   replaced by its marker: only there is a marker turned into a field, so a
+ *   private-use character of the template's own (an icon font) stays as it is.
+ */
 function replacePlaceholders(root, values) {
+  const fieldParagraphs = new Set();
   for (const paragraph of descendants(root, 'p')) {
-    if (paragraph.namespaceURI === NS.w) replaceInParagraph(paragraph, values);
+    if (paragraph.namespaceURI === NS.w) {
+      replaceInParagraph(paragraph, values, found => fieldParagraphs.add(found));
+    }
   }
+  return fieldParagraphs;
 }
 
 function newText(doc, text) {
@@ -235,10 +247,12 @@ function convertSentinels(doc, t) {
   }
 }
 
-/** Write `{{page}}` and `{{pages}}` (already replaced by sentinels) as page number fields. */
-function convertPageFields(doc, root) {
-  for (const t of descendants(root, 't')) {
-    if (t.namespaceURI === NS.w && SENTINELS.test(t.textContent)) convertSentinels(doc, t);
+/** Write `{{page}}` and `{{pages}}` (already replaced by markers) in these paragraphs as page number fields. */
+function convertPageFields(doc, paragraphs) {
+  for (const paragraph of paragraphs) {
+    for (const t of descendants(paragraph, 't')) {
+      if (t.namespaceURI === NS.w && SENTINELS.test(t.textContent)) convertSentinels(doc, t);
+    }
   }
 }
 
@@ -256,6 +270,20 @@ function findMarker(body, pattern) {
  */
 function placeAtMarker(marker, nodes) {
   for (const node of nodes) marker.parentNode.insertBefore(node, marker);
+  // A page break in the marker's paragraph ends the section it stands for:
+  // keep it, as a paragraph of its own after what was put there.
+  if (
+    descendants(marker, 'br').some(br => br.namespaceURI === NS.w && wAttr(br, 'type') === 'page')
+  ) {
+    const doc = marker.ownerDocument;
+    const paragraph = doc.createElementNS(NS.w, 'w:p');
+    const run = doc.createElementNS(NS.w, 'w:r');
+    const pageBreak = doc.createElementNS(NS.w, 'w:br');
+    setWAttr(pageBreak, 'type', 'page');
+    run.appendChild(pageBreak);
+    paragraph.appendChild(run);
+    marker.parentNode.insertBefore(paragraph, marker);
+  }
   const markerPr = firstChild(marker, 'pPr');
   if (firstChild(markerPr, 'sectPr')) {
     for (const child of childElements(marker)) {
@@ -427,7 +455,7 @@ async function themeAccentOf(zip, mainPart) {
  * content is built.
  *
  * @param {Buffer} buffer
- * @returns {Promise<{ setup: Object, placeholders: Set<string>, accent: string|null }>}
+ * @returns {Promise<{ setup: Object, placeholders: Set<string>, tocMarker: boolean, accent: string|null }>}
  */
 export async function readWordTemplateLayout(buffer) {
   const zip = await openPackage(buffer);
@@ -436,6 +464,8 @@ export async function readWordTemplateLayout(buffer) {
   return {
     setup: pageSetupOf(doc),
     placeholders: placeholdersIn(bodyOf(doc)),
+    // A paragraph that holds only `{{toc}}`: the only place a table of contents can go.
+    tocMarker: Boolean(findMarker(bodyOf(doc), TOC_MARKER)),
     accent: await themeAccentOf(zip, mainPart)
   };
 }
@@ -736,8 +766,7 @@ export async function mergeIntoWordTemplate(generated, template, options = {}) {
   // A `{{toc}}` that shares its paragraph with other text has no place for a
   // table of contents.
   values.toc = '';
-  replacePlaceholders(tplBody, values);
-  convertPageFields(tplDoc, tplBody);
+  convertPageFields(tplDoc, replacePlaceholders(tplBody, values));
 
   // Place the content.
   const marker = findMarker(tplBody, CONTENT_MARKER);
@@ -763,8 +792,7 @@ export async function mergeIntoWordTemplate(generated, template, options = {}) {
   for (const part of await headerFooterParts(tpl, tplMain)) {
     const partDoc = await readXmlPart(tpl, part);
     if (!partDoc) continue;
-    replacePlaceholders(partDoc.documentElement, values);
-    convertPageFields(partDoc, partDoc.documentElement);
+    convertPageFields(partDoc, replacePlaceholders(partDoc.documentElement, values));
     writeXmlPart(tpl, part, partDoc);
   }
 

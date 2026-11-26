@@ -157,3 +157,42 @@ as before.
   handshake to all others.
 
 Details: [MCP Integration](../../mcp-integration.md#protocol-revisions).
+
+## Document Templates: Colours and Fonts From the Word and PowerPoint Files
+
+A document template that sets no colours of its own takes them from its Word and PowerPoint files,
+so a template with just an upload already has a brand.
+
+- **Where a colour comes from:** the template's own colour, else the PowerPoint theme, else the
+  Word theme, else a neutral default. A Word document follows the Word template's theme first.
+  Primary and accent colour are the first accents of the theme that are real colours, not greys;
+  the text colour is the theme's dark 1.
+- **Palette and fonts:** up to six palette colours and the theme's heading and body fonts are read
+  from the files too. The tool descriptions tell the model the brand of the template that applies,
+  read-only, with the fonts as names only: the reader's computer may not have them.
+- **PDF margins:** PDFs take the page margins of the Word template's last section, unless the
+  template sets its own `pdf.margins`. A template with a letterhead keeps the engine's margins:
+  the Word template does not know where the stationery's logo and address block are.
+
+## Word Templates: Year, Page Numbers, Table of Contents and Custom Fields
+
+A Word template can hold more placeholders, written `{{name}}`, and the model asks the user for
+what a template needs.
+
+- **Built in:** `{{year}}` (the year of the document's date), `{{page}}` and `{{pages}}` (Word page
+  number fields that keep the formatting of their text), and `{{toc}}`.
+- **Table of contents:** a paragraph that holds only `{{toc}}` is where the contents go. The
+  document gets one unless the model sets `toc: false`; without `{{toc}}` the contents stay an
+  option at the start of the document. Word fills the contents when the file is opened and asks to
+  update fields; other viewers show it empty.
+- **Custom fields:** any other `{{name}}` (letters, digits, underscores) is a field of the
+  template: a classification, a department, a document number. Declare them under `fields` in
+  `contents/document-templates/<id>/template.json` with a label, a description, whether the field
+  is required, the allowed values and a default; the admin page keeps them when it saves, and an
+  editor for them follows.
+- **The model asks:** the Word tool lists the fields, passes their values in `fields`, and stops
+  with `missing_fields` when a required value is missing or not allowed. The model is told to ask
+  the user and never to invent a value. `edit_docx` changes one field and keeps the others.
+- **The template decides the design:** the Word tool no longer offers colours, fonts, header,
+  footer, page numbers or page format, and the author of a document is the person who asked for
+  it unless the model names one.
