@@ -46,9 +46,67 @@ const IASSISTANT_ENV_PREFIX = 'IHUB_PLATFORM__I_ASSISTANT__';
 const text = value => (typeof value === 'string' && value.trim() ? value.trim() : undefined);
 const nonEmpty = value =>
   value !== undefined && value !== null && !(typeof value === 'string' && value.trim() === '');
+const nonEmptyStrings = value =>
+  Array.isArray(value) && value.length ? value.filter(s => typeof s === 'string' && s) : undefined;
 
-function put(values, key, value) {
-  if (nonEmpty(value)) values[key] = value;
+/** The value at a dotted path of a block, or undefined. */
+const at = (block, dotted) => dotted.split('.').reduce((node, key) => node?.[key], block);
+
+/**
+ * How a `platform.iFinder` / `platform.iAssistant`-shaped block maps onto the
+ * values of its installation (the mapping of V192): install value, path in the
+ * block, and which values count (any non-empty one by default).
+ */
+const IFINDER_VALUES = [
+  ['baseUrl', 'baseUrl'],
+  ['authMode', 'authMode'],
+  ['useOidcKeyPair', 'useOidcKeyPair', value => value === true],
+  ['privateKeyRef', 'privateKeyRef'],
+  ['algorithm', 'algorithm'],
+  ['issuer', 'issuer'],
+  ['audience', 'audience'],
+  ['tokenExpirationSeconds', 'tokenExpirationSeconds', Number.isFinite],
+  ['defaultScope', 'defaultScope'],
+  ['jwtSubjectField', 'jwtSubjectField'],
+  ['tokenExchangeProvider', 'tokenExchange.oidcProvider'],
+  ['tokenExchangeGrant', 'tokenExchange.grantType'],
+  ['tokenExchangeAudience', 'tokenExchange.audience'],
+  ['tokenExchangeScopeIndexRead', 'tokenExchange.scopeMap.fa_index_read'],
+  ['tokenExchangeScopeAssistant', 'tokenExchange.scopeMap.fa_iassistant'],
+  ['tokenExchangeScopeSmartCollections', 'tokenExchange.scopeMap.fi_smartcollections'],
+  ['tokenExchangeExtraScopes', 'tokenExchange.extraScopes', 'strings'],
+  ['searchProfileApplication', 'searchProfileApplication'],
+  ['defaultSearchProfile', 'defaultSearchProfile'],
+  ['allowedSearchProfiles', 'allowedSearchProfiles', 'strings'],
+  ['allowUserSearchProfileChange', 'allowUserSearchProfileChange', value => value === false],
+  ['timeout', 'timeout', Number.isFinite],
+  ['downloadDir', 'downloadDir'],
+  ['searchEndpoint', 'endpoints.search'],
+  ['documentEndpoint', 'endpoints.document'],
+  ['fieldsEndpoint', 'endpoints.fields'],
+  ['facetsEndpoint', 'endpoints.facets']
+];
+
+const IASSISTANT_VALUES = [
+  ['defaultProfileId', 'defaultProfileId'],
+  ['defaultSearchProfile', 'defaultSearchProfile'],
+  ['verifySearchProfileAccess', 'verifySearchProfileAccess', value => value === false],
+  ['groundedOnly', 'groundedOnly', value => value === true],
+  ['searchProfileCacheTtlMs', 'searchProfileCacheTtlMs', Number.isFinite]
+];
+
+/** The install values `mapping` takes from `block`. */
+function valuesFrom(block, mapping, values = {}) {
+  for (const [key, dotted, accept = nonEmpty] of mapping) {
+    const value = at(block, dotted);
+    if (accept === 'strings') {
+      const strings = nonEmptyStrings(value);
+      if (strings) values[key] = strings;
+    } else if (accept(value)) {
+      values[key] = value;
+    }
+  }
+  return values;
 }
 
 /** The block the `<prefix>A__B=value` variables describe, or undefined when none is set. */
@@ -56,7 +114,10 @@ function blockFromEnv(prefix, env) {
   let block;
   for (const [key, value] of Object.entries(env)) {
     if (!key.startsWith(prefix) || value === undefined) continue;
-    const pathParts = key.slice(prefix.length).split('__').map(toCamelCase);
+    const pathParts = key
+      .slice(prefix.length)
+      .split('__')
+      .map(part => toCamelCase(part));
     if (pathParts.some(part => !part)) continue;
     block ??= {};
     setNestedValue(block, pathParts, parseEnvValue(value));
@@ -79,61 +140,73 @@ function installation(id, definition, enabled, values, now, extra = {}) {
   };
 }
 
-/** The values of the `ifinder` installation a `platform.iFinder`-shaped block describes. */
-function iFinderValues(iFinder) {
-  const values = {};
-  put(values, 'baseUrl', iFinder.baseUrl);
-  put(values, 'authMode', iFinder.authMode);
-  if (iFinder.useOidcKeyPair === true) values.useOidcKeyPair = true;
-  put(values, 'privateKeyRef', iFinder.privateKeyRef);
-  put(values, 'algorithm', iFinder.algorithm);
-  put(values, 'issuer', iFinder.issuer);
-  put(values, 'audience', iFinder.audience);
-  if (Number.isFinite(iFinder.tokenExpirationSeconds)) {
-    values.tokenExpirationSeconds = iFinder.tokenExpirationSeconds;
-  }
-  put(values, 'defaultScope', iFinder.defaultScope);
-  put(values, 'jwtSubjectField', iFinder.jwtSubjectField);
-  const exchange = iFinder.tokenExchange || {};
-  put(values, 'tokenExchangeProvider', exchange.oidcProvider);
-  put(values, 'tokenExchangeGrant', exchange.grantType);
-  put(values, 'tokenExchangeAudience', exchange.audience);
-  const scopeMap = exchange.scopeMap || {};
-  put(values, 'tokenExchangeScopeIndexRead', scopeMap.fa_index_read);
-  put(values, 'tokenExchangeScopeAssistant', scopeMap.fa_iassistant);
-  put(values, 'tokenExchangeScopeSmartCollections', scopeMap.fi_smartcollections);
-  if (Array.isArray(exchange.extraScopes) && exchange.extraScopes.length) {
-    values.tokenExchangeExtraScopes = exchange.extraScopes.filter(s => typeof s === 'string' && s);
-  }
-  put(values, 'searchProfileApplication', iFinder.searchProfileApplication);
-  put(values, 'defaultSearchProfile', iFinder.defaultSearchProfile);
-  if (Array.isArray(iFinder.allowedSearchProfiles) && iFinder.allowedSearchProfiles.length) {
-    values.allowedSearchProfiles = iFinder.allowedSearchProfiles.filter(
-      s => typeof s === 'string' && s
-    );
-  }
-  if (iFinder.allowUserSearchProfileChange === false) values.allowUserSearchProfileChange = false;
-  if (Number.isFinite(iFinder.timeout)) values.timeout = iFinder.timeout;
-  put(values, 'downloadDir', iFinder.downloadDir);
-  const endpoints = iFinder.endpoints || {};
-  put(values, 'searchEndpoint', endpoints.search);
-  put(values, 'documentEndpoint', endpoints.document);
-  put(values, 'fieldsEndpoint', endpoints.fields);
-  put(values, 'facetsEndpoint', endpoints.facets);
-  return values;
+/** Provider keys: the setup wizard counts as done (V075). */
+function applySetupKeys(platform, env, changes) {
+  const setupKey = SETUP_KEY_VARS.find(name => text(env[name]));
+  if (!setupKey || platform.setup?.configured !== false) return;
+  platform.setup.configured = true;
+  changes.platform = true;
+  changes.applied.push(`${setupKey} → setup.configured`);
 }
 
-/** The values of the `iassistant` installation, on the iFinder connection. */
-function iAssistantValues(iAssistant) {
-  const values = { connection: 'ifinder' };
-  put(values, 'defaultProfileId', iAssistant.defaultProfileId);
-  put(values, 'defaultSearchProfile', iAssistant.defaultSearchProfile);
-  if (iAssistant.verifySearchProfileAccess === false) values.verifySearchProfileAccess = false;
-  if (iAssistant.groundedOnly === true) values.groundedOnly = true;
-  if (Number.isFinite(iAssistant.searchProfileCacheTtlMs)) {
-    values.searchProfileCacheTtlMs = iAssistant.searchProfileCacheTtlMs;
+/** `IHUB_PLATFORM__I_FINDER__*` / `__I_ASSISTANT__*`: both installations (V192). */
+function applyIFinder(env, changes) {
+  const iFinder = blockFromEnv(IFINDER_ENV_PREFIX, env);
+  const iAssistant = blockFromEnv(IASSISTANT_ENV_PREFIX, env);
+  if (!iFinder && !iAssistant) return;
+  const enabled = iFinder?.enabled === true;
+  changes.add(
+    'ifinder',
+    'com.intrafind/ifinder',
+    enabled,
+    valuesFrom(iFinder || {}, IFINDER_VALUES),
+    `${IFINDER_ENV_PREFIX}*`
+  );
+  changes.add(
+    'iassistant',
+    'com.intrafind/iassistant',
+    enabled,
+    valuesFrom(iAssistant || {}, IASSISTANT_VALUES, { connection: 'ifinder' }),
+    `${IASSISTANT_ENV_PREFIX}*`
+  );
+}
+
+/** `AZURE_*`: the shipped `entra` installation, enabled with all three (V197). */
+function applyEntra(installed, env, now, changes) {
+  const entra = installed.find(entry => entry?.id === 'entra');
+  const tenantId = text(env.AZURE_TENANT_ID);
+  const clientId = text(env.AZURE_CLIENT_ID);
+  if (!entra || !(tenantId || clientId)) return;
+  entra.values = { ...entra.values };
+  if (tenantId) entra.values.tenantId = tenantId;
+  if (clientId) entra.values.clientId = clientId;
+  entra.enabled = Boolean(tenantId && clientId && text(env.AZURE_CLIENT_SECRET));
+  entra.updatedAt = now;
+  changes.integrations = true;
+  changes.applied.push(
+    `AZURE_* → installation "entra" (${entra.enabled ? 'enabled' : 'disabled'})`
+  );
+}
+
+/** Search engine keys (V204) and `MCP_SERVER_URL` (V050, V193). */
+function applyKeyedInstallations(env, changes) {
+  if (text(env.BRAVE_SEARCH_API_KEY)) {
+    changes.add('brave', 'com.intrafind/brave-search', true, {}, 'BRAVE_SEARCH_API_KEY');
   }
-  return values;
+  if (text(env.STAAN_API_KEY)) {
+    changes.add('staan', 'com.intrafind/staan-search', true, {}, 'STAAN_API_KEY');
+  }
+  const mcpUrl = text(env.MCP_SERVER_URL);
+  if (mcpUrl) {
+    changes.add(
+      'legacy-mcp-server',
+      'com.intrafind/mcp-server',
+      true,
+      { transport: 'streamableHttp', url: mcpUrl },
+      'MCP_SERVER_URL',
+      { label: { en: 'Legacy MCP Server (promoted from MCP_SERVER_URL)' } }
+    );
+  }
 }
 
 /**
@@ -151,97 +224,28 @@ export function applyFirstStartEnvironment(
   env = process.env,
   now = new Date().toISOString()
 ) {
-  const changed = { platform: false, integrations: false, applied: [] };
   if (!Array.isArray(integrations.installed)) integrations.installed = [];
   const installed = integrations.installed;
-  const has = id => installed.some(entry => entry?.id === id);
-  const add = (entry, what) => {
-    installed.push(entry);
-    changed.integrations = true;
-    changed.applied.push(what);
+  const changes = {
+    platform: false,
+    integrations: false,
+    applied: [],
+    // Add an installation unless one with this id exists.
+    add(id, definition, enabled, values, source, extra) {
+      if (installed.some(entry => entry?.id === id)) return;
+      installed.push(installation(id, definition, enabled, values, now, extra));
+      this.integrations = true;
+      this.applied.push(`${source} → installation "${id}"`);
+    }
   };
 
-  const setupKey = SETUP_KEY_VARS.find(name => text(env[name]));
-  if (setupKey && platform.setup?.configured === false) {
-    platform.setup.configured = true;
-    changed.platform = true;
-    changed.applied.push(`${setupKey} → setup.configured`);
-  }
+  applySetupKeys(platform, env, changes);
+  applyIFinder(env, changes);
+  applyEntra(installed, env, now, changes);
+  applyKeyedInstallations(env, changes);
 
-  const iFinder = blockFromEnv(IFINDER_ENV_PREFIX, env);
-  const iAssistant = blockFromEnv(IASSISTANT_ENV_PREFIX, env);
-  if (iFinder || iAssistant) {
-    const enabled = iFinder?.enabled === true;
-    if (!has('ifinder')) {
-      add(
-        installation(
-          'ifinder',
-          'com.intrafind/ifinder',
-          enabled,
-          iFinderValues(iFinder || {}),
-          now
-        ),
-        `${IFINDER_ENV_PREFIX}* → installation "ifinder"`
-      );
-    }
-    if (!has('iassistant')) {
-      add(
-        installation(
-          'iassistant',
-          'com.intrafind/iassistant',
-          enabled,
-          iAssistantValues(iAssistant || {}),
-          now
-        ),
-        `${IASSISTANT_ENV_PREFIX}* → installation "iassistant"`
-      );
-    }
-  }
-
-  const entra = installed.find(entry => entry?.id === 'entra');
-  const tenantId = text(env.AZURE_TENANT_ID);
-  const clientId = text(env.AZURE_CLIENT_ID);
-  if (entra && (tenantId || clientId)) {
-    entra.values = { ...entra.values };
-    if (tenantId) entra.values.tenantId = tenantId;
-    if (clientId) entra.values.clientId = clientId;
-    entra.enabled = Boolean(tenantId && clientId && text(env.AZURE_CLIENT_SECRET));
-    entra.updatedAt = now;
-    changed.integrations = true;
-    changed.applied.push(
-      `AZURE_* → installation "entra" (${entra.enabled ? 'enabled' : 'disabled'})`
-    );
-  }
-
-  if (text(env.BRAVE_SEARCH_API_KEY) && !has('brave')) {
-    add(
-      installation('brave', 'com.intrafind/brave-search', true, {}, now),
-      'BRAVE_SEARCH_API_KEY → installation "brave"'
-    );
-  }
-  if (text(env.STAAN_API_KEY) && !has('staan')) {
-    add(
-      installation('staan', 'com.intrafind/staan-search', true, {}, now),
-      'STAAN_API_KEY → installation "staan"'
-    );
-  }
-
-  const mcpUrl = text(env.MCP_SERVER_URL);
-  if (mcpUrl && !has('legacy-mcp-server')) {
-    add(
-      installation(
-        'legacy-mcp-server',
-        'com.intrafind/mcp-server',
-        true,
-        { transport: 'streamableHttp', url: mcpUrl },
-        now,
-        { label: { en: 'Legacy MCP Server (promoted from MCP_SERVER_URL)' } }
-      ),
-      'MCP_SERVER_URL → installation "legacy-mcp-server"'
-    );
-  }
-
-  return changed;
+  const { platform: platformChanged, integrations: integrationsChanged, applied } = changes;
+  return { platform: platformChanged, integrations: integrationsChanged, applied };
 }
 
 /**

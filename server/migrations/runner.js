@@ -783,18 +783,20 @@ export async function runConfigMigrations({
       if (createdFromDefaults) {
         // server/defaults is already what every migration produces: record
         // them all, run none, and write the history once.
-        for (const migration of migrationFiles) {
-          history.migrations.push({
+        const appliedAt = new Date().toISOString();
+        const rows = await Promise.all(
+          migrationFiles.map(async migration => ({
             version: migration.version,
             description: migration.description,
             file: migration.file,
             checksum: await computeChecksum(migration.filePath),
-            appliedAt: new Date().toISOString(),
+            appliedAt,
             executionTimeMs: 0,
             status: 'success',
             freshInstall: true
-          });
-        }
+          }))
+        );
+        history.migrations.push(...rows);
         await saveHistory(contentsDir, history);
         logger.info('Fresh installation: all migrations recorded as applied, none run', {
           component: 'Migration',
