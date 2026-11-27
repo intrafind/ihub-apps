@@ -13,7 +13,7 @@ fsSync.mkdirSync(path.join(ROOT, 'contents'), { recursive: true });
 process.env.APP_ROOT_DIR = ROOT;
 process.env.CONTENTS_DIR = 'contents';
 
-const { atomicCreateJSON, atomicWriteFile, atomicWriteJSON, writeInDirectory } =
+const { atomicCreateJSON, atomicWriteFile, atomicWriteJSON, renameWithRetry, writeInDirectory } =
   await import('../utils/atomicWrite.js');
 const { saveSnapshot, listSnapshots } = await import('../services/ChangeHistoryService.js');
 
@@ -129,6 +129,87 @@ describe('atomicWrite permissions', { skip: process.platform === 'win32' }, () =
     await fs.mkdir(dir);
     await atomicWriteFile(path.join(dir, 'a.txt'), 'x');
     assert.deepEqual(await fs.readdir(dir), ['a.txt']);
+  });
+});
+
+describe('renameWithRetry', () => {
+  const NO_DELAYS = [0, 0, 0, 0, 0];
+  const lockedError = code =>
+    Object.assign(new Error(`${code}: operation not permitted`), { code });
+
+  /** Runs `fn` with fs.rename failing `failures` times with `code` before renaming for real. */
+  async function withLockedRename(code, failures, fn) {
+    const realRename = fs.rename;
+    let calls = 0;
+    fs.rename = async (from, to) => {
+      calls++;
+      if (calls <= failures) throw lockedError(code);
+      return realRename(from, to);
+    };
+    try {
+      await fn();
+    } finally {
+      fs.rename = realRename;
+    }
+    return calls;
+  }
+
+  async function freshPair(name) {
+    const dir = path.join(ROOT, name);
+    await fs.mkdir(dir);
+    const from = path.join(dir, 'from.json');
+    const to = path.join(dir, 'to.json');
+    await fs.writeFile(from, '{"new":true}');
+    await fs.writeFile(to, '{"old":true}');
+    return { dir, from, to };
+  }
+
+  for (const code of ['EPERM', 'EBUSY', 'EACCES']) {
+    it(`retries a Windows ${code} while the target is locked, then replaces it`, async () => {
+      const { from, to } = await freshPair(`retry-${code}`);
+      const calls = await withLockedRename(code, 3, () =>
+        renameWithRetry(from, to, { platform: 'win32', delays: NO_DELAYS })
+      );
+      assert.equal(calls, 4);
+      assert.deepEqual(JSON.parse(await fs.readFile(to, 'utf8')), { new: true });
+    });
+  }
+
+  it('gives up on Windows once the retries are spent', async () => {
+    const { from, to } = await freshPair('retry-exhausted');
+    const calls = await withLockedRename('EPERM', Infinity, () =>
+      assert.rejects(renameWithRetry(from, to, { platform: 'win32', delays: [0, 0] }), /EPERM/)
+    );
+    assert.equal(calls, 3, 'the first attempt and one per delay');
+    assert.deepEqual(JSON.parse(await fs.readFile(to, 'utf8')), { old: true });
+  });
+
+  it('does not retry an error that is not a lock (ENOENT)', async () => {
+    const { from, to } = await freshPair('retry-enoent');
+    const calls = await withLockedRename('ENOENT', 1, () =>
+      assert.rejects(renameWithRetry(from, to, { platform: 'win32', delays: NO_DELAYS }), /ENOENT/)
+    );
+    assert.equal(calls, 1);
+  });
+
+  it('does not retry outside Windows, where EPERM is a real permission error', async () => {
+    const { from, to } = await freshPair('retry-linux');
+    const calls = await withLockedRename('EPERM', 1, () =>
+      assert.rejects(renameWithRetry(from, to, { platform: 'linux', delays: NO_DELAYS }), /EPERM/)
+    );
+    assert.equal(calls, 1);
+  });
+
+  it('atomicWriteFile removes its temp file when the rename finally fails', async () => {
+    const dir = path.join(ROOT, 'retry-cleanup');
+    await fs.mkdir(dir);
+    const file = path.join(dir, 'a.json');
+    await fs.writeFile(file, 'old');
+    await withLockedRename('EPERM', Infinity, () =>
+      assert.rejects(atomicWriteFile(file, 'new'), /EPERM/)
+    );
+    assert.equal(await fs.readFile(file, 'utf8'), 'old');
+    assert.deepEqual(await fs.readdir(dir), ['a.json']);
   });
 });
 

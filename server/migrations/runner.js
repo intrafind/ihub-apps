@@ -17,7 +17,7 @@ import { createHash } from 'node:crypto';
 import { pathToFileURL } from 'node:url';
 import os from 'node:os';
 import { getRootDir } from '../pathUtils.js';
-import { atomicWriteJSON, atomicCreateJSON } from '../utils/atomicWrite.js';
+import { atomicWriteJSON, atomicCreateJSON, renameWithRetry } from '../utils/atomicWrite.js';
 import logger from '../utils/logger.js';
 import {
   setDefault,
@@ -572,7 +572,7 @@ function createMigrationContext(contentsDir, defaultsDir, migration) {
       await fs.unlink(join(contentsDir, relativePath));
     },
     moveFile: async (from, to) => {
-      await fs.rename(join(contentsDir, from), join(contentsDir, to));
+      await renameWithRetry(join(contentsDir, from), join(contentsDir, to));
     },
     listFiles: async (directory, pattern) => {
       const dirPath = join(contentsDir, directory);
@@ -855,64 +855,40 @@ export async function runConfigMigrations({
     let applied = 0;
     let skipped = 0;
     let failed = 0;
+    // A row the last save could not write (only with onFailure 'continue').
+    let historyUnsaved = false;
 
     for (const migration of pending) {
       const startTime = Date.now();
       const ctx = createMigrationContext(contentsDir, defaultsDir, migration);
+      const historyRow = async status => ({
+        version: migration.version,
+        description: migration.description,
+        file: migration.file,
+        checksum: await computeChecksum(migration.filePath),
+        appliedAt: new Date().toISOString(),
+        executionTimeMs: Date.now() - startTime,
+        status
+      });
 
+      // Run the migration. Only its own failure (import, precondition, up, or
+      // reading its file for the checksum) counts as a failed migration;
+      // recording the result in the history is a separate step below.
+      let entry;
       try {
         // Dynamic import the migration module
         const moduleUrl = pathToFileURL(migration.filePath).href;
         const mod = await import(moduleUrl);
 
-        // Check precondition
-        if (typeof mod.precondition === 'function') {
-          const shouldRun = await mod.precondition(ctx);
-          if (!shouldRun) {
-            const entry = {
-              version: migration.version,
-              description: migration.description,
-              file: migration.file,
-              checksum: await computeChecksum(migration.filePath),
-              appliedAt: new Date().toISOString(),
-              executionTimeMs: Date.now() - startTime,
-              status: 'skipped'
-            };
-            history.migrations.push(entry);
-            await saveHistory(contentsDir, history);
-            skipped++;
-            logger.info('Migration skipped (precondition not met)', {
-              component: 'Migration',
-              version: migration.version,
-              description: migration.description
-            });
-            continue;
-          }
+        // Check precondition, then execute the migration
+        if (typeof mod.precondition === 'function' && !(await mod.precondition(ctx))) {
+          entry = await historyRow('skipped');
+        } else {
+          await mod.up(ctx);
+          entry = await historyRow('success');
         }
-
-        // Execute the migration
-        await mod.up(ctx);
-
-        const entry = {
-          version: migration.version,
-          description: migration.description,
-          file: migration.file,
-          checksum: await computeChecksum(migration.filePath),
-          appliedAt: new Date().toISOString(),
-          executionTimeMs: Date.now() - startTime,
-          status: 'success'
-        };
-        history.migrations.push(entry);
-        await saveHistory(contentsDir, history);
-        applied++;
-        logger.info('Migration applied', {
-          component: 'Migration',
-          version: migration.version,
-          description: migration.description,
-          executionTimeMs: entry.executionTimeMs
-        });
       } catch (error) {
-        const entry = {
+        const failedEntry = {
           version: migration.version,
           description: migration.description,
           file: migration.file,
@@ -922,8 +898,24 @@ export async function runConfigMigrations({
           status: 'failed',
           error: error.message
         };
-        history.migrations.push(entry);
-        await saveHistory(contentsDir, history);
+        history.migrations.push(failedEntry);
+        // Best effort: a history that cannot be written must not hide the
+        // migration's own error, which is what the operator has to fix.
+        await saveHistory(contentsDir, history).then(
+          () => {
+            historyUnsaved = false;
+          },
+          saveError => {
+            // Kept in memory: the next save, or the last one, writes it.
+            historyUnsaved = true;
+            logger.error('Could not record the failed migration in the history', {
+              component: 'Migration',
+              version: migration.version,
+              file: HISTORY_FILE,
+              error: saveError
+            });
+          }
+        );
         failed++;
 
         logger.error('Migration failed', {
@@ -943,7 +935,63 @@ export async function runConfigMigrations({
           haltError.migrationHalt = true;
           throw haltError;
         }
+        continue;
       }
+
+      if (entry.status === 'skipped') {
+        skipped++;
+        logger.info('Migration skipped (precondition not met)', {
+          component: 'Migration',
+          version: migration.version,
+          description: migration.description
+        });
+      } else {
+        applied++;
+        logger.info('Migration applied', {
+          component: 'Migration',
+          version: migration.version,
+          description: migration.description,
+          executionTimeMs: entry.executionTimeMs
+        });
+      }
+
+      // Record it. The migration has run, so a history that cannot be written
+      // is not a failed migration: no `failed` row, and the error says so.
+      history.migrations.push(entry);
+      try {
+        await saveHistory(contentsDir, history);
+        historyUnsaved = false;
+      } catch (saveError) {
+        logger.error('Migration ran, but the history could not be saved', {
+          component: 'Migration',
+          version: migration.version,
+          description: migration.description,
+          file: HISTORY_FILE,
+          error: saveError
+        });
+        if (migrationConfig.onFailure === 'halt') {
+          // Running further migrations without a history would leave more of
+          // them to run a second time on the next start.
+          const haltError = new Error(
+            `Migration V${migration.version} (${migration.description}) ran, but recording it in ${HISTORY_FILE} failed: ${saveError.message}`
+          );
+          haltError.migrationHalt = true;
+          haltError.historyWriteFailed = true;
+          throw haltError;
+        }
+        // Otherwise the row stays in memory and the next save writes it.
+        historyUnsaved = true;
+      }
+    }
+
+    if (historyUnsaved) {
+      await saveHistory(contentsDir, history).catch(error => {
+        logger.error('The migration history could not be saved; the migrations will run again', {
+          component: 'Migration',
+          file: HISTORY_FILE,
+          error
+        });
+      });
     }
 
     logger.info('Migration run complete', {

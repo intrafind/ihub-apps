@@ -51,3 +51,20 @@ documents of the project".
 - To summarize or compare all documents of a large project, it reads them from the project's
   document list instead of answering from a few search hits.
 - The same applies to projects added to a prompt step of a workflow.
+
+## Windows: Startup No Longer Stops When a Virus Scanner Holds a Configuration File
+
+On Windows, startup could stop during the configuration migrations, most often on a fresh install,
+with an error like this:
+
+> Migration V233 (web_chat_inline_citations) failed: EPERM: operation not permitted, rename
+> '…\contents\.tmp_…' -> '…\contents\.migration-history.json'
+
+A virus scanner such as Microsoft Defender, the search indexer or a backup agent held the file
+open for a moment while iHub replaced it.
+
+- iHub now tries again for about a second when Windows reports a file as locked while it replaces
+  it. This covers the configuration files and the migration history, and also the usage
+  statistics, the results of tool jobs and files a migration moves.
+- When a migration ran but the history file cannot be written, the error now says so, and the
+  history no longer lists that migration as failed.

@@ -16,6 +16,7 @@ import {
 import config from '../../config.js';
 import { getContentsPath } from '../../utils/contentsPath.js';
 import logger from '../../utils/logger.js';
+import { renameWithRetry } from '../../utils/atomicWrite.js';
 
 /**
  * Jobs live in the memory of the worker that runs them — the uploaded file,
@@ -223,7 +224,7 @@ export async function completeJob(job, { result, contentType, filename }) {
     try {
       await fs.mkdir(RESULTS_DIR, { recursive: true });
       await fs.writeFile(temp, result);
-      await fs.rename(temp, file);
+      await renameWithRetry(temp, file);
       job.resultFile = file;
     } catch (error) {
       await removeResultFile(temp);
