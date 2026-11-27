@@ -7,6 +7,7 @@ import {
   StreamableHTTPClientTransport
 } from '@modelcontextprotocol/client';
 import { StdioClientTransport } from '@modelcontextprotocol/client/stdio';
+import { SkillsClient } from '@modelcontextprotocol/client/ext/skills';
 import { URL } from 'node:url';
 import { safeFetch, assertSafeHost } from './safeFetch.js';
 import {
@@ -766,6 +767,13 @@ export class McpServerConnection {
    * @returns {Promise<Object>} ReadResourceResult
    */
   async readResource(uri) {
+    await this._ready();
+    const timeoutMs = this.config.timeoutMs ?? 30000;
+    return this.client.readResource({ uri }, { timeout: timeoutMs });
+  }
+
+  /** Connect unless connected; refuse an unhealthy or disabled server. */
+  async _ready() {
     if (this.unhealthy) {
       throw new Error(`MCP server ${this.config.id} is unhealthy: ${this.lastError}`);
     }
@@ -773,8 +781,61 @@ export class McpServerConnection {
       throw new Error(`MCP server ${this.config.id} is disabled`);
     }
     if (!this.connected) await this.connect();
+  }
+
+  /** The skills side of the current client (MCP Skills extension), built once per client. */
+  _skillsClient() {
+    if (this._skills?.client !== this.client) {
+      // An entry the server lists badly is left out, not the whole listing.
+      this._skills = {
+        client: this.client,
+        skills: new SkillsClient(this.client, { skipInvalid: true })
+      };
+    }
+    return this._skills.skills;
+  }
+
+  /**
+   * The server's skills (MCP Skills extension, `skills/list`), or null when
+   * the server does not declare the extension.
+   *
+   * @param {Object} [options]
+   * @param {number} [options.maxAgeMs=0] - Reuse a listing of this
+   *   connection at most this old; 0 asks the server
+   *
+   * @returns {Promise<{skills: Object[], invalid: Object[]}|null>}
+   */
+  async listSkills({ maxAgeMs = 0 } = {}) {
+    await this._ready();
+    const kept = this._skillListing;
+    if (maxAgeMs > 0 && kept?.client === this.client && Date.now() - kept.at < maxAgeMs) {
+      return kept.value;
+    }
+    const skills = this._skillsClient();
+    let value = null;
+    if (skills.supported) {
+      const timeoutMs = this.config.timeoutMs ?? 30000;
+      const listing = await skills.list({}, { timeout: timeoutMs });
+      value = { skills: listing.skills, invalid: listing.invalid };
+    }
+    this._skillListing = { client: this.client, at: Date.now(), value };
+    return value;
+  }
+
+  /**
+   * Read one file of a skill and verify it against `skill` — the entry it is
+   * checked against, which need not be the server's current one: a file that
+   * is not in the entry, or whose size or digest differs, is refused
+   * (`SkillVerificationError`).
+   *
+   * @param {Object} skill - A skill entry (`uri`, `frontmatter`, `resources`)
+   * @param {string} [ref] - Path relative to the skill root; `SKILL.md` when absent
+   * @returns {Promise<Object>} the SDK's `SkillFile`
+   */
+  async readSkillFile(skill, ref) {
+    await this._ready();
     const timeoutMs = this.config.timeoutMs ?? 30000;
-    return this.client.readResource({ uri }, { timeout: timeoutMs });
+    return this._skillsClient().read(skill, ref, { timeout: timeoutMs });
   }
 
   /**

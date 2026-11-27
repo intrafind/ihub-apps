@@ -136,6 +136,33 @@ export const saveIntegrationInstructions = async (id, instructions) =>
     })
   ).data;
 
+/** The skills an MCP server offers, with the approval of each: `{ items }`. */
+export const fetchInstallationSkills = async id =>
+  (await makeAdminApiCall(`${instancePath(id)}/skills`)).data;
+
+const skillApprovalPath = (id, name) =>
+  `${instancePath(id)}/skill-approvals/${encodeURIComponent(name)}`;
+
+/**
+ * Approve a server skill as the admin reviewed it: `digest` is the item's
+ * `digest` from the listing. Answers its item; `SKILL_LISTING_CHANGED` when
+ * the server changed it since.
+ */
+export const approveInstallationSkill = async (id, name, digest) =>
+  (await makeAdminApiCall(skillApprovalPath(id, name), { method: 'PUT', ...json({ digest }) }))
+    .data;
+
+/** One file of a server skill as the server offers it now: `{ path, size, text?, truncated? }`. */
+export const fetchInstallationSkillFile = async (id, skillName, path, digest) => {
+  const query = new URLSearchParams({ skillName, path, digest });
+  return (await makeAdminApiCall(`${instancePath(id)}/skill-files?${query}`)).data;
+};
+
+/** Withdraw the approval of a server skill. */
+export const revokeInstallationSkill = async (id, name) => {
+  await makeAdminApiCall(skillApprovalPath(id, name), { method: 'DELETE' });
+};
+
 export const deleteInstalledIntegration = async id => {
   await makeAdminApiCall(instancePath(id), { method: 'DELETE' });
 };

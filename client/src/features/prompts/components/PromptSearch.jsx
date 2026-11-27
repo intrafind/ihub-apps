@@ -14,7 +14,7 @@ import { selectPickerSkills } from '../../skills/utils/skillPicker';
 import { PromptScopeBadge } from './PromptMeta';
 
 /** Fields a query matches against. A constant: the modal rebuilds its index when this changes. */
-const FUSE_KEYS = ['name', 'prompt', 'description', 'ownerName'];
+const FUSE_KEYS = ['name', 'prompt', 'description', 'ownerName', 'serverName'];
 
 /**
  * Order of the groups the list shows before anything is typed. The app's
@@ -29,7 +29,8 @@ const GROUP_ORDER = [
   'global',
   'skill',
   'skillMine',
-  'skillShared'
+  'skillShared',
+  'skillServer'
 ];
 
 /**
@@ -85,7 +86,7 @@ function PromptSearch({
           // Fresh on every open: another user's share or revocation, or a
           // deleted skill, must show up without waiting for a cache to expire.
           skillsEnabled
-            ? fetchSkills(undefined, { skipCache: true }).catch(() => [])
+            ? fetchSkills(undefined, { skipCache: true, appId }).catch(() => [])
             : Promise.resolve([])
         ]);
         if (!active) return;
@@ -113,7 +114,15 @@ function PromptSearch({
     return () => {
       active = false;
     };
-  }, [isOpen, i18n.language, promptsEnabled, skillsEnabled, allowPersonalSkills, appSkillsKey]);
+  }, [
+    isOpen,
+    i18n.language,
+    promptsEnabled,
+    skillsEnabled,
+    allowPersonalSkills,
+    appSkillsKey,
+    appId
+  ]);
 
   const groupOf = useMemo(() => {
     const favs = new Set(favorites);
@@ -148,7 +157,8 @@ function PromptSearch({
     global: t('prompts.groups.global', 'Global prompts'),
     skill: t('prompts.groups.skills', 'Skills'),
     skillMine: t('prompts.groups.mySkills', 'My skills'),
-    skillShared: t('prompts.groups.sharedSkills', 'Shared skills')
+    skillShared: t('prompts.groups.sharedSkills', 'Shared skills'),
+    skillServer: t('prompts.groups.serverSkills', 'Skills of connected servers')
   };
 
   const handleSelect = async item => {
@@ -182,10 +192,16 @@ function PromptSearch({
                 <span className="ml-1 px-1.5 py-0.5 text-xs text-purple-600 bg-purple-100 rounded-full">
                   {t('common.promptSearch.skill', 'skill')}
                 </span>
-                {item.scope !== 'global' && (
-                  <span className="ml-1">
-                    <PromptScopeBadge prompt={item} />
+                {item.scope === 'server' ? (
+                  <span className="ml-1 px-1.5 py-0.5 text-xs text-gray-700 bg-gray-100 dark:text-gray-200 dark:bg-gray-700 rounded-full">
+                    {item.serverName}
                   </span>
+                ) : (
+                  item.scope !== 'global' && (
+                    <span className="ml-1">
+                      <PromptScopeBadge prompt={item} />
+                    </span>
+                  )
                 )}
               </div>
               <p

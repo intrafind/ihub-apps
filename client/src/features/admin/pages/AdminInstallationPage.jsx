@@ -19,6 +19,7 @@ import IntegrationFactList from '../components/integrations/IntegrationFactList'
 import { InstallationStatusPills } from '../components/integrations/IntegrationPills';
 import InstallationMigrationPanel from '../components/integrations/InstallationMigrationPanel';
 import InstallationBackups from '../components/integrations/InstallationBackups';
+import InstallationSkillsPanel from '../components/integrations/InstallationSkillsPanel';
 import {
   MigrationConfirmDialog,
   MigrationLog,
@@ -79,7 +80,7 @@ import { EditorSaveContext } from '../components/integrations/editors/useInstall
 const IntegrationTestPanel = lazy(() => import('../components/integrations/IntegrationTestPanel'));
 
 /** The tabs of the page; Releases only when the definition has a release history. */
-const TABS = new Set(['overview', 'settings', 'releases']);
+const TABS = new Set(['overview', 'settings', 'skills', 'releases']);
 
 /** On the page the facts list everything known, not only the tile's top four. */
 const PAGE_FACT_LIMIT = 12;
@@ -90,15 +91,17 @@ const CARD_TITLE_CLASS = 'text-base font-semibold text-gray-900 dark:text-gray-1
 
 /**
  * The tab to show: the one `?tab=` names when the page has it (Releases only
- * with a release history), else Overview.
+ * with a release history, Skills only for an MCP server), else Overview.
  *
  * @param {string|null} tabParam - the `tab` search parameter
  * @param {boolean} hasReleases - the definition has a release history
- * @returns {'overview'|'settings'|'releases'}
+ * @param {boolean} [hasSkills] - the installation is an MCP server
+ * @returns {'overview'|'settings'|'skills'|'releases'}
  */
-function activeTab(tabParam, hasReleases) {
+export function activeTab(tabParam, hasReleases, hasSkills = false) {
   if (!TABS.has(tabParam)) return 'overview';
   if (tabParam === 'releases' && !hasReleases) return 'overview';
+  if (tabParam === 'skills' && !hasSkills) return 'overview';
   return tabParam;
 }
 
@@ -303,8 +306,10 @@ function InstallationPageContent({ instanceId }) {
   const [settingsError, setSettingsError] = useState(null);
   const editorHost = useMemo(() => ({ saveRef: settingsSaveRef, setError: setSettingsError }), []);
   const hasReleases = (definition?.releases?.length || 0) > 0;
+  // An MCP server may offer skills (MCP Skills extension), approved on their own tab.
+  const hasSkills = instance?.protocol === 'mcp';
   const tabParam = searchParams.get('tab');
-  const tab = activeTab(tabParam, hasReleases);
+  const tab = activeTab(tabParam, hasReleases, hasSkills);
   // Once opened, the Settings tab stays mounted (hidden on the other tabs), so
   // switching tabs keeps its unsaved edits; leaving the page still asks.
   const [settingsOpened, setSettingsOpened] = useState(tab === 'settings');
@@ -577,6 +582,9 @@ function InstallationPageContent({ instanceId }) {
   const tabs = [
     { id: 'overview', label: t('admin.integrations.page.tabs.overview', 'Overview') },
     { id: 'settings', label: t('admin.integrations.page.tabs.settings', 'Settings') },
+    ...(hasSkills
+      ? [{ id: 'skills', label: t('admin.integrations.page.tabs.skills', 'Skills') }]
+      : []),
     ...(hasReleases
       ? [
           {
@@ -1128,6 +1136,17 @@ function InstallationPageContent({ instanceId }) {
                 editorHost={editorHost}
                 onDirtyChange={setSettingsDirty}
               />
+            </div>
+          )}
+
+          {tab === 'skills' && hasSkills && (
+            <div
+              role="tabpanel"
+              id="tabpanel-skills"
+              aria-labelledby="tab-skills"
+              className={CARD_CLASS}
+            >
+              <InstallationSkillsPanel instanceId={instance.id} />
             </div>
           )}
 
