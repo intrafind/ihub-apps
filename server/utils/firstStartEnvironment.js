@@ -19,8 +19,12 @@
  *   `ifinder` and `iassistant` installations (V192).
  * - `AZURE_TENANT_ID`, `AZURE_CLIENT_ID`, `AZURE_CLIENT_SECRET`: the `entra`
  *   installation, enabled when all three are set (V197).
- * - `BRAVE_SEARCH_API_KEY`: the `brave` web search installation (V204).
+ * - `BRAVE_SEARCH_API_KEY`, `STAAN_API_KEY`: the `brave` and `staan` web
+ *   search installations (V204).
  * - `MCP_SERVER_URL`: the `legacy-mcp-server` installation (V050, V193).
+ *
+ * The shipped installations get the time of this first start as their
+ * `installedAt` / `updatedAt` ({@link stampInstallationTimes}).
  *
  * Existing installations never pass through here; their migrations already
  * ran. tests/first-start-environment.test.js pins the output to what the
@@ -215,6 +219,12 @@ export function applyFirstStartEnvironment(
       'BRAVE_SEARCH_API_KEY → installation "brave"'
     );
   }
+  if (text(env.STAAN_API_KEY) && !has('staan')) {
+    add(
+      installation('staan', 'com.intrafind/staan-search', true, {}, now),
+      'STAAN_API_KEY → installation "staan"'
+    );
+  }
 
   const mcpUrl = text(env.MCP_SERVER_URL);
   if (mcpUrl && !has('legacy-mcp-server')) {
@@ -231,6 +241,25 @@ export function applyFirstStartEnvironment(
     );
   }
 
+  return changed;
+}
+
+/**
+ * Give every installation without an `installedAt` the time of this first
+ * start, in place. The shipped `integrations.json` carries no timestamps.
+ *
+ * @param {object} integrations - parsed `config/integrations.json`
+ * @param {string} [now] - ISO timestamp
+ * @returns {boolean} whether anything changed
+ */
+export function stampInstallationTimes(integrations, now = new Date().toISOString()) {
+  let changed = false;
+  for (const entry of Array.isArray(integrations.installed) ? integrations.installed : []) {
+    if (!entry || typeof entry !== 'object' || entry.installedAt) continue;
+    entry.installedAt = now;
+    entry.updatedAt ??= now;
+    changed = true;
+  }
   return changed;
 }
 
@@ -259,9 +288,11 @@ export async function importEnvironmentOnFirstStart({
   const platform = await readJson(platformFile, {});
   const integrations = await readJson(integrationsFile, { installed: [] });
 
-  const changed = applyFirstStartEnvironment({ platform, integrations }, env);
+  const now = new Date().toISOString();
+  const changed = applyFirstStartEnvironment({ platform, integrations }, env, now);
+  const stamped = stampInstallationTimes(integrations, now);
   if (changed.platform) await atomicWriteJSON(platformFile, platform);
-  if (changed.integrations) await atomicWriteJSON(integrationsFile, integrations);
+  if (changed.integrations || stamped) await atomicWriteJSON(integrationsFile, integrations);
   if (changed.applied.length) {
     logger.info('Applied the environment to the new installation', {
       component: 'Setup',

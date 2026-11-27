@@ -92,21 +92,6 @@
         "disabled": [],
         "overrides": {}
       }
-    },
-    {
-      "id": "staan",
-      "definition": "com.intrafind/staan-search",
-      "definitionVersion": "1.0.0",
-      "enabled": true,
-      "values": {},
-      "auth": {
-        "mode": "none"
-      },
-      "actions": {
-        "enabled": ["*"],
-        "disabled": [],
-        "overrides": {}
-      }
     }
   ],
   "security": {

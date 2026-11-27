@@ -81,7 +81,7 @@ A fresh install runs no migration. `server/defaults` is kept in the state every 
 
 - **What counts as fresh**: `performInitialSetup()` found `contents/` missing, or holding nothing but empty directories (the Docker volumes for `data/` and `uploads/` on a new installation) and `lost+found`. Startup passes this to the runner (`createdFromDefaults`, `server/startup/bootstrap.js`); a backup import never does, so imported files are always migrated.
 - **Not fresh**: a `contents/` that already held files, such as apps copied over from an older installation or a data volume with documents in it. Its migrations run as before, starting above the baseline.
-- **Environment variables**: some migrations turned variables into configuration on a fresh install (the provider API keys → setup done, `IHUB_PLATFORM__I_FINDER__*` / `__I_ASSISTANT__*`, `AZURE_*`, `BRAVE_SEARCH_API_KEY`, `MCP_SERVER_URL`). A new installation gets the same from `server/utils/firstStartEnvironment.js`, which runs once, right after the seeding. **A new migration that reads the environment must add the same to that module**, writing the current shape of the configuration.
+- **Environment variables**: some migrations turned variables into configuration on a fresh install (the provider API keys → setup done, `IHUB_PLATFORM__I_FINDER__*` / `__I_ASSISTANT__*`, `AZURE_*`, `BRAVE_SEARCH_API_KEY`, `STAAN_API_KEY`, `MCP_SERVER_URL`). A new installation gets the same from `server/utils/firstStartEnvironment.js`, which runs once, right after the seeding. **A new migration that reads the environment must add the same to that module**, writing the current shape of the configuration.
 
 ## Baseline (squashed migrations)
 

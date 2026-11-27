@@ -286,7 +286,7 @@ migration history records them all as applied in one step.
   still work the same way: a provider API key (`OPENAI_API_KEY`, `ANTHROPIC_API_KEY`,
   `GOOGLE_API_KEY`, `MISTRAL_API_KEY`) marks the setup as done, and `IHUB_PLATFORM__I_FINDER__*`,
   `IHUB_PLATFORM__I_ASSISTANT__*`, `AZURE_TENANT_ID` / `AZURE_CLIENT_ID` / `AZURE_CLIENT_SECRET`,
-  `BRAVE_SEARCH_API_KEY` and `MCP_SERVER_URL` create their integrations.
+  `BRAVE_SEARCH_API_KEY`, `STAAN_API_KEY` and `MCP_SERVER_URL` create their integrations.
 - A new installation no longer logs warnings about `tools/knowledge.json` on its first start, and
   no longer gets that file and `sources/meeting-knowledge-base.md` in `contents/`.
 - A `contents/` directory that already holds files, such as apps copied over from an older

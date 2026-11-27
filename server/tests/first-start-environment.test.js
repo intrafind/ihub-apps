@@ -17,7 +17,8 @@ import assert from 'node:assert/strict';
 
 import {
   applyFirstStartEnvironment,
-  importEnvironmentOnFirstStart
+  importEnvironmentOnFirstStart,
+  stampInstallationTimes
 } from '../utils/firstStartEnvironment.js';
 import { copyDefaultConfiguration } from '../utils/setupUtils.js';
 
@@ -135,8 +136,10 @@ describe('applyFirstStartEnvironment', () => {
     assert.deepEqual(byId(partial, 'entra').values, { tenantId: 'tid', clientId: 'cid' });
   });
 
-  it('installs Brave when its key is set; STAAN is installed already (V204)', async () => {
+  it('installs Brave and STAAN when their keys are set, and neither without (V204)', async () => {
     const config = await freshConfig();
+    assert.equal(byId(config, 'brave'), undefined);
+    assert.equal(byId(config, 'staan'), undefined);
     applyFirstStartEnvironment(config, { BRAVE_SEARCH_API_KEY: 'bk', STAAN_API_KEY: 'sk' }, NOW);
     assert.deepEqual(byId(config, 'brave'), {
       id: 'brave',
@@ -145,8 +148,13 @@ describe('applyFirstStartEnvironment', () => {
       values: {},
       ...BASE
     });
-    assert.equal(byId(config, 'staan').enabled, true);
-    assert.equal(config.integrations.installed.filter(entry => entry.id === 'staan').length, 1);
+    assert.deepEqual(byId(config, 'staan'), {
+      id: 'staan',
+      definition: 'com.intrafind/staan-search',
+      enabled: true,
+      values: {},
+      ...BASE
+    });
   });
 
   it('installs the MCP server named by MCP_SERVER_URL (V050, V193)', async () => {
@@ -160,6 +168,20 @@ describe('applyFirstStartEnvironment', () => {
       label: { en: 'Legacy MCP Server (promoted from MCP_SERVER_URL)' },
       ...BASE
     });
+  });
+});
+
+describe('stampInstallationTimes', () => {
+  it('stamps the installations that have no install time, and keeps the others', () => {
+    const integrations = {
+      installed: [{ id: 'a' }, { id: 'b', installedAt: 'then', updatedAt: 'later' }]
+    };
+    assert.equal(stampInstallationTimes(integrations, NOW), true);
+    assert.deepEqual(integrations.installed, [
+      { id: 'a', installedAt: NOW, updatedAt: NOW },
+      { id: 'b', installedAt: 'then', updatedAt: 'later' }
+    ]);
+    assert.equal(stampInstallationTimes(integrations, NOW), false);
   });
 });
 
@@ -188,5 +210,6 @@ describe('importEnvironmentOnFirstStart', () => {
     assert.equal(await fs.readFile(platformFile, 'utf8'), platformBefore);
     const integrations = JSON.parse(await fs.readFile(integrationsFile, 'utf8'));
     assert.ok(integrations.installed.some(entry => entry.id === 'brave'));
+    assert.ok(integrations.installed.every(entry => entry.installedAt && entry.updatedAt));
   });
 });
