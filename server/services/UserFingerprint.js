@@ -6,6 +6,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import logger from '../utils/logger.js';
 import { getContentsPath } from '../utils/contentsPath.js';
+import { renameWithRetry } from '../utils/atomicWrite.js';
 
 const pepperFile = getContentsPath('.usage-pepper');
 
@@ -49,7 +50,7 @@ async function loadOrCreatePepper() {
       if (error.code !== 'EEXIST') throw error;
       // Another worker published first. If what it left is unusable (a file an
       // older version wrote empty), replace it with this complete one.
-      if (!(await readPepper())) await fs.rename(tmpPath, pepperFile);
+      if (!(await readPepper())) await renameWithRetry(tmpPath, pepperFile);
     }
   } finally {
     await fs.unlink(tmpPath).catch(() => {});

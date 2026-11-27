@@ -17,7 +17,7 @@ import { createHash } from 'node:crypto';
 import { pathToFileURL } from 'node:url';
 import os from 'node:os';
 import { getRootDir } from '../pathUtils.js';
-import { atomicWriteJSON, atomicCreateJSON } from '../utils/atomicWrite.js';
+import { atomicWriteJSON, atomicCreateJSON, renameWithRetry } from '../utils/atomicWrite.js';
 import logger from '../utils/logger.js';
 import {
   setDefault,
@@ -572,7 +572,7 @@ function createMigrationContext(contentsDir, defaultsDir, migration) {
       await fs.unlink(join(contentsDir, relativePath));
     },
     moveFile: async (from, to) => {
-      await fs.rename(join(contentsDir, from), join(contentsDir, to));
+      await renameWithRetry(join(contentsDir, from), join(contentsDir, to));
     },
     listFiles: async (directory, pattern) => {
       const dirPath = join(contentsDir, directory);

@@ -27,6 +27,7 @@ import {
 import { buildRollup, mergeRollups, ROLLUP_VERSION } from './usage/rollup.js';
 import { cleanupFeedback } from '../feedbackStorage.js';
 import logger from '../utils/logger.js';
+import { renameWithRetry } from '../utils/atomicWrite.js';
 
 const ROLLUP_INTERVAL_MS = 60 * 60 * 1000; // 1 hour
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -56,7 +57,7 @@ async function writeJsonAtomic(file, data) {
   await fs.mkdir(path.dirname(file), { recursive: true });
   const tmp = `${file}.${process.pid}.${Date.now()}.tmp`;
   await fs.writeFile(tmp, JSON.stringify(data));
-  await fs.rename(tmp, file);
+  await renameWithRetry(tmp, file);
 }
 
 export function dailyRollupFile(date) {

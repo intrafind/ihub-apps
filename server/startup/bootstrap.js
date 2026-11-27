@@ -67,9 +67,13 @@ export async function prepareContents() {
       // against config the migration never finished updating. Exiting lets a
       // process manager / container orchestrator surface the failure instead
       // of the server quietly running on stale or half-migrated config.
+      // A migration that ran but could not be recorded did not fail: say so,
+      // or the last line an operator reads blames the migration.
       logger.error({
         component: 'Server',
-        message: 'Halting startup: migrations.onFailure is "halt" and a migration failed'
+        message: error.historyWriteFailed
+          ? 'Halting startup: migrations.onFailure is "halt" and a migration ran but could not be recorded in the migration history'
+          : 'Halting startup: migrations.onFailure is "halt" and a migration failed'
       });
       process.exit(1);
     }
