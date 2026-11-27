@@ -1,0 +1,218 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
+import { Link } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
+import Icon from '../../../shared/components/Icon';
+
+/**
+ * How each catalog source looks: its icon, the colours of the icon tile and
+ * of the badge that names the source beside the entry's name. Colour is never
+ * the only signal: the badge says the source in words.
+ */
+export const CATALOG_SOURCE_STYLES = Object.freeze({
+  ifinder: {
+    icon: 'magnifying-glass',
+    tile: 'bg-teal-50 text-teal-700 dark:bg-teal-900/40 dark:text-teal-300',
+    badge: 'bg-teal-100 text-teal-800 dark:bg-teal-900/50 dark:text-teal-200'
+  },
+  admin: {
+    icon: 'shield-check',
+    tile: 'bg-purple-50 text-purple-600 dark:bg-purple-900/40 dark:text-purple-300',
+    badge: 'bg-purple-100 text-purple-800 dark:bg-purple-900/50 dark:text-purple-200'
+  },
+  colleagues: {
+    icon: 'user-group',
+    tile: 'bg-indigo-50 text-indigo-600 dark:bg-indigo-900/40 dark:text-indigo-300',
+    badge: 'bg-indigo-100 text-indigo-800 dark:bg-indigo-900/50 dark:text-indigo-200'
+  },
+  yours: {
+    icon: 'folder',
+    tile: 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300',
+    badge: 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-200'
+  }
+});
+
+/**
+ * The name of a source, on the entry's badge and on the filter chip.
+ *
+ * @param {string} source
+ * @param {Function} t
+ * @returns {string}
+ */
+export function catalogSourceLabel(source, t) {
+  switch (source) {
+    case 'ifinder':
+      return t('projects.catalog.chips.ifinder', 'iFinder');
+    case 'admin':
+      return t('projects.catalog.chips.admin', 'Administrators');
+    case 'colleagues':
+      return t('projects.catalog.chips.colleagues', 'Colleagues');
+    default:
+      return t('projects.catalog.chips.yours', 'Yours');
+  }
+}
+
+const ACTION_BASE =
+  'shrink-0 inline-flex items-center justify-center gap-1.5 rounded-lg border text-sm font-medium min-h-11 min-w-11 px-2.5 sm:min-h-9 sm:min-w-0 sm:px-3 focus:outline-hidden focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-gray-800 aria-disabled:opacity-60 aria-disabled:cursor-wait';
+const ADD_BUTTON = `${ACTION_BASE} border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-600`;
+const ADDED_BUTTON = `${ACTION_BASE} border-green-300 bg-green-50 text-green-800 hover:bg-green-100 dark:border-green-700 dark:bg-green-900/30 dark:text-green-300 dark:hover:bg-green-900/50`;
+
+/**
+ * The meta line of an entry: who published it (the badge names the source)
+ * and its size.
+ *
+ * @param {import('../utils/catalogSources').CatalogEntry} entry
+ * @param {Function} t
+ * @returns {string}
+ */
+function metaLine(entry, t) {
+  if (entry.kind === 'collection') {
+    return t('projects.ifinder.documentCount', '{{count}} documents', { count: entry.count });
+  }
+  const size = t('projects.list.itemCount', '{{count}} items', { count: entry.count });
+  if (entry.source === 'admin') return size;
+  const owner = t('projects.catalog.byOwner', 'By {{name}}', {
+    name: entry.ownerName || t('projects.members.unknownOwner', 'Unknown')
+  });
+  return `${owner} · ${size}`;
+}
+
+/**
+ * The status of an entry that is in the viewer's projects already.
+ *
+ * @returns {JSX.Element}
+ */
+function InListStatus() {
+  const { t } = useTranslation();
+  return (
+    <span className="shrink-0 inline-flex items-center gap-1 rounded-full bg-gray-100 dark:bg-gray-700 px-2 py-1 text-xs font-medium text-gray-700 dark:text-gray-200 whitespace-nowrap">
+      <Icon name="check-circle" size="xs" aria-hidden="true" />
+      {t('projects.catalog.inYourList', 'In your projects')}
+    </span>
+  );
+}
+
+/**
+ * The Add button of an entry, or the Added button of a project added from
+ * the catalog (which removes it again). While busy it stays focusable
+ * (`aria-disabled`), so focus does not drop to the page when its label flips.
+ *
+ * @param {Object} props
+ * @param {import('../utils/catalogSources').CatalogEntry} props.entry
+ * @param {boolean} props.busy
+ * @param {string|undefined} props.errorId - The id of the row's error, if any.
+ * @param {() => void} props.onClick
+ * @returns {JSX.Element}
+ */
+function EntryButton({ entry, busy, errorId, onClick }) {
+  const { t } = useTranslation();
+  const added = entry.status === 'added';
+  let icon = added ? 'check' : 'plus';
+  if (busy) icon = 'spinner';
+  const name = added
+    ? t('projects.catalog.addedRemoveNamed', 'Added: remove {{name}} from my projects', {
+        name: entry.name
+      })
+    : t('projects.catalog.addNamed', 'Add {{name}} to my projects', { name: entry.name });
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-disabled={busy || undefined}
+      aria-busy={busy || undefined}
+      aria-describedby={errorId}
+      className={added ? ADDED_BUTTON : ADD_BUTTON}
+      aria-label={name}
+    >
+      <Icon
+        name={icon}
+        size="sm"
+        className={busy ? 'animate-spin' : undefined}
+        aria-hidden="true"
+      />
+      <span className="hidden sm:inline">
+        {added ? t('projects.catalog.added', 'Added') : t('projects.catalog.addShort', 'Add')}
+      </span>
+    </button>
+  );
+}
+
+/**
+ * One entry of the project catalog: a published project or one of the
+ * viewer's iFinder smart collections, with what the viewer can do with it.
+ *
+ * - `add`: an Add button.
+ * - `added` (a project added from the catalog): an Added button that removes
+ *   it again.
+ * - `inList` (own or member project, collection already added): a status.
+ *
+ * @param {Object} props
+ * @param {import('../utils/catalogSources').CatalogEntry} props.entry
+ * @param {boolean} props.busy - Adding or removing it is under way.
+ * @param {string|null} [props.error] - Why the last add or remove failed.
+ * @param {(entry: Object) => void} props.onToggle - Add, or remove an added project.
+ * @param {() => void} props.onNavigate - Called when the viewer follows the link.
+ * @returns {JSX.Element}
+ */
+function CatalogEntryRow({ entry, busy, error, onToggle, onNavigate }) {
+  const { t } = useTranslation();
+  const style = CATALOG_SOURCE_STYLES[entry.source];
+  const errorId = error ? `catalog-row-error-${entry.key}` : undefined;
+
+  return (
+    <li className="flex items-start gap-3 px-4 py-3 sm:px-6 [@media(max-height:560px)]:py-2">
+      <span
+        className={`flex-none grid place-items-center size-9 rounded-lg ${style.tile}`}
+        aria-hidden="true"
+      >
+        <Icon name={style.icon} size="md" />
+      </span>
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-2 min-w-0">
+          {entry.projectId ? (
+            <Link
+              to={`/projects/${encodeURIComponent(entry.projectId)}`}
+              onClick={onNavigate}
+              className="min-w-0 truncate font-medium text-gray-900 dark:text-gray-100 hover:text-indigo-600 dark:hover:text-indigo-400 rounded-sm focus:outline-hidden focus-visible:ring-2 focus-visible:ring-indigo-500"
+            >
+              {entry.name}
+            </Link>
+          ) : (
+            <span className="min-w-0 truncate font-medium text-gray-900 dark:text-gray-100">
+              {entry.name}
+            </span>
+          )}
+          <span
+            className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-medium whitespace-nowrap ${style.badge}`}
+          >
+            {catalogSourceLabel(entry.source, t)}
+          </span>
+        </div>
+        {entry.description && (
+          <p className="text-sm text-gray-600 dark:text-gray-400 line-clamp-1 sm:line-clamp-2 [@media(max-height:560px)]:line-clamp-1">
+            {entry.description}
+          </p>
+        )}
+        <p className="mt-0.5 text-xs text-gray-500 dark:text-gray-400">{metaLine(entry, t)}</p>
+        {error && (
+          <p id={errorId} role="alert" className="mt-1 text-xs text-red-600 dark:text-red-400">
+            {error}
+          </p>
+        )}
+      </div>
+      {entry.status === 'inList' ? (
+        <InListStatus />
+      ) : (
+        <EntryButton
+          entry={entry}
+          busy={busy}
+          errorId={errorId}
+          onClick={() => !busy && onToggle(entry)}
+        />
+      )}
+    </li>
+  );
+}
+
+export default CatalogEntryRow;
