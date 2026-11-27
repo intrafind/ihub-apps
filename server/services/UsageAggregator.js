@@ -66,11 +66,36 @@ async function readJson(file) {
   }
 }
 
-/** Write a file whole or not at all. */
-async function writeJsonAtomic(file, data) {
+/** Thrown when a run finds it no longer holds the rollup lease: it stops publishing. */
+class RollupLeaseLostError extends Error {
+  constructor() {
+    super('The usage rollup run lost its lease to another run; it stops without publishing');
+    this.name = 'RollupLeaseLostError';
+  }
+}
+
+/**
+ * Write a file whole or not at all.
+ *
+ * With a `lease` (the run holds the storage lock), the lease is checked after
+ * the content is written and right before the rename that publishes it: a run
+ * that was evicted (its event loop wedged past the lease's TTL, so another run
+ * took over) must not replace the newer run's rollup with the snapshot it read
+ * before. The check and the rename are not one step; the window left is the
+ * time between them (see `storage/LockManager.js`, fencing).
+ *
+ * @param {string} file
+ * @param {unknown} data
+ * @param {{isCurrent: () => Promise<boolean>}} [lease]
+ */
+async function writeJsonAtomic(file, data, lease) {
   await fs.mkdir(path.dirname(file), { recursive: true });
   const tmp = `${file}.${process.pid}.${Date.now()}.tmp`;
   await fs.writeFile(tmp, JSON.stringify(data));
+  if (lease && !(await lease.isCurrent())) {
+    await fs.unlink(tmp).catch(() => {});
+    throw new RollupLeaseLostError();
+  }
   await renameWithRetry(tmp, file);
 }
 
@@ -107,9 +132,10 @@ export async function buildDayRollup(date) {
  * @param {Object} [opts]
  * @param {number} [opts.now]
  * @param {boolean} [opts.all=false] - rebuild every day that has events
+ * @param {Object} [opts.lease] - the rollup lease to check before each write
  * @returns {Promise<{daysGenerated: number, eventsProcessed: number, days: string[]}>}
  */
-export async function generateDailyRollups({ now = Date.now(), all = false } = {}) {
+export async function generateDailyRollups({ now = Date.now(), all = false, lease } = {}) {
   const today = utcDay(now);
   const yesterday = utcDay(now - DAY_MS);
   const days = [];
@@ -120,9 +146,10 @@ export async function generateDailyRollups({ now = Date.now(), all = false } = {
     try {
       const events = await readDayEvents(date);
       eventsProcessed += events.length;
-      await writeJsonAtomic(dailyRollupFile(date), buildRollup(events, { date }));
+      await writeJsonAtomic(dailyRollupFile(date), buildRollup(events, { date }), lease);
       days.push(date);
     } catch (error) {
+      if (error instanceof RollupLeaseLostError) throw error;
       logger.error('Failed to write daily usage rollup', {
         component: 'UsageAggregator',
         date,
@@ -143,9 +170,11 @@ export async function generateDailyRollups({ now = Date.now(), all = false } = {
  * Rebuild the monthly rollups of the given days' months from their daily
  * rollups.
  * @param {string[]} days
+ * @param {Object} [opts]
+ * @param {Object} [opts.lease] - the rollup lease to check before each write
  * @returns {Promise<{monthsGenerated: number}>}
  */
-export async function generateMonthlyRollups(days) {
+export async function generateMonthlyRollups(days, { lease } = {}) {
   const months = [...new Set(days.map(d => d.slice(0, 7)))];
   let files = [];
   try {
@@ -164,10 +193,12 @@ export async function generateMonthlyRollups(days) {
     try {
       await writeJsonAtomic(
         monthlyRollupFile(month),
-        mergeRollups(rollups, { month, days: rollups.length })
+        mergeRollups(rollups, { month, days: rollups.length }),
+        lease
       );
       generated++;
     } catch (error) {
+      if (error instanceof RollupLeaseLostError) throw error;
       logger.error('Failed to write monthly usage rollup', {
         component: 'UsageAggregator',
         month,
@@ -253,8 +284,9 @@ let rollupQueue = Promise.resolve();
 
 /**
  * Run `fn` holding the storage lock of rollup runs, where the storage has one
- * that excludes anything. Without one (no storage yet, `locking: 'none'`),
- * only the queue of this process orders the runs.
+ * that excludes anything, and hand it the lease. Without one (no storage yet,
+ * `locking: 'none'`), only the queue of this process orders the runs, and `fn`
+ * gets no lease.
  */
 function withRollupLock(fn) {
   const provider = getStorage();
@@ -265,7 +297,7 @@ function withRollupLock(fn) {
   } catch {
     locking = undefined;
   }
-  if (typeof locks?.withLock !== 'function' || locking === 'none') return fn();
+  if (typeof locks?.withLock !== 'function' || locking === 'none') return fn(undefined);
   return locks.withLock(ROLLUP_LOCK, fn, ROLLUP_LOCK_OPTIONS);
 }
 
@@ -275,7 +307,9 @@ function withRollupLock(fn) {
  * Runs one at a time, in the order they were asked for: the hourly run, the
  * one at startup and an admin's `POST /api/admin/usage/_rollup` queue behind
  * each other in this process, and the storage lock keeps the runs of other
- * workers and instances apart. A run that was asked for while another was
+ * workers and instances apart where the storage has a lock. A run that lost
+ * its lease (wedged past the TTL, taken over) stops before it publishes
+ * another rollup. A run that was asked for while another was
  * going still runs itself afterwards, so it sees the events that arrived in
  * the meantime and honours its own `all`.
  *
@@ -284,7 +318,9 @@ function withRollupLock(fn) {
  * @returns {Promise<Object>} the run's counts
  */
 export function runRollups(retentionConfig = {}, opts = {}) {
-  const run = rollupQueue.then(() => withRollupLock(() => rollUp(retentionConfig, opts)));
+  const run = rollupQueue.then(() =>
+    withRollupLock(lease => rollUp(retentionConfig, { ...opts, lease }))
+  );
   // A failed run must not stop the ones queued behind it.
   rollupQueue = run.catch(() => {});
   return run;
@@ -294,7 +330,7 @@ export function runRollups(retentionConfig = {}, opts = {}) {
 async function rollUp(retentionConfig, opts) {
   const eventsFlushed = (await flushQueue().catch(() => 0)) || 0;
   const { daysGenerated, eventsProcessed, days } = await generateDailyRollups(opts);
-  const { monthsGenerated } = await generateMonthlyRollups(days);
+  const { monthsGenerated } = await generateMonthlyRollups(days, { lease: opts.lease });
   let eventsDeleted = 0;
   if (retentionConfig.eventRetentionDays != null) {
     eventsDeleted = await cleanupEvents(retentionConfig.eventRetentionDays, opts.now);

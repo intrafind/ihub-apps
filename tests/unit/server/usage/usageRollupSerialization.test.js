@@ -8,13 +8,20 @@
  * place. In this process they queue; across workers and instances they hold
  * the storage lock `usage-rollups`.
  */
-import { describe, it, expect, jest, beforeEach } from '@jest/globals';
+import { describe, it, expect, jest, beforeEach, afterAll } from '@jest/globals';
+import fs from 'node:fs';
+import path from 'node:path';
 
 /** What happened, in order: `start:<n>` / `end:<n>` per run, `lock:*` per lease. */
 let mockTrace = [];
 let mockRun = 0;
 let mockFailNext = false;
 let mockStorage = null;
+/** Event days the next runs see, and where their rollups go. */
+let mockDays = [];
+const mockRollupDir = require('node:fs').mkdtempSync(
+  require('node:path').join(require('node:os').tmpdir(), 'usage-rollup-serial-')
+);
 
 const tick = () => new Promise(resolve => setTimeout(resolve, 5));
 
@@ -45,29 +52,35 @@ jest.mock('../../../../server/services/UsageEventLog.js', () => ({
       mockFailNext = false;
       throw new Error('event directory unreadable');
     }
-    return [];
+    return mockDays;
   },
   readDayEvents: async () => [],
   eventFileMtime: async () => null,
-  getDailyDir: () => '/nonexistent/usage-daily',
-  getMonthlyDir: () => '/nonexistent/usage-monthly',
+  getDailyDir: () => require('node:path').join(mockRollupDir, 'daily'),
+  getMonthlyDir: () => require('node:path').join(mockRollupDir, 'monthly'),
   cleanupEvents: async () => 0
 }));
 
 import { runRollups } from '../../../../server/services/UsageAggregator.js';
 
-/** A storage whose lock records its sections but excludes nothing itself. */
+/**
+ * A storage whose lock records its sections but excludes nothing itself.
+ * `isCurrent` answers what the test sets on `lease.current`.
+ */
 function storageWithLock(locking = 'advisory-single-machine') {
   const calls = [];
+  const lease = { name: 'usage-rollups', token: 1, current: true };
+  lease.isCurrent = async () => lease.current;
   return {
     calls,
+    lease,
     getCapabilities: () => ({ locking }),
     locks: {
       withLock: async (name, fn, options) => {
         calls.push({ name, options });
         mockTrace.push('lock:acquire');
         try {
-          return await fn();
+          return await fn(lease);
         } finally {
           mockTrace.push('lock:release');
         }
@@ -81,7 +94,23 @@ beforeEach(() => {
   mockRun = 0;
   mockFailNext = false;
   mockStorage = null;
+  mockDays = [];
+  fs.rmSync(mockRollupDir, { recursive: true, force: true });
 });
+
+afterAll(() => {
+  fs.rmSync(mockRollupDir, { recursive: true, force: true });
+});
+
+const DAY = '2026-10-15';
+const dailyFile = () => path.join(mockRollupDir, 'daily', `${DAY}.json`);
+const listed = dir => {
+  try {
+    return fs.readdirSync(path.join(mockRollupDir, dir));
+  } catch {
+    return [];
+  }
+};
 
 describe('runRollups serialization', () => {
   it('runs overlapping calls one after another, in the order they came', async () => {
@@ -114,6 +143,24 @@ describe('runRollups serialization', () => {
     await Promise.all([runRollups(), runRollups()]);
     expect(mockStorage.calls).toHaveLength(0);
     expect(mockTrace).toEqual(['start:1', 'end:1', 'start:2', 'end:2']);
+  });
+
+  it('publishes daily and monthly rollups while it holds the lease', async () => {
+    mockStorage = storageWithLock();
+    mockDays = [DAY];
+    const stats = await runRollups();
+    expect(stats).toMatchObject({ daysGenerated: 1, monthsGenerated: 1 });
+    expect(fs.existsSync(dailyFile())).toBe(true);
+    expect(listed('monthly')).toEqual(['2026-10.json']);
+  });
+
+  it('stops without publishing once it has lost the lease to another run', async () => {
+    mockStorage = storageWithLock();
+    mockStorage.lease.current = false;
+    mockDays = [DAY];
+    await expect(runRollups()).rejects.toThrow(/lost its lease/);
+    expect(listed('daily')).toEqual([]);
+    expect(listed('monthly')).toEqual([]);
   });
 
   it('keeps going after a run that failed', async () => {
