@@ -11,15 +11,14 @@ iHub talks MCP in two directions. The **gateway** (`/mcp`, iHub as server) now s
 | Capability                        | Gateway (iHub as server)                     | Outbound (iHub as client)          |
 | --------------------------------- | -------------------------------------------- | ---------------------------------- |
 | Protocol 2026-07-28               | yes, stateless, next to the 2025 revisions   | yes, over Streamable HTTP          |
-| Skills (`io.modelcontextprotocol/skills`) | yes: `skills/list`, `skill://` files | no                                 |
+| Skills (`io.modelcontextprotocol/skills`) | yes: `skills/list`, `skill://` files | yes: approved per installation     |
 | Tasks (`io.modelcontextprotocol/tasks`)   | yes: apps and workflows              | no                                 |
 | Elicitation                       | yes: approval of gated tools                 | yes: form and URL mode, in the chat |
 | File Uploads (experimental)       | no                                           | no                                 |
 
-Outbound, iHub declares none of the extensions, so every server answers it as it answers any
-client without them: synchronously, without asking the user mid-call, without skills. Nothing is
-broken; iHub just does not use what servers like Supabase, GitHub or Atlassian now offer. This
-document plans the three client-side pieces and says what blocks File Uploads.
+Outbound, iHub now takes questions from servers (elicitation, form and URL mode) and uses the
+skills an admin approved; it does not declare Tasks, so a server answers a long call synchronously.
+This document plans the three client-side pieces and says what blocks File Uploads.
 
 ## 1. Elicitation from external servers
 
@@ -91,6 +90,22 @@ when the run is aborted, and report `statusMessage` as tool progress.
 
 ## 3. Skills from external servers
 
+**Status: implemented** (see
+[MCP Integration → Skills from the server](../docs/mcp-integration.md#skills-from-the-server)).
+As built, the approval stores the skill's entry, and every read is verified
+against that stored entry (the SDK's `SkillsClient.read` checks a file against
+the entry it is given), so nothing is cached on disk: verified files are kept
+in memory by digest. An activation also compares the server's current listing
+(at most a minute old) with the approval, so a changed `SKILL.md` that a cached
+copy would cover is refused too. Per-user servers needed no special case: the
+admin lists through their own connection, a user reads through theirs, and a
+user whose server serves something else than was approved does not get the
+skill. A user starts one with `/<installation>:<name>`, which the `/` picker
+inserts (`GET /api/skills?appId=` lists the app's server skills), or with the
+bare `/<name>` when nothing else has that name. Agents do not get server skills.
+
+The original plan follows.
+
 **What it gives:** a connected server ships its own playbooks (how to use its tools well), loaded
 only when the model needs them.
 
@@ -119,6 +134,6 @@ chat files to servers instead of passing base64 through the model.
 ## Order
 
 1. Elicitation — done (form and URL mode).
-2. Skills (server-side only, no SDK gap).
+2. Skills — done.
 3. Tasks (blocked on SDK client extensions).
 4. File Uploads (blocked on the spec).

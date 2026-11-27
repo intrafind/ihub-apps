@@ -94,6 +94,39 @@ const installedActionsSchema = z.object({
  * action's mode and the app's override wins (`utils/toolApproval.js`). Absent
  * means nothing is asked on account of the installation.
  */
+/** A skill name as the Agent Skills spec has it: lowercase letters, digits and single hyphens. */
+export const SKILL_NAME_PATTERN = /^[a-z0-9](?:[a-z0-9]|-(?!-)){0,63}(?<!-)$/;
+
+/**
+ * One skill of an MCP server an admin approved (MCP Skills extension): the
+ * server's entry as it was approved — `SKILL.md`'s URI, its frontmatter and
+ * every file with its SHA-256 digest and size. A file is loaded only when it
+ * still matches this entry, so a skill the server changed is not loaded until
+ * an admin approves it again (`services/mcp/mcpSkills.js`).
+ */
+export const skillApprovalSchema = z
+  .object({
+    uri: z.string().min(1).max(2048),
+    frontmatter: z
+      .object({ name: z.string().min(1).max(64), description: z.string().max(1024) })
+      .loose(),
+    resources: z
+      .array(
+        z
+          .object({
+            uri: z.string().min(1).max(2048),
+            digest: z.string().regex(/^sha256:[0-9a-f]{64}$/),
+            size: z.number().int().nonnegative()
+          })
+          .strict()
+      )
+      .min(1)
+      .max(512),
+    approvedAt: z.string(),
+    approvedBy: z.string().max(200).optional()
+  })
+  .strict();
+
 export const installedApprovalSchema = z.object({
   default: z.enum(APPROVAL_MODES).optional(),
   actions: z.record(z.string().min(1).max(128), z.enum(APPROVAL_MODES)).optional(),
@@ -252,6 +285,14 @@ const installedIntegrationObjectSchema = z.object({
    * says otherwise).
    */
   elicitation: z.object({ enabled: z.boolean() }).strict().optional(),
+  /**
+   * MCP servers only: the server's skills an admin approved, by skill name
+   * (`setSkillApproval`). Only these reach a chat, as `<installation>:<name>`.
+   */
+  skills: z
+    .object({ approved: z.record(z.string().regex(SKILL_NAME_PATTERN), skillApprovalSchema) })
+    .strict()
+    .optional(),
   // No `allowedGroups` (removed in #3093, moved onto the groups by V203): who
   // may use an installation is `groups.json` → `permissions.integrations`.
   timeoutMs: z.number().int().min(1000).max(120000).optional(),

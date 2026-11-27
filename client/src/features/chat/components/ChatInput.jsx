@@ -6,6 +6,7 @@ import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
 import { UnifiedUploader, CloudStoragePicker, AttachedFilesList } from '../../upload/components';
 import PromptSearch from '../../prompts/components/PromptSearch';
+import { pickerSkillToken } from '../../skills/utils/skillPicker';
 import usePromptLauncher from '../../prompts/hooks/usePromptLauncher';
 import WorkflowMentionSearch from './WorkflowMentionSearch';
 import {
@@ -533,7 +534,7 @@ function ChatInput({
   // server activates the skills named by `/name` tokens in the message.
   const insertSkill = useCallback(
     skill => {
-      const next = insertSkillAtSlash(value, takeSlashAnchor(), skill.name);
+      const next = insertSkillAtSlash(value, takeSlashAnchor(), pickerSkillToken(skill));
       onChange({ target: { value: next.value } });
       focusInputAt(next.caret);
       return true;

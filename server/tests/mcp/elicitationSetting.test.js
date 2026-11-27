@@ -101,3 +101,44 @@ test('questions are offered over Streamable HTTP only, where a question finds it
   assert.equal(elicitationEnabledFor(config('stdio')), false);
   assert.equal(elicitationEnabledFor(config('sse')), false);
 });
+
+test('a save never sets or drops the approved server skills; the approval is checked', async () => {
+  const { skillApprovalSchema } = await import('../../validators/integrationsConfigSchema.js');
+  const approval = {
+    uri: 'skill://deploy/SKILL.md',
+    frontmatter: { name: 'deploy', description: 'Deploy', 'allowed-tools': 'x' },
+    resources: [{ uri: 'skill://deploy/SKILL.md', digest: `sha256:${'a'.repeat(64)}`, size: 10 }],
+    approvedAt: '2026-11-26T00:00:00.000Z'
+  };
+  assert.equal(skillApprovalSchema.safeParse(approval).success, true);
+  assert.equal(
+    skillApprovalSchema.safeParse({
+      ...approval,
+      resources: [{ uri: 'x', digest: 'md5:1', size: 1 }]
+    }).success,
+    false
+  );
+  assert.equal(
+    validateInstalledIntegration({
+      id: 'billing',
+      definition: 'mcp/billing',
+      skills: { approved: { 'Bad Name': approval } }
+    }).success,
+    false
+  );
+
+  const entry = { definition: { ...definition(), install: [], actions: [] } };
+  const service = new InstalledIntegrationService({
+    registry: { list: () => [entry], get: () => entry, ensureLoaded: async () => {} }
+  });
+  const existing = { ...instance(), skills: { approved: { deploy: approval } } };
+  const base = { id: 'billing', definition: 'mcp/billing', enabled: true, values: {} };
+  const kept = await service._prepare(base, { existing });
+  assert.deepEqual(kept.instance.skills, existing.skills);
+  // A payload that names skills cannot approve one past the Skills tab.
+  const smuggled = await service._prepare(
+    { ...base, skills: { approved: { other: approval } } },
+    { existing: instance() }
+  );
+  assert.equal(smuggled.instance.skills, undefined);
+});

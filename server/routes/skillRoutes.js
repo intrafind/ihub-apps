@@ -3,14 +3,18 @@
 
 import { authRequired } from '../middleware/authRequired.js';
 import configCache from '../configCache.js';
-import { isAnonymousAccessAllowed, enhanceUserWithPermissions } from '../utils/authorization.js';
+import {
+  canUserAccessResource,
+  isAnonymousAccessAllowed,
+  enhanceUserWithPermissions
+} from '../utils/authorization.js';
 import { buildServerPath } from '../utils/basePath.js';
 import { responseEtag } from '../utils/etag.js';
 import { ServiceError } from '../utils/ServiceError.js';
 import { getSkillContent, getSkillResource } from '../services/skillLoader.js';
 import { assertValidId } from '../utils/pathSecurity.js';
 import { requireFeature } from '../featureRegistry.js';
-import { getUsablePersonalSkills } from '../services/skillAccess.js';
+import { getUsablePersonalSkills, getUsableServerSkills } from '../services/skillAccess.js';
 
 /**
  * Give the request's user its permissions, as the skill lookups need them.
@@ -52,7 +56,10 @@ async function requireUsableSkill(req, name) {
 
 export default function registerSkillRoutes(app) {
   /**
-   * GET /api/skills - List available skills filtered by user permissions
+   * GET /api/skills - List available skills filtered by user permissions.
+   * With `appId` (an app the caller may open), also the skills MCP servers the
+   * app binds ship and an admin approved (`scope: 'server'`, `id`
+   * `<installation>:<name>`), for that app's `/` picker.
    */
   app.get(
     buildServerPath('/api/skills'),
@@ -74,10 +81,29 @@ export default function registerSkillRoutes(app) {
         isSystem: isSystem === true
       }));
 
+      // The skills the MCP servers of the app ship, once approved.
+      const appId = typeof req.query.appId === 'string' ? req.query.appId : '';
+      // The app this request may run (a content admin's unpublished test app
+      // too), and only when the caller's groups grant it.
+      const candidate = appId && req.user ? configCache.getAppForRequest(appId, req.user) : null;
+      const app =
+        candidate && canUserAccessResource(req.user, 'apps', candidate.id) ? candidate : null;
+      const server = app ? await getUsableServerSkills({ app, user: req.user }) : [];
+      for (const skill of server) {
+        safeSkills.push({
+          id: skill.id,
+          name: skill.name,
+          displayName: skill.name,
+          description: skill.description,
+          scope: 'server',
+          server: { id: skill.instanceId, name: skill.serverName }
+        });
+      }
+
       // The caller's own and shared user skills, for the `/` picker. They
       // change with every save, so the list is not cached when it has any.
       const personal = await getUsablePersonalSkills({ user: req.user });
-      if (personal.length > 0) {
+      if (personal.length > 0 || server.length > 0) {
         res.setHeader('Cache-Control', 'private, no-store');
         for (const skill of personal) {
           safeSkills.push({

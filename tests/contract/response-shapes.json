@@ -2192,6 +2192,31 @@
       ]
     }
   },
+  "GET /api/admin/integrations/installed/:id/skill-files": {
+    "status": 400,
+    "shape": {
+      "code": "string",
+      "detail": "string",
+      "details": {},
+      "status": "number",
+      "title": "string",
+      "type": "string"
+    }
+  },
+  "GET /api/admin/integrations/installed/:id/skills": {
+    "status": 502,
+    "shape": {
+      "code": "string",
+      "detail": "string",
+      "details": {
+        "instanceId": "string",
+        "reason": "string"
+      },
+      "status": "number",
+      "title": "string",
+      "type": "string"
+    }
+  },
   "GET /api/admin/integrations/people-directories/editor-context": {
     "status": 200,
     "shape": {
