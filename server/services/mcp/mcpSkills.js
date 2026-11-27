@@ -514,15 +514,15 @@ async function readVerified(conn, instanceId, approval, path, { useCache = true 
   const keyFor = client =>
     `${instanceId}\n${sessionKeyOf(client)}\n${resource.uri}\n${resource.digest}\n${kind}`;
   // Only a session that is open answers from the cache, and a text is kept
-  // only for the session that read it: no client, or a different one after
-  // the read (a reconnect meanwhile), keeps nothing.
+  // only when the same session was open before and after the read: a read
+  // that opened the session itself, or saw a reconnect meanwhile, cannot tell
+  // which session answered and keeps nothing.
   const session = conn.client || null;
   if (useCache && session && fileCache.has(keyFor(session))) return fileCache.get(keyFor(session));
   const file = await conn.readSkillFile(approval, path);
   const text = path === SKILL_FILE ? (file.body ?? '') : (file.text ?? null);
-  const reader = conn.client || null;
-  if (typeof text === 'string' && reader && (session === null || session === reader)) {
-    remember(keyFor(reader), text);
+  if (typeof text === 'string' && session && conn.client === session) {
+    remember(keyFor(session), text);
   }
   return text;
 }

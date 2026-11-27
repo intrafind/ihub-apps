@@ -365,6 +365,33 @@ describe.each([
     }
   });
 
+  it('keeps nothing a session read while a reconnect replaced it', async () => {
+    try {
+      await approve(h, 'deploy');
+      clearServerSkillCache();
+      const skill = await loadServerSkill('billing:deploy', { app, user, deps: h.deps });
+      // The read finds no open session and opens one (A); a reconnect replaces
+      // it with B before the answer arrives. The answer must not be kept as B's.
+      await h.conn.disconnect();
+      const readSkillFile = h.conn.readSkillFile.bind(h.conn);
+      h.conn.readSkillFile = async (entry, ref) => {
+        const file = await readSkillFile(entry, ref);
+        await h.conn.disconnect();
+        await h.conn.connect();
+        return file;
+      };
+      expect(await skill.readFile('references/CHECKLIST.md')).toBe('1. Plan\n2. Deploy\n');
+      // B is refused the file: nothing A read answers for it.
+      h.conn.readSkillFile = async (entry, ref) => {
+        if (ref !== 'SKILL.md') throw new Error('not for this session');
+        return readSkillFile(entry, ref);
+      };
+      expect(await skill.readFile('references/CHECKLIST.md')).toBeNull();
+    } finally {
+      await h.conn.disconnect();
+    }
+  });
+
   it('never answers one file’s read with another file of the same bytes', async () => {
     files.deploy['references/COPY.md'] = files.deploy['references/CHECKLIST.md'];
     try {
