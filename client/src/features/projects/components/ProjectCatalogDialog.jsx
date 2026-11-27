@@ -99,7 +99,11 @@ function ProjectCatalogDialog({
   const collectionsLoading = collectionsEnabled && collections.status === 'loading';
   const settled = !catalogLoading && !collectionsLoading;
   const trimmedQuery = query.trim();
-  const showEmpty = settled && shown.length === 0 && !showCollectionsNotice && !showCatalogError;
+  const filtered = trimmedQuery !== '' || activeSource !== 'all';
+  // "Nothing matches" shows even beside a notice, so an empty search result is
+  // not taken for the notice's fault; "nothing published" only without one.
+  const showEmpty =
+    settled && shown.length === 0 && (filtered || (!showCollectionsNotice && !showCatalogError));
 
   const resultText = t('projects.catalog.resultCount', '{{count}} results', {
     count: shown.length
@@ -226,7 +230,7 @@ function ProjectCatalogDialog({
         {showEmpty && (
           <CatalogEmptyState
             query={trimmedQuery}
-            filtered={trimmedQuery !== '' || activeSource !== 'all'}
+            filtered={filtered}
             catalogEnabled={catalogEnabled}
             collectionsEnabled={collectionsEnabled}
             onClear={clearFilters}

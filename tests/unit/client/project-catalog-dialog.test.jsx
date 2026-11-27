@@ -281,6 +281,24 @@ describe('ProjectCatalogDialog', () => {
     expect(mockApi.fetchSmartCollections).toHaveBeenCalledTimes(2);
   });
 
+  test('says nothing matches a search also while iFinder cannot be reached', async () => {
+    mockApi.fetchSmartCollections.mockResolvedValueOnce({
+      available: true,
+      items: [],
+      warnings: [{ code: 'IFINDER_UNREACHABLE' }]
+    });
+    renderDialog();
+    await screen.findByText('Company FAQ');
+    fireEvent.change(screen.getByRole('searchbox'), { target: { value: 'nothing like it' } });
+    expect(screen.getByText('Nothing matches “nothing like it”.')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Clear search and filter' })).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        'iFinder could not be reached, so your smart collections are missing from this list.'
+      )
+    ).toBeInTheDocument();
+  });
+
   test('shows a failed catalog as an error, not as an empty catalog', async () => {
     mockApi.fetchProjectCatalog.mockRejectedValueOnce(new Error('Boom'));
     renderDialog({ collectionsEnabled: false });
