@@ -52,8 +52,8 @@ export async function writeInDirectory(dir, write) {
  */
 const TRANSIENT_RENAME_ERRORS = new Set(['EPERM', 'EBUSY', 'EACCES']);
 
-/** Waits between rename attempts on Windows: about one second in all. */
-const RENAME_RETRY_DELAYS_MS = [10, 20, 40, 80, 120, 200, 250, 300];
+/** Waits between rename attempts on Windows: five retries, about one second in all. */
+const RENAME_RETRY_DELAYS_MS = [20, 60, 150, 300, 500];
 
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 
