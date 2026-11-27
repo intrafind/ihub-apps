@@ -55,6 +55,7 @@ import { fetchSkills } from '../../../client/src/api/endpoints/skills';
 import PromptSearch from '../../../client/src/features/prompts/components/PromptSearch';
 import {
   PICKER_SKILL_GROUPS,
+  pickerSkillToken,
   selectPickerSkills
 } from '../../../client/src/features/skills/utils/skillPicker';
 
@@ -203,5 +204,46 @@ describe('PromptSearch skill groups', () => {
     expect(onSelect).toHaveBeenCalledWith(
       expect.objectContaining({ _type: 'skill', id: 'usk_mine1', name: 'weekly-report' })
     );
+  });
+});
+
+describe('skills of connected MCP servers in the picker', () => {
+  const SERVER_SKILL = {
+    id: 'billing:deploy',
+    name: 'deploy',
+    displayName: 'deploy',
+    description: 'Deploy safely',
+    scope: 'server',
+    server: { id: 'billing', name: 'Billing' }
+  };
+
+  test('are offered as the server listed them for the app, in their own group', () => {
+    const [skill] = selectPickerSkills([SERVER_SKILL], { appSkills: [], allowPersonal: false });
+    expect(skill).toMatchObject({
+      id: 'billing:deploy',
+      scope: 'server',
+      group: PICKER_SKILL_GROUPS.server,
+      serverName: 'Billing'
+    });
+  });
+
+  test('are written into the message by their id, other skills by their name', () => {
+    const [server, mine] = selectPickerSkills(
+      [SERVER_SKILL, { id: 'usk_1', name: 'weekly-report', scope: 'mine' }],
+      {}
+    );
+    expect(pickerSkillToken(server)).toBe('billing:deploy');
+    expect(pickerSkillToken(mine)).toBe('weekly-report');
+  });
+
+  test('come from the list of the open app, under the server group', async () => {
+    fetchSkills.mockReset();
+    fetchSkills.mockResolvedValue([SERVER_SKILL]);
+    render(
+      <PromptSearch isOpen onClose={() => {}} onSelect={() => {}} appId="ops" appSkills={[]} />
+    );
+    await waitFor(() => expect(screen.getAllByRole('listitem')).toHaveLength(1));
+    expect(fetchSkills).toHaveBeenCalledWith(undefined, { skipCache: true, appId: 'ops' });
+    expect(screen.getByRole('listitem').dataset.group).toBe('Skills of connected servers');
   });
 });

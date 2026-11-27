@@ -11,7 +11,8 @@ import { isSkillAssigned } from '../../../../../shared/appWildcards.js';
 export const PICKER_SKILL_GROUPS = {
   global: 'skill',
   mine: 'skillMine',
-  shared: 'skillShared'
+  shared: 'skillShared',
+  server: 'skillServer'
 };
 
 /**
@@ -19,10 +20,22 @@ export const PICKER_SKILL_GROUPS = {
  * from a server that knows only global skills.
  *
  * @param {Object} skill - A picker entry.
- * @returns {'global'|'mine'|'shared'}
+ * @returns {'global'|'mine'|'shared'|'server'}
  */
 export function pickerSkillScope(skill) {
-  return skill?.scope === 'mine' || skill?.scope === 'shared' ? skill.scope : 'global';
+  return ['mine', 'shared', 'server'].includes(skill?.scope) ? skill.scope : 'global';
+}
+
+/**
+ * What picking a skill writes into the message after `/`: its name, or for a
+ * skill an MCP server ships its id (`billing:deploy`), which no other skill
+ * shares.
+ *
+ * @param {Object} skill - A picker entry.
+ * @returns {string}
+ */
+export function pickerSkillToken(skill) {
+  return pickerSkillScope(skill) === 'server' ? skill.id : skill.name;
 }
 
 /**
@@ -32,6 +45,8 @@ export function pickerSkillScope(skill) {
  *   (`"*"` lists every skill).
  * - A **personal** skill (the caller's own, or shared with them) is offered
  *   unless the app sets `skillSettings.allowPersonal: false`.
+ * - A **server** skill (an MCP server's, approved) is offered as the server
+ *   listed it: `GET /api/skills?appId=` lists only the ones of that app.
  *
  * Whether the app offers skills at all (`skillSettings.enabled`) is decided by
  * the caller: it does not open the picker's skill list otherwise.
@@ -57,7 +72,8 @@ export function selectPickerSkills(rawSkills, { appSkills = [], allowPersonal = 
   for (const skill of Array.isArray(rawSkills) ? rawSkills : []) {
     if (!skill?.name) continue;
     const scope = pickerSkillScope(skill);
-    if (scope === 'global' ? !isSkillAssigned(appSkills, skill.name) : !allowPersonal) continue;
+    if (scope === 'global' && !isSkillAssigned(appSkills, skill.name)) continue;
+    if ((scope === 'mine' || scope === 'shared') && !allowPersonal) continue;
     result.push({
       ...skill,
       _type: 'skill',
@@ -65,7 +81,8 @@ export function selectPickerSkills(rawSkills, { appSkills = [], allowPersonal = 
       group: PICKER_SKILL_GROUPS[scope],
       id: skill.id || skill.name,
       description: skill.description || '',
-      ownerName: skill.owner?.name || ''
+      ownerName: skill.owner?.name || '',
+      serverName: skill.server?.name || ''
     });
   }
   return result;

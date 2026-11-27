@@ -38,7 +38,8 @@ jest.unstable_mockModule('../services/skillLoader.js', () => ({
   getSkillResource: async () => state.resource
 }));
 jest.unstable_mockModule('../services/skillAccess.js', () => ({
-  getUsablePersonalSkills: async () => []
+  getUsablePersonalSkills: async () => [],
+  getUsableServerSkills: async () => []
 }));
 jest.unstable_mockModule('../utils/logger.js', () => ({
   default: { info: () => {}, warn: () => {}, error: () => {}, debug: () => {} }

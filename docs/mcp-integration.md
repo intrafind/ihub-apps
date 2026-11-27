@@ -163,6 +163,64 @@ server goes on without asking. The choice is stored on the installation as
 definition decides (a shipped definition can set
 `protocol.elicitation.enabled: false`). A change reconnects the server.
 
+### Skills from the server
+
+A server that declares the MCP Skills extension (`io.modelcontextprotocol/skills`)
+ships skills: instructions for using its tools well, each a `SKILL.md` with
+files next to it. The installation page of such a server has a **Skills** tab.
+It lists the server's skills with their files and size, and the status of each:
+**Not approved**, **Approved**, **Changed on the server**, **No longer
+offered** or **Cannot be approved** (two skills by one name, or a skill whose
+files the server does not list).
+
+- **Read before you approve.** Each skill lists its files; a click opens one
+  read-only, as the server offers it now.
+- **Nothing reaches a chat unapproved.** **Approve** approves the skill as you
+  reviewed it: if the server changed it since the list was loaded, the approval
+  is refused and the list reloads for another look. It reads every file of the
+  skill from the server, checks it against the digest and size the server
+  listed, and stores that entry with the installation
+  (`skills.approved.<name>`). A regular save of the installation never sets or
+  drops an approval.
+- **A changed skill stops loading.** A chat loads a skill only while the server
+  lists exactly the entry that was approved and serves exactly those bytes. If
+  the server changes the skill (another file, other bytes, other frontmatter), it
+  shows as **Changed on the server** and is not loaded until it is approved
+  again. iHub re-reads the server's listing at most once a minute per
+  connection.
+- **In a chat** an approved skill is a skill like iHub's own, named
+  `<installation>:<name>` (`billing:deploy`), so it never stands in for an iHub
+  skill of the same name. The model sees it in its skill list with the server's
+  name in front of the description, and loads it with `activate_skill` and its
+  files with `read_skill_resource`. It is offered in apps that turn skills on
+  (`skillSettings.enabled`) and bind the installation, to users the
+  installation is granted to. Agents do not get it.
+- **Started by the user** like any skill: the `/` picker lists the app's server
+  skills under **Skills of connected servers**, with the server's name, and
+  writes `/<installation>:<name>` into the message. Typed by hand, the bare
+  `/<name>` works too when no skill of the user's own, shared or global has that
+  name and only one server offers it; otherwise the id decides.
+- **It grants nothing.** `allowed-tools` in a server skill's frontmatter is
+  ignored; the skill can only use the tools the chat offers anyway.
+- **Per-user servers** (`oauth-user`): the tab lists the skills through the
+  admin's own connection, so the admin connects first. A chat reads the files
+  through the user's own connection; when a user's server serves something else
+  than was approved, that user does not get the skill.
+
+Verified files are kept in memory by digest. Nothing is written to the skill
+folders. A read is answered only from the copy the same session read: never
+from another user's connection, and never from the session before a reconnect,
+so a server that refuses a file to one user, or no longer serves it, is not
+bypassed. The routes are
+`GET /api/admin/integrations/installed/{id}/skills`,
+`GET /api/admin/integrations/installed/{id}/skill-files?skillName=&path=&digest=` and
+`PUT` (body `{ digest }`) / `DELETE
+/api/admin/integrations/installed/{id}/skill-approvals/{skillName}`. The file
+read and the approval both carry the listed item's `digest`. When the server
+changed the skill since the list was loaded, both answer `409
+SKILL_LISTING_CHANGED` and the tab reloads, so an admin never reads or approves
+one version under another version's listing.
+
 ### Transports
 
 | Transport        | When to use                                                                                                                                                                                                         |

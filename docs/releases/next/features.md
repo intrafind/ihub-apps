@@ -217,6 +217,22 @@ the server, **Decline** tells it no, and the tool call goes on.
 
 Details: [MCP Integration](../../mcp-integration.md#questions-from-the-server-elicitation).
 
+## Integrations: Use the Skills an MCP Server Ships
+
+An MCP server can ship skills: instructions for using its tools well. The installation page of such
+a server has a new **Skills** tab that lists them; an admin approves each skill before it reaches a
+chat.
+
+- An approved skill works like iHub's own skills: the model sees it in its skill list, with the
+  server's name, and loads it when a request needs it. It is offered in apps that turn skills on and
+  use the integration.
+- **Approve** checks every file of the skill. If the server later changes the skill, it shows as
+  **Changed on the server** and is not used until you approve it again.
+- You can also start one yourself: the `/` picker lists it under **Skills of connected servers**.
+- A server skill never replaces an iHub skill of the same name, and it grants no tools.
+
+Details: [MCP Integration](../../mcp-integration.md#skills-from-the-server).
+
 ## Document Templates: Colours and Fonts From the Word and PowerPoint Files
 
 A document template that sets no colours of its own takes them from its Word and PowerPoint files,
