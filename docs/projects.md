@@ -523,6 +523,8 @@ system prompt.
 
 ```xml
 <projects>
+These projects are part of this conversation: their documents are what the user is working with. When the user refers to "the documents", "the files" or the like without naming other documents or attaching files to the message, they mean the documents of these projects. Use them instead of asking which documents are meant.
+For a request about all of a project's documents, such as summarizing or comparing them, take them from its document list (knowledge_list for the complete one) and read them with knowledge_read; knowledge_search returns only the passages that match a query.
   <project id="faq" name="FAQ" mode="loaded">
     <document id="itm_…" name="faq.md" origin="uploaded">…text…</document>
   </project>
@@ -535,6 +537,13 @@ Read a listed document directly with knowledge_read (its id), or search them all
   </project>
 </projects>
 ```
+
+The block opens with what the projects are to the conversation: a request about "the documents" or
+"the files" means the documents of these projects, unless the user names others or attaches files to
+the message. The second line is only there when a project is searched and the model can call tools.
+An app prompt that limits what the model answers from (for example "answer only from the FAQ
+project") is not contradicted by it: the note says which documents a request means, not which ones
+to answer from.
 
 A **searched** project lists the documents that are not in the prompt already, so the model can
 pick the one to read instead of searching blindly. See

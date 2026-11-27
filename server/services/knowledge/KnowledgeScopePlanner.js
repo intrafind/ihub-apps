@@ -100,8 +100,8 @@ const EXCERPT_NOTE_NO_TOOLS =
  * which documents were meant, although the chat had a project attached.
  */
 const SCOPE_NOTE =
-  'These projects were added to this conversation: their documents are what the user is working with. ' +
-  'When the user refers to "the documents", "the files", "them" or the like without naming other ' +
+  'These projects are part of this conversation: their documents are what the user is working with. ' +
+  'When the user refers to "the documents", "the files" or the like without naming other ' +
   'documents or attaching files to the message, they mean the documents of these projects. ' +
   'Use them instead of asking which documents are meant.';
 
