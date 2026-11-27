@@ -104,7 +104,7 @@ PR and Jira text: the `pr-handling-guidelines` and `jira-handling-guidelines` sk
 
 ### Config Migrations
 
-Versioned, Flyway-style, in `server/migrations/` (`V{NNN}__{description}.js`), run on startup. Write one when adding/renaming/restructuring fields in existing config files or adding default entries; NOT for brand-new config files (initial setup copies `server/defaults/`). Never modify an applied migration; forward-only. Use the `create-migration` skill; details in `docs/configuration-migrations.md` and `server/migrations/README.md`.
+Versioned, Flyway-style, in `server/migrations/` (`V{NNN}__{description}.js`), run on startup. Write one when adding/renaming/restructuring fields in existing config files or adding default entries; NOT for brand-new config files (initial setup copies `server/defaults/`). Every migration makes the same change in `server/defaults/` too: a fresh install runs no migration (`server/tests/migrations-defaults-current.test.js` enforces it). Never modify an applied migration; forward-only. Use the `create-migration` skill; details in `docs/configuration-migrations.md` and `server/migrations/README.md`.
 
 ### Code Quality
 

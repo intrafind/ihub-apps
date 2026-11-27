@@ -17,6 +17,8 @@ Create a migration whenever you:
 - Add default entries to `providers.json`, `groups.json`, `integrations.json`, etc.
 - Remove or move configuration keys that existing installations may still have in the old format
 
+**Every migration also changes `server/defaults` the same way.** A fresh install runs no migration (see [Fresh installs](#fresh-installs)), so a change that only the migration makes never reaches a new installation. `server/tests/migrations-defaults-current.test.js` seeds a contents directory from `server/defaults`, runs all migrations on it and fails, naming the file, when any of them changes something.
+
 **Do NOT** create migrations for:
 
 - Adding brand-new config files (handled by `performInitialSetup` copying from `server/defaults/`)
@@ -73,11 +75,19 @@ export async function up(ctx) {
 | `ctx.transformWhere(array, pred, fn)` | Apply `fn` to items matching `pred` |
 | `ctx.log(msg)` / `ctx.warn(msg)` | Structured logging with version prefix |
 
+## Fresh installs
+
+A fresh install runs no migration. `server/defaults` is kept in the state every migration leaves it in (`server/tests/migrations-defaults-current.test.js`), so the runner records each migration as applied (`"freshInstall": true` on its history row) and writes the history once.
+
+- **What counts as fresh**: `performInitialSetup()` found `contents/` missing, or holding nothing but empty directories (the Docker volumes for `data/` and `uploads/` on a new installation) and `lost+found`. Startup passes this to the runner (`createdFromDefaults`, `server/startup/bootstrap.js`); a backup import never does, so imported files are always migrated.
+- **Not fresh**: a `contents/` that already held files, such as apps copied over from an older installation or a data volume with documents in it. Its migrations run as before, starting above the baseline.
+- **Environment variables**: some migrations turned variables into configuration on a fresh install (the provider API keys → setup done, `IHUB_PLATFORM__I_FINDER__*` / `__I_ASSISTANT__*`, `AZURE_*`, `BRAVE_SEARCH_API_KEY`, `MCP_SERVER_URL`). A new installation gets the same from `server/utils/firstStartEnvironment.js`, which runs once, right after the seeding. **A new migration that reads the environment must add the same to that module**, writing the current shape of the configuration.
+
 ## Baseline (squashed migrations)
 
 Migrations up to the **baseline** have been deleted from the repository: the baseline is **V030**, the last migration of release **5.3.0**. `V031` and everything above stays, numbered as it was shipped. The runner (`server/migrations/runner.js`, `BASELINE_VERSION` / `BASELINE_RELEASE`) treats the baseline like this:
 
-- **Fresh install** (`contents/` seeded from `server/defaults` by this start): recorded as applied at V030 (a `baseline` row in the history); the migrations above V030 then run against the defaults like on any other install.
+- **Fresh install** (`contents/` created from `server/defaults` by this start): recorded at V030 (a `baseline` row in the history) and every migration above it recorded as applied without running; see [Fresh installs](#fresh-installs). A `contents/` without a `platform.json` that already held other files gets the `baseline` row, and the migrations above V030 then run like on any other install.
 - **Existing install at or above V030** (highest `success` or `skipped` row in the history): starts normally. History rows of removed versions, with their old checksums, are only history: they are never checksum-validated and never reported as "no longer on disk", even with `checksumValidation: strict`. A gap in numbers below the baseline is fine for `scripts/check-migration-versions.js`.
 - **Existing install below V030**, or a `contents/` with a configuration but no migration history (it predates the migration system): the server logs an error and exits with code 1. The message tells the admin to upgrade to release 5.3.x first, start it once, and then upgrade to the current release. Nothing is migrated or written.
 

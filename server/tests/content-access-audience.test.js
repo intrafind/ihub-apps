@@ -272,8 +272,14 @@ describe('what stays as it was', () => {
 
     expect(Object.keys(body)).toEqual(['type', 'id', 'scope', 'groups', 'audience']);
     expect(body).toMatchObject({ type: 'apps', id: 'chat', scope: 'membership' });
-    // `users` (member) and `admins` (inherits from users), in the file's order.
-    expect(body.groups).toEqual([
+    // `users` (member) and the groups that inherit from it, in the file's order.
+    expect(body.groups.map(group => group.id)).toEqual([
+      'admins',
+      'users',
+      'browser-extension',
+      'nextcloud-embed'
+    ]);
+    expect(body.groups.filter(group => ['admins', 'users'].includes(group.id))).toEqual([
       {
         id: 'admins',
         name: SHIPPED_GROUPS.groups.admins.name,

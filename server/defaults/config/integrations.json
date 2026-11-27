@@ -62,6 +62,51 @@
         "disabled": [],
         "overrides": {}
       }
+    },
+    {
+      "id": "entra",
+      "definition": "com.intrafind/entra-directory",
+      "definitionVersion": "1.0.0",
+      "enabled": false,
+      "values": {},
+      "auth": {
+        "mode": "none"
+      },
+      "actions": {
+        "enabled": ["*"],
+        "disabled": [],
+        "overrides": {}
+      }
+    },
+    {
+      "id": "ihub",
+      "definition": "com.intrafind/ihub",
+      "definitionVersion": "1.0.0",
+      "enabled": true,
+      "values": {},
+      "auth": {
+        "mode": "none"
+      },
+      "actions": {
+        "enabled": ["*"],
+        "disabled": [],
+        "overrides": {}
+      }
+    },
+    {
+      "id": "staan",
+      "definition": "com.intrafind/staan-search",
+      "definitionVersion": "1.0.0",
+      "enabled": true,
+      "values": {},
+      "auth": {
+        "mode": "none"
+      },
+      "actions": {
+        "enabled": ["*"],
+        "disabled": [],
+        "overrides": {}
+      }
     }
   ],
   "security": {

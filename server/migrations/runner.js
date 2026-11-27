@@ -725,14 +725,20 @@ async function loadMigrationConfig(contentsDir) {
 /**
  * Run all pending configuration migrations.
  * This is the main entry point, called from server.js after performInitialSetup().
- * The options exist for tests; production calls it without arguments.
+ * The options exist for tests, except `createdFromDefaults`: startup passes it
+ * (see startup/bootstrap.js) when this start created `contents/` from
+ * server/defaults alone. server/defaults is kept in the state every migration
+ * leaves it in (server/tests/migrations-defaults-current.test.js), so such an install
+ * has every migration recorded as applied and none run. It is never the
+ * default: a backup import calls this without it, and its files must be migrated.
  * @throws {Error} with `belowBaseline` when the install is older than the baseline
  */
 export async function runConfigMigrations({
   contentsDir = getContentsPath(),
   migrationsDir = join(getRootDir(), 'server', 'migrations'),
   defaultsDir = join(getRootDir(), 'server', 'defaults'),
-  freshlySeeded = wasContentsFreshlySeeded()
+  freshlySeeded = wasContentsFreshlySeeded(),
+  createdFromDefaults = false
 } = {}) {
   // Load migration config
   const migrationConfig = await loadMigrationConfig(contentsDir);
@@ -774,6 +780,28 @@ export async function runConfigMigrations({
         executionTimeMs: 0,
         status: 'success'
       });
+      if (createdFromDefaults) {
+        // server/defaults is already what every migration produces: record
+        // them all, run none, and write the history once.
+        for (const migration of migrationFiles) {
+          history.migrations.push({
+            version: migration.version,
+            description: migration.description,
+            file: migration.file,
+            checksum: await computeChecksum(migration.filePath),
+            appliedAt: new Date().toISOString(),
+            executionTimeMs: 0,
+            status: 'success',
+            freshInstall: true
+          });
+        }
+        await saveHistory(contentsDir, history);
+        logger.info('Fresh installation: all migrations recorded as applied, none run', {
+          component: 'Migration',
+          count: migrationFiles.length
+        });
+        return { applied: 0, skipped: 0, failed: 0, recorded: migrationFiles.length };
+      }
       await saveHistory(contentsDir, history);
       logger.info(`Fresh installation recorded at baseline V${BASELINE_VERSION}`, {
         component: 'Migration'

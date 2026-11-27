@@ -14,5 +14,6 @@
   "modelType": "transcription",
   "apiKey": "",
   "enabled": false,
-  "default": false
+  "default": false,
+  "maxOutputTokens": 4096
 }

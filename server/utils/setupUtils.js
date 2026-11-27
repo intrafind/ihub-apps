@@ -25,6 +25,7 @@ import path from 'node:path';
 import { getRootDir } from '../pathUtils.js';
 import logger from './logger.js';
 import { getContentsPath } from './contentsPath.js';
+import { importEnvironmentOnFirstStart } from './firstStartEnvironment.js';
 
 /**
  * The tool files of iHub's own features, retired from `contents/tools/` by
@@ -367,6 +368,35 @@ export async function syncManagedDefaultFiles({
 }
 
 let freshlySeeded = false;
+let createdFromDefaults = false;
+
+/** Entries a new, empty volume or folder can hold that belong to no installation. */
+const NOT_INSTALLATION_ENTRIES = new Set(['lost+found', '.DS_Store', 'Thumbs.db', 'desktop.ini']);
+
+/**
+ * Whether `dir` is missing or holds nothing of an installation. Empty
+ * subdirectories count as nothing: Docker mounts `contents/data` and
+ * `contents/uploads` as volumes of their own, which appear as empty
+ * directories on a new installation. A volume that holds files from an
+ * earlier installation makes the directory non-empty.
+ * @param {string} dir
+ * @returns {Promise<boolean>}
+ */
+async function isEmptyDirectory(dir) {
+  let entries;
+  try {
+    entries = await fs.readdir(dir, { withFileTypes: true });
+  } catch (error) {
+    return error.code === 'ENOENT';
+  }
+  for (const entry of entries) {
+    if (NOT_INSTALLATION_ENTRIES.has(entry.name)) continue;
+    if (!entry.isDirectory() || !(await isEmptyDirectory(path.join(dir, entry.name)))) {
+      return false;
+    }
+  }
+  return true;
+}
 
 async function pathExists(p) {
   try {
@@ -387,6 +417,19 @@ export function wasContentsFreshlySeeded() {
 }
 
 /**
+ * Whether the last performInitialSetup() created the contents directory from
+ * server/defaults alone: the directory was missing or empty before it ran.
+ * Stricter than {@link wasContentsFreshlySeeded}: a contents directory that
+ * already held files (apps or groups copied in from an older installation,
+ * say) has to be migrated, even without a platform.json. False when it has
+ * not run.
+ * @returns {boolean}
+ */
+export function wasContentsCreatedFromDefaults() {
+  return createdFromDefaults;
+}
+
+/**
  * Performs initial setup by copying any missing default configuration files
  * This function should be called during server startup
  * @returns {Promise<boolean>} True if any files were copied
@@ -397,9 +440,14 @@ export async function performInitialSetup() {
     // migration runner records such an install at its baseline instead of
     // treating an old contents directory as fresh.
     freshlySeeded = !(await pathExists(path.join(getContentsPath(), 'config', 'platform.json')));
+    createdFromDefaults = await isEmptyDirectory(getContentsPath());
     logger.info('Checking for missing default configuration files', { component: 'Setup' });
 
     const filesCopied = await copyDefaultConfiguration();
+
+    // A new installation runs no migration, so the environment variables
+    // migrations used to fold into the configuration are applied here.
+    if (createdFromDefaults) await importEnvironmentOnFirstStart();
 
     if (filesCopied) {
       logger.info('Initial setup completed - missing default files have been copied', {
@@ -423,6 +471,8 @@ export async function performInitialSetup() {
 
     return filesCopied;
   } catch (error) {
+    // A half-seeded directory is not one the migrations may skip.
+    createdFromDefaults = false;
     logger.error('Error during initial setup', { component: 'Setup', error });
     throw error;
   }
