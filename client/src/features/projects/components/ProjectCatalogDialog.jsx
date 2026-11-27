@@ -16,11 +16,11 @@ import { projectErrorMessage } from '../utils/projectErrors';
 import {
   availableSources,
   collectionEntry,
-  groupCatalogEntries,
+  filterCatalogEntries,
   projectEntry
 } from '../utils/catalogSources';
 import { INPUT_CLASS } from './item-dialog/dialogStyles';
-import CatalogEntryRow, { CATALOG_SOURCE_STYLES } from './CatalogEntryRow';
+import CatalogEntryRow, { CATALOG_SOURCE_STYLES, catalogSourceLabel } from './CatalogEntryRow';
 
 const CHIP_BASE =
   'shrink-0 inline-flex items-center gap-1.5 rounded-full border px-2.5 min-h-11 sm:min-h-8 text-sm font-medium whitespace-nowrap transition-colors focus:outline-hidden focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-gray-800 [@media(max-height:560px)]:min-h-8';
@@ -33,51 +33,12 @@ const LINK_BUTTON =
 const ANNOUNCE_DELAY_MS = 600;
 
 /**
- * The label of a source, for its chip and its group header.
- *
- * @param {string} source
- * @param {Function} t
- * @returns {string}
- */
-function sourceLabel(source, t) {
-  switch (source) {
-    case 'admin':
-      return t('projects.catalog.sources.admin', 'From the administrators');
-    case 'colleagues':
-      return t('projects.catalog.sources.colleagues', 'Published by colleagues');
-    case 'ifinder':
-      return t('projects.catalog.sources.ifinder', 'Your iFinder smart collections');
-    default:
-      return t('projects.catalog.sources.yours', 'Already in your projects');
-  }
-}
-
-/**
- * The short label of a source, for its filter chip.
- *
- * @param {string} source
- * @param {Function} t
- * @returns {string}
- */
-function sourceChipLabel(source, t) {
-  switch (source) {
-    case 'admin':
-      return t('projects.catalog.chips.admin', 'Administrators');
-    case 'colleagues':
-      return t('projects.catalog.chips.colleagues', 'Colleagues');
-    case 'ifinder':
-      return t('projects.catalog.chips.ifinder', 'iFinder');
-    default:
-      return t('projects.catalog.chips.yours', 'Yours');
-  }
-}
-
-/**
  * The project catalog: what the viewer can add to their projects, in one
- * list grouped by where it comes from — projects the administrators made
- * available to everyone, projects colleagues published, the viewer's own
- * iFinder smart collections (where that tier is offered), and published
- * projects that are in their list already.
+ * list ordered by where it comes from — the viewer's own iFinder smart
+ * collections (where that tier is offered), projects the administrators made
+ * available to everyone, projects colleagues published, and published
+ * projects that are in their list already. Each entry carries a badge that
+ * names its source.
  *
  * The header (title, close, search, source filter) stays in place and only
  * the list scrolls, so the dialog works on short screens too; below the `sm`
@@ -169,30 +130,25 @@ function ProjectCatalogDialog({
     [catalogEnabled, catalog.items, collectionsEnabled, collections.items, language]
   );
 
-  // The iFinder group stays while it loads or has something to say, so its
-  // chip does not appear late and a warning is not lost. A viewer the tier is
-  // not offered to (`available: false`, no warning) gets no group.
+  // The iFinder chip stays while it loads or has something to say, so it does
+  // not appear late and a warning is not lost. A viewer the tier is not
+  // offered to (`available: false`, no warning) gets no chip.
   const collectionsNotice =
     collectionsEnabled && (collections.status !== 'ready' || collections.warnings.length > 0);
   const sources = availableSources(entries, collectionsNotice ? ['ifinder'] : []);
   const activeSource = source !== 'all' && sources.includes(source) ? source : 'all';
-  const groups = groupCatalogEntries(entries, query);
-  const countBySource = Object.fromEntries(
-    groups.map(group => [group.source, group.entries.length])
-  );
-  const totalCount = groups.reduce((sum, group) => sum + group.entries.length, 0);
-  const shownGroups = groups.filter(
-    group => activeSource === 'all' || group.source === activeSource
-  );
+  const matches = filterCatalogEntries(entries, query);
+  const countBySource = {};
+  for (const entry of matches) countBySource[entry.source] = (countBySource[entry.source] || 0) + 1;
+  const shown =
+    activeSource === 'all' ? matches : matches.filter(entry => entry.source === activeSource);
   const showCollectionsNotice =
-    collectionsNotice &&
-    (activeSource === 'all' || activeSource === 'ifinder') &&
-    !shownGroups.some(group => group.source === 'ifinder');
+    collectionsNotice && (activeSource === 'all' || activeSource === 'ifinder');
   const catalogLoading = catalogEnabled && catalog.status === 'loading';
   const showCatalogError =
     catalogEnabled && catalog.status === 'error' && activeSource !== 'ifinder';
   const settled = !catalogLoading && !(collectionsEnabled && collections.status === 'loading');
-  const shownCount = shownGroups.reduce((sum, group) => sum + group.entries.length, 0);
+  const shownCount = shown.length;
   const filtered = query.trim() !== '' || activeSource !== 'all';
 
   const resultText = t('projects.catalog.resultCount', '{{count}} results', {
@@ -302,17 +258,6 @@ function ProjectCatalogDialog({
     );
   }
 
-  const groupHeader = (group, count) => (
-    <h3
-      id={`catalog-group-${group}`}
-      className="sticky top-0 z-10 flex items-center gap-2 px-4 sm:px-6 py-2 bg-gray-50 dark:bg-gray-900 border-y border-gray-200 dark:border-gray-700 text-xs font-semibold uppercase tracking-wide text-gray-600 dark:text-gray-300"
-    >
-      <Icon name={CATALOG_SOURCE_STYLES[group].icon} size="xs" aria-hidden="true" />
-      <span className="truncate">{sourceLabel(group, t)}</span>
-      {count !== null && <span className="ml-auto tabular-nums font-normal">{count}</span>}
-    </h3>
-  );
-
   return (
     <Modal
       isOpen
@@ -360,7 +305,7 @@ function ProjectCatalogDialog({
           >
             {['all', ...sources].map(key => {
               const selected = activeSource === key;
-              const count = key === 'all' ? totalCount : (countBySource[key] ?? 0);
+              const count = key === 'all' ? matches.length : (countBySource[key] ?? 0);
               const pending = key === 'ifinder' && collections.status === 'loading';
               return (
                 <button
@@ -380,7 +325,9 @@ function ProjectCatalogDialog({
                       className={selected ? 'text-white' : ''}
                     />
                   )}
-                  {key === 'all' ? t('projects.catalog.chips.all', 'All') : sourceChipLabel(key, t)}
+                  {key === 'all'
+                    ? t('projects.catalog.chips.all', 'All')
+                    : catalogSourceLabel(key, t)}
                   <span
                     className={`tabular-nums text-xs rounded-full px-1.5 min-w-5 text-center ${
                       selected
@@ -422,6 +369,26 @@ function ProjectCatalogDialog({
           </details>
         )}
 
+        {showCollectionsNotice &&
+          (collections.status === 'loading' ? (
+            <p className="px-4 sm:px-6 py-3 border-t border-gray-100 dark:border-gray-700 text-sm text-gray-500 dark:text-gray-400">
+              {t('projects.catalog.collectionsLoading', 'Loading your iFinder smart collections…')}
+            </p>
+          ) : collections.status === 'error' ? (
+            <p
+              role="alert"
+              className="px-4 sm:px-6 py-3 border-t border-gray-100 dark:border-gray-700 text-sm text-red-600 dark:text-red-400 flex items-start gap-2"
+            >
+              <Icon name="exclamation-triangle" size="sm" className="mt-0.5 flex-none" />
+              <span className="flex-1">{collections.error}</span>
+              <button type="button" onClick={retryCollections} className={LINK_BUTTON}>
+                {t('common.retry', 'Retry')}
+              </button>
+            </p>
+          ) : (
+            <CollectionsWarning onRetry={retryCollections} />
+          ))}
+
         {showCatalogError && (
           <div
             role="alert"
@@ -435,57 +402,28 @@ function ProjectCatalogDialog({
           </div>
         )}
 
+        {shown.length > 0 && (
+          <ul
+            className="border-t border-gray-100 dark:border-gray-700 divide-y divide-gray-100 dark:divide-gray-700"
+            aria-label={t('projects.catalog.dialogTitle', 'Project catalog')}
+          >
+            {shown.map(entry => (
+              <CatalogEntryRow
+                key={entry.key}
+                entry={entry}
+                busy={busyKey === entry.key}
+                error={rowErrors[entry.key]}
+                onToggle={toggle}
+                onNavigate={onClose}
+              />
+            ))}
+          </ul>
+        )}
+
         {catalogLoading && (
           <p className="px-4 sm:px-6 py-6 text-center text-sm text-gray-500 dark:text-gray-400">
             {t('common.loading', 'Loading...')}
           </p>
-        )}
-
-        {shownGroups.map(group => (
-          <section key={group.source} aria-labelledby={`catalog-group-${group.source}`}>
-            {groupHeader(group.source, group.entries.length)}
-            {group.source === 'ifinder' && collections.warnings.length > 0 && (
-              <CollectionsWarning onRetry={retryCollections} />
-            )}
-            <ul
-              className="divide-y divide-gray-100 dark:divide-gray-700"
-              data-testid={group.source === 'ifinder' ? 'catalog-smart-collections' : undefined}
-            >
-              {group.entries.map(entry => (
-                <CatalogEntryRow
-                  key={entry.key}
-                  entry={entry}
-                  busy={busyKey === entry.key}
-                  error={rowErrors[entry.key]}
-                  onToggle={toggle}
-                  onNavigate={onClose}
-                />
-              ))}
-            </ul>
-          </section>
-        ))}
-
-        {showCollectionsNotice && (
-          <section aria-labelledby="catalog-group-ifinder">
-            {groupHeader('ifinder', null)}
-            {collections.status === 'loading' ? (
-              <p className="px-4 sm:px-6 py-4 text-sm text-gray-500 dark:text-gray-400">
-                {t('common.loading', 'Loading...')}
-              </p>
-            ) : collections.status === 'error' ? (
-              <p
-                role="alert"
-                className="px-4 sm:px-6 py-3 text-sm text-red-600 dark:text-red-400 flex items-start gap-2"
-              >
-                <span className="flex-1">{collections.error}</span>
-                <button type="button" onClick={retryCollections} className={LINK_BUTTON}>
-                  {t('common.retry', 'Retry')}
-                </button>
-              </p>
-            ) : (
-              <CollectionsWarning onRetry={retryCollections} />
-            )}
-          </section>
         )}
 
         {emptyState}
@@ -504,7 +442,7 @@ function ProjectCatalogDialog({
 function CollectionsWarning({ onRetry }) {
   const { t } = useTranslation();
   return (
-    <p className="px-4 sm:px-6 py-3 flex items-start gap-2 text-sm text-amber-700 dark:text-amber-300">
+    <p className="px-4 sm:px-6 py-3 border-t border-gray-100 dark:border-gray-700 flex items-start gap-2 text-sm text-amber-700 dark:text-amber-300">
       <Icon name="exclamation-triangle" size="sm" className="mt-0.5 flex-none" />
       <span className="flex-1">
         {t(

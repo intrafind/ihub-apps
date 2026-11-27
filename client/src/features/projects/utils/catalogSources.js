@@ -4,9 +4,9 @@
 /**
  * Pure rules of the project catalog dialog: where an entry comes from, what
  * the viewer can do with it, and how the search and the source filter narrow
- * the list. The dialog lists the published projects (`/projects/_catalog`) and
- * the viewer's iFinder smart collections (`/projects/_collections`) in one list,
- * grouped by source.
+ * the list. The dialog lists the viewer's iFinder smart collections
+ * (`/projects/_collections`) and the published projects (`/projects/_catalog`)
+ * in one list, ordered by source, each entry marked with its source.
  *
  * @module features/projects/utils/catalogSources
  */
@@ -15,17 +15,17 @@ import { localizedText } from './projectItems';
 import { projectDisplayName } from './projectView';
 
 /**
- * The sources, in the order the dialog shows their groups: what the viewer
- * can add first, what is theirs already last.
+ * The sources, in the order the dialog lists them (and offers their filter):
+ * the viewer's own collections first, what is theirs already last.
  *
+ * - `ifinder`: the viewer's own iFinder smart collections.
  * - `admin`: admin projects available to everyone signed in.
  * - `colleagues`: user projects published by someone else, reached only
  *   through the catalog.
- * - `ifinder`: the viewer's own iFinder smart collections.
  * - `yours`: published projects the viewer owns or is a member of; they are
  *   in the viewer's list already.
  */
-export const CATALOG_SOURCES = Object.freeze(['admin', 'colleagues', 'ifinder', 'yours']);
+export const CATALOG_SOURCES = Object.freeze(['ifinder', 'admin', 'colleagues', 'yours']);
 
 /**
  * The source of a catalog project.
@@ -137,18 +137,17 @@ export function matchesQuery(entry, query) {
 }
 
 /**
- * The entries of each source that match the search, in source order. Sources
- * without entries are left out.
+ * The entries that match the search, in source order (`CATALOG_SOURCES`);
+ * within a source they keep their order (by name, from the server).
  *
  * @param {CatalogEntry[]} entries
  * @param {string} query
- * @returns {Array<{source: string, entries: CatalogEntry[]}>}
+ * @returns {CatalogEntry[]}
  */
-export function groupCatalogEntries(entries, query) {
-  return CATALOG_SOURCES.map(source => ({
-    source,
-    entries: entries.filter(entry => entry.source === source && matchesQuery(entry, query))
-  })).filter(group => group.entries.length > 0);
+export function filterCatalogEntries(entries, query) {
+  return CATALOG_SOURCES.flatMap(source =>
+    entries.filter(entry => entry.source === source && matchesQuery(entry, query))
+  );
 }
 
 /**

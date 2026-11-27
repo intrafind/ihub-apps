@@ -2,10 +2,10 @@
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
 /**
- * The project catalog dialog: one list grouped by source (administrators,
- * colleagues, iFinder smart collections, already yours), a fixed header with
- * close, search and source filter, and per-source loading, warning and error
- * states. Plus the pure rules behind it (`catalogSources`).
+ * The project catalog dialog: one list ordered by source (iFinder smart
+ * collections, administrators, colleagues, already yours), each entry marked
+ * with a source badge, a fixed header with close, search and source filter,
+ * and per-source loading, warning and error states. Plus the pure rules behind it (`catalogSources`).
  */
 import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import '@testing-library/jest-dom';
@@ -47,7 +47,7 @@ const {
   availableSources,
   catalogProjectSource,
   collectionEntry,
-  groupCatalogEntries,
+  filterCatalogEntries,
   matchesQuery,
   projectEntry
 } = require('../../../client/src/features/projects/utils/catalogSources');
@@ -115,7 +115,11 @@ function renderDialog(props = {}) {
   return handlers;
 }
 
-const groupNamed = name => screen.getByRole('region', { name: new RegExp(`^${name}`) });
+const rowOf = name => screen.getByText(name).closest('li');
+const listOrder = () =>
+  within(screen.getByRole('list', { name: 'Project catalog' }))
+    .getAllByRole('listitem')
+    .map(item => item.querySelector('a, span.truncate').textContent);
 
 beforeEach(() => {
   Object.values(mockApi).forEach(fn => fn.mockReset());
@@ -151,47 +155,49 @@ describe('catalogSources', () => {
     expect(matchesQuery(projectEntry(CATALOG[1], 'en'), 'ann')).toBe(true);
   });
 
-  test('groups in source order and leaves out empty sources', () => {
+  test('orders by source, iFinder first, and keeps the order within a source', () => {
     const entries = [
       ...CATALOG.map(project => projectEntry(project, 'en')),
       ...COLLECTIONS.items.map(collectionEntry)
     ];
-    expect(groupCatalogEntries(entries, '').map(group => group.source)).toEqual([
-      'admin',
-      'colleagues',
-      'ifinder',
-      'yours'
+    expect(filterCatalogEntries(entries, '').map(entry => entry.id)).toEqual([
+      'c1',
+      'c2',
+      'company-faq',
+      'prj_docs',
+      'prj_case'
     ]);
-    expect(groupCatalogEntries(entries, 'contracts').map(group => group.source)).toEqual([
-      'ifinder'
-    ]);
+    expect(filterCatalogEntries(entries, 'contracts').map(entry => entry.id)).toEqual(['c1']);
     expect(availableSources(entries.slice(0, 1))).toEqual(['admin']);
-    expect(availableSources(entries.slice(0, 1), ['ifinder'])).toEqual(['admin', 'ifinder']);
+    expect(availableSources(entries.slice(0, 1), ['ifinder'])).toEqual(['ifinder', 'admin']);
   });
 });
 
 describe('ProjectCatalogDialog', () => {
-  test('lists every source in its own group, with the source named in each row', async () => {
+  test('lists every source in one list, iFinder first, each entry marked with its source', async () => {
     renderDialog();
     expect(await screen.findByText('Contracts')).toBeInTheDocument();
-    expect(
-      within(groupNamed('From the administrators')).getByText('Company FAQ').closest('li')
-    ).toHaveTextContent('From the administrators · 3 items');
-    expect(
-      within(groupNamed('Published by colleagues')).getByText('iHub knowledge').closest('li')
-    ).toHaveTextContent('By Ann · 12 items');
-    const ifinder = groupNamed('Your iFinder smart collections');
-    expect(within(ifinder).getByText('Contracts').closest('li')).toHaveTextContent(
-      'iFinder smart collection · 40 documents'
-    );
-    expect(within(ifinder).getByRole('link', { name: 'Tenders' })).toHaveAttribute(
+    expect(listOrder()).toEqual([
+      'Contracts',
+      'Tenders',
+      'Company FAQ',
+      'iHub knowledge',
+      'Case 2026-114'
+    ]);
+    expect(rowOf('Contracts')).toHaveTextContent('iFinder');
+    expect(rowOf('Contracts')).toHaveTextContent('40 documents');
+    expect(screen.getByRole('link', { name: 'Tenders' })).toHaveAttribute(
       'href',
       '/projects/ifc_c2'
     );
-    expect(
-      within(groupNamed('Already in your projects')).getByText('Case 2026-114').closest('li')
-    ).toHaveTextContent('In your projects');
-    // One scroll region: no list caps its own height.
+    expect(rowOf('Company FAQ')).toHaveTextContent('Administrators');
+    expect(rowOf('Company FAQ')).toHaveTextContent('3 items');
+    expect(rowOf('iHub knowledge')).toHaveTextContent('Colleagues');
+    expect(rowOf('iHub knowledge')).toHaveTextContent('By Ann · 12 items');
+    expect(rowOf('Case 2026-114')).toHaveTextContent('Yours');
+    expect(rowOf('Case 2026-114')).toHaveTextContent('In your projects');
+    // No section headers, and one scroll region: no list caps its own height.
+    expect(screen.queryByRole('heading', { level: 3 })).toBeNull();
     expect(document.querySelector('ul.max-h-64, ul.max-h-96')).toBeNull();
   });
 

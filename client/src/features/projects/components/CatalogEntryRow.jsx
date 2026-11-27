@@ -6,28 +6,52 @@ import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
 
 /**
- * How each catalog source looks: its icon and the colours of the icon tile.
- * The icon is never the only signal: the group header and the row's meta line
- * name the source in text.
+ * How each catalog source looks: its icon, the colours of the icon tile and
+ * of the badge that names the source beside the entry's name. Colour is never
+ * the only signal: the badge says the source in words.
  */
 export const CATALOG_SOURCE_STYLES = Object.freeze({
+  ifinder: {
+    icon: 'magnifying-glass',
+    tile: 'bg-teal-50 text-teal-700 dark:bg-teal-900/40 dark:text-teal-300',
+    badge: 'bg-teal-100 text-teal-800 dark:bg-teal-900/50 dark:text-teal-200'
+  },
   admin: {
     icon: 'shield-check',
-    tile: 'bg-purple-50 text-purple-600 dark:bg-purple-900/40 dark:text-purple-300'
+    tile: 'bg-purple-50 text-purple-600 dark:bg-purple-900/40 dark:text-purple-300',
+    badge: 'bg-purple-100 text-purple-800 dark:bg-purple-900/50 dark:text-purple-200'
   },
   colleagues: {
     icon: 'user-group',
-    tile: 'bg-indigo-50 text-indigo-600 dark:bg-indigo-900/40 dark:text-indigo-300'
-  },
-  ifinder: {
-    icon: 'magnifying-glass',
-    tile: 'bg-teal-50 text-teal-700 dark:bg-teal-900/40 dark:text-teal-300'
+    tile: 'bg-indigo-50 text-indigo-600 dark:bg-indigo-900/40 dark:text-indigo-300',
+    badge: 'bg-indigo-100 text-indigo-800 dark:bg-indigo-900/50 dark:text-indigo-200'
   },
   yours: {
     icon: 'folder',
-    tile: 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300'
+    tile: 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300',
+    badge: 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-200'
   }
 });
+
+/**
+ * The name of a source, on the entry's badge and on the filter chip.
+ *
+ * @param {string} source
+ * @param {Function} t
+ * @returns {string}
+ */
+export function catalogSourceLabel(source, t) {
+  switch (source) {
+    case 'ifinder':
+      return t('projects.catalog.chips.ifinder', 'iFinder');
+    case 'admin':
+      return t('projects.catalog.chips.admin', 'Administrators');
+    case 'colleagues':
+      return t('projects.catalog.chips.colleagues', 'Colleagues');
+    default:
+      return t('projects.catalog.chips.yours', 'Yours');
+  }
+}
 
 const ACTION_BASE =
   'shrink-0 inline-flex items-center justify-center gap-1.5 rounded-lg border text-sm font-medium min-h-11 min-w-11 px-2.5 sm:min-h-9 sm:min-w-0 sm:px-3 focus:outline-hidden focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-gray-800 aria-disabled:opacity-60 aria-disabled:cursor-wait';
@@ -35,7 +59,8 @@ const ADD_BUTTON = `${ACTION_BASE} border-gray-300 dark:border-gray-600 bg-white
 const ADDED_BUTTON = `${ACTION_BASE} border-green-300 bg-green-50 text-green-800 hover:bg-green-100 dark:border-green-700 dark:bg-green-900/30 dark:text-green-300 dark:hover:bg-green-900/50`;
 
 /**
- * The meta line of an entry: where it comes from, in words, and its size.
+ * The meta line of an entry: who published it (the badge names the source)
+ * and its size.
  *
  * @param {import('../utils/catalogSources').CatalogEntry} entry
  * @param {Function} t
@@ -43,19 +68,14 @@ const ADDED_BUTTON = `${ACTION_BASE} border-green-300 bg-green-50 text-green-800
  */
 function metaLine(entry, t) {
   if (entry.kind === 'collection') {
-    return `${t('projects.catalog.sourceMeta.ifinder', 'iFinder smart collection')} · ${t(
-      'projects.ifinder.documentCount',
-      '{{count}} documents',
-      { count: entry.count }
-    )}`;
+    return t('projects.ifinder.documentCount', '{{count}} documents', { count: entry.count });
   }
-  const origin =
-    entry.source === 'admin'
-      ? t('projects.catalog.byAdmins', 'From the administrators')
-      : t('projects.catalog.byOwner', 'By {{name}}', {
-          name: entry.ownerName || t('projects.members.unknownOwner', 'Unknown')
-        });
-  return `${origin} · ${t('projects.list.itemCount', '{{count}} items', { count: entry.count })}`;
+  const size = t('projects.list.itemCount', '{{count}} items', { count: entry.count });
+  if (entry.source === 'admin') return size;
+  const owner = t('projects.catalog.byOwner', 'By {{name}}', {
+    name: entry.ownerName || t('projects.members.unknownOwner', 'Unknown')
+  });
+  return `${owner} · ${size}`;
 }
 
 /**
@@ -128,19 +148,26 @@ function CatalogEntryRow({ entry, busy, error, onToggle, onNavigate }) {
         <Icon name={style.icon} size="md" />
       </span>
       <div className="flex-1 min-w-0">
-        {entry.projectId ? (
-          <Link
-            to={`/projects/${encodeURIComponent(entry.projectId)}`}
-            onClick={onNavigate}
-            className="block truncate font-medium text-gray-900 dark:text-gray-100 hover:text-indigo-600 dark:hover:text-indigo-400 rounded-sm focus:outline-hidden focus-visible:ring-2 focus-visible:ring-indigo-500"
+        <div className="flex items-center gap-2 min-w-0">
+          {entry.projectId ? (
+            <Link
+              to={`/projects/${encodeURIComponent(entry.projectId)}`}
+              onClick={onNavigate}
+              className="min-w-0 truncate font-medium text-gray-900 dark:text-gray-100 hover:text-indigo-600 dark:hover:text-indigo-400 rounded-sm focus:outline-hidden focus-visible:ring-2 focus-visible:ring-indigo-500"
+            >
+              {entry.name}
+            </Link>
+          ) : (
+            <span className="min-w-0 truncate font-medium text-gray-900 dark:text-gray-100">
+              {entry.name}
+            </span>
+          )}
+          <span
+            className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-medium whitespace-nowrap ${style.badge}`}
           >
-            {entry.name}
-          </Link>
-        ) : (
-          <span className="block truncate font-medium text-gray-900 dark:text-gray-100">
-            {entry.name}
+            {catalogSourceLabel(entry.source, t)}
           </span>
-        )}
+        </div>
         {entry.description && (
           <p className="text-sm text-gray-600 dark:text-gray-400 line-clamp-1 sm:line-clamp-2 [@media(max-height:560px)]:line-clamp-1">
             {entry.description}

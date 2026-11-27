@@ -13474,22 +13474,14 @@
       "noMatchesFilter": "Nichts passt zu diesem Filter.",
       "clearFilters": "Suche und Filter zurücksetzen",
       "emptyAll": "Noch nichts veröffentlicht, und Sie haben keine Smart Collections in iFinder.",
-      "sourceMeta": {
-        "ifinder": "iFinder Smart Collection"
-      },
-      "sources": {
-        "admin": "Von den Administratoren",
-        "colleagues": "Von Kollegen veröffentlicht",
-        "ifinder": "Ihre iFinder Smart Collections",
-        "yours": "Bereits in Ihren Projekten"
-      },
       "chips": {
         "all": "Alle",
         "admin": "Administratoren",
         "colleagues": "Kollegen",
         "ifinder": "iFinder",
         "yours": "Eigene"
-      }
+      },
+      "collectionsLoading": "Ihre iFinder Smart Collections werden geladen…"
     },
     "picker": {
       "search": "Projekte durchsuchen",

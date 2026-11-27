@@ -318,7 +318,7 @@ describe('ProjectsPage', () => {
     expect(within(dialog).getByText('In your projects')).toBeInTheDocument();
     // An admin project available to everyone is added to the list the same way.
     const faq = within(dialog).getByText('Company FAQ').closest('li');
-    expect(faq).toHaveTextContent('From the administrators');
+    expect(faq).toHaveTextContent('Administrators');
     mockApi.addCatalogProject.mockResolvedValueOnce({ id: 'company-faq', subscribed: true });
     fireEvent.click(within(faq).getByRole('button', { name: 'Add Company FAQ to my projects' }));
     await waitFor(() => expect(mockApi.addCatalogProject).toHaveBeenCalledWith('company-faq'));
