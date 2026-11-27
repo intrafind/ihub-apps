@@ -1050,7 +1050,7 @@ A project shared with everyone signed in shows **Global**; one in the catalog sh
 
 ### Global projects and the catalog
 
-![The project catalog: projects published by users and by the administrators, with Added and In your projects](assets/screenshots/projects-catalog.png)
+![The project catalog: one list grouped by source, with a search and a filter for each source](assets/screenshots/projects-catalog.png)
 
 There are two ways to make a project available to everyone, so that a few people curate it and
 everyone else uses it:
@@ -1059,11 +1059,23 @@ everyone else uses it:
   list under **Shared with me**, marked **Global**, in the role you chose. Everyone becomes a member,
   and members read each other's chats in the project.
 - **Publish to the catalog** (`sharing.allowCatalog`): the project does not appear in anyone's list
-  by itself. Users find it under **Projects → Browse catalog**, open it and add it with **Add to my
-  projects** (and take it away with **Remove from my projects**). It shows **From the catalog** for them. They read its documents
+  by itself. Users find it under **Projects → Browse catalog**, open it and add it with **Add** (and
+  take it away again with **Added**, or with **Remove from my projects** on its page). It shows
+  **From the catalog** for them. They read its documents
   and instructions, link its documents, attach it to their chats and chat inside it. A chat they
   start in it is **private to them**: the owner, the editors and the other members cannot read it, and
   they do not read the members' chats. The project's page lists their own chats, and only those.
+
+**Browse catalog** shows one list, grouped by where an entry comes from, each group with its count:
+**From the administrators**, **Published by colleagues**, **Your iFinder smart collections** (where
+the iFinder tier is offered) and **Already in your projects** (published projects you own or are a
+member of). Each entry names its source again under its name (*From the administrators*, *By
+Ann*, *iFinder smart collection*). The search matches names, descriptions and owners; the chips
+below it (**All**, **Administrators**, **Colleagues**, **iFinder**, **Yours**) show one source and
+count what matches the search. Only the list scrolls: the title, the close button, the search and
+the chips stay in place, and on a phone or a screen of little height the catalog fills the screen.
+If iFinder cannot be reached, or the catalog does not load, that group says so and offers
+**Retry**; the other groups stay.
 
 Owners and editors publish a project with **Publish to the catalog** on the project page, after a
 confirmation, and take it out with **Take out of the catalog**. Publishing needs the `projectSharing` permission;
@@ -1149,7 +1161,8 @@ With `platform.projects.tierPolicy` set to `both` or `ifinder` (**Admin → Proj
 settings**, a change applies at once), **iFinder** installed and
 enabled (**Admin → Integrations**) and **User Projects** switched on, users can add their iFinder
 smart collections to their projects. **Browse catalog** on the Projects page lists them under
-**Your iFinder smart collections**; **Add** makes one a project, marked **iFinder**. Collections
+**Your iFinder smart collections** (filter **iFinder**); **Add** makes one a project, marked
+**iFinder**. Collections
 nobody added are not listed under **Projects**.
 
 The project of a collection keeps what iFinder does not have: a **default app**, **instructions**

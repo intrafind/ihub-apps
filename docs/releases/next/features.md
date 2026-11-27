@@ -275,3 +275,21 @@ as `{{project}}` or `{{client}}`. The model now fills them.
 - The `fields` parameter of `create_docx` is offered whenever users may upload a Word file, not only
   when a document template declares fields.
 
+
+## Projects: One Clear List in the Project Catalog
+
+**Projects → Browse catalog** now shows everything users can add in one list, grouped by where it
+comes from, instead of two lists that each scrolled on their own.
+
+- The groups are **From the administrators**, **Published by colleagues**, **Your iFinder smart
+  collections** and **Already in your projects**, each with its count. Every entry also names its
+  source under its title, for example *By Ann · 12 items* or *iFinder smart collection · 40
+  documents*.
+- Chips under the search (**All**, **Administrators**, **Colleagues**, **iFinder**, **Yours**) show
+  one source; their counts follow the search, which filters all groups as you type.
+- Only the list scrolls. The title, the close button, the search and the chips stay in place, so
+  the catalog can always be closed, also on screens of little height, where the close button could
+  be cut off before. On a phone, and on a screen less than 560 pixels high, the catalog fills the
+  screen.
+- If iFinder cannot be reached or the catalog fails to load, only that group says so, with
+  **Retry**. A failed add or remove is reported under its entry.

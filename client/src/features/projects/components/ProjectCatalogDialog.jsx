@@ -1,30 +1,88 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
-import { useEffect, useRef, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import Modal from '../../../shared/components/Modal';
 import Icon from '../../../shared/components/Icon';
-import { addCatalogProject, fetchProjectCatalog, removeCatalogProject } from '../../../api';
+import {
+  addCatalogProject,
+  addSmartCollection,
+  fetchProjectCatalog,
+  fetchSmartCollections,
+  removeCatalogProject
+} from '../../../api';
 import { projectErrorMessage } from '../utils/projectErrors';
-import { localizedText } from '../utils/projectItems';
-import { projectDisplayName } from '../utils/projectView';
-import { INPUT_CLASS, SECONDARY_BUTTON } from './item-dialog/dialogStyles';
-import SmartCollectionsCatalogSection from './SmartCollectionsCatalogSection';
+import {
+  availableSources,
+  collectionEntry,
+  groupCatalogEntries,
+  projectEntry
+} from '../utils/catalogSources';
+import { INPUT_CLASS } from './item-dialog/dialogStyles';
+import CatalogEntryRow, { CATALOG_SOURCE_STYLES } from './CatalogEntryRow';
 
-const ROW_BUTTON =
-  'inline-flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-lg border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50';
+const CHIP_BASE =
+  'shrink-0 inline-flex items-center gap-1.5 rounded-full border px-2.5 min-h-11 sm:min-h-8 text-sm font-medium whitespace-nowrap transition-colors focus:outline-hidden focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-gray-800 [@media(max-height:560px)]:min-h-8';
+const CHIP_SELECTED = `${CHIP_BASE} bg-indigo-600 border-indigo-600 text-white`;
+const CHIP_IDLE = `${CHIP_BASE} bg-white border-gray-300 text-gray-700 hover:bg-gray-50 dark:bg-gray-700 dark:border-gray-600 dark:text-gray-200 dark:hover:bg-gray-600`;
+const LINK_BUTTON =
+  'font-medium text-indigo-600 dark:text-indigo-400 hover:underline rounded-sm focus:outline-hidden focus-visible:ring-2 focus-visible:ring-indigo-500';
+
+/** Delay before the result count is announced, so typing is not read out letter by letter. */
+const ANNOUNCE_DELAY_MS = 600;
 
 /**
- * The project catalog: projects their owners published for everyone signed
- * in, and admin projects available to everyone signed in. Search it, open a
- * project, and add one to your projects (or remove it again): it then shows
- * in your list and in the chat input's project picker. A project you own or
- * are a member of is in your list already.
+ * The label of a source, for its chip and its group header.
  *
- * Where the viewer's iFinder smart collections are offered, the catalog lists
- * them too, to add to their projects (`SmartCollectionsCatalogSection`).
+ * @param {string} source
+ * @param {Function} t
+ * @returns {string}
+ */
+function sourceLabel(source, t) {
+  switch (source) {
+    case 'admin':
+      return t('projects.catalog.sources.admin', 'From the administrators');
+    case 'colleagues':
+      return t('projects.catalog.sources.colleagues', 'Published by colleagues');
+    case 'ifinder':
+      return t('projects.catalog.sources.ifinder', 'Your iFinder smart collections');
+    default:
+      return t('projects.catalog.sources.yours', 'Already in your projects');
+  }
+}
+
+/**
+ * The short label of a source, for its filter chip.
+ *
+ * @param {string} source
+ * @param {Function} t
+ * @returns {string}
+ */
+function sourceChipLabel(source, t) {
+  switch (source) {
+    case 'admin':
+      return t('projects.catalog.chips.admin', 'Administrators');
+    case 'colleagues':
+      return t('projects.catalog.chips.colleagues', 'Colleagues');
+    case 'ifinder':
+      return t('projects.catalog.chips.ifinder', 'iFinder');
+    default:
+      return t('projects.catalog.chips.yours', 'Yours');
+  }
+}
+
+/**
+ * The project catalog: what the viewer can add to their projects, in one
+ * list grouped by where it comes from — projects the administrators made
+ * available to everyone, projects colleagues published, the viewer's own
+ * iFinder smart collections (where that tier is offered), and published
+ * projects that are in their list already.
+ *
+ * The header (title, close, search, source filter) stays in place and only
+ * the list scrolls, so the dialog works on short screens too; below the `sm`
+ * breakpoint it fills the screen. The search and the filter work on the
+ * loaded lists, so the source counts follow every keystroke.
  *
  * Mount it only while open.
  *
@@ -44,71 +102,247 @@ function ProjectCatalogDialog({
   const { t, i18n } = useTranslation();
   const language = i18n?.language || 'en';
   const [query, setQuery] = useState('');
-  const [items, setItems] = useState(null);
-  const [busyId, setBusyId] = useState(null);
-  const [error, setError] = useState(null);
+  const [source, setSource] = useState('all');
+  // { status: 'loading'|'ready'|'error', items, error }
+  const [catalog, setCatalog] = useState({ status: 'loading', items: [], error: null });
+  // { status: 'loading'|'ready'|'error', items, warnings, error }
+  const [collections, setCollections] = useState({
+    status: 'loading',
+    items: [],
+    warnings: [],
+    error: null
+  });
+  const [catalogAttempt, setCatalogAttempt] = useState(0);
+  const [collectionsAttempt, setCollectionsAttempt] = useState(0);
+  const [busyKey, setBusyKey] = useState(null);
+  const [rowErrors, setRowErrors] = useState({});
+  const [announcement, setAnnouncement] = useState('');
   const searchRef = useRef(null);
 
   useEffect(() => {
     if (!catalogEnabled) return undefined;
     let active = true;
-    const handle = setTimeout(() => {
-      fetchProjectCatalog(query.trim())
-        .then(result => active && setItems(result?.items || []))
-        .catch(err => {
-          if (!active) return;
-          setItems([]);
-          setError(projectErrorMessage(err, t));
-        });
-    }, 250);
+    fetchProjectCatalog()
+      .then(result => {
+        if (active) setCatalog({ status: 'ready', items: result?.items || [], error: null });
+      })
+      .catch(err => {
+        if (active) setCatalog({ status: 'error', items: [], error: projectErrorMessage(err, t) });
+      });
     return () => {
       active = false;
-      clearTimeout(handle);
     };
-  }, [query, t, catalogEnabled]);
+  }, [catalogEnabled, catalogAttempt, t]);
 
-  const toggle = async project => {
-    setBusyId(project.id);
-    setError(null);
-    try {
-      if (project.subscribed) await removeCatalogProject(project.id);
-      else await addCatalogProject(project.id);
-      setItems(previous =>
-        previous.map(entry =>
-          entry.id === project.id ? { ...entry, subscribed: !project.subscribed } : entry
-        )
-      );
-      onChanged();
-    } catch (err) {
-      setError(projectErrorMessage(err, t));
-    } finally {
-      setBusyId(null);
-    }
+  useEffect(() => {
+    if (!collectionsEnabled) return undefined;
+    let active = true;
+    fetchSmartCollections()
+      .then(result => {
+        if (!active) return;
+        setCollections({
+          status: 'ready',
+          items: result?.items || [],
+          warnings: result?.warnings || [],
+          error: null
+        });
+      })
+      .catch(err => {
+        if (!active) return;
+        setCollections({
+          status: 'error',
+          items: [],
+          warnings: [],
+          error: projectErrorMessage(err, t)
+        });
+      });
+    return () => {
+      active = false;
+    };
+  }, [collectionsEnabled, collectionsAttempt, t]);
+
+  const entries = useMemo(
+    () => [
+      ...(catalogEnabled ? catalog.items.map(project => projectEntry(project, language)) : []),
+      ...(collectionsEnabled ? collections.items.map(collectionEntry) : [])
+    ],
+    [catalogEnabled, catalog.items, collectionsEnabled, collections.items, language]
+  );
+
+  // The iFinder group stays while it loads or has something to say, so its
+  // chip does not appear late and a warning is not lost. A viewer the tier is
+  // not offered to (`available: false`, no warning) gets no group.
+  const collectionsNotice =
+    collectionsEnabled && (collections.status !== 'ready' || collections.warnings.length > 0);
+  const sources = availableSources(entries, collectionsNotice ? ['ifinder'] : []);
+  const activeSource = source !== 'all' && sources.includes(source) ? source : 'all';
+  const groups = groupCatalogEntries(entries, query);
+  const countBySource = Object.fromEntries(
+    groups.map(group => [group.source, group.entries.length])
+  );
+  const totalCount = groups.reduce((sum, group) => sum + group.entries.length, 0);
+  const shownGroups = groups.filter(
+    group => activeSource === 'all' || group.source === activeSource
+  );
+  const showCollectionsNotice =
+    collectionsNotice &&
+    (activeSource === 'all' || activeSource === 'ifinder') &&
+    !shownGroups.some(group => group.source === 'ifinder');
+  const catalogLoading = catalogEnabled && catalog.status === 'loading';
+  const showCatalogError =
+    catalogEnabled && catalog.status === 'error' && activeSource !== 'ifinder';
+  const settled = !catalogLoading && !(collectionsEnabled && collections.status === 'loading');
+  const shownCount = shownGroups.reduce((sum, group) => sum + group.entries.length, 0);
+  const filtered = query.trim() !== '' || activeSource !== 'all';
+
+  const resultText = t('projects.catalog.resultCount', '{{count}} results', {
+    count: shownCount
+  });
+  useEffect(() => {
+    if (!settled) return undefined;
+    const handle = setTimeout(() => setAnnouncement(resultText), ANNOUNCE_DELAY_MS);
+    return () => clearTimeout(handle);
+  }, [resultText, settled]);
+
+  /** Loads the catalog again (after it failed). */
+  const retryCatalog = () => {
+    setCatalog(previous => ({ ...previous, status: 'loading', error: null }));
+    setCatalogAttempt(n => n + 1);
   };
+
+  /** Loads the smart collections again (after iFinder failed or warned). */
+  const retryCollections = () => {
+    setCollections(previous => ({ ...previous, status: 'loading', error: null }));
+    setCollectionsAttempt(n => n + 1);
+  };
+
+  const clearFilters = () => {
+    setQuery('');
+    setSource('all');
+    searchRef.current?.focus();
+  };
+
+  const toggle = useCallback(
+    async entry => {
+      setBusyKey(entry.key);
+      setRowErrors(previous => ({ ...previous, [entry.key]: null }));
+      try {
+        if (entry.kind === 'collection') {
+          const project = await addSmartCollection({ collectionId: entry.id });
+          setCollections(previous => ({
+            ...previous,
+            items: previous.items.map(item =>
+              item.collectionId === entry.id
+                ? { ...item, added: true, projectId: project.id }
+                : item
+            )
+          }));
+        } else {
+          const subscribed = entry.status === 'added';
+          if (subscribed) await removeCatalogProject(entry.id);
+          else await addCatalogProject(entry.id);
+          setCatalog(previous => ({
+            ...previous,
+            items: previous.items.map(item =>
+              item.id === entry.id ? { ...item, subscribed: !subscribed } : item
+            )
+          }));
+        }
+        onChanged();
+      } catch (err) {
+        setRowErrors(previous => ({ ...previous, [entry.key]: projectErrorMessage(err, t) }));
+      } finally {
+        setBusyKey(null);
+      }
+    },
+    [onChanged, t]
+  );
+
+  const hint = [
+    catalogEnabled
+      ? t(
+          'projects.catalog.dialogHint',
+          'Projects published for everyone, by their owners or by the administrators: add one to your projects to use it in your chats. Whoever published it keeps it up to date.'
+        )
+      : null,
+    collectionsEnabled
+      ? t(
+          'projects.catalog.collectionsHint',
+          'Add a collection to your projects to chat with it, with a default app and instructions of its own. Its documents stay in iFinder.'
+        )
+      : null
+  ].filter(Boolean);
+
+  let emptyState = null;
+  if (settled && shownCount === 0 && !showCollectionsNotice && !showCatalogError) {
+    emptyState = filtered ? (
+      <div className="px-4 sm:px-6 py-8 text-center text-sm text-gray-600 dark:text-gray-400 space-y-2">
+        <p>
+          {query.trim()
+            ? t('projects.catalog.noMatchesQuery', 'Nothing matches “{{query}}”.', {
+                query: query.trim()
+              })
+            : t('projects.catalog.noMatchesFilter', 'Nothing matches this filter.')}
+        </p>
+        <button type="button" onClick={clearFilters} className={LINK_BUTTON}>
+          {t('projects.catalog.clearFilters', 'Clear search and filter')}
+        </button>
+      </div>
+    ) : (
+      <p className="px-4 sm:px-6 py-8 text-center text-sm text-gray-600 dark:text-gray-400">
+        {catalogEnabled && collectionsEnabled
+          ? t(
+              'projects.catalog.emptyAll',
+              'Nothing has been published yet, and you have no smart collections in iFinder.'
+            )
+          : catalogEnabled
+            ? t('projects.catalog.empty', 'Nothing has been published yet.')
+            : t('projects.catalog.noCollections', 'You have no smart collections in iFinder.')}
+      </p>
+    );
+  }
+
+  const groupHeader = (group, count) => (
+    <h3
+      id={`catalog-group-${group}`}
+      className="sticky top-0 z-10 flex items-center gap-2 px-4 sm:px-6 py-2 bg-gray-50 dark:bg-gray-900 border-y border-gray-200 dark:border-gray-700 text-xs font-semibold uppercase tracking-wide text-gray-600 dark:text-gray-300"
+    >
+      <Icon name={CATALOG_SOURCE_STYLES[group].icon} size="xs" aria-hidden="true" />
+      <span className="truncate">{sourceLabel(group, t)}</span>
+      {count !== null && <span className="ml-auto tabular-nums font-normal">{count}</span>}
+    </h3>
+  );
 
   return (
     <Modal
       isOpen
       onClose={onClose}
-      maxWidthClassName="max-w-2xl"
+      maxWidthClassName="max-w-3xl"
+      // Below `sm`, and on screens of little height, the dialog fills the screen.
+      // Otherwise it keeps one height, so the search does not move while typing.
+      overlayPaddingClassName="p-0 sm:[@media(min-height:561px)]:p-4"
+      maxHeightClassName="max-h-dvh sm:[@media(min-height:561px)]:max-h-[90dvh]"
+      panelClassName="h-dvh sm:h-[min(90dvh,48rem)] max-sm:rounded-none [@media(max-height:560px)]:h-dvh [@media(max-height:560px)]:rounded-none"
       labelledBy="project-catalog-dialog-title"
       initialFocusRef={searchRef}
     >
-      <div className="px-6 pt-5 pb-4 space-y-3">
-        <h2
-          id="project-catalog-dialog-title"
-          className="text-lg font-semibold text-gray-900 dark:text-gray-100"
-        >
-          {t('projects.catalog.dialogTitle', 'Project catalog')}
-        </h2>
-        {catalogEnabled && (
-          <p className="text-sm text-gray-600 dark:text-gray-400">
-            {t(
-              'projects.catalog.dialogHint',
-              'Projects published for everyone, by their owners or by the administrators: add one to your projects to use it in your chats. Whoever published it keeps it up to date.'
-            )}
-          </p>
-        )}
+      <div className="flex-none space-y-3 px-4 pt-4 pb-3 sm:px-6 sm:pt-5 border-b border-gray-200 dark:border-gray-700 [@media(max-height:560px)]:space-y-2 [@media(max-height:560px)]:pt-2 [@media(max-height:560px)]:pb-2">
+        <div className="flex items-center gap-3">
+          <h2
+            id="project-catalog-dialog-title"
+            className="flex-1 min-w-0 truncate text-lg font-semibold text-gray-900 dark:text-gray-100 [@media(max-height:560px)]:text-base"
+          >
+            {t('projects.catalog.dialogTitle', 'Project catalog')}
+          </h2>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label={t('common.close', 'Close')}
+            className="-mr-2 grid place-items-center size-11 sm:size-9 rounded-lg text-gray-500 hover:text-gray-700 hover:bg-gray-100 dark:text-gray-400 dark:hover:text-gray-200 dark:hover:bg-gray-700 focus:outline-hidden focus-visible:ring-2 focus-visible:ring-indigo-500"
+          >
+            <Icon name="x" size="md" />
+          </button>
+        </div>
         <input
           ref={searchRef}
           type="search"
@@ -118,105 +352,170 @@ function ProjectCatalogDialog({
           aria-label={t('projects.catalog.search', 'Search the catalog')}
           className={INPUT_CLASS}
         />
-        {collectionsEnabled && (
-          <SmartCollectionsCatalogSection query={query} onClose={onClose} onChanged={onChanged} />
-        )}
-        {collectionsEnabled && catalogEnabled && (
-          <h3 className="pt-2 text-sm font-semibold text-gray-900 dark:text-gray-100">
-            {t('projects.catalog.publishedTitle', 'Published projects')}
-          </h3>
-        )}
-        {!catalogEnabled ? null : items === null ? (
-          <p className="text-sm text-gray-500 dark:text-gray-400">
-            {t('common.loading', 'Loading...')}
-          </p>
-        ) : items.length === 0 ? (
-          <p className="text-sm text-gray-600 dark:text-gray-400">
-            {query.trim()
-              ? t('projects.catalog.noMatches', 'No published project matches.')
-              : t('projects.catalog.empty', 'Nothing has been published yet.')}
-          </p>
-        ) : (
-          <ul className="max-h-96 overflow-y-auto divide-y divide-gray-100 dark:divide-gray-700 border border-gray-200 dark:border-gray-700 rounded-md">
-            {items.map(project => {
-              const description = localizedText(project.description, language);
-              // An admin project is open to everyone and managed by the
-              // administrators; anyone adds it to their list. A user project
-              // they own or are a member of is in their list already.
-              const fromAdmins = project.ownership === 'admin';
-              const inList = !fromAdmins && project.role !== 'catalog';
+        {sources.length > 1 && (
+          <div
+            role="group"
+            aria-label={t('projects.catalog.filterLabel', 'Show')}
+            className="-mx-4 px-4 sm:mx-0 sm:px-0 flex gap-2 overflow-x-auto sm:flex-wrap [@media(max-height:560px)]:flex-nowrap [scrollbar-width:none]"
+          >
+            {['all', ...sources].map(key => {
+              const selected = activeSource === key;
+              const count = key === 'all' ? totalCount : (countBySource[key] ?? 0);
+              const pending = key === 'ifinder' && collections.status === 'loading';
               return (
-                <li key={project.id} className="px-3 py-3 flex items-start gap-3">
-                  <Icon name="folder" size="md" className="mt-0.5 text-indigo-500 flex-none" />
-                  <div className="flex-1 min-w-0">
-                    <Link
-                      to={`/projects/${encodeURIComponent(project.id)}`}
-                      onClick={onClose}
-                      className="font-medium text-gray-900 dark:text-gray-100 hover:text-indigo-600 dark:hover:text-indigo-400"
-                    >
-                      {projectDisplayName(project, language)}
-                    </Link>
-                    {description && (
-                      <p className="text-sm text-gray-600 dark:text-gray-400 line-clamp-2">
-                        {description}
-                      </p>
-                    )}
-                    <p className="text-xs text-gray-500 dark:text-gray-400">
-                      {fromAdmins
-                        ? t('projects.catalog.byAdmins', 'From the administrators')
-                        : t('projects.catalog.byOwner', 'By {{name}}', {
-                            name:
-                              project.owner?.name || t('projects.members.unknownOwner', 'Unknown')
-                          })}
-                      {' · '}
-                      {t('projects.list.itemCount', '{{count}} items', {
-                        count: project.usage?.items ?? 0
-                      })}
-                    </p>
-                  </div>
-                  {inList ? (
-                    <span className="text-xs text-gray-500 dark:text-gray-400 pt-1.5">
-                      {t('projects.catalog.inYourList', 'In your projects')}
-                    </span>
-                  ) : (
-                    <button
-                      type="button"
-                      onClick={() => toggle(project)}
-                      disabled={busyId === project.id}
-                      className={ROW_BUTTON}
-                      aria-label={
-                        project.subscribed
-                          ? t('projects.catalog.removeNamed', 'Remove {{name}} from my projects', {
-                              name: projectDisplayName(project, language)
-                            })
-                          : t('projects.catalog.addNamed', 'Add {{name}} to my projects', {
-                              name: projectDisplayName(project, language)
-                            })
-                      }
-                    >
-                      <Icon name={project.subscribed ? 'check' : 'plus'} size="sm" />
-                      {project.subscribed
-                        ? t('projects.catalog.added', 'Added')
-                        : t('projects.catalog.addShort', 'Add')}
-                    </button>
+                <button
+                  key={key}
+                  type="button"
+                  aria-pressed={selected}
+                  onClick={() => setSource(key)}
+                  className={`${selected ? CHIP_SELECTED : CHIP_IDLE} ${
+                    !selected && count === 0 && !pending ? 'opacity-60' : ''
+                  }`}
+                >
+                  {key !== 'all' && (
+                    <Icon
+                      name={CATALOG_SOURCE_STYLES[key].icon}
+                      size="xs"
+                      aria-hidden="true"
+                      className={selected ? 'text-white' : ''}
+                    />
                   )}
-                </li>
+                  {key === 'all' ? t('projects.catalog.chips.all', 'All') : sourceChipLabel(key, t)}
+                  <span
+                    className={`tabular-nums text-xs rounded-full px-1.5 min-w-5 text-center ${
+                      selected
+                        ? 'bg-white/20'
+                        : 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-300'
+                    }`}
+                  >
+                    {pending ? '…' : count}
+                  </span>
+                </button>
               );
             })}
-          </ul>
+          </div>
         )}
-        {error && (
-          <p role="alert" className="text-sm text-red-600 dark:text-red-400">
-            {error}
+        <p role="status" aria-live="polite" className="sr-only">
+          {announcement}
+        </p>
+      </div>
+
+      <div
+        className="flex-1 min-h-0 overflow-y-auto overscroll-contain pb-[env(safe-area-inset-bottom)]"
+        data-testid="catalog-results"
+      >
+        {hint.length > 0 && (
+          <details className="group px-4 sm:px-6 py-2 text-sm text-gray-600 dark:text-gray-400">
+            <summary className="inline-flex items-center gap-1 cursor-pointer select-none font-medium text-gray-700 dark:text-gray-300 rounded-sm focus:outline-hidden focus-visible:ring-2 focus-visible:ring-indigo-500 [&::-webkit-details-marker]:hidden list-none">
+              <Icon
+                name="chevron-right"
+                size="xs"
+                className="transition-transform group-open:rotate-90"
+              />
+              {t('projects.catalog.howItWorks', 'How adding works')}
+            </summary>
+            <div className="mt-1 space-y-1">
+              {hint.map(text => (
+                <p key={text}>{text}</p>
+              ))}
+            </div>
+          </details>
+        )}
+
+        {showCatalogError && (
+          <div
+            role="alert"
+            className="mx-4 sm:mx-6 my-2 flex items-start gap-2 rounded-lg border border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-900/30 px-3 py-2 text-sm text-red-700 dark:text-red-300"
+          >
+            <Icon name="exclamation-triangle" size="sm" className="mt-0.5 flex-none" />
+            <span className="flex-1">{catalog.error}</span>
+            <button type="button" onClick={retryCatalog} className={LINK_BUTTON}>
+              {t('common.retry', 'Retry')}
+            </button>
+          </div>
+        )}
+
+        {catalogLoading && (
+          <p className="px-4 sm:px-6 py-6 text-center text-sm text-gray-500 dark:text-gray-400">
+            {t('common.loading', 'Loading...')}
           </p>
         )}
-      </div>
-      <div className="px-6 py-4 border-t border-gray-200 dark:border-gray-700 flex justify-end">
-        <button type="button" onClick={onClose} className={SECONDARY_BUTTON}>
-          {t('common.close', 'Close')}
-        </button>
+
+        {shownGroups.map(group => (
+          <section key={group.source} aria-labelledby={`catalog-group-${group.source}`}>
+            {groupHeader(group.source, group.entries.length)}
+            {group.source === 'ifinder' && collections.warnings.length > 0 && (
+              <CollectionsWarning onRetry={retryCollections} />
+            )}
+            <ul
+              className="divide-y divide-gray-100 dark:divide-gray-700"
+              data-testid={group.source === 'ifinder' ? 'catalog-smart-collections' : undefined}
+            >
+              {group.entries.map(entry => (
+                <CatalogEntryRow
+                  key={entry.key}
+                  entry={entry}
+                  busy={busyKey === entry.key}
+                  error={rowErrors[entry.key]}
+                  onToggle={toggle}
+                  onNavigate={onClose}
+                />
+              ))}
+            </ul>
+          </section>
+        ))}
+
+        {showCollectionsNotice && (
+          <section aria-labelledby="catalog-group-ifinder">
+            {groupHeader('ifinder', null)}
+            {collections.status === 'loading' ? (
+              <p className="px-4 sm:px-6 py-4 text-sm text-gray-500 dark:text-gray-400">
+                {t('common.loading', 'Loading...')}
+              </p>
+            ) : collections.status === 'error' ? (
+              <p
+                role="alert"
+                className="px-4 sm:px-6 py-3 text-sm text-red-600 dark:text-red-400 flex items-start gap-2"
+              >
+                <span className="flex-1">{collections.error}</span>
+                <button type="button" onClick={retryCollections} className={LINK_BUTTON}>
+                  {t('common.retry', 'Retry')}
+                </button>
+              </p>
+            ) : (
+              <CollectionsWarning onRetry={retryCollections} />
+            )}
+          </section>
+        )}
+
+        {emptyState}
       </div>
     </Modal>
+  );
+}
+
+/**
+ * iFinder could not be reached: the smart collections may be missing.
+ *
+ * @param {Object} props
+ * @param {() => void} props.onRetry
+ * @returns {JSX.Element}
+ */
+function CollectionsWarning({ onRetry }) {
+  const { t } = useTranslation();
+  return (
+    <p className="px-4 sm:px-6 py-3 flex items-start gap-2 text-sm text-amber-700 dark:text-amber-300">
+      <Icon name="exclamation-triangle" size="sm" className="mt-0.5 flex-none" />
+      <span className="flex-1">
+        {t(
+          'projects.catalog.collectionsUnavailable',
+          'iFinder could not be reached, so your smart collections are missing from this list.'
+        )}
+      </span>
+      <button type="button" onClick={onRetry} className={LINK_BUTTON}>
+        {t('common.retry', 'Retry')}
+      </button>
+    </p>
   );
 }
 

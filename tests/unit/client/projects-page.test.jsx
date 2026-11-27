@@ -323,7 +323,7 @@ describe('ProjectsPage', () => {
     fireEvent.click(within(faq).getByRole('button', { name: 'Add Company FAQ to my projects' }));
     await waitFor(() => expect(mockApi.addCatalogProject).toHaveBeenCalledWith('company-faq'));
     expect(
-      await within(faq).findByRole('button', { name: 'Remove Company FAQ from my projects' })
+      await within(faq).findByRole('button', { name: 'Added: remove Company FAQ from my projects' })
     ).toBeInTheDocument();
 
     fireEvent.click(
@@ -331,7 +331,9 @@ describe('ProjectsPage', () => {
     );
     await waitFor(() => expect(mockApi.addCatalogProject).toHaveBeenCalledWith('prj_docs'));
     expect(
-      await within(dialog).findByRole('button', { name: 'Remove iHub knowledge from my projects' })
+      await within(dialog).findByRole('button', {
+        name: 'Added: remove iHub knowledge from my projects'
+      })
     ).toBeInTheDocument();
   });
 
