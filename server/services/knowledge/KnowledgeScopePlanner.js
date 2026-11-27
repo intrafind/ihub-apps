@@ -95,6 +95,26 @@ const EXCERPT_NOTE_NO_TOOLS =
   'Excerpt: the sections of this document that best match the question, not the whole document.';
 
 /**
+ * What the model is told the projects are for: the context of the user's
+ * requests. Without it, "summarize the documents" got a question back about
+ * which documents were meant, although the chat had a project attached.
+ */
+const SCOPE_NOTE =
+  'These projects are part of this conversation: their documents are what the user is working with. ' +
+  'When the user refers to "the documents", "the files" or the like without naming other ' +
+  'documents or attaching files to the message, they mean the documents of these projects. ' +
+  'Use them instead of asking which documents are meant.';
+
+/**
+ * Added when a project is left to the knowledge tools: a search returns
+ * passages, so a request about all of its documents lists and reads them.
+ */
+const SCOPE_NOTE_TOOLS =
+  "For a request about all of a project's documents, such as summarizing or comparing them, " +
+  'take them from its document list (knowledge_list for the complete one) and read them with ' +
+  'knowledge_read; knowledge_search returns only the passages that match a query.';
+
+/**
  * The load-all budget of a request.
  *
  * @param {{contextWindow?: number}|null} model
@@ -697,7 +717,9 @@ function documentListLines(project, budgetTokens = MAX_LIST_TOKENS) {
 }
 
 /**
- * The `<projects>` block a plan puts into the system prompt.
+ * The `<projects>` block a plan puts into the system prompt. It opens with what
+ * the projects are to the conversation ({@link SCOPE_NOTE}), so a request about
+ * "the documents" is read as one about theirs.
  *
  * @param {Awaited<ReturnType<typeof planKnowledgeScope>>} plan
  * @param {Array<{text: string, tokens: number}>|null} [knownParts] - receives
@@ -707,7 +729,10 @@ function documentListLines(project, budgetTokens = MAX_LIST_TOKENS) {
  */
 export function renderProjectsBlock(plan, knownParts = null) {
   if (!plan?.projects?.length) return '';
-  const lines = ['<projects>'];
+  const lines = ['<projects>', SCOPE_NOTE];
+  if (!plan.toolless && plan.projects.some(project => project.mode === 'searched')) {
+    lines.push(SCOPE_NOTE_TOOLS);
+  }
   for (const project of plan.projects) {
     const attrs = [
       `id="${escapeAttribute(project.id)}"`,

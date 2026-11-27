@@ -1,30 +1,54 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
-import { useEffect, useRef, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import Modal from '../../../shared/components/Modal';
 import Icon from '../../../shared/components/Icon';
-import { addCatalogProject, fetchProjectCatalog, removeCatalogProject } from '../../../api';
-import { projectErrorMessage } from '../utils/projectErrors';
-import { localizedText } from '../utils/projectItems';
-import { projectDisplayName } from '../utils/projectView';
-import { INPUT_CLASS, SECONDARY_BUTTON } from './item-dialog/dialogStyles';
-import SmartCollectionsCatalogSection from './SmartCollectionsCatalogSection';
+import useProjectCatalog from '../hooks/useProjectCatalog';
+import {
+  availableSources,
+  collectionEntry,
+  filterCatalogEntries,
+  projectEntry
+} from '../utils/catalogSources';
+import { INPUT_CLASS } from './item-dialog/dialogStyles';
+import CatalogEntryRow from './CatalogEntryRow';
+import {
+  CatalogEmptyState,
+  CatalogError,
+  CollectionsNotice,
+  HowItWorks,
+  SourceChips
+} from './CatalogDialogParts';
 
-const ROW_BUTTON =
-  'inline-flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-lg border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50';
+/** Delay before the result count is announced, so typing is not read out letter by letter. */
+const ANNOUNCE_DELAY_MS = 600;
 
 /**
- * The project catalog: projects their owners published for everyone signed
- * in, and admin projects available to everyone signed in. Search it, open a
- * project, and add one to your projects (or remove it again): it then shows
- * in your list and in the chat input's project picker. A project you own or
- * are a member of is in your list already.
+ * Matches per source.
  *
- * Where the viewer's iFinder smart collections are offered, the catalog lists
- * them too, to add to their projects (`SmartCollectionsCatalogSection`).
+ * @param {import('../utils/catalogSources').CatalogEntry[]} entries
+ * @returns {Object<string, number>}
+ */
+function countBySource(entries) {
+  const counts = {};
+  for (const entry of entries) counts[entry.source] = (counts[entry.source] || 0) + 1;
+  return counts;
+}
+
+/**
+ * The project catalog: what the viewer can add to their projects, in one
+ * list ordered by where it comes from — the viewer's own iFinder smart
+ * collections (where that tier is offered), projects the administrators made
+ * available to everyone, projects colleagues published, and published
+ * projects that are in their list already. Each entry carries a badge that
+ * names its source.
+ *
+ * The header (title, close, search, source filter) stays in place and only
+ * the list scrolls, so the dialog works on short screens too; below the `sm`
+ * breakpoint it fills the screen. The search and the filter work on the
+ * loaded lists, so the source counts follow every keystroke.
  *
  * Mount it only while open.
  *
@@ -44,71 +68,106 @@ function ProjectCatalogDialog({
   const { t, i18n } = useTranslation();
   const language = i18n?.language || 'en';
   const [query, setQuery] = useState('');
-  const [items, setItems] = useState(null);
-  const [busyId, setBusyId] = useState(null);
-  const [error, setError] = useState(null);
+  const [source, setSource] = useState('all');
+  const [announcement, setAnnouncement] = useState('');
   const searchRef = useRef(null);
+  const { catalog, collections, retryCatalog, retryCollections, toggle, busyKey, rowErrors } =
+    useProjectCatalog({ catalogEnabled, collectionsEnabled, onChanged, t });
 
+  const entries = useMemo(
+    () => [
+      ...(catalogEnabled ? catalog.items.map(project => projectEntry(project, language)) : []),
+      ...(collectionsEnabled ? collections.items.map(collectionEntry) : [])
+    ],
+    [catalogEnabled, catalog.items, collectionsEnabled, collections.items, language]
+  );
+
+  // The iFinder chip stays while it loads or has something to say, so it does
+  // not appear late and a warning is not lost. A viewer the tier is not
+  // offered to (`available: false`, no warning) gets no chip.
+  const collectionsNotice =
+    collectionsEnabled && (collections.status !== 'ready' || collections.warnings.length > 0);
+  const sources = availableSources(entries, collectionsNotice ? ['ifinder'] : []);
+  const activeSource = sources.includes(source) ? source : 'all';
+  const matches = filterCatalogEntries(entries, query);
+  const shown =
+    activeSource === 'all' ? matches : matches.filter(entry => entry.source === activeSource);
+  const showCollectionsNotice = collectionsNotice && ['all', 'ifinder'].includes(activeSource);
+  const catalogLoading = catalogEnabled && catalog.status === 'loading';
+  const showCatalogError =
+    catalogEnabled && catalog.status === 'error' && activeSource !== 'ifinder';
+  const collectionsLoading = collectionsEnabled && collections.status === 'loading';
+  const settled = !catalogLoading && !collectionsLoading;
+  const trimmedQuery = query.trim();
+  const filtered = trimmedQuery !== '' || activeSource !== 'all';
+  // "Nothing matches" shows even beside a notice, so an empty search result is
+  // not taken for the notice's fault; "nothing published" only without one.
+  const showEmpty =
+    settled && shown.length === 0 && (filtered || (!showCollectionsNotice && !showCatalogError));
+
+  const resultText = t('projects.catalog.resultCount', '{{count}} results', {
+    count: shown.length
+  });
   useEffect(() => {
-    if (!catalogEnabled) return undefined;
-    let active = true;
-    const handle = setTimeout(() => {
-      fetchProjectCatalog(query.trim())
-        .then(result => active && setItems(result?.items || []))
-        .catch(err => {
-          if (!active) return;
-          setItems([]);
-          setError(projectErrorMessage(err, t));
-        });
-    }, 250);
-    return () => {
-      active = false;
-      clearTimeout(handle);
-    };
-  }, [query, t, catalogEnabled]);
+    if (!settled) return undefined;
+    const handle = setTimeout(() => setAnnouncement(resultText), ANNOUNCE_DELAY_MS);
+    return () => clearTimeout(handle);
+  }, [resultText, settled]);
 
-  const toggle = async project => {
-    setBusyId(project.id);
-    setError(null);
-    try {
-      if (project.subscribed) await removeCatalogProject(project.id);
-      else await addCatalogProject(project.id);
-      setItems(previous =>
-        previous.map(entry =>
-          entry.id === project.id ? { ...entry, subscribed: !project.subscribed } : entry
-        )
-      );
-      onChanged();
-    } catch (err) {
-      setError(projectErrorMessage(err, t));
-    } finally {
-      setBusyId(null);
-    }
+  const clearFilters = () => {
+    setQuery('');
+    setSource('all');
+    searchRef.current?.focus();
   };
+
+  const hints = [];
+  if (catalogEnabled) {
+    hints.push(
+      t(
+        'projects.catalog.dialogHint',
+        'Projects published for everyone, by their owners or by the administrators: add one to your projects to use it in your chats. Whoever published it keeps it up to date.'
+      )
+    );
+  }
+  if (collectionsEnabled) {
+    hints.push(
+      t(
+        'projects.catalog.collectionsHint',
+        'Add a collection to your projects to chat with it, with a default app and instructions of its own. Its documents stay in iFinder.'
+      )
+    );
+  }
 
   return (
     <Modal
       isOpen
       onClose={onClose}
-      maxWidthClassName="max-w-2xl"
+      maxWidthClassName="max-w-3xl"
+      // Below `sm`, and on screens of little height, the dialog fills the screen.
+      // Otherwise it keeps one height, so the search does not move while typing.
+      overlayPaddingClassName="p-0 sm:[@media(min-height:561px)]:p-4"
+      maxHeightClassName="max-h-dvh sm:[@media(min-height:561px)]:max-h-[90dvh]"
+      panelClassName="h-dvh sm:h-[min(90dvh,48rem)] max-sm:rounded-none [@media(max-height:560px)]:h-dvh [@media(max-height:560px)]:rounded-none"
       labelledBy="project-catalog-dialog-title"
       initialFocusRef={searchRef}
     >
-      <div className="px-6 pt-5 pb-4 space-y-3">
-        <h2
-          id="project-catalog-dialog-title"
-          className="text-lg font-semibold text-gray-900 dark:text-gray-100"
-        >
-          {t('projects.catalog.dialogTitle', 'Project catalog')}
-        </h2>
-        {catalogEnabled && (
-          <p className="text-sm text-gray-600 dark:text-gray-400">
-            {t(
-              'projects.catalog.dialogHint',
-              'Projects published for everyone, by their owners or by the administrators: add one to your projects to use it in your chats. Whoever published it keeps it up to date.'
-            )}
-          </p>
-        )}
+      <div className="flex-none space-y-3 px-4 pt-4 pb-3 sm:px-6 sm:pt-5 border-b border-gray-200 dark:border-gray-700 [@media(max-height:560px)]:space-y-2 [@media(max-height:560px)]:pt-2 [@media(max-height:560px)]:pb-2">
+        <div className="flex items-center gap-3">
+          <h2
+            id="project-catalog-dialog-title"
+            className="flex-1 min-w-0 truncate text-lg font-semibold text-gray-900 dark:text-gray-100 [@media(max-height:560px)]:text-base"
+          >
+            {t('projects.catalog.dialogTitle', 'Project catalog')}
+          </h2>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label={t('common.close', 'Close')}
+            className="-mr-2 grid place-items-center size-11 sm:size-9 rounded-lg text-gray-500 hover:text-gray-700 hover:bg-gray-100 dark:text-gray-400 dark:hover:text-gray-200 dark:hover:bg-gray-700 focus:outline-hidden focus-visible:ring-2 focus-visible:ring-indigo-500"
+          >
+            <Icon name="x" size="md" />
+          </button>
+        </div>
         <input
           ref={searchRef}
           type="search"
@@ -118,103 +177,65 @@ function ProjectCatalogDialog({
           aria-label={t('projects.catalog.search', 'Search the catalog')}
           className={INPUT_CLASS}
         />
-        {collectionsEnabled && (
-          <SmartCollectionsCatalogSection query={query} onClose={onClose} onChanged={onChanged} />
+        {sources.length > 1 && (
+          <SourceChips
+            sources={sources}
+            activeSource={activeSource}
+            counts={countBySource(matches)}
+            total={matches.length}
+            pendingSources={collectionsLoading ? ['ifinder'] : []}
+            onSelect={setSource}
+          />
         )}
-        {collectionsEnabled && catalogEnabled && (
-          <h3 className="pt-2 text-sm font-semibold text-gray-900 dark:text-gray-100">
-            {t('projects.catalog.publishedTitle', 'Published projects')}
-          </h3>
+        <p role="status" aria-live="polite" className="sr-only">
+          {announcement}
+        </p>
+      </div>
+
+      <div
+        className="flex-1 min-h-0 overflow-y-auto overscroll-contain pb-[env(safe-area-inset-bottom)]"
+        data-testid="catalog-results"
+      >
+        <HowItWorks hints={hints} />
+        {showCollectionsNotice && (
+          <CollectionsNotice
+            status={collections.status}
+            error={collections.error}
+            onRetry={retryCollections}
+          />
         )}
-        {!catalogEnabled ? null : items === null ? (
-          <p className="text-sm text-gray-500 dark:text-gray-400">
-            {t('common.loading', 'Loading...')}
-          </p>
-        ) : items.length === 0 ? (
-          <p className="text-sm text-gray-600 dark:text-gray-400">
-            {query.trim()
-              ? t('projects.catalog.noMatches', 'No published project matches.')
-              : t('projects.catalog.empty', 'Nothing has been published yet.')}
-          </p>
-        ) : (
-          <ul className="max-h-96 overflow-y-auto divide-y divide-gray-100 dark:divide-gray-700 border border-gray-200 dark:border-gray-700 rounded-md">
-            {items.map(project => {
-              const description = localizedText(project.description, language);
-              // An admin project is open to everyone and managed by the
-              // administrators; anyone adds it to their list. A user project
-              // they own or are a member of is in their list already.
-              const fromAdmins = project.ownership === 'admin';
-              const inList = !fromAdmins && project.role !== 'catalog';
-              return (
-                <li key={project.id} className="px-3 py-3 flex items-start gap-3">
-                  <Icon name="folder" size="md" className="mt-0.5 text-indigo-500 flex-none" />
-                  <div className="flex-1 min-w-0">
-                    <Link
-                      to={`/projects/${encodeURIComponent(project.id)}`}
-                      onClick={onClose}
-                      className="font-medium text-gray-900 dark:text-gray-100 hover:text-indigo-600 dark:hover:text-indigo-400"
-                    >
-                      {projectDisplayName(project, language)}
-                    </Link>
-                    {description && (
-                      <p className="text-sm text-gray-600 dark:text-gray-400 line-clamp-2">
-                        {description}
-                      </p>
-                    )}
-                    <p className="text-xs text-gray-500 dark:text-gray-400">
-                      {fromAdmins
-                        ? t('projects.catalog.byAdmins', 'From the administrators')
-                        : t('projects.catalog.byOwner', 'By {{name}}', {
-                            name:
-                              project.owner?.name || t('projects.members.unknownOwner', 'Unknown')
-                          })}
-                      {' · '}
-                      {t('projects.list.itemCount', '{{count}} items', {
-                        count: project.usage?.items ?? 0
-                      })}
-                    </p>
-                  </div>
-                  {inList ? (
-                    <span className="text-xs text-gray-500 dark:text-gray-400 pt-1.5">
-                      {t('projects.catalog.inYourList', 'In your projects')}
-                    </span>
-                  ) : (
-                    <button
-                      type="button"
-                      onClick={() => toggle(project)}
-                      disabled={busyId === project.id}
-                      className={ROW_BUTTON}
-                      aria-label={
-                        project.subscribed
-                          ? t('projects.catalog.removeNamed', 'Remove {{name}} from my projects', {
-                              name: projectDisplayName(project, language)
-                            })
-                          : t('projects.catalog.addNamed', 'Add {{name}} to my projects', {
-                              name: projectDisplayName(project, language)
-                            })
-                      }
-                    >
-                      <Icon name={project.subscribed ? 'check' : 'plus'} size="sm" />
-                      {project.subscribed
-                        ? t('projects.catalog.added', 'Added')
-                        : t('projects.catalog.addShort', 'Add')}
-                    </button>
-                  )}
-                </li>
-              );
-            })}
+        {showCatalogError && <CatalogError error={catalog.error} onRetry={retryCatalog} />}
+        {shown.length > 0 && (
+          <ul
+            className="border-t border-gray-100 dark:border-gray-700 divide-y divide-gray-100 dark:divide-gray-700"
+            aria-label={t('projects.catalog.dialogTitle', 'Project catalog')}
+          >
+            {shown.map(entry => (
+              <CatalogEntryRow
+                key={entry.key}
+                entry={entry}
+                busy={busyKey === entry.key}
+                error={rowErrors[entry.key]}
+                onToggle={toggle}
+                onNavigate={onClose}
+              />
+            ))}
           </ul>
         )}
-        {error && (
-          <p role="alert" className="text-sm text-red-600 dark:text-red-400">
-            {error}
+        {catalogLoading && (
+          <p className="px-4 sm:px-6 py-6 text-center text-sm text-gray-500 dark:text-gray-400">
+            {t('common.loading', 'Loading...')}
           </p>
         )}
-      </div>
-      <div className="px-6 py-4 border-t border-gray-200 dark:border-gray-700 flex justify-end">
-        <button type="button" onClick={onClose} className={SECONDARY_BUTTON}>
-          {t('common.close', 'Close')}
-        </button>
+        {showEmpty && (
+          <CatalogEmptyState
+            query={trimmedQuery}
+            filtered={filtered}
+            catalogEnabled={catalogEnabled}
+            collectionsEnabled={collectionsEnabled}
+            onClear={clearFilters}
+          />
+        )}
       </div>
     </Modal>
   );

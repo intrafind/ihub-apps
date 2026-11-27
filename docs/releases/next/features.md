@@ -276,6 +276,23 @@ as `{{project}}` or `{{client}}`. The model now fills them.
   when a document template declares fields.
 
 
+## Projects: One Clear List in the Project Catalog
+
+**Projects → Browse catalog** now shows everything users can add in one list, instead of two lists
+that each scrolled on their own.
+
+- A badge beside each name says where an entry comes from: **iFinder**, **Administrators**,
+  **Colleagues** or **Yours**. The user's iFinder smart collections come first. Projects of
+  colleagues also say who published them (*By Ann · 12 items*).
+- Chips under the search (**All**, **iFinder**, **Administrators**, **Colleagues**, **Yours**) show
+  one source; their counts follow the search, which filters the list as you type.
+- Only the list scrolls. The title, the close button, the search and the chips stay in place, so
+  the catalog can always be closed, also on screens of little height, where the close button could
+  be cut off before. On a phone, and on a screen less than 560 pixels high, the catalog fills the
+  screen.
+- If iFinder cannot be reached or the catalog fails to load, a notice says so, with **Retry**; the
+  entries of the other sources stay. A failed add or remove is reported under its entry.
+
 ## New Installations Start Without Running Configuration Migrations
 
 The first start of a new installation no longer runs the configuration migrations, about 230 of

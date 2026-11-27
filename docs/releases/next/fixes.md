@@ -39,3 +39,15 @@ Report 2026").
   title. When the heading is the longer one, its wording is printed once as the title.
 - A different first heading, and a heading further down, stay.
 
+
+## Chats With a Project Know Which Documents You Mean
+
+In a chat with a project attached, a request such as "summarize the documents" could get a question
+back about which documents were meant. The answer only used the project once the request said "the
+documents of the project".
+
+- The assistant now takes "the documents", "the files" and similar words as the documents of the
+  attached projects, unless the message names other documents or carries files of its own.
+- To summarize or compare all documents of a large project, it reads them from the project's
+  document list instead of answering from a few search hits.
+- The same applies to projects added to a prompt step of a workflow.
