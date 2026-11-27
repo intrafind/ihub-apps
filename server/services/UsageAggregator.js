@@ -11,6 +11,10 @@
  * event file changed after its rollup was written. History is not re-read.
  * A month is rebuilt when one of its days was.
  *
+ * Runs are serialized ({@link runRollups}): each reads the event files and then
+ * replaces whole rollup files, so two overlapping runs could finish in the
+ * wrong order and leave the older snapshot in place.
+ *
  * @module services/UsageAggregator
  */
 import fs from 'node:fs/promises';
@@ -27,9 +31,19 @@ import {
 import { buildRollup, mergeRollups, ROLLUP_VERSION } from './usage/rollup.js';
 import { cleanupFeedback } from '../feedbackStorage.js';
 import logger from '../utils/logger.js';
+import { getStorage, readFacet } from '../storage/bootstrap.js';
 import { renameWithRetry } from '../utils/atomicWrite.js';
 
 const ROLLUP_INTERVAL_MS = 60 * 60 * 1000; // 1 hour
+
+/** Storage lock that keeps the rollup runs of different workers and instances apart. */
+const ROLLUP_LOCK = 'usage-rollups';
+/**
+ * Lease of one rollup run: renewed while the run lasts (`ttlMs` is how long a
+ * crashed holder blocks the next run); a second run queues for up to `waitMs`,
+ * long enough for a full `all` rebuild.
+ */
+const ROLLUP_LOCK_OPTIONS = Object.freeze({ ttlMs: 60_000, waitMs: 10 * 60_000 });
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 function utcDay(ms) {
@@ -234,12 +248,50 @@ export async function cleanupMonthlyRollups(retentionDays, now) {
   return cleanupRollupDir(getMonthlyDir(), retentionDays, 7, now);
 }
 
+/** The end of the queue of this process's rollup runs. */
+let rollupQueue = Promise.resolve();
+
+/**
+ * Run `fn` holding the storage lock of rollup runs, where the storage has one
+ * that excludes anything. Without one (no storage yet, `locking: 'none'`),
+ * only the queue of this process orders the runs.
+ */
+function withRollupLock(fn) {
+  const provider = getStorage();
+  const locks = readFacet(provider, 'locks');
+  let locking;
+  try {
+    locking = provider?.getCapabilities?.()?.locking;
+  } catch {
+    locking = undefined;
+  }
+  if (typeof locks?.withLock !== 'function' || locking === 'none') return fn();
+  return locks.withLock(ROLLUP_LOCK, fn, ROLLUP_LOCK_OPTIONS);
+}
+
 /**
  * Flush, roll up incrementally, and apply retention.
+ *
+ * Runs one at a time, in the order they were asked for: the hourly run, the
+ * one at startup and an admin's `POST /api/admin/usage/_rollup` queue behind
+ * each other in this process, and the storage lock keeps the runs of other
+ * workers and instances apart. A run that was asked for while another was
+ * going still runs itself afterwards, so it sees the events that arrived in
+ * the meantime and honours its own `all`.
+ *
  * @param {Object} [retentionConfig] - platform `usageTracking`
  * @param {Object} [opts] - `{ now, all }`
+ * @returns {Promise<Object>} the run's counts
  */
-export async function runRollups(retentionConfig = {}, opts = {}) {
+export function runRollups(retentionConfig = {}, opts = {}) {
+  const run = rollupQueue.then(() => withRollupLock(() => rollUp(retentionConfig, opts)));
+  // A failed run must not stop the ones queued behind it.
+  rollupQueue = run.catch(() => {});
+  return run;
+}
+
+/** One rollup run; always called through {@link runRollups}. */
+async function rollUp(retentionConfig, opts) {
   const eventsFlushed = (await flushQueue().catch(() => 0)) || 0;
   const { daysGenerated, eventsProcessed, days } = await generateDailyRollups(opts);
   const { monthsGenerated } = await generateMonthlyRollups(days);
