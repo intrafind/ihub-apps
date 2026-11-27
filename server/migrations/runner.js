@@ -876,6 +876,8 @@ export async function runConfigMigrations({
             historyUnsaved = false;
           },
           saveError => {
+            // Kept in memory: the next save, or the last one, writes it.
+            historyUnsaved = true;
             logger.error('Could not record the failed migration in the history', {
               component: 'Migration',
               version: migration.version,
