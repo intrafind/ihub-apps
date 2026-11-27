@@ -79,6 +79,66 @@ function metaLine(entry, t) {
 }
 
 /**
+ * The status of an entry that is in the viewer's projects already.
+ *
+ * @returns {JSX.Element}
+ */
+function InListStatus() {
+  const { t } = useTranslation();
+  return (
+    <span className="shrink-0 inline-flex items-center gap-1 rounded-full bg-gray-100 dark:bg-gray-700 px-2 py-1 text-xs font-medium text-gray-700 dark:text-gray-200 whitespace-nowrap">
+      <Icon name="check-circle" size="xs" aria-hidden="true" />
+      {t('projects.catalog.inYourList', 'In your projects')}
+    </span>
+  );
+}
+
+/**
+ * The Add button of an entry, or the Added button of a project added from
+ * the catalog (which removes it again). While busy it stays focusable
+ * (`aria-disabled`), so focus does not drop to the page when its label flips.
+ *
+ * @param {Object} props
+ * @param {import('../utils/catalogSources').CatalogEntry} props.entry
+ * @param {boolean} props.busy
+ * @param {string|undefined} props.errorId - The id of the row's error, if any.
+ * @param {() => void} props.onClick
+ * @returns {JSX.Element}
+ */
+function EntryButton({ entry, busy, errorId, onClick }) {
+  const { t } = useTranslation();
+  const added = entry.status === 'added';
+  let icon = added ? 'check' : 'plus';
+  if (busy) icon = 'spinner';
+  const name = added
+    ? t('projects.catalog.addedRemoveNamed', 'Added: remove {{name}} from my projects', {
+        name: entry.name
+      })
+    : t('projects.catalog.addNamed', 'Add {{name}} to my projects', { name: entry.name });
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-disabled={busy || undefined}
+      aria-busy={busy || undefined}
+      aria-describedby={errorId}
+      className={added ? ADDED_BUTTON : ADD_BUTTON}
+      aria-label={name}
+    >
+      <Icon
+        name={icon}
+        size="sm"
+        className={busy ? 'animate-spin' : undefined}
+        aria-hidden="true"
+      />
+      <span className="hidden sm:inline">
+        {added ? t('projects.catalog.added', 'Added') : t('projects.catalog.addShort', 'Add')}
+      </span>
+    </button>
+  );
+}
+
+/**
  * One entry of the project catalog: a published project or one of the
  * viewer's iFinder smart collections, with what the viewer can do with it.
  *
@@ -86,9 +146,6 @@ function metaLine(entry, t) {
  * - `added` (a project added from the catalog): an Added button that removes
  *   it again.
  * - `inList` (own or member project, collection already added): a status.
- *
- * While busy, the button stays focusable (`aria-disabled`), so focus does not
- * drop to the page when its label flips.
  *
  * @param {Object} props
  * @param {import('../utils/catalogSources').CatalogEntry} props.entry
@@ -102,42 +159,6 @@ function CatalogEntryRow({ entry, busy, error, onToggle, onNavigate }) {
   const { t } = useTranslation();
   const style = CATALOG_SOURCE_STYLES[entry.source];
   const errorId = error ? `catalog-row-error-${entry.key}` : undefined;
-
-  const action =
-    entry.status === 'inList' ? (
-      <span className="shrink-0 inline-flex items-center gap-1 rounded-full bg-gray-100 dark:bg-gray-700 px-2 py-1 text-xs font-medium text-gray-700 dark:text-gray-200 whitespace-nowrap">
-        <Icon name="check-circle" size="xs" aria-hidden="true" />
-        {t('projects.catalog.inYourList', 'In your projects')}
-      </span>
-    ) : (
-      <button
-        type="button"
-        onClick={() => !busy && onToggle(entry)}
-        aria-disabled={busy || undefined}
-        aria-busy={busy || undefined}
-        aria-describedby={errorId}
-        className={entry.status === 'added' ? ADDED_BUTTON : ADD_BUTTON}
-        aria-label={
-          entry.status === 'added'
-            ? t('projects.catalog.addedRemoveNamed', 'Added: remove {{name}} from my projects', {
-                name: entry.name
-              })
-            : t('projects.catalog.addNamed', 'Add {{name}} to my projects', { name: entry.name })
-        }
-      >
-        <Icon
-          name={busy ? 'spinner' : entry.status === 'added' ? 'check' : 'plus'}
-          size="sm"
-          className={busy ? 'animate-spin' : undefined}
-          aria-hidden="true"
-        />
-        <span className="hidden sm:inline">
-          {entry.status === 'added'
-            ? t('projects.catalog.added', 'Added')
-            : t('projects.catalog.addShort', 'Add')}
-        </span>
-      </button>
-    );
 
   return (
     <li className="flex items-start gap-3 px-4 py-3 sm:px-6 [@media(max-height:560px)]:py-2">
@@ -180,7 +201,16 @@ function CatalogEntryRow({ entry, busy, error, onToggle, onNavigate }) {
           </p>
         )}
       </div>
-      {action}
+      {entry.status === 'inList' ? (
+        <InListStatus />
+      ) : (
+        <EntryButton
+          entry={entry}
+          busy={busy}
+          errorId={errorId}
+          onClick={() => !busy && onToggle(entry)}
+        />
+      )}
     </li>
   );
 }

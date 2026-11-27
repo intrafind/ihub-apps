@@ -71,6 +71,18 @@ function texts(value) {
  */
 
 /**
+ * What the viewer can do with a catalog project.
+ *
+ * @param {string} source
+ * @param {boolean} subscribed - Added from the catalog.
+ * @returns {'add'|'added'|'inList'}
+ */
+function projectStatus(source, subscribed) {
+  if (source === 'yours') return 'inList';
+  return subscribed ? 'added' : 'add';
+}
+
+/**
  * A catalog project as a dialog entry.
  *
  * @param {Object} project - From `/projects/_catalog`.
@@ -88,7 +100,7 @@ export function projectEntry(project, language) {
     name: projectDisplayName(project, language),
     description: localizedText(project.description, language),
     projectId: project.id,
-    status: source === 'yours' ? 'inList' : project.subscribed ? 'added' : 'add',
+    status: projectStatus(source, project.subscribed),
     ownerName,
     count: project.usage?.items ?? 0,
     haystack: [...texts(project.name), ...texts(project.description), ownerName || '']
