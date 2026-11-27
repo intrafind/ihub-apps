@@ -54,19 +54,20 @@ const CACHE_MAX_ENTRIES = 500;
 const CACHE_MAX_BYTES = 16 * 1024 * 1024;
 
 /**
- * Verified file texts by connection and digest, oldest first. Keyed by the
- * connection that read them: a per-user server may refuse a file to one user
- * that it serves another, so one user's read never answers another's.
+ * Verified file texts by session and digest, oldest first. Keyed by the SDK
+ * client that read them: a per-user server may refuse a file to one user that
+ * it serves another, so one user's read never answers another's, and a
+ * connection's new session (a reconnect) reads for itself too.
  */
 const fileCache = new Map();
 let cacheBytes = 0;
 
-/** A key per connection object (the shared one, or a user's own). */
-const connectionKeys = new WeakMap();
-let nextConnectionKey = 0;
-function connectionKeyOf(conn) {
-  if (!connectionKeys.has(conn)) connectionKeys.set(conn, String(++nextConnectionKey));
-  return connectionKeys.get(conn);
+/** A key per SDK client: the session of the shared connection or of a user's own. */
+const sessionKeys = new WeakMap();
+let nextSessionKey = 0;
+function sessionKeyOf(client) {
+  if (!sessionKeys.has(client)) sessionKeys.set(client, String(++nextSessionKey));
+  return sessionKeys.get(client);
 }
 
 /**
@@ -510,11 +511,19 @@ async function readVerified(conn, instanceId, approval, path, { useCache = true 
   const kind = path === SKILL_FILE ? 'body' : 'text';
   // Per file too: two files with the same bytes share a digest, and a server
   // may still serve one and refuse the other.
-  const key = `${instanceId}\n${connectionKeyOf(conn)}\n${resource.uri}\n${resource.digest}\n${kind}`;
-  if (useCache && fileCache.has(key)) return fileCache.get(key);
+  const keyFor = client =>
+    `${instanceId}\n${sessionKeyOf(client)}\n${resource.uri}\n${resource.digest}\n${kind}`;
+  // Only a session that is open answers from the cache, and a text is kept
+  // only for the session that read it: no client, or a different one after
+  // the read (a reconnect meanwhile), keeps nothing.
+  const session = conn.client || null;
+  if (useCache && session && fileCache.has(keyFor(session))) return fileCache.get(keyFor(session));
   const file = await conn.readSkillFile(approval, path);
   const text = path === SKILL_FILE ? (file.body ?? '') : (file.text ?? null);
-  if (typeof text === 'string') remember(key, text);
+  const reader = conn.client || null;
+  if (typeof text === 'string' && reader && (session === null || session === reader)) {
+    remember(keyFor(reader), text);
+  }
   return text;
 }
 

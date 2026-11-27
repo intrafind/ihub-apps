@@ -344,6 +344,27 @@ describe.each([
     }
   });
 
+  it('never answers a new session’s read from the cache of the one before', async () => {
+    try {
+      await approve(h, 'deploy');
+      const first = await loadServerSkill('billing:deploy', { app, user, deps: h.deps });
+      expect(await first.readFile('references/CHECKLIST.md')).toBe('1. Plan\n2. Deploy\n');
+      // A reconnect opens a new session on the same connection; a server that
+      // now refuses the file is not bypassed by what the old session read.
+      await h.conn.disconnect();
+      await h.conn.connect();
+      const readSkillFile = h.conn.readSkillFile.bind(h.conn);
+      h.conn.readSkillFile = async (skill, ref) => {
+        if (ref !== 'SKILL.md') throw new Error('not any more');
+        return readSkillFile(skill, ref);
+      };
+      const again = await loadServerSkill('billing:deploy', { app, user, deps: h.deps });
+      expect(await again.readFile('references/CHECKLIST.md')).toBeNull();
+    } finally {
+      await h.conn.disconnect();
+    }
+  });
+
   it('never answers one file’s read with another file of the same bytes', async () => {
     files.deploy['references/COPY.md'] = files.deploy['references/CHECKLIST.md'];
     try {

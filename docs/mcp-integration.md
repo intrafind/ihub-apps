@@ -208,8 +208,10 @@ files the server does not list).
   than was approved, that user does not get the skill.
 
 Verified files are kept in memory by digest. Nothing is written to the skill
-folders. A user's read is never answered from another connection's copy, so a
-per-user server that refuses a file to one user is not bypassed. The routes are
+folders. A read is answered only from the copy the same session read: never
+from another user's connection, and never from the session before a reconnect,
+so a server that refuses a file to one user, or no longer serves it, is not
+bypassed. The routes are
 `GET /api/admin/integrations/installed/{id}/skills`,
 `GET /api/admin/integrations/installed/{id}/skill-files?skillName=&path=&digest=` and
 `PUT` (body `{ digest }`) / `DELETE

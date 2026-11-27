@@ -198,6 +198,27 @@ describe('the Skills tab', () => {
     await waitFor(() => expect(revokeInstallationSkill).toHaveBeenCalledWith('billing', 'report'));
   });
 
+  it('shows the listing loaded last, whichever reload answers first', async () => {
+    render(<InstallationSkillsPanel instanceId="billing" />);
+    expect(await screen.findByRole('button', { name: 'Withdraw approval' })).toBeInTheDocument();
+    const answers = [];
+    fetchInstallationSkills.mockImplementation(() => new Promise(resolve => answers.push(resolve)));
+    // A refused file read reloads the listing, then a withdrawal reloads it again.
+    fetchInstallationSkillFile.mockRejectedValueOnce({
+      response: { data: { code: 'SKILL_LISTING_CHANGED', detail: 'changed' } }
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'SKILL.md' }));
+    await waitFor(() => expect(answers).toHaveLength(1));
+    fireEvent.click(screen.getByRole('button', { name: 'Withdraw approval' }));
+    await waitFor(() => expect(answers).toHaveLength(2));
+    const withdrawn = { ...ITEMS[1], status: 'available', approvedAt: undefined };
+    await act(async () => answers[1]({ items: [ITEMS[0], withdrawn, ITEMS[2]] }));
+    expect(screen.queryByRole('button', { name: 'Withdraw approval' })).not.toBeInTheDocument();
+    // The reload started first answers last, with the listing before the withdrawal.
+    await act(async () => answers[0]({ items: ITEMS }));
+    expect(screen.queryByRole('button', { name: 'Withdraw approval' })).not.toBeInTheDocument();
+  });
+
   it('says so when the server offers no skills, or the admin must connect first', async () => {
     fetchInstallationSkills.mockRejectedValueOnce({
       response: { data: { code: 'SKILLS_NOT_SUPPORTED', detail: 'x' } }

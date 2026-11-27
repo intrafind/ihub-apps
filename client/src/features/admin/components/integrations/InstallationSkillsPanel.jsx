@@ -182,12 +182,18 @@ export default function InstallationSkillsPanel({ instanceId }) {
   const [busy, setBusy] = useState(null);
   const [actionError, setActionError] = useState(null);
 
+  // The listing whose answer may still be shown: a later reload (after an
+  // approval, a withdrawal or a refused file read) supersedes it.
+  const latestLoadRef = useRef(0);
   const load = useCallback(async () => {
+    const request = ++latestLoadRef.current;
     setError(null);
     try {
       const data = await fetchInstallationSkills(instanceId);
+      if (request !== latestLoadRef.current) return;
       setItems(Array.isArray(data?.items) ? data.items : []);
     } catch (err) {
+      if (request !== latestLoadRef.current) return;
       setItems(null);
       setError(err);
     }
