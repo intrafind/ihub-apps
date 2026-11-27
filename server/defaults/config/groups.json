@@ -78,6 +78,82 @@
         "userAppSharing": true
       },
       "mappings": []
+    },
+    "browser-extension": {
+      "id": "browser-extension",
+      "name": "Browser Extension Users",
+      "description": "Users allowed to use the iHub browser extension",
+      "inherits": ["users"],
+      "permissions": {
+        "apps": [],
+        "prompts": [],
+        "models": [],
+        "skills": [],
+        "adminAccess": false,
+        "integrations": ["*"]
+      },
+      "mappings": []
+    },
+    "nextcloud-embed": {
+      "id": "nextcloud-embed",
+      "name": "Nextcloud Embed Users",
+      "description": "Users allowed to use iHub embedded inside Nextcloud",
+      "inherits": ["users"],
+      "permissions": {
+        "apps": [],
+        "prompts": [],
+        "models": [],
+        "skills": [],
+        "adminAccess": false,
+        "integrations": ["*"]
+      },
+      "mappings": []
+    },
+    "agents": {
+      "id": "agents",
+      "name": "Agents",
+      "description": "Service-account group for agent runs",
+      "inherits": ["authenticated"],
+      "permissions": {
+        "apps": [],
+        "prompts": [],
+        "models": ["*"],
+        "skills": [],
+        "adminAccess": false,
+        "integrations": ["*"]
+      },
+      "mappings": []
+    },
+    "agent-operators": {
+      "id": "agent-operators",
+      "name": "Agent Operators",
+      "description": "Users who can trigger agent runs and approve HITL checkpoints",
+      "inherits": ["authenticated"],
+      "permissions": {
+        "apps": ["*"],
+        "prompts": ["*"],
+        "models": ["*"],
+        "skills": ["*"],
+        "adminAccess": false,
+        "integrations": ["*"]
+      },
+      "mappings": []
+    },
+    "content-admins": {
+      "id": "content-admins",
+      "name": "Content Admins",
+      "description": "Can manage Apps, Prompts, and Sources without full admin access",
+      "inherits": ["authenticated"],
+      "permissions": {
+        "apps": ["*"],
+        "prompts": ["*"],
+        "models": [],
+        "skills": [],
+        "adminAccess": false,
+        "contentAdmin": true,
+        "integrations": ["*"]
+      },
+      "mappings": []
     }
   },
   "metadata": {

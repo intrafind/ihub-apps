@@ -8,6 +8,7 @@ description: Create a new versioned config migration in server/migrations/ follo
 - **Never modify** a migration file after it has been applied — checksums are tracked; mismatches halt startup.
 - Migrations are **forward-only**. To undo a change, create a new higher-versioned migration.
 - Do NOT create migrations for brand-new config files (handled by `performInitialSetup` copying from `server/defaults/`).
+- **Make the same change in `server/defaults/`.** A fresh install runs no migration; it starts from the defaults. `server/tests/migrations-defaults-current.test.js` fails when a migration changes a freshly seeded contents directory. A migration that reads an environment variable must also add the same to `server/utils/firstStartEnvironment.js` (see `docs/configuration-migrations.md`, "Fresh installs").
 - Do NOT create migrations for code-only changes with no config schema impact.
 
 ## Steps

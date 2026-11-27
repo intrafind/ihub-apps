@@ -78,7 +78,8 @@
         "text/javascript",
         "application/javascript",
         "text/xml",
-        "application/pdf"
+        "application/pdf",
+        "text/vtt"
       ]
     }
   },

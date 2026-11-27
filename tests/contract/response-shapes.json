@@ -2024,7 +2024,7 @@
           "id": "string",
           "incompatible": "boolean",
           "incompatibleReason": "null",
-          "installedAt?": "string",
+          "installedAt": "string",
           "label": "string",
           "labelLocalized": "null|object",
           "latestVersion": "null",
@@ -2039,7 +2039,7 @@
           "type": "null|string",
           "update": "null",
           "updateAvailable": "boolean",
-          "updatedAt?": "string",
+          "updatedAt": "string",
           "values": "object"
         }
       ],
@@ -2134,6 +2134,7 @@
         "id": "string",
         "incompatible": "boolean",
         "incompatibleReason": "null",
+        "installedAt": "string",
         "label": "string",
         "labelLocalized": "null",
         "latestVersion": "null",
@@ -2154,6 +2155,7 @@
         "type": "null",
         "update": "null",
         "updateAvailable": "boolean",
+        "updatedAt": "string",
         "values": {}
       },
       "instructions": {

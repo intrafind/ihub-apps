@@ -27,7 +27,8 @@
     "maxResults": 5,
     "extractContent": true,
     "contentMaxLength": 3000,
-    "enabledByDefault": false
+    "enabledByDefault": false,
+    "maxSearches": 5
   },
   "skillSettings": {
     "enabled": true

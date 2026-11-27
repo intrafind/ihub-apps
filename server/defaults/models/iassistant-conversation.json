@@ -27,5 +27,6 @@
     "text": {
       "by": "none"
     }
-  }
+  },
+  "maxOutputTokens": 4096
 }

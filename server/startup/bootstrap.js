@@ -8,7 +8,7 @@
 
 import logger from '../utils/logger.js';
 import { bootstrapStorage } from '../storage/bootstrap.js';
-import { performInitialSetup } from '../utils/setupUtils.js';
+import { performInitialSetup, wasContentsCreatedFromDefaults } from '../utils/setupUtils.js';
 import { runConfigMigrations } from '../migrations/runner.js';
 
 /**
@@ -42,7 +42,9 @@ export async function prepareContents() {
   }
 
   try {
-    await runConfigMigrations();
+    // A contents directory this start created from server/defaults needs no
+    // migration: the defaults are kept fully migrated.
+    await runConfigMigrations({ createdFromDefaults: wasContentsCreatedFromDefaults() });
   } catch (error) {
     logger.error({
       component: 'Server',

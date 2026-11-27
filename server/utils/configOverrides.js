@@ -14,7 +14,7 @@ import { isSecretName, redactUrlSecrets, REDACTED } from './secretNames.js';
  * Convert an UPPER_SNAKE_CASE segment to camelCase
  * Example: SESSION_TIMEOUT_MINUTES → sessionTimeoutMinutes
  */
-function toCamelCase(segment) {
+export function toCamelCase(segment) {
   return segment.toLowerCase().replace(/_([a-z0-9])/g, (_, c) => c.toUpperCase());
 }
 
@@ -22,7 +22,7 @@ function toCamelCase(segment) {
  * Parse an environment variable string value to the most appropriate type.
  * Numbers and booleans are coerced; JSON arrays/objects are parsed; otherwise string.
  */
-function parseEnvValue(value) {
+export function parseEnvValue(value) {
   try {
     return JSON.parse(value);
   } catch {
@@ -34,7 +34,7 @@ function parseEnvValue(value) {
  * Set a value at a nested path inside an object.
  * Intermediate objects are created as needed.
  */
-function setNestedValue(obj, pathParts, value) {
+export function setNestedValue(obj, pathParts, value) {
   if (!obj || typeof obj !== 'object' || pathParts.length === 0) return;
 
   let current = obj;

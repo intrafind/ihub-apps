@@ -91,6 +91,39 @@ describe('migration baseline', () => {
     expect(Date.now() - Date.parse(history.migrations[0].appliedAt)).toBeLessThan(60_000);
   });
 
+  it('records every migration as applied and runs none when contents/ was created from defaults', async () => {
+    const result = await run({ freshlySeeded: true, createdFromDefaults: true });
+    expect(result).toEqual({ applied: 0, skipped: 0, failed: 0, recorded: 2 });
+    expect(await exists('marker-a.json')).toBe(false);
+    expect(await exists('marker-b.json')).toBe(false);
+
+    const history = await readHistory();
+    expect(history.migrations.map(m => [m.version, m.status])).toEqual([
+      ['030', 'success'],
+      ['031', 'success'],
+      ['032', 'success']
+    ]);
+    expect(history.migrations[1]).toMatchObject({
+      file: 'V031__first.js',
+      executionTimeMs: 0,
+      freshInstall: true
+    });
+    expect(history.migrations[1].checksum).toMatch(/^[0-9a-f]{64}$/);
+
+    // The next start has nothing to do; a migration shipped later still runs.
+    expect(await run()).toEqual({ applied: 0, skipped: 0, failed: 0 });
+    await fs.writeFile(path.join(migrationsDir, 'V033__third.js'), MIGRATION_SOURCE('033', 'c'));
+    expect((await run()).applied).toBe(1);
+    expect(await exists('marker-c.json')).toBe(true);
+  });
+
+  it('ignores createdFromDefaults once there is a history', async () => {
+    await writeHistory([row('030')]);
+    const result = await run({ createdFromDefaults: true });
+    expect(result.applied).toBe(2);
+    expect(await exists('marker-a.json')).toBe(true);
+  });
+
   it('treats an empty contents dir without platform.json as fresh', async () => {
     await fs.rm(path.join(contentsDir, 'config'), { recursive: true });
     await run();
