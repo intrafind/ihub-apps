@@ -36,9 +36,10 @@ export const DEFAULT_MAX_EVENT_SIZE = 1024;
  * Redaction rules, applied in order. Secrets first, so a token that contains
  * something e-mail-like is removed as a whole.
  *
- * Every repetition is bounded and no two adjacent ones can match the same
- * characters, so a pattern runs in linear time on any input (the text is
- * conversation content, possibly crafted to stall a regex).
+ * No two adjacent repetitions can match the same characters and none is
+ * nested, so a pattern runs in linear time on any input (the text is
+ * conversation content, possibly crafted to stall a regex). A secret's value
+ * is consumed to its end, however long, so no tail of it is left behind.
  */
 const REDACTIONS = [
   // JSON Web Tokens (three base64url parts, header starts with `{"`)
@@ -52,7 +53,7 @@ const REDACTIONS = [
   ],
   // key=value / key: value secrets, also with a quoted (JSON) key
   [
-    /\b((?:api[_-]?key|access[_-]?token|refresh[_-]?token|client[_-]?secret|secret|password|passwd|pwd|token)["']? {0,4}[:=] {0,4})(["']?)[^\s"'&,;]{4,512}["']?/gi,
+    /\b((?:api[_-]?key|access[_-]?token|refresh[_-]?token|client[_-]?secret|secret|password|passwd|pwd|token)["']?[ \t]*[:=][ \t]*)(["']?)[^\s"'&,;]{4,}["']?/gi,
     '$1$2[REDACTED:secret]$2'
   ],
   // E-mail addresses
@@ -60,7 +61,12 @@ const REDACTIONS = [
   // must end in a dot and a TLD, checked in the replacer (no nested repetition).
   [
     /[A-Za-z0-9._%+-]{1,64}@[A-Za-z0-9.-]{1,253}/g,
-    email => (/\.[A-Za-z]{2,}$/.test(email) ? '[REDACTED:email]' : email)
+    match => {
+      // A sentence may end right after the address: keep its full stop.
+      const email = match.replace(/[.-]+$/, '');
+      const trailing = match.slice(email.length);
+      return /\.[A-Za-z]{2,}$/.test(email) ? `[REDACTED:email]${trailing}` : match;
+    }
   ],
   // IBANs, with or without the usual blanks every four characters
   [/\b[A-Z]{2}\d{2}(?: ?[A-Z0-9]{4}){2,7}(?: ?[A-Z0-9]{1,4})?\b/g, '[REDACTED:iban]']
@@ -204,14 +210,16 @@ function suffixStart(text, budget) {
   let used = 0;
   let start = text.length;
   while (start > 0) {
-    const cost = JSON.stringify(text[start - 1]).length - 2;
+    // One code point at a time: a surrogate pair is two characters encoded,
+    // where either half alone would be escaped to six.
+    const low = text.charCodeAt(start - 1);
+    const high = start > 1 ? text.charCodeAt(start - 2) : 0;
+    const width = low >= 0xdc00 && low <= 0xdfff && high >= 0xd800 && high <= 0xdbff ? 2 : 1;
+    const cost = JSON.stringify(text.slice(start - width, start)).length - 2;
     if (used + cost > budget) break;
     used += cost;
-    start--;
+    start -= width;
   }
-  // Never start on the second half of a surrogate pair.
-  const code = text.charCodeAt(start);
-  if (start < text.length && code >= 0xdc00 && code <= 0xdfff) start++;
   return start;
 }
 

@@ -23,6 +23,7 @@ import {
   getTelemetryHealth,
   getTelemetryStatus,
   resetExportStatusForTests,
+  setSignalEnabled,
   setTelemetrySetup,
   trackExporter
 } from '../telemetry/exportStatus.js';
@@ -231,6 +232,24 @@ describe('export status', () => {
         logs: { status: 'off', lastSuccessAt: null }
       }
     });
+  });
+});
+
+describe('export status follows a runtime switch', () => {
+  test('spans switched off at runtime report as off; history is kept; no exporter stays off', () => {
+    setTelemetrySetup({ enabled: true, provider: 'otlp', exporters: { traces: 'otlp' } });
+    const exporter = trackExporter({ export: (items, done) => done({ code: 0 }) }, 'traces');
+    exporter.export([], () => {});
+    setSignalEnabled('traces', false);
+    expect(getTelemetryStatus().signals.traces).toMatchObject({
+      enabled: false,
+      status: 'off',
+      lastSuccessAt: expect.any(String)
+    });
+    setSignalEnabled('traces', true);
+    expect(getTelemetryStatus().signals.traces.status).toBe('ok');
+    setSignalEnabled('logs', true);
+    expect(getTelemetryStatus().signals.logs.status).toBe('off');
   });
 });
 

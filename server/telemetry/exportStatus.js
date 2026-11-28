@@ -115,6 +115,20 @@ export function setTelemetrySetup({ enabled, provider = null, exporters = {} }) 
   }
 }
 
+/**
+ * Switch a signal on or off at runtime (`spans.enabled` saved in the admin),
+ * keeping its export history. A signal that has no exporter since startup
+ * stays off: turning it on needs a restart.
+ *
+ * @param {string} signal
+ * @param {boolean} enabled
+ */
+export function setSignalEnabled(signal, enabled) {
+  const entry = state.signals[signal];
+  if (!entry) return;
+  entry.enabled = state.enabled && entry.exporter !== null && enabled === true;
+}
+
 /** Record a successful export (or a served Prometheus scrape). */
 export function recordExportSuccess(signal) {
   const entry = state.signals[signal];

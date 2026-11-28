@@ -189,10 +189,11 @@ function walk(next, stored, segments, visit, pointer = [], options = {}) {
     return;
   }
   const storedChild = isPlainObject(stored) ? stored[segment.key] : undefined;
+  // Rollback of a `*` path: an object the snapshot lacks along the way (the
+  // `otlp` above `headers`) is created, so the current secrets below it stay.
   if (
     options.storedKeys &&
-    rest.length === 1 &&
-    rest[0].key === '*' &&
+    segments.at(-1).key === '*' &&
     !segment.array &&
     next[segment.key] === undefined &&
     isPlainObject(storedChild)
@@ -391,7 +392,13 @@ export function restoreRedacted(
       stored,
       parsePath(path),
       (holder, storedHolder, leaf) =>
-        restoreLeaf(holder, storedHolder?.[leaf], leaf, { kind, mode }),
+        restoreLeaf(
+          holder,
+          // Own keys only: a header named `constructor` is not Object's.
+          storedHolder && Object.hasOwn(storedHolder, leaf) ? storedHolder[leaf] : undefined,
+          leaf,
+          { kind, mode }
+        ),
       [],
       { storedKeys: mode === 'rollback' && kind === 'secret' }
     );
