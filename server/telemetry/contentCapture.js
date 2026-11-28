@@ -58,7 +58,10 @@ const REDACTIONS = [
   // E-mail addresses
   // E-mail addresses: the domain is matched as one run of labels and dots and
   // must end in a dot and a TLD, checked in the replacer (no nested repetition).
-  [/[A-Za-z0-9._%+-]{1,64}@[A-Za-z0-9.-]{1,253}/g, email => (/\.[A-Za-z]{2,}$/.test(email) ? '[REDACTED:email]' : email)],
+  [
+    /[A-Za-z0-9._%+-]{1,64}@[A-Za-z0-9.-]{1,253}/g,
+    email => (/\.[A-Za-z]{2,}$/.test(email) ? '[REDACTED:email]' : email)
+  ],
   // IBANs, with or without the usual blanks every four characters
   [/\b[A-Z]{2}\d{2}(?: ?[A-Z0-9]{4}){2,7}(?: ?[A-Z0-9]{1,4})?\b/g, '[REDACTED:iban]']
 ];
