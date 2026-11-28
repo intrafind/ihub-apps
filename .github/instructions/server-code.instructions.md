@@ -74,10 +74,19 @@ When working with Node.js server code, follow these specific guidelines:
 
 ## Logging
 
-1. **Console Logging** - Use `console.log`, `console.error`, `console.warn` appropriately
-2. **Structured Logging** - Include context in log messages (user ID, request ID, etc.)
+1. **Logger** - Log through `server/utils/logger.js` with a `component`; new code does not use `console.*`
+2. **Structured Logging** - Include context in log messages (request ID, run ID); no user names or emails
 3. **No Sensitive Data** - Never log passwords, API keys, or tokens
 4. **Error Logging** - Log full error stack traces for debugging
+
+## Observability (spans and metrics)
+
+Full rules: `docs/observability-guidelines.md`.
+
+1. **Every change answers it** - How will an operator see that this works, is used and fails? A new outbound dependency, background job or worker thread gets a span and a duration metric with `error.type`
+2. **Metrics** - Defined only in `server/telemetry/metrics.js` behind a `recordX()` function; units `s` / `By`; labels from a closed set and in `ALLOWED_METRIC_LABELS`; never a user, id, URL, query or free text as a label
+3. **Spans** - Created through `server/telemetry/` helpers, active when they have children, ended in `finally`; errors set `error.type` only, no `recordException()` or `error.message`
+4. **Privacy** - No prompts, completions, queries, tool arguments, file names, clear-text identities or secrets on any span, metric or log line
 
 ## Code Structure
 

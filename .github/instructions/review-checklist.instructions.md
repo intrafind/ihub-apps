@@ -100,4 +100,17 @@ caller or input to the failure. Name the OWASP category or WCAG criterion.
   controls are not nested inside each other.
 - New user-facing strings go through i18n (`t()`), in English and German.
 
+## Observability (`docs/observability-guidelines.md`)
+
+- The PR says how an operator sees that the change works, is used and
+  fails: a new span or metric, the existing signal that covers it, or why
+  nothing applies. A new outbound dependency, background job or worker
+  thread without a span and a duration metric is a finding.
+- Metric labels come from a closed set and are in `ALLOWED_METRIC_LABELS`.
+  No user, email, group, id, file name, URL, query or free text as a label.
+- No prompts, completions, queries, tool arguments, file names, URL query
+  strings, clear-text identities, secrets or raw provider error messages on
+  spans, metrics or log lines. Errors set `error.type` only.
+- Spans are ended in `finally`; a user stop is not recorded as an error.
+
 <!-- checklist:end -->

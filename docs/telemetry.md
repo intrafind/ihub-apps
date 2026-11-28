@@ -13,6 +13,8 @@ Administrators can wire iHub into any standard observability backend - Jaeger, T
 Grafana, Prometheus, or a generic OTLP collector - to monitor app usage, track token
 consumption, identify errors, and analyze performance.
 
+Developers adding spans or metrics: follow the [Observability Guidelines](observability-guidelines.md).
+
 ## At a glance
 
 | Signal type | Examples | Where it ends up |
