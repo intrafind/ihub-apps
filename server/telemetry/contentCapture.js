@@ -53,7 +53,7 @@ const REDACTIONS = [
   ],
   // key=value / key: value secrets, also with a quoted (JSON) key
   [
-    /\b((?:api[_-]?key|access[_-]?token|refresh[_-]?token|client[_-]?secret|secret|password|passwd|pwd|token)["']?[ \t]*[:=][ \t]*)(["']?)[^\s"'&,;]{4,}["']?/gi,
+    /\b((?:api[_-]?key|access[_-]?token|refresh[_-]?token|client[_-]?secret|secret|password|passwd|pwd|token)["']?\s*[:=]\s*)(["']?)[^\s"'&,;]{4,}["']?/gi,
     '$1$2[REDACTED:secret]$2'
   ],
   // E-mail addresses
