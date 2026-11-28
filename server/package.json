@@ -55,7 +55,7 @@
     "compression": "^1.8.2",
     "cookie-parser": "^1.4.7",
     "cors": "^2.8.6",
-    "croner": "^10.0.1",
+    "croner": "^11.0.0",
     "dejavu-fonts-ttf": "^2.37.3",
     "docx": "^9.15.3",
     "dotenv": "^18.0.10",
