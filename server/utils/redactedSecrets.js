@@ -191,11 +191,13 @@ function walk(next, stored, segments, visit, pointer = [], options = {}) {
   const storedChild = isPlainObject(stored) ? stored[segment.key] : undefined;
   // Rollback of a `*` path: an object the snapshot lacks along the way (the
   // `otlp` above `headers`) is created, so the current secrets below it stay.
+  // A `null` is replaced only on the map itself: a `null` above it (no OTLP
+  // exporter at all) is a stored state of its own and stays.
   if (
     options.storedKeys &&
     segments.at(-1).key === '*' &&
     !segment.array &&
-    next[segment.key] === undefined &&
+    (next[segment.key] === undefined || (next[segment.key] === null && rest.length === 1)) &&
     isPlainObject(storedChild)
   ) {
     next[segment.key] = {};

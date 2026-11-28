@@ -48,20 +48,23 @@ const REDACTIONS = [
     /(?<![A-Za-z0-9_-])eyJ[A-Za-z0-9_-]{5,}\.[A-Za-z0-9_-]{5,}\.[A-Za-z0-9_-]{5,}/g,
     '[REDACTED:jwt]'
   ],
-  // Authorization header values, to their end
-  [/\b(Bearer|Basic) {1,4}[A-Za-z0-9._~+/=-]{8,}/gi, '$1 [REDACTED:token]'],
-  // Well-known API key formats
+  // Authorization header values, to their end, after any run of blanks
+  [/\b(Bearer|Basic)\s+[A-Za-z0-9._~+/=-]{8,}/gi, '$1 [REDACTED:token]'],
+  // Well-known API key formats, each consumed to its end however long
   [
-    /\b(?:sk|pk|rk)-[A-Za-z0-9_-]{16,512}|\bAKIA[0-9A-Z]{16}\b|\bgh[pousr]_[A-Za-z0-9]{30,255}|\bgithub_pat_[A-Za-z0-9_]{30,255}|\bxox[abprs]-[A-Za-z0-9-]{10,255}|\bAIza[0-9A-Za-z_-]{35}\b|\bglpat-[A-Za-z0-9_-]{20,255}/g,
+    /\b(?:sk|pk|rk)-[A-Za-z0-9_-]{16,}|\bAKIA[0-9A-Z]{16}\b|\bgh[pousr]_[A-Za-z0-9]{30,}|\bgithub_pat_[A-Za-z0-9_]{30,}|\bxox[abprs]-[A-Za-z0-9-]{10,}|\bAIza[0-9A-Za-z_-]{35}\b|\bglpat-[A-Za-z0-9_-]{20,}/g,
     '[REDACTED:key]'
   ],
   // key=value / key: value secrets, also with a quoted (JSON) key. A quoted
   // value is replaced up to its closing quote (escaped quotes included), so
-  // `&`, commas or blanks inside it leave nothing behind; an unquoted one up
-  // to the first delimiter. Each quoted scan stops at the next quote.
+  // `&`, commas or blanks inside it leave nothing behind; a quote that is never
+  // closed on its line takes the rest of the line; an unquoted value goes up
+  // to the first delimiter. Each quoted scan stops at the next quote or line
+  // end, and an unclosed one consumes what it scanned.
   [
-    /\b((?:api[_-]?key|access[_-]?token|refresh[_-]?token|client[_-]?secret|secret|password|passwd|pwd|token)["']?\s*[:=]\s*)(?:"(?:[^"\\\r\n]|\\.)+"|'(?:[^'\\\r\n]|\\.)+'|(["']?)[^\s"'&,;]{4,}["']?)/gi,
-    (match, assignment, openQuote) => {
+    /\b((?:api[_-]?key|access[_-]?token|refresh[_-]?token|client[_-]?secret|secret|password|passwd|pwd|token)["']?\s*[:=]\s*)(?:"(?:[^"\\\r\n]|\\.)+"|'(?:[^'\\\r\n]|\\.)+'|("(?:[^"\\\r\n]|\\[^\r\n])*\\?(?![^\r\n])|'(?:[^'\\\r\n]|\\[^\r\n])*\\?(?![^\r\n]))|(["']?)[^\s"'&,;]{4,}["']?)/gi,
+    (match, assignment, unclosed, openQuote) => {
+      if (unclosed) return `${assignment}${unclosed.charAt(0)}[REDACTED:secret]`;
       const quote = openQuote ?? match.charAt(assignment.length);
       return /["']/.test(quote)
         ? `${assignment}${quote}[REDACTED:secret]${quote}`

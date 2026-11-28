@@ -207,6 +207,23 @@ describe('errors and stops', () => {
     expect(histograms['gen_ai.client.inference.usage.input_tokens'].add).not.toHaveBeenCalled();
   });
 
+  test('a failure keeps the usage the provider reported before it', () => {
+    configureSpans(ON);
+    const histograms = fakeMeter();
+    const timeout = Object.assign(new Error('deadline'), { code: 'TIMEOUT' });
+    call(ON).fail(timeout, { usage: { inputTokens: 40, outputTokens: 7 } });
+    const labels = expect.objectContaining({ 'error.type': 'timeout' });
+    expect(
+      histograms['gen_ai.client.inference.operation.input_tokens'].record
+    ).toHaveBeenCalledWith(40, labels);
+    expect(
+      histograms['gen_ai.client.inference.operation.output_tokens'].record
+    ).toHaveBeenCalledWith(7, labels);
+    expect(histograms['gen_ai.client.inference.usage.input_tokens'].add).toHaveBeenCalledTimes(1);
+    const [span] = exporter.getFinishedSpans();
+    expect(span.attributes['gen_ai.usage.input_tokens']).toBe(40);
+  });
+
   test('a stop after the answer started keeps its tokens, is aborted, records no duration', () => {
     configureSpans(ON);
     const histograms = fakeMeter();
@@ -384,7 +401,16 @@ describe('redactContent', () => {
     ['{"password":"with, comma and space"}', '{"password":"[REDACTED:secret]"}'],
     ['{"password":"esc\\"aped","user":"x"}', '{"password":"[REDACTED:secret]","user":"x"}'],
     ["secret='it is me'", "secret='[REDACTED:secret]'"],
-    ['password: "unterminated value', 'password: "[REDACTED:secret]" value'],
+    ['password: "unterminated value', 'password: "[REDACTED:secret]'],
+    [
+      'password: "correct horse battery staple\nuser: bob',
+      'password: "[REDACTED:secret]\nuser: bob'
+    ],
+    ["secret='never closed, at all", "secret='[REDACTED:secret]"],
+    ['{"password":"","user":"x"}', '{"password":"","user":"x"}'],
+    ['Authorization: Bearer      abcdefghijklmnop', 'Authorization: Bearer [REDACTED:token]'],
+    [`key sk-${'a'.repeat(600)} end`, 'key [REDACTED:key] end'],
+    [`ghp_${'b'.repeat(400)} end`, '[REDACTED:key] end'],
     [`access_token=${'a'.repeat(600)} end`, 'access_token=[REDACTED:secret] end'],
     ['Contact alice@example.com.', 'Contact [REDACTED:email].'],
     [

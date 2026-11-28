@@ -148,19 +148,22 @@ export class LLMCallTelemetry {
 
   /**
    * The call failed or was stopped. A failure sets `error.type` on the span,
-   * the duration and the token histograms (with `0` tokens: a failed call
-   * reports no usage); a stop (user, client disconnect) sets `ihub.aborted`
-   * and records no metric, since the user chose it.
+   * the duration and the token histograms (with the provider's usage when it
+   * sent one before failing, `0` otherwise); a stop (user, client disconnect)
+   * sets `ihub.aborted` and records no metric, since the user chose it.
    *
    * @param {unknown} err
+   * @param {Object} [options]
+   * @param {Object} [options.usage] - The usage the provider reported before the failure
    */
-  fail(err) {
+  fail(err, { usage = null } = {}) {
     if (this.ended) return;
     this.ended = true;
     try {
       if (!isAbortError(err)) {
         recordInferenceDuration(this.durationSeconds(), this.metricAttributes, err);
-        recordInferenceTokens(this.metricAttributes, null, err);
+        recordInferenceTokens(this.metricAttributes, usage, err);
+        if (usage && this.span.isRecording) this.span.setAttributes(buildUsageAttributes(usage));
       }
       this.span.fail(err);
     } catch {

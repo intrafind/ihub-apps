@@ -545,8 +545,11 @@ export class LLMClient {
    *   LLM_CONNECT_TIMEOUT_MS, and is itself overridden by a model's own `connectTimeoutMs`.
    * @param {number} [opts.streamIdleTimeoutMs] - ceiling for the gap between two chunks of a
    *   stream that has already produced one; <=0 disables. Same precedence as above.
+   * @param {() => (import('../../telemetry/GenAIInstrumentation.js').GenAIInstrumentation|null)}
+   *   [opts.getInstrumentation] - the call telemetry seam; defaults to the process-wide one
    */
   constructor(opts = {}) {
+    this.getInstrumentation = opts.getInstrumentation || getGenAIInstrumentation;
     this.transport = opts.transport || defaultTransport;
     this.createRequest = opts.createRequest || createCompletionRequest;
     this.apiKeyVerifier = opts.apiKeyVerifier || new ApiKeyVerifier();
@@ -1211,11 +1214,16 @@ export class LLMClient {
           }
           currentResponse = res;
         }
-        if (priorUsage) accumulator.usage = addUsage(priorUsage, accumulator.usage);
       } catch (rawErr) {
         failure = toLLMError(rawErr, errCtx());
         throw failure;
       } finally {
+        // Requests before a `pause_turn` reported their own usage: it counts
+        // however the call ends, a failed or stopped continuation included.
+        if (priorUsage) {
+          accumulator.usage = addUsage(priorUsage, accumulator.usage);
+          priorUsage = null;
+        }
         if (timer) clearTimeout(timer);
         clearStreamIdle();
         try {
@@ -1227,7 +1235,13 @@ export class LLMClient {
         await accumulator.settleMedia();
         const toolCalls = accumulator.toolCalls.length;
         if (failure) {
-          client._recordError({ runId, step, err: failure, callTelemetry });
+          client._recordError({
+            runId,
+            step,
+            err: failure,
+            callTelemetry,
+            usage: telemetryUsage(accumulator.usage)
+          });
           // A call that failed or was stopped after the answer started still
           // used tokens: the provider's count when it sent one, an estimate
           // otherwise (most providers report usage only in the last chunk, so
@@ -1242,13 +1256,21 @@ export class LLMClient {
         } else {
           const stopped = !accumulator.complete && callSignal?.aborted === true;
           // The deadline ran out while the consumer held a chunk, so no read
-          // threw: a timeout all the same, not the user's stop.
+          // threw: a timeout all the same, not the user's stop. The reason
+          // that aborted the signal first decides: a user stop stays a stop
+          // even when a timer fires after it.
+          const deadlineWon =
+            callSignal?.reason === TIMEOUT_REASON || callSignal?.reason === STREAM_IDLE_REASON;
           const expired =
-            stopped && (timedOut || streamIdleTimedOut)
-              ? toLLMError(callSignal.reason, errCtx())
+            stopped && deadlineWon
+              ? toLLMError(callSignal.reason, {
+                  ...errCtx(),
+                  timedOut: callSignal.reason === TIMEOUT_REASON,
+                  streamIdleTimedOut: callSignal.reason === STREAM_IDLE_REASON
+                })
               : null;
           if (expired) {
-            callTelemetry?.fail(expired);
+            callTelemetry?.fail(expired, { usage: telemetryUsage(accumulator.usage) });
           } else {
             client._endCallTelemetry(callTelemetry, { model, accumulator, aborted: stopped });
           }
@@ -1753,9 +1775,11 @@ export class LLMClient {
    * ledger keeps a safe sentence ({@link ledgerErrorMessage}), never the raw
    * failure text, because the ledger is replayed to the run's owner
    * (`GET /api/runs/:runId/events`); the raw text goes to the server log.
+   * `usage` is what the provider reported before the failure, for the token
+   * metrics.
    * @private
    */
-  _recordError({ runId, step, err, callTelemetry }) {
+  _recordError({ runId, step, err, callTelemetry, usage = null }) {
     if (runId && err && typeof err === 'object') ledgeredErrors.set(err, runId);
     if (runId && err?.code !== LLM_ERROR_CODES.ABORTED) {
       logger.warn('Model call failed', {
@@ -1779,7 +1803,7 @@ export class LLMClient {
       recoverable: err.retryable === true || err.code === LLM_ERROR_CODES.CONTEXT_WINDOW_EXCEEDED
     });
     // A stop is not a failure: the call telemetry records it as aborted.
-    callTelemetry?.fail(err);
+    callTelemetry?.fail(err, { usage });
   }
 
   /**
@@ -1790,7 +1814,7 @@ export class LLMClient {
    */
   _beginCallTelemetry({ model, messages, request, telemetry, effectiveStream, startedAt }) {
     try {
-      const instrumentation = getGenAIInstrumentation();
+      const instrumentation = this.getInstrumentation();
       if (!instrumentation) return null;
       let runMeta = null;
       try {
@@ -1839,15 +1863,7 @@ export class LLMClient {
   _endCallTelemetry(callTelemetry, { model, accumulator, aborted = false }) {
     if (!callTelemetry) return;
     try {
-      const usage = accumulator.usage
-        ? {
-            inputTokens: accumulator.usage.promptTokens,
-            outputTokens: accumulator.usage.completionTokens,
-            cacheReadTokens: accumulator.usage.cacheReadTokens,
-            cacheWriteTokens: accumulator.usage.cacheWriteTokens,
-            reasoningTokens: accumulator.usage.reasoningTokens
-          }
-        : undefined;
+      const usage = telemetryUsage(accumulator.usage) ?? undefined;
       callTelemetry.succeed({
         // A user stop after the answer started: tokens count, the call is not
         // an error and its duration says nothing about latency.
@@ -1866,6 +1882,23 @@ export class LLMClient {
 }
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
+
+/**
+ * A call's usage (`promptTokens`, `completionTokens`, …) in the field names
+ * of the call telemetry (`inputTokens`, `outputTokens`, …).
+ * @param {Object|null} usage
+ * @returns {Object|null}
+ */
+function telemetryUsage(usage) {
+  if (!usage) return null;
+  return {
+    inputTokens: usage.promptTokens,
+    outputTokens: usage.completionTokens,
+    cacheReadTokens: usage.cacheReadTokens,
+    cacheWriteTokens: usage.cacheWriteTokens,
+    reasoningTokens: usage.reasoningTokens
+  };
+}
 
 /**
  * Run `fn` with a call's LLM span active, or just run it without telemetry.

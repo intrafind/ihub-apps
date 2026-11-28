@@ -27,6 +27,7 @@ import {
   textResponse,
   openaiText,
   captureRunLog,
+  fakeInstrumentation,
   MODELS
 } from './helpers/llmFixtures.js';
 
@@ -748,4 +749,75 @@ test('execute — a call that fails before any answer carries no usage', async (
   );
   assert.equal(recorded.length, 1);
   assert.equal(recorded[0].usage, null);
+});
+
+/** A stream that sends one chunk and then hangs until its request is aborted. */
+function oneChunkThenHang(extra = {}) {
+  const encoder = new TextEncoder();
+  const chunk = `data: ${JSON.stringify({ choices: [{ index: 0, delta: { content: 'partial' } }], ...extra })}\n\n`;
+  return async () =>
+    new Response(
+      new ReadableStream({
+        start(controller) {
+          controller.enqueue(encoder.encode(chunk));
+        }
+      }),
+      { status: 200, headers: { 'content-type': 'text/event-stream' } }
+    );
+}
+
+/** Read the first chunk, wait past the deadline, then stop reading. */
+async function holdFirstChunk(stream, { onFirst } = {}) {
+  for await (const _chunk of stream) {
+    onFirst?.();
+    await new Promise(resolve => setTimeout(resolve, 60));
+    break;
+  }
+}
+
+test('execute — the deadline expiring while the consumer holds a chunk is a timeout', async () => {
+  const recorded = [];
+  const { client } = makeClient({
+    usage: { record: call => recorded.push(call) },
+    transport: oneChunkThenHang()
+  });
+  const stream = await client.execute({ modelId: 'oa', messages, timeoutMs: 20, retries: 0 });
+  await holdFirstChunk(stream);
+  assert.equal(recorded.length, 1);
+  assert.equal(recorded[0].errorCode, LLM_ERROR_CODES.TIMEOUT);
+});
+
+test('execute — a timed-out call hands the provider usage to the call telemetry', async () => {
+  const instrumentation = fakeInstrumentation();
+  const { client } = makeClient({
+    instrumentation,
+    transport: oneChunkThenHang({ usage: { prompt_tokens: 40, completion_tokens: 7 } })
+  });
+  const stream = await client.execute({ modelId: 'oa', messages, timeoutMs: 20, retries: 0 });
+  await holdFirstChunk(stream);
+  const [[kind, err, options]] = instrumentation.events;
+  assert.equal(kind, 'fail');
+  assert.equal(err.code, LLM_ERROR_CODES.TIMEOUT);
+  assert.equal(options.usage.inputTokens, 40);
+  assert.equal(options.usage.outputTokens, 7);
+});
+
+test('execute — a user stop stays a stop when the deadline fires after it', async () => {
+  const recorded = [];
+  const { client } = makeClient({
+    usage: { record: call => recorded.push(call) },
+    transport: oneChunkThenHang()
+  });
+  const stop = new AbortController();
+  const stream = await client.execute({
+    modelId: 'oa',
+    messages,
+    signal: stop.signal,
+    timeoutMs: 20,
+    retries: 0
+  });
+  await holdFirstChunk(stream, { onFirst: () => stop.abort() });
+  assert.equal(recorded.length, 1);
+  assert.equal(recorded[0].errorCode, null);
+  assert.equal(recorded[0].outcome, 'aborted');
 });
