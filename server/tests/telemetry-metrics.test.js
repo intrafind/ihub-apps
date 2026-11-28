@@ -2,36 +2,41 @@
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
 /**
- * recordTokenUsage must preserve a legitimate 0-token reading. The previous
- * `usage.inputTokens || usage.prompt_tokens` pattern silently dropped 0
- * because `0 || undefined === undefined`, leading to `histogram.record(undefined)`.
+ * recordInferenceTokens follows the inference token metrics of the GenAI
+ * semantic conventions (semantic-conventions-genai v0.1.0):
  *
- * These tests replace the histogram with a stub so we can assert the exact
- * arguments forwarded by recordTokenUsage.
+ * - `gen_ai.client.inference.operation.input_tokens` / `.output_tokens`
+ *   histograms get one record per inference, `0` when no usage was reported
+ *   (a legitimate `0` must survive: the old `a || b` pattern dropped it).
+ * - `gen_ai.client.inference.usage.*` counters get only strictly positive
+ *   counts, with `gen_ai.token.modality` (`unknown`) except on reasoning.
  */
 
 import { jest } from '@jest/globals';
-import { initializeMetrics, recordTokenUsage } from '../telemetry/metrics.js';
+import { initializeMetrics, recordInferenceTokens } from '../telemetry/metrics.js';
+
+const INPUT = 'gen_ai.client.inference.operation.input_tokens';
+const OUTPUT = 'gen_ai.client.inference.operation.output_tokens';
+const USAGE_IN = 'gen_ai.client.inference.usage.input_tokens';
+const USAGE_OUT = 'gen_ai.client.inference.usage.output_tokens';
 
 function makeFakeMeterProvider() {
-  const recorded = [];
-  const histogram = { record: jest.fn((value, attrs) => recorded.push({ value, attrs })) };
-  const counter = { add: jest.fn() };
+  const recorded = {};
+  const instrument = name => {
+    recorded[name] = [];
+    const push = jest.fn((value, attrs) => recorded[name].push([value, attrs]));
+    return { record: push, add: push };
+  };
   const meter = {
-    createHistogram: () => histogram,
-    createCounter: () => counter,
+    createHistogram: instrument,
+    createCounter: instrument,
     createUpDownCounter: () => ({ add: () => {} }),
     createObservableGauge: () => ({ addCallback: () => {} })
   };
-  return {
-    provider: { getMeter: () => meter },
-    histogram,
-    counter,
-    recorded
-  };
+  return { provider: { getMeter: () => meter }, recorded };
 }
 
-describe('recordTokenUsage', () => {
+describe('recordInferenceTokens', () => {
   let fake;
 
   beforeEach(() => {
@@ -39,19 +44,24 @@ describe('recordTokenUsage', () => {
     initializeMetrics(fake.provider);
   });
 
-  test('records both input and output tokens with type attribute', () => {
-    recordTokenUsage({ 'gen_ai.request.model': 'gpt-4' }, { inputTokens: 12, outputTokens: 7 });
+  test('records the per-operation histograms and the usage counters', () => {
+    recordInferenceTokens(
+      { 'gen_ai.request.model': 'gpt-4' },
+      { inputTokens: 12, outputTokens: 7 }
+    );
 
-    expect(fake.recorded).toEqual([
-      { value: 12, attrs: { 'gen_ai.request.model': 'gpt-4', 'gen_ai.token.type': 'input' } },
-      { value: 7, attrs: { 'gen_ai.request.model': 'gpt-4', 'gen_ai.token.type': 'output' } }
-    ]);
+    const labels = { 'gen_ai.request.model': 'gpt-4' };
+    const counterLabels = { ...labels, 'gen_ai.token.modality': 'unknown' };
+    expect(fake.recorded[INPUT]).toEqual([[12, labels]]);
+    expect(fake.recorded[OUTPUT]).toEqual([[7, labels]]);
+    expect(fake.recorded[USAGE_IN]).toEqual([[12, counterLabels]]);
+    expect(fake.recorded[USAGE_OUT]).toEqual([[7, counterLabels]]);
   });
 
   test('drops high-cardinality attributes that are not in the metrics allow-list', () => {
     // Token counts, conversation id, response id and message count would
     // explode Prometheus cardinality - they live on spans, not metrics.
-    recordTokenUsage(
+    recordInferenceTokens(
       {
         'gen_ai.request.model': 'gpt-4',
         'gen_ai.conversation.id': 'chat-abc-123',
@@ -66,44 +76,62 @@ describe('recordTokenUsage', () => {
       { inputTokens: 12 }
     );
 
-    expect(fake.recorded).toEqual([
-      {
-        value: 12,
-        attrs: {
-          'gen_ai.request.model': 'gpt-4',
-          'gen_ai.token.type': 'input',
-          'server.address': 'api.openai.com'
-        }
-      }
+    expect(fake.recorded[INPUT]).toEqual([
+      [12, { 'gen_ai.request.model': 'gpt-4', 'server.address': 'api.openai.com' }]
     ]);
   });
 
-  test('preserves 0 input tokens (regression: previous || drop)', () => {
-    recordTokenUsage({}, { inputTokens: 0, outputTokens: 5 });
+  test('records 0 on the histograms but never adds 0 to a counter', () => {
+    recordInferenceTokens({}, { inputTokens: 0, outputTokens: 5 });
 
-    expect(fake.recorded).toContainEqual({
-      value: 0,
-      attrs: { 'gen_ai.token.type': 'input' }
-    });
+    expect(fake.recorded[INPUT]).toEqual([[0, {}]]);
+    expect(fake.recorded[USAGE_IN]).toEqual([]);
+    expect(fake.recorded[USAGE_OUT]).toEqual([[5, { 'gen_ai.token.modality': 'unknown' }]]);
   });
 
   test('falls back to OpenAI-style prompt_tokens / completion_tokens', () => {
-    recordTokenUsage({}, { prompt_tokens: 9, completion_tokens: 0 });
+    recordInferenceTokens({}, { prompt_tokens: 9, completion_tokens: 0 });
 
-    expect(fake.recorded).toEqual([
-      { value: 9, attrs: { 'gen_ai.token.type': 'input' } },
-      { value: 0, attrs: { 'gen_ai.token.type': 'output' } }
+    expect(fake.recorded[INPUT]).toEqual([[9, {}]]);
+    expect(fake.recorded[OUTPUT]).toEqual([[0, {}]]);
+  });
+
+  test('a failed inference records 0 tokens with error.type and no counter', () => {
+    recordInferenceTokens({}, null, Object.assign(new Error('x'), { status: 429 }));
+
+    const labels = { 'error.type': 'rate_limit_exceeded' };
+    expect(fake.recorded[INPUT]).toEqual([[0, labels]]);
+    expect(fake.recorded[OUTPUT]).toEqual([[0, labels]]);
+    expect(fake.recorded[USAGE_IN]).toEqual([]);
+  });
+
+  test('a non-numeric count is recorded as 0, never as the value', () => {
+    recordInferenceTokens({}, { inputTokens: 'abc', outputTokens: -3 });
+    expect(fake.recorded[INPUT]).toEqual([[0, {}]]);
+    expect(fake.recorded[OUTPUT]).toEqual([[0, {}]]);
+    expect(fake.recorded[USAGE_IN]).toEqual([]);
+  });
+
+  test('cache and reasoning counters count their subsets; reasoning has no modality', () => {
+    recordInferenceTokens(
+      {},
+      {
+        inputTokens: 100,
+        outputTokens: 10,
+        cacheReadTokens: 80,
+        cacheWriteTokens: 20,
+        reasoningTokens: 4
+      }
+    );
+    const modality = { 'gen_ai.token.modality': 'unknown' };
+    expect(fake.recorded['gen_ai.client.inference.usage.cache_read.input_tokens']).toEqual([
+      [80, modality]
     ]);
-  });
-
-  test('skips recording when usage object is missing', () => {
-    recordTokenUsage({}, undefined);
-    recordTokenUsage({}, null);
-    expect(fake.histogram.record).not.toHaveBeenCalled();
-  });
-
-  test('does not record when token field is non-numeric', () => {
-    recordTokenUsage({}, { inputTokens: 'abc' });
-    expect(fake.histogram.record).not.toHaveBeenCalled();
+    expect(fake.recorded['gen_ai.client.inference.usage.cache_write.input_tokens']).toEqual([
+      [20, modality]
+    ]);
+    expect(fake.recorded['gen_ai.client.inference.usage.reasoning.output_tokens']).toEqual([
+      [4, {}]
+    ]);
   });
 });

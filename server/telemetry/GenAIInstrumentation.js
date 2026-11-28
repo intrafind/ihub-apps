@@ -9,12 +9,13 @@
  * attribute filter, `error.type`, abort handling, idempotent end) and names the
  * user only through `identity.js`.
  *
- * The metrics (`gen_ai.client.token.usage`, `gen_ai.client.operation.duration`)
- * are built from the call's own data, never from `span.attributes`: a span that
+ * The metrics (`gen_ai.client.inference.duration`, the
+ * `gen_ai.client.inference.operation.*` token histograms and the
+ * `gen_ai.client.inference.usage.*` token counters) are built from the call's own data, never from `span.attributes`: a span that
  * is sampled out or switched off has none, and the metrics must not depend on
  * either. They are recorded whenever the metric instruments exist.
  *
- * @see https://opentelemetry.io/docs/specs/semconv/gen-ai/
+ * @see https://github.com/open-telemetry/semantic-conventions-genai/blob/main/docs/gen-ai/client-inference.md
  */
 
 import {
@@ -28,10 +29,10 @@ import {
 import { inputMessagesAttributes, outputMessagesAttributes } from './contentCapture.js';
 import { conversationSpanAttributes, userSpanAttributes } from './identity.js';
 import {
+  recordInferenceDuration,
+  recordInferenceTokens,
   recordLlmInflight,
-  recordOperationDuration,
-  recordTimeToFirstChunk,
-  recordTokenUsage
+  recordTimeToFirstChunk
 } from './metrics.js';
 import { errorTypeOf, isAbortError, SpanKind, startSpan } from './spans.js';
 
@@ -124,9 +125,9 @@ export class LLMCallTelemetry {
     if (this.ended) return;
     this.ended = true;
     try {
-      recordTokenUsage(this.metricAttributes, usage);
+      recordInferenceTokens(this.metricAttributes, usage);
       if (aborted) this.span.abort();
-      else recordOperationDuration(this.durationSeconds(), this.metricAttributes);
+      else recordInferenceDuration(this.durationSeconds(), this.metricAttributes);
       if (this.span.isRecording) {
         this.span.setAttributes({
           ...buildResponseAttributes({ finishReasons, model: responseModel }),
@@ -146,9 +147,10 @@ export class LLMCallTelemetry {
   }
 
   /**
-   * The call failed or was stopped. A failure sets `error.type` on the span
-   * and the duration metric; a stop (user, client disconnect) sets
-   * `ihub.aborted` and records no duration, since the user chose it.
+   * The call failed or was stopped. A failure sets `error.type` on the span,
+   * the duration and the token histograms (with `0` tokens: a failed call
+   * reports no usage); a stop (user, client disconnect) sets `ihub.aborted`
+   * and records no metric, since the user chose it.
    *
    * @param {unknown} err
    */
@@ -157,7 +159,8 @@ export class LLMCallTelemetry {
     this.ended = true;
     try {
       if (!isAbortError(err)) {
-        recordOperationDuration(this.durationSeconds(), this.metricAttributes, err);
+        recordInferenceDuration(this.durationSeconds(), this.metricAttributes, err);
+        recordInferenceTokens(this.metricAttributes, null, err);
       }
       this.span.fail(err);
     } catch {
@@ -207,7 +210,7 @@ export class LLMCallTelemetry {
 
   /**
    * The first output chunk of a streamed call arrived: records
-   * `gen_ai.client.operation.time_to_first_chunk` (once) and the span attribute.
+   * `gen_ai.client.inference.time_to_first_chunk` (once) and the span attribute.
    */
   firstChunk() {
     if (this.firstChunkSeen || this.ended) return;

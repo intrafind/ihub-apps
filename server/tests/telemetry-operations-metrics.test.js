@@ -321,7 +321,7 @@ describe('LLM call metrics', () => {
     call.firstChunk();
     call.succeed({});
     expect(fake.recorded['ihub.llm.requests.inflight'].map(([delta]) => delta)).toEqual([1, -1]);
-    expect(labelsOf('gen_ai.client.operation.time_to_first_chunk')).toEqual([
+    expect(labelsOf('gen_ai.client.inference.time_to_first_chunk')).toEqual([
       {
         'gen_ai.operation.name': 'chat',
         'gen_ai.provider.name': 'openai',
@@ -332,7 +332,7 @@ describe('LLM call metrics', () => {
     ]);
   });
 
-  test('cache and reasoning tokens are their own token types', () => {
+  test('cache and reasoning tokens have their own usage counters', () => {
     const call = new GenAIInstrumentation({ enabled: true }).startCall({
       operation: 'chat',
       model: { modelId: 'm' },
@@ -341,14 +341,12 @@ describe('LLM call metrics', () => {
     call.succeed({
       usage: { inputTokens: 100, outputTokens: 10, cacheReadTokens: 80, reasoningTokens: 4 }
     });
-    expect(
-      fake.recorded['gen_ai.client.token.usage'].map(([v, l]) => [v, l['gen_ai.token.type']])
-    ).toEqual([
-      [100, 'input'],
-      [10, 'output'],
-      [80, 'cache_read'],
-      [4, 'reasoning']
-    ]);
+    const usage = name => fake.recorded[`gen_ai.client.inference.usage.${name}`].map(([v]) => v);
+    expect(usage('input_tokens')).toEqual([100]);
+    expect(usage('output_tokens')).toEqual([10]);
+    expect(usage('cache_read.input_tokens')).toEqual([80]);
+    expect(usage('cache_write.input_tokens')).toEqual([]);
+    expect(usage('reasoning.output_tokens')).toEqual([4]);
   });
 });
 
