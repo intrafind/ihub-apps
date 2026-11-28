@@ -527,7 +527,11 @@ function AdminTelemetryPage() {
                         max={4096}
                         value={config.events?.maxEventSize || 1024}
                         onChange={e =>
-                          updateField('events.maxEventSize', Number.parseInt(e.target.value, 10))
+                          // Kept as typed (1.5 stays 1.5) so the save can refuse it.
+                          updateField(
+                            'events.maxEventSize',
+                            e.target.value === '' ? undefined : Number(e.target.value)
+                          )
                         }
                         className="w-full px-3 py-2 border border-admin-control-border dark:border-admin-control-border-dark rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
                       />
