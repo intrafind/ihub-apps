@@ -19,6 +19,23 @@ import {
 import { samplerOption } from '../telemetry.js';
 import { GenAIInstrumentation } from '../telemetry/GenAIInstrumentation.js';
 import {
+  configureIdentity,
+  resetIdentityForTests,
+  setPseudonymKeySource
+} from '../telemetry/identity.js';
+import {
+  endTurnSpan,
+  endWorkflowRunSpan,
+  resetTracesForTests,
+  startToolSpan,
+  startTurnSpan,
+  startWorkflowRunSpan,
+  toolSpanName,
+  withA2aTaskSpan,
+  withInferenceSpan,
+  withMcpToolSpan
+} from '../telemetry/traces.js';
+import {
   configureSpans,
   extractContext,
   injectContext,
@@ -168,5 +185,72 @@ describe('the LLM span', () => {
     configureSpans({ enabled: true, spans: { enabled: false } });
     c.succeed({});
     expect(span('chat m')).toBeDefined();
+  });
+});
+
+describe('traces.js helpers', () => {
+  beforeEach(() => {
+    resetTracesForTests();
+    resetIdentityForTests();
+    setPseudonymKeySource(() => 'd'.repeat(64));
+    configureIdentity({});
+  });
+
+  test('runtime tool names never reach the span name', () => {
+    expect(toolSpanName({ _mcp: true }, 'acme_crm_lookup_customer')).toBe('mcp');
+    expect(toolSpanName({ _a2a: true }, 'remote-agent-skill')).toBe('a2a');
+    expect(toolSpanName(null, 'whatever')).toBe('unknown');
+    startToolSpan({ toolDef: { _mcp: true }, toolId: 'acme_crm_lookup_customer' }).end();
+    expect(span('execute_tool mcp')).toBeDefined();
+  });
+
+  test('a trigger outside the closed set is `other`', () => {
+    startTurnSpan({ appId: 'chat', trigger: 'cron-from-somewhere' }).end();
+    expect(span('invoke_agent chat').attributes['ihub.trigger.type']).toBe('other');
+  });
+
+  test('turn, inference and A2A spans carry a pseudonymised user and a hashed chat id', async () => {
+    startTurnSpan({ appId: 'chat', chatId: 'chat-42', userId: 'DOMAIN\\jdoe' }).end();
+    await withInferenceSpan({ api: 'chat_completions', userId: 'DOMAIN\\jdoe' }, async () => {});
+    await withA2aTaskSpan(
+      { skillKind: 'app', skillId: 'chat', userId: 'DOMAIN\\jdoe' },
+      async () => {}
+    );
+    await withMcpToolSpan({ tool: 'chat', userId: 'DOMAIN\\jdoe' }, async () => {});
+    for (const s of exporter.getFinishedSpans()) {
+      expect(s.attributes['user.id']).toBeUndefined();
+      expect(s.attributes['user.hash']).toMatch(/^[0-9a-f]{32}$/);
+      expect(JSON.stringify(s.attributes)).not.toContain('jdoe');
+    }
+    const turn = span('invoke_agent chat').attributes;
+    expect(turn['gen_ai.conversation.id']).toMatch(/^[0-9a-f]{32}$/);
+    expect(JSON.stringify(turn)).not.toContain('chat-42');
+  });
+
+  test('an aborted turn is ihub.aborted without ERROR; a failed one is ERROR with error.type', () => {
+    const stopped = startTurnSpan({ appId: 'a' });
+    endTurnSpan(stopped, { status: 'aborted' });
+    stopped.end();
+    const failed = startTurnSpan({ appId: 'b' });
+    endTurnSpan(failed, { status: 'error', errorInfo: { code: 'NETWORK' } });
+    failed.end();
+    expect(span('invoke_agent a').attributes['ihub.aborted']).toBe(true);
+    expect(span('invoke_agent a').status.code).toBe(0);
+    expect(span('invoke_agent b').status.code).toBe(2);
+    expect(span('invoke_agent b').attributes['error.type']).toBe('NETWORK');
+  });
+
+  test('a failed or cancelled workflow segment keeps its carrier: the resume links to it', () => {
+    for (const status of ['failed', 'cancelled']) {
+      exporter.reset();
+      const first = startWorkflowRunSpan({ executionId: `wf-${status}` });
+      endWorkflowRunSpan(first, status, `wf-${status}`);
+      first.end();
+      const resumed = startWorkflowRunSpan({ executionId: `wf-${status}`, resumed: true });
+      endWorkflowRunSpan(resumed, 'completed', `wf-${status}`);
+      resumed.end();
+      const [before, after] = exporter.getFinishedSpans();
+      expect(after.links.map(l => l.context.spanId)).toEqual([before.spanContext().spanId]);
+    }
   });
 });

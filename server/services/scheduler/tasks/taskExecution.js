@@ -181,6 +181,14 @@ async function authorizeRun(task, user, language) {
   return { app, integrationScopes: scopes.scopes };
 }
 
+/** The closed set of `ihub.trigger.type` values on `scheduled_task.run`. */
+const SCHEDULED_TRIGGERS = new Set(['schedule', 'manual', 'catch_up']);
+
+/** A run's trigger as a span attribute value, `other` outside the closed set. */
+function scheduledTriggerOf(trigger) {
+  return SCHEDULED_TRIGGERS.has(trigger) ? trigger : 'other';
+}
+
 /**
  * Execute one scheduled task run in its own trace (`scheduled_task.run`); the
  * turn it runs (`invoke_agent`) and everything below are its children. See
@@ -218,6 +226,8 @@ async function executeTaskRunTraced({ taskId, runId }, deps = {}, span = null) {
   const task = await repository.getTask(taskId);
   if (task?.appId) span?.setAttributes({ 'app.id': task.appId });
   let run = await repository.getRun(taskId, runId);
+  // "Run now" and scheduled runs share the span name; the run says which it was.
+  if (run?.trigger) span?.setAttributes({ 'ihub.trigger.type': scheduledTriggerOf(run.trigger) });
   if (!task) {
     if (run && !isFinalRunStatus(run.status)) {
       await repository.mutateRun(taskId, runId, stored => ({
