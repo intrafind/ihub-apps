@@ -30,8 +30,19 @@
  * @module telemetry/traces
  */
 
+import { context as otelContext, createContextKey } from '@opentelemetry/api';
 import { conversationSpanAttributes, userSpanAttributes } from './identity.js';
+import {
+  recordHitlWait,
+  recordToolDuration,
+  recordTurn,
+  recordWorkflowExecution,
+  recordWorkflowNode
+} from './metrics.js';
 import { linksFrom, SpanKind, startSpan, withSpan } from './spans.js';
+
+/** Context key of the running turn's state, which its tool calls report to. */
+const TURN_STATE = createContextKey('ihub.turn.state');
 
 /** Trigger types of a turn; anything else is `other`. */
 const TRIGGERS = new Set(['user', 'schedule', 'system', 'workflow', 'api', 'mcp', 'a2a', 'agent']);
@@ -59,6 +70,8 @@ function nameSegment(value, fallback = 'unknown') {
  * @param {string} [turn.trigger] - `user`, `schedule`, `api`, … (closed set)
  * @param {boolean} [turn.streaming]
  * @param {string} [turn.kind] - `turn` (a chat turn) or `subagent` (an app called as a tool)
+ * @param {string} [turn.surface] - `chat`, `agent`, `task`, `api`, … (metric label)
+ * @param {string} [turn.channel] - `web`, `office`, `mcp`, … (`channel.js`, metric label)
  * @returns {import('./spans.js').SpanHandle}
  */
 export function startTurnSpan({
@@ -68,9 +81,11 @@ export function startTurnSpan({
   userId,
   trigger,
   streaming,
-  kind = 'turn'
+  kind = 'turn',
+  surface,
+  channel
 }) {
-  return startSpan(`invoke_agent ${nameSegment(appId, 'chat')}`, {
+  const span = startSpan(`invoke_agent ${nameSegment(appId, 'chat')}`, {
     kind: SpanKind.INTERNAL,
     attributes: {
       'gen_ai.operation.name': 'invoke_agent',
@@ -79,10 +94,16 @@ export function startTurnSpan({
       'ihub.turn.kind': kind === 'subagent' ? 'subagent' : 'turn',
       'ihub.trigger.type': bounded(trigger ?? 'user', TRIGGERS),
       ...(typeof streaming === 'boolean' ? { 'ihub.streaming': streaming } : {}),
+      ...(surface ? { 'ihub.surface': surface } : {}),
+      ...(channel ? { 'ihub.client.channel': channel } : {}),
       ...conversationSpanAttributes(chatId),
       ...userSpanAttributes(userId)
     }
   });
+  // What the turn's metrics need at its end, and what its tool calls report to.
+  span.turn = { appId, surface, channel, startedAt: Date.now(), toolFailures: 0 };
+  span.context = span.context.setValue(TURN_STATE, span.turn);
+  return span;
 }
 
 /**
@@ -94,9 +115,49 @@ export function startTurnSpan({
  */
 export function endTurnSpan(span, result) {
   const status = typeof result?.status === 'string' ? result.status.slice(0, 32) : 'unknown';
-  span.setAttributes({ 'ihub.turn.status': status });
+  const outcome = turnOutcomeOf(result, span.turn);
+  span.setAttributes({ 'ihub.turn.status': status, 'ihub.turn.outcome': outcome });
   if (status === 'aborted') span.abort();
   else if (status === 'error') span.fail({ code: result?.errorInfo?.code || 'TURN_FAILED' });
+  if (span.turn) {
+    recordTurn({
+      seconds: (Date.now() - span.turn.startedAt) / 1000,
+      outcome,
+      surface: span.turn.surface,
+      channel: span.turn.channel,
+      appId: span.turn.appId
+    });
+  }
+}
+
+/** Error codes of a failed turn that mean "over the user's limit" / "provider busy". */
+const QUOTA_CODES = new Set(['QUOTA_EXCEEDED']);
+const RATE_CODES = new Set(['RATE_LIMITED', 'rate_limit_exceeded']);
+
+/**
+ * How a turn ended for the user: `ok`, `error`, `quota`, `rate_limited`,
+ * `aborted`, `empty` (it ended without an answer, a question or a tool result
+ * to show) or `tool_degraded` (it answered, but at least one tool call failed).
+ *
+ * @param {Object} result - The turn result
+ * @param {{toolFailures?: number}} [turn]
+ * @returns {string}
+ */
+export function turnOutcomeOf(result, turn) {
+  const status = result?.status;
+  if (status === 'aborted') return 'aborted';
+  if (status === 'error') {
+    const code = result?.errorInfo?.code || result?.error?.code;
+    if (QUOTA_CODES.has(code)) return 'quota';
+    if (RATE_CODES.has(code)) return 'rate_limited';
+    return 'error';
+  }
+  const content = result?.content ?? result?.finalMessage?.content;
+  const answered =
+    (typeof content === 'string' && content.trim() !== '') ||
+    Boolean(result?.pendingInteraction || result?.toolName || result?.structuredOutput);
+  if (!answered && status !== 'paused') return 'empty';
+  return turn?.toolFailures > 0 ? 'tool_degraded' : 'ok';
 }
 
 /**
@@ -125,7 +186,8 @@ export function toolSpanName(toolDef, toolId) {
  * @returns {import('./spans.js').SpanHandle}
  */
 export function startToolSpan({ toolDef, toolId, callId, origin }) {
-  return startSpan(`execute_tool ${toolSpanName(toolDef, toolId)}`, {
+  const name = toolSpanName(toolDef, toolId);
+  const span = startSpan(`execute_tool ${name}`, {
     kind: SpanKind.INTERNAL,
     attributes: {
       'gen_ai.operation.name': 'execute_tool',
@@ -134,6 +196,8 @@ export function startToolSpan({ toolDef, toolId, callId, origin }) {
       'tool.origin': origin || 'none'
     }
   });
+  span.tool = { name, origin, startedAt: Date.now() };
+  return span;
 }
 
 /**
@@ -157,10 +221,25 @@ export function endToolSpan(span, { origin, outcome, count, bytes, failed, rateL
   });
   if (rateLimited) span.fail({ code: 'TOOL_RATE_LIMITED' });
   else if (failed) span.fail({ code: 'TOOL_FAILED' });
+  if (span.tool) {
+    recordToolDuration({
+      seconds: (Date.now() - span.tool.startedAt) / 1000,
+      toolName: span.tool.name,
+      origin: origin || span.tool.origin,
+      outcome: failed || rateLimited ? 'error' : outcome
+    });
+  }
+  if (failed || rateLimited) {
+    // The turn answered with a tool that failed: `tool_degraded`.
+    const turn = otelContext.active().getValue(TURN_STATE);
+    if (turn) turn.toolFailures += 1;
+  }
 }
 
 /** In-process trace carriers of workflow runs, for the link when one resumes. */
 const workflowCarriers = new Map();
+/** When a workflow paused for a human, for `ihub.hitl.wait.duration` when it resumes. */
+const workflowPausedAt = new Map();
 const MAX_WORKFLOW_CARRIERS = 5000;
 
 /**
@@ -190,6 +269,11 @@ export function startWorkflowRunSpan({ executionId, workflowId, userId, resumed 
     }
   });
   rememberWorkflowCarrier(executionId, span);
+  if (resumed && workflowPausedAt.has(executionId)) {
+    recordHitlWait((Date.now() - workflowPausedAt.get(executionId)) / 1000);
+  }
+  workflowPausedAt.delete(executionId);
+  span.workflow = { startedAt: Date.now() };
   return span;
 }
 
@@ -217,6 +301,15 @@ export function endWorkflowRunSpan(span, status, executionId) {
   if (status === 'completed' || status === 'failed' || status === 'cancelled') {
     workflowCarriers.delete(executionId);
   }
+  if (status === 'paused') {
+    workflowPausedAt.set(executionId, Date.now());
+    if (workflowPausedAt.size > MAX_WORKFLOW_CARRIERS) {
+      workflowPausedAt.delete(workflowPausedAt.keys().next().value);
+    }
+  }
+  if (span.workflow) {
+    recordWorkflowExecution(status, (Date.now() - span.workflow.startedAt) / 1000);
+  }
   if (status === 'cancelled') span.abort();
 }
 
@@ -232,6 +325,8 @@ export function endWorkflowRunSpan(span, status, executionId) {
  * @returns {Promise<T>}
  */
 export function withWorkflowNodeSpan({ type, id, attempt }, fn) {
+  const startedAt = Date.now();
+  const settle = ok => recordWorkflowNode(type, (Date.now() - startedAt) / 1000, ok);
   return withSpan(
     `workflow.node ${nameSegment(type)}`,
     {
@@ -242,6 +337,15 @@ export function withWorkflowNodeSpan({ type, id, attempt }, fn) {
       }
     },
     fn
+  ).then(
+    result => {
+      settle(true);
+      return result;
+    },
+    error => {
+      settle(false);
+      throw error;
+    }
   );
 }
 
@@ -411,4 +515,5 @@ export function withA2aTaskSpan({ skillKind, skillId, stream, userId }, fn) {
 /** Forget remembered workflow carriers (tests only). */
 export function resetTracesForTests() {
   workflowCarriers.clear();
+  workflowPausedAt.clear();
 }

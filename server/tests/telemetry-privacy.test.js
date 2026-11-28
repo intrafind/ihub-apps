@@ -76,6 +76,7 @@ function fakeMeter() {
       return histograms[name];
     },
     createCounter: () => ({ add: jest.fn() }),
+    createUpDownCounter: () => ({ add: () => {} }),
     createObservableGauge: () => ({ addCallback: () => {} })
   };
   initializeMetrics({ getMeter: () => meter });
@@ -213,7 +214,8 @@ describe('GenAI metrics do not depend on spans', () => {
       'gen_ai.operation.name': 'chat',
       'gen_ai.provider.name': 'openai',
       'gen_ai.request.model': 'gpt-test',
-      'app.id': 'chat-app'
+      'app.id': 'chat-app',
+      'server.address': 'llm.example.com'
     };
     expect(histograms['gen_ai.client.token.usage'].record.mock.calls).toEqual([
       [12, { ...labels, 'gen_ai.token.type': 'input' }],

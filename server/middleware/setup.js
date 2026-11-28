@@ -314,7 +314,10 @@ export function setupMiddleware(app, platformConfig = {}) {
         ip: req.ip,
         userId: undefined,
         oauthClientId: undefined,
-        requestId: randomUUID()
+        requestId: randomUUID(),
+        // Only for `telemetry/channel.js` (which client a turn came through);
+        // the logger does not copy it into log lines.
+        channelPath: req.path
       },
       () => next()
     );

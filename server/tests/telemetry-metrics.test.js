@@ -20,6 +20,7 @@ function makeFakeMeterProvider() {
   const meter = {
     createHistogram: () => histogram,
     createCounter: () => counter,
+    createUpDownCounter: () => ({ add: () => {} }),
     createObservableGauge: () => ({ addCallback: () => {} })
   };
   return {
@@ -59,6 +60,7 @@ describe('recordTokenUsage', () => {
         'gen_ai.usage.output_tokens': '7',
         'conversation.message_count': '14',
         'user.id': 'alice',
+        // Bounded by the model config: kept, so one degraded endpoint shows (#4008).
         'server.address': 'api.openai.com'
       },
       { inputTokens: 12 }
@@ -67,7 +69,11 @@ describe('recordTokenUsage', () => {
     expect(fake.recorded).toEqual([
       {
         value: 12,
-        attrs: { 'gen_ai.request.model': 'gpt-4', 'gen_ai.token.type': 'input' }
+        attrs: {
+          'gen_ai.request.model': 'gpt-4',
+          'gen_ai.token.type': 'input',
+          'server.address': 'api.openai.com'
+        }
       }
     ]);
   });

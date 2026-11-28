@@ -1103,6 +1103,8 @@ export class LLMClient {
                   );
                 }
                 if (!firstChunkAt) firstChunkAt = Date.now();
+                // Streamed calls only: time to the first output chunk (metric and span).
+                callTelemetry?.firstChunk();
                 accumulator.push(chunk);
                 yield chunk;
                 if (chunk.complete) break;
@@ -1781,8 +1783,15 @@ export class LLMClient {
     try {
       const instrumentation = getGenAIInstrumentation();
       if (!instrumentation) return null;
+      let runMeta = null;
+      try {
+        runMeta = telemetry.runId ? this.runLog?.getRunMeta?.(telemetry.runId) || null : null;
+      } catch {
+        runMeta = null;
+      }
       const call = instrumentation.startCall({
         operation: resolveOperation(model.provider),
+        surface: resolveSurface(telemetry, runMeta),
         model,
         provider: resolveProviderName(model.provider),
         appId: telemetry.appId,
@@ -1916,7 +1925,8 @@ function defaultTransport(request, { signal, onConnected }) {
     headers: request.headers,
     body: request.body !== undefined ? JSON.stringify(request.body) : undefined,
     signal,
-    onConnect: onConnected
+    onConnect: onConnected,
+    dependency: 'llm'
   });
 }
 

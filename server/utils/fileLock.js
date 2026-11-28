@@ -27,6 +27,7 @@ import logger from './logger.js';
 import { writeInDirectory } from './atomicWrite.js';
 import { LockTimeoutError } from '../storage/errors.js';
 import { lockPrefix, lockStats, recordLockHold } from '../telemetry/waitDiagnostics.js';
+import { recordLockWait } from '../telemetry/metrics.js';
 
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 
@@ -334,6 +335,7 @@ export async function acquireLease(lockPath, owner, opts) {
     const writtenAt = await acquireLeaseUntimed(lockPath, owner, opts);
     diag.acquisitions += 1;
     diag.wait.record(performance.now() - startedAt);
+    recordLockWait((performance.now() - startedAt) / 1000);
     return writtenAt;
   } catch (error) {
     if (error instanceof LockTimeoutError) diag.timeouts += 1;
@@ -800,6 +802,7 @@ export async function withLeaseLine(
     } else {
       diag.acquisitions += 1;
       diag.wait.record(performance.now() - startedAt);
+      recordLockWait((performance.now() - startedAt) / 1000);
     }
   } catch (error) {
     await passTurn(lockPath, line, name, component, pollMs);

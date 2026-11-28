@@ -24,6 +24,7 @@ import {
   resourceFromAttributes
 } from '@opentelemetry/resources';
 import { containerDetector } from '@opentelemetry/resource-detector-container';
+import { RuntimeNodeInstrumentation } from '@opentelemetry/instrumentation-runtime-node';
 import { GenAIInstrumentation } from './telemetry/GenAIInstrumentation.js';
 import { initializeMetrics, registerTelemetryStatusObservers } from './telemetry/metrics.js';
 import { initializeProcessMetrics } from './telemetry/ProcessMetrics.js';
@@ -267,6 +268,7 @@ function isContainer() {
  */
 export function buildSdkOptions(config, { instrumentations } = {}) {
   const provider = config.provider || 'console';
+  const metricsOn = config.metrics?.enabled !== false;
   const exporters = { traces: null, metrics: null, logs: null };
 
   const spanProcessors = [];
@@ -324,8 +326,12 @@ export function buildSdkOptions(config, { instrumentations } = {}) {
       spanProcessors,
       metricReaders,
       logRecordProcessors,
-      instrumentations:
-        instrumentations ?? (config.autoInstrumentation === true ? createInstrumentations() : []),
+      instrumentations: [
+        ...(instrumentations ??
+          (config.autoInstrumentation === true ? createInstrumentations() : [])),
+        // Runtime metrics (event loop, GC, heap spaces): metrics only, no patching.
+        ...(metricsOn ? [new RuntimeNodeInstrumentation()] : [])
+      ],
       ...samplerOption(config)
     }
   };
@@ -411,6 +417,10 @@ export async function initTelemetry(rawConfig = {}, { instrumentations, bootstra
     // global one, so we acquire meters via the @opentelemetry/api facade.
     initializeMetrics(metricsApi);
     initializeProcessMetrics(metricsApi);
+    // Loaded here: it reads the platform config, which telemetry must not
+    // import while the bootstrap runs before the app.
+    const { startFilesystemSampler } = await import('./telemetry/filesystemSampler.js');
+    startFilesystemSampler();
     const version = options.resource.attributes['service.version'];
     registerTelemetryStatusObservers({
       lastSuccess: lastSuccessTimestamps,

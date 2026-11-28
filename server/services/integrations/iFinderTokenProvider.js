@@ -415,6 +415,7 @@ const REFRESH_LOCK_STALE_MS = 30_000;
 async function postForm(url, params) {
   const response = await httpFetch(url, {
     method: 'POST',
+    dependency: 'idp',
     signal: AbortSignal.timeout(TOKEN_REQUEST_TIMEOUT_MS),
     headers: {
       'Content-Type': 'application/x-www-form-urlencoded',

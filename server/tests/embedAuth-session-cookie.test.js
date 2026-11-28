@@ -22,6 +22,7 @@ import jwt from 'jsonwebtoken';
 import express from 'express';
 import supertest from 'supertest';
 import { parseCookies } from './helpers/parseCookies.js';
+import { metricsMock } from './helpers/metricsMock.js';
 
 const SECRET = 'embed-session-cookie-secret';
 process.env.JWT_SECRET = SECRET;
@@ -55,10 +56,7 @@ jest.unstable_mockModule('../services/TokenStorageService.js', () => ({
 }));
 
 jest.unstable_mockModule('../services/AuditLogService.js', () => ({ logAudit: () => {} }));
-jest.unstable_mockModule('../telemetry/metrics.js', () => ({
-  recordAuthEvent: () => {},
-  recordRateLimitHit: () => {}
-}));
+jest.unstable_mockModule('../telemetry/metrics.js', () => metricsMock());
 
 const { default: jwtAuth } = await import('../middleware/jwtAuth.js');
 const { default: registerEmbedAuthRoutes } = await import('../routes/embedAuth.js');

@@ -46,6 +46,7 @@ import { authorizeInteraction as defaultAuthorizeInteraction } from '../loop/run
 import { APPROVAL_DECISIONS, APPROVAL_GRANTS } from '../../../shared/toolApproval.js';
 import { boundCarriedBasis } from './answerBasis.js';
 import { publicPendingConnect } from './chatConnectResume.js';
+import { recordSecurityEvent } from '../../telemetry/metrics.js';
 
 const COMPONENT = 'ChatToolApproval';
 
@@ -488,6 +489,7 @@ async function commitChatApproval({
         { user, channel: 'chat' }
       );
       outcome = response.decision === 'approve' ? 'approved' : 'rejected';
+      if (outcome === 'rejected') recordSecurityEvent('tool_approval_denied');
     } catch (err) {
       if (err?.code === 'EXPIRED' || err?.code === 'NOT_FOUND') {
         outcome = 'expired';

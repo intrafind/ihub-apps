@@ -14,6 +14,7 @@ import { setAuthCookie } from '../utils/cookieSettings.js';
 import { clearOidcLogoutHint } from '../utils/oidcLogoutHint.js';
 
 import { ServiceError } from '../utils/ServiceError.js';
+import { recordAuthEvent } from '../telemetry/metrics.js';
 // jwks-rsa pulls in jose (pure ESM) internally via a synchronous require(), so
 // a static top-level import here would blow up as soon as anything imports
 // this file — e.g. for route registration — under Jest's CJS-style module
@@ -264,6 +265,7 @@ export async function teamsTokenExchange(req, res) {
     // browser: it would keep an ID token around and send this session's logout
     // through an unrelated provider. See utils/oidcLogoutHint.js.
     clearOidcLogoutHint(res, req);
+    recordAuthEvent('teams', 'login_success');
 
     res.json({
       user: {
@@ -279,6 +281,7 @@ export async function teamsTokenExchange(req, res) {
     });
   } catch (error) {
     logger.error('Teams token exchange error', { component: 'TeamsAuth', error });
+    recordAuthEvent('teams', 'login_failure');
 
     if (isAccountDisabledError(error)) throw await refuse('TEAMS_ACCOUNT_DISABLED');
     throw await refuse('TEAMS_INVALID_OR_EXPIRED_TOKEN');

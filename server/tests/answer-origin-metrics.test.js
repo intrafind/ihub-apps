@@ -28,6 +28,7 @@ function fakeMeter() {
       counters[name] = { add: jest.fn() };
       return counters[name];
     },
+    createUpDownCounter: () => ({ add: () => {} }),
     createObservableGauge: () => ({ addCallback: () => {} })
   };
   return { provider: { getMeter: () => meter }, counters };

@@ -13,6 +13,7 @@ import logger from '../utils/logger.js';
 import { checkProxyTrust, reportIgnoredProxyHeaders } from '../utils/proxyAuthTrust.js';
 
 import { ServiceError } from '../utils/ServiceError.js';
+import { recordAuthEvent } from '../telemetry/metrics.js';
 // JWKS documents are cached per provider URL, but only for a bounded TTL. The
 // previous cache never expired, so once an IdP rotated its signing keys every
 // token signed with the new key failed verification until the process was
@@ -197,7 +198,7 @@ async function getLdapGroupsForProxyUser(providerName, userId, ttlMs) {
 async function requestJwks(jwkUrl, previous) {
   const attemptedAt = Date.now();
   try {
-    const res = await httpFetch(jwkUrl);
+    const res = await httpFetch(jwkUrl, { dependency: 'idp' });
     if (!res.ok) throw new Error(`Failed to load JWKs: ${res.status}`);
     const jwks = await res.json();
     jwksCache.set(jwkUrl, { jwks, fetchedAt: attemptedAt, lastAttemptAt: attemptedAt });
@@ -450,12 +451,14 @@ export async function proxyAuth(req, res, next) {
     user = enhanceUserGroups(user, authConfig);
   } catch (error) {
     logger.error('Proxy user validation error', { component: 'ProxyAuth', error });
+    recordAuthEvent('proxy', 'token_invalid');
     // A 403 with the validation's own, user-friendly message; the request never goes on.
     // Passed to `next` rather than thrown: `createAuthChain` calls this middleware with its own
     // callback and never observes the returned promise, so a rejection would leave the request hanging.
     return next(new ServiceError('USER_VALIDATION_FAILED', error.message, { cause: error }));
   }
 
+  recordAuthEvent('proxy', 'token_validated');
   req.user = user;
   next();
 }

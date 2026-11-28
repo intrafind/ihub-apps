@@ -179,6 +179,7 @@ test('index-cache gauges attach even when registered before telemetry exists', a
     getMeter: () => ({
       createHistogram: instrument,
       createCounter: instrument,
+      createUpDownCounter: instrument,
       createObservableGauge: instrument
     })
   });

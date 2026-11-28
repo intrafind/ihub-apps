@@ -19,12 +19,33 @@ import {
 } from '../../telemetry/metrics.js';
 import activityTracker from '../../telemetry/ActivityTracker.js';
 import { resolveProviderName } from '../../telemetry/providerMap.js';
+import configCache from '../../configCache.js';
+import { currentClientChannel } from '../../telemetry/channel.js';
 
 function providerLabels(model) {
   return {
     'gen_ai.provider.name': resolveProviderName(model.provider),
     'gen_ai.request.model': model.modelId
   };
+}
+
+/**
+ * The surface and client channel of a chat model call (`ihub.surface`,
+ * `ihub.client.channel`): the inference API, MCP and A2A are `api`; a call
+ * outside any request (a scheduled task) is `task`; everything else `chat`.
+ *
+ * @param {Object} baseLog
+ * @returns {{'ihub.surface': string, 'ihub.client.channel': string}}
+ */
+function surfaceLabels(baseLog) {
+  const channel = currentClientChannel({
+    user: baseLog?.user,
+    platform: configCache.getPlatform?.()
+  });
+  let surface = 'chat';
+  if (channel === 'openai_proxy' || channel === 'mcp' || channel === 'a2a') surface = 'api';
+  else if (channel === 'system') surface = 'task';
+  return { 'ihub.surface': surface, 'ihub.client.channel': channel };
 }
 
 /**
@@ -43,7 +64,7 @@ export async function recordChatCallStart({ baseLog, chatId, model, messages }) 
     chatId
   });
   if (baseLog.appId) {
-    const shared = providerLabels(model);
+    const shared = { ...providerLabels(model), ...surfaceLabels(baseLog) };
     recordAppUsage(baseLog.appId, baseLog.user?.id || baseLog.userSessionId, shared);
     recordConversation(chatId, (messages?.length || 0) > 2, { 'app.id': baseLog.appId, ...shared });
   }
@@ -61,7 +82,7 @@ export async function recordChatCallStart({ baseLog, chatId, model, messages }) 
  */
 export async function recordChatCallEnd({ baseLog, model, outcome, error }) {
   if (baseLog.appId && model) {
-    const labels = { 'app.id': baseLog.appId, ...providerLabels(model) };
+    const labels = { 'app.id': baseLog.appId, ...providerLabels(model), ...surfaceLabels(baseLog) };
     if (error) recordError(error.name || 'Error', 'llm_call_streaming', labels);
     recordStreamOutcome(outcome, labels);
   }

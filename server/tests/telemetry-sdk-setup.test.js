@@ -195,6 +195,7 @@ describe('export status', () => {
         createCounter: name => ({
           add: (value, labels) => name === 'ihub.telemetry.export.failures' && added.push(labels)
         }),
+        createUpDownCounter: () => ({ add: () => {} }),
         createObservableGauge: () => ({ addCallback: () => {} })
       })
     });

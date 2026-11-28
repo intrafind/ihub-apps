@@ -207,7 +207,17 @@ Done (P1):
   the cluster bus and to resumed runs; `SpanHandle.bindIterable` binds an async iterator.
 - `spans.sampleRate` is wired.
 
+Done (P2):
+
+- `ihub.surface` and `ihub.client.channel` (`telemetry/channel.js`) label the turn, app usage,
+  stream outcome and GenAI metrics; `ihub.turns` carries `ihub.turn.outcome`.
+- Turn, tool, workflow, node and human-wait durations are recorded by the `traces.js` helpers that
+  start their spans, so a new unit of work gets both from one call.
+- Outbound requests through `httpFetch` are measured per dependency kind: pass
+  `dependency: 'llm' | 'ifinder' | 'idp' | …` for a new dependency.
+- `ihub.security.events` is derived from audit entries (`telemetry/securityEvents.js`): a new
+  security-relevant audit resource gets a line there.
+
 Still open:
 
-- `ihub.surface`, `ihub.client.channel` and `ihub.turn.outcome` are introduced by #4008 (P2).
 - Log lines carry trace ids only with `autoInstrumentation` (P3 adds them in the logger itself).

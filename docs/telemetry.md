@@ -284,9 +284,81 @@ iHub-specific span attributes:
 
 Standard gen-ai histograms:
 
-- `gen_ai.client.token.usage` - histogram of input/output tokens (one record per
-  direction, with `gen_ai.token.type=input|output`)
+- `gen_ai.client.token.usage` - histogram of tokens per call, by `gen_ai.token.type`: `input`,
+  `output`, and, when the provider reports them, `cache_read`, `cache_write` (prompt cache) and
+  `reasoning`. The last three are subsets of `input` / `output`: sum only `input` and `output`
+  for totals
 - `gen_ai.client.operation.duration` - histogram of operation durations in seconds
+- `gen_ai.client.operation.time_to_first_chunk` - histogram (seconds) from the start of a
+  streamed model call to its first output chunk, retries included. Streamed calls only
+  (semantic conventions v1.41; newer drafts call it `gen_ai.client.inference.time_to_first_chunk`)
+
+The GenAI metrics carry `gen_ai.operation.name`, `gen_ai.provider.name`, `gen_ai.request.model`,
+`app.id`, `ihub.surface` (`chat`, `agent`, `workflow`, `task`, `api`, `magic`, `system`) and
+`server.address` (the host of the model endpoint, from the model config: one of two vLLM nodes
+degrading shows up). They are recorded whether or not spans are on or sampled. On these metrics
+`ihub.surface` is what [Usage reporting](usage-reporting.md) calls the surface of a model call: an
+app run through the inference API counts as `chat` there, while its turn (`ihub.turns`) is
+`api`.
+
+Turns and tools:
+
+- `ihub.turn.duration` - histogram (seconds) of a whole turn: every model call and tool round
+  until the answer, as the user waited for it
+- `ihub.turns` - counter of turns by `ihub.turn.outcome`: `ok`, `error`, `quota` (usage limit),
+  `rate_limited`, `aborted` (the user stopped it), `empty` (no answer, question or result to
+  show), `tool_degraded` (it answered, but a tool call failed). Both carry `ihub.surface`,
+  `ihub.client.channel` and `app.id`
+- `ihub.client.channel` - which client a turn came through: `web`, `office` (the Office add-in in
+  Outlook, Word, Excel or PowerPoint; the server cannot tell the host apart), `browser_extension`,
+  `teams`, `nextcloud`, `mcp`, `a2a`, `openai_proxy`, or `system` outside a request. Decided from
+  the route and the OAuth client, never from a header the client sends. Also on `ihub.app.usage`
+  and `ihub.stream.outcome`
+- `ihub.tool.duration` - histogram (seconds) per tool call, by `tool.name` (a configured tool id;
+  `mcp` / `a2a` for tools a remote system reports at runtime, `unknown` for a tool the app does
+  not offer), `tool.origin` and `tool.outcome`
+
+Workflows:
+
+- `ihub.workflow.executions` + `ihub.workflow.duration` - execution segments by
+  `ihub.workflow.outcome` (`completed`, `failed`, `cancelled`, `paused` = waits for a human)
+- `ihub.workflow.node.duration` - per node attempt, by `ihub.workflow.node.type` and
+  `ihub.workflow.outcome` (`ok`, `error`)
+- `ihub.hitl.wait.duration` - how long a workflow waited for a human decision before it resumed
+  (measured by the process that paused it; a restart in between loses the measurement)
+
+Capacity and dependencies:
+
+- `ihub.llm.requests.inflight` - up-down counter of model calls in progress, by
+  `gen_ai.provider.name`
+- `ihub.llm.requests.queued` - up-down counter of model calls waiting for a concurrency slot of
+  their model (`concurrency` in the model config), by `gen_ai.request.model`. Rising before the
+  provider answers 429 means saturation
+- `ihub.outbound.request.duration` - histogram (seconds, until the response headers) of every
+  outbound request through `httpFetch`, by `ihub.dependency.kind` (`llm`, `ifinder`, `iassistant`,
+  `idp`, `search`, `web`, `integration`, …, `other`) and `error.type` (`http_<status>`, `tls`,
+  `connection_refused`, `dns`, `timeout`, `network`)
+- `ihub.outbound.tls.errors` - counter of TLS handshake failures by dependency kind: a private CA
+  that rotated, a proxy that intercepts
+- `ihub.dependency.up` - gauge, 1 when the last outbound request of a dependency kind got a
+  response below 500, 0 when it failed. Per process: `min` across workers
+- `ihub.storage.filesystem.usage` / `.limit` - gauges (bytes) of the volume behind each storage
+  location, by `ihub.storage.mount` (`contents`, `data`, `uploads`, `logs`, `temp`), measured
+  every minute. Same on every worker: `max`
+- `ihub.lock.wait.duration` - histogram (seconds) of waits for a file lock before a write
+- `ihub.clusterbus.timeouts` - counter of cross-worker requests that got no answer in time, by
+  `clusterbus.operation` (`request`, `gather`)
+
+Security:
+
+- `ihub.auth.events` - now also for OIDC, NTLM, Teams (`login_success`, `login_failure`) and
+  proxy authentication (`token_validated`, `token_invalid`). `auth.provider` and `auth.event`
+  are closed sets; anything else is `other`
+- `ihub.security.events` - counter by `security.event`: `login_failure`, `admin_config_change`,
+  `content_capture_change`, `permission_change`, `user_change`, `api_key_change`,
+  `oauth_client_change`, `oauth_grant`, `oauth_revoke`, `tool_approval_denied`, `bulk_export`,
+  `share_created`. Derived from the audit log entries (and the tool approval answer); who and
+  what is in the audit log, never on the metric
 
 iHub product counters & gauges:
 
@@ -361,7 +433,12 @@ Process / runtime gauges (registered automatically when telemetry is enabled):
 
 - `process.cpu.utilization` - 0-1 CPU utilisation (user + system, summed)
 - `process.runtime.nodejs.memory.usage` - rss / heap_used / heap_total / external
-- `process.runtime.nodejs.event_loop.delay` - mean event-loop delay in seconds
+- `process.open_file_descriptor.count` - open file descriptors (Linux)
+- `nodejs.eventloop.delay.*` (`min`, `max`, `mean`, `stddev`, `p50`, `p90`, `p99`),
+  `nodejs.eventloop.utilization`, `v8js.gc.duration`, `v8js.memory.heap.*` - from
+  `@opentelemetry/instrumentation-runtime-node`. They replace
+  `process.runtime.nodejs.event_loop.delay`, which reset its histogram on every read and so
+  showed each of two scrapers only half
 - `ihub.workers.count` - 1 per worker process (`cluster.role=worker`); `sum` across workers is
   the number of live workers
 
@@ -373,7 +450,7 @@ Process / runtime gauges (registered automatically when telemetry is enabled):
   across workers
 - `ihub.telemetry.export.last_success` - gauge, seconds since the epoch of the last successful
   export per `telemetry.signal`; for Prometheus the last served scrape. Per process: `max` across
-  workers. `time() - max(ihub_telemetry_export_last_success_seconds) > 600` means exports stopped
+  workers. `time() - max(ihub_telemetry_export_last_success) > 600` means exports stopped
 - `ihub.build.info` - always 1, labelled by `service.version`, `telemetry.provider` and
   `telemetry.enabled`. `absent(ihub_build_info)` means nothing arrives at all
 
@@ -404,6 +481,9 @@ How to aggregate across workers:
 | `ihub.knowledge.index.cache.entries` / `.chars`, process gauges | `sum` (or per worker) |
 | `ihub.telemetry.export.last_success` | `max` |
 | `ihub.workers.count` | `sum` |
+| `ihub.llm.requests.inflight` / `.queued` | `sum` |
+| `ihub.dependency.up` | `min` |
+| `ihub.storage.filesystem.usage` / `.limit` | `max` (per mount) |
 
 No metrics backend? **Admin → System Resources** shows the same process numbers, plus disk space
 and host memory, without enabling telemetry. See the
@@ -421,6 +501,11 @@ intentionally.
 
 ### Useful PromQL examples
 
+Names as the built-in Prometheus endpoint exposes them: dots become underscores, counters end in
+`_total`, and no unit suffix is added. Through OTLP into Mimir or Prometheus, the collector's
+translation usually appends the unit (`gen_ai_client_operation_duration_seconds_bucket`); adjust
+the queries and the shipped dashboards' metric names if yours does.
+
 ```promql
 # Token usage by model
 sum by (gen_ai_request_model, gen_ai_token_type) (rate(gen_ai_client_token_usage_sum[5m]))
@@ -431,6 +516,20 @@ histogram_quantile(0.95,
 
 # Error rate
 rate(ihub_errors_total[1h])
+
+# Turn p95 per surface and channel
+histogram_quantile(0.95,
+  sum by (le, ihub_surface, ihub_client_channel) (rate(ihub_turn_duration_bucket[5m])))
+
+# Share of turns that ended badly for the user
+sum(rate(ihub_turns_total{ihub_turn_outcome!~"ok|aborted"}[15m])) / sum(rate(ihub_turns_total[15m]))
+
+# Time to first chunk p95 per endpoint
+histogram_quantile(0.95,
+  sum by (le, server_address) (rate(gen_ai_client_operation_time_to_first_chunk_bucket[5m])))
+
+# Is the Outlook / Office add-in used?
+sum by (ihub_client_channel) (increase(ihub_turns_total[7d]))
 
 # Top 10 most used apps
 topk(10, sum by (app_id) (rate(ihub_app_usage_total[1h])))

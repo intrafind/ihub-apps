@@ -25,6 +25,7 @@
 
 import logger from '../utils/logger.js';
 import { recordTelemetryExportFailure } from './metrics.js';
+import { networkErrorClass } from './networkErrors.js';
 
 /** The signals tracked. */
 export const SIGNALS = Object.freeze(['traces', 'metrics', 'logs']);
@@ -41,19 +42,6 @@ export const EXPORT_FAILURE_REASONS = Object.freeze([
   'http_5xx',
   'deferred',
   'unknown'
-]);
-
-const TLS_CODES = new Set([
-  'UNABLE_TO_VERIFY_LEAF_SIGNATURE',
-  'UNABLE_TO_GET_ISSUER_CERT',
-  'UNABLE_TO_GET_ISSUER_CERT_LOCALLY',
-  'SELF_SIGNED_CERT_IN_CHAIN',
-  'DEPTH_ZERO_SELF_SIGNED_CERT',
-  'CERT_HAS_EXPIRED',
-  'CERT_NOT_YET_VALID',
-  'ERR_TLS_CERT_ALTNAME_INVALID',
-  'ERR_SSL_WRONG_VERSION_NUMBER',
-  'EPROTO'
 ]);
 
 let state = freshState();
@@ -89,29 +77,21 @@ function freshState() {
 export function exportFailureReason(error) {
   if (!error || typeof error !== 'object') return 'unknown';
   const seen = new Set();
-  // Network errors often arrive wrapped (`cause`); look one or two levels down.
   for (let current = error; current && !seen.has(current); current = current.cause) {
     seen.add(current);
-    const code = typeof current.code === 'string' ? current.code : undefined;
+    // The OTLP exporter reports the HTTP status as a numeric `code`.
     const status =
       typeof current.code === 'number'
         ? current.code
         : (current.status ?? current.statusCode ?? undefined);
-    if (code && TLS_CODES.has(code)) return 'tls';
-    if (code === 'ECONNREFUSED' || code === 'ECONNRESET') return 'connection_refused';
-    if (code === 'ENOTFOUND' || code === 'EAI_AGAIN') return 'dns';
-    if (code === 'ETIMEDOUT' || code === 'ESOCKETTIMEDOUT' || current.name === 'TimeoutError') {
-      return 'timeout';
-    }
     if (Number.isInteger(status)) {
       if (status === 401 || status === 403) return 'authentication';
       if (status >= 400 && status < 500) return 'http_4xx';
       if (status >= 500 && status < 600) return 'http_5xx';
     }
     if (current.deferred === true) return 'deferred';
-    if (code && /^E[A-Z]+$/.test(code)) return 'network';
   }
-  return 'unknown';
+  return networkErrorClass(error).type;
 }
 
 /**

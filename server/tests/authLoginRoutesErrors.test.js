@@ -13,6 +13,7 @@ import express from 'express';
 import rateLimit from 'express-rate-limit';
 import request from 'supertest';
 import { ServiceError } from '../utils/ServiceError.js';
+import { metricsMock } from './helpers/metricsMock.js';
 
 const platform = {
   localAuth: { enabled: true },
@@ -42,7 +43,7 @@ jest.unstable_mockModule('../middleware/ntlmAuth.js', () => ({
   NTLM_REQUESTED_COOKIE: 'ntlmRequested'
 }));
 jest.unstable_mockModule('../services/AuditLogService.js', () => ({ logAudit: () => {} }));
-jest.unstable_mockModule('../telemetry/metrics.js', () => ({ recordAuthEvent: () => {} }));
+jest.unstable_mockModule('../telemetry/metrics.js', () => metricsMock());
 
 const { default: registerAuthRoutes } = await import('../routes/auth.js');
 const { default: errorHandler } = await import('../middleware/errorHandler.js');

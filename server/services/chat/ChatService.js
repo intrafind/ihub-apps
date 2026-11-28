@@ -96,6 +96,7 @@ import * as defaultTelemetry from './chatTelemetry.js';
 import modelDiscoveryService from '../ModelDiscoveryService.js';
 import { recordTextOutput } from '../provenance/turnProvenance.js';
 import { endTurnSpan, startTurnSpan } from '../../telemetry/traces.js';
+import { currentClientChannel } from '../../telemetry/channel.js';
 
 const COMPONENT = 'ChatService';
 
@@ -295,6 +296,26 @@ function clientConnectedOf(persist, chatId) {
     }
   }
   return hasChatClient(chatId);
+}
+
+/**
+ * The surface and client channel of a turn, for its metrics: a scheduled run
+ * is a `task`, a turn through the inference API, MCP or A2A is `api`, every
+ * other turn `chat`.
+ *
+ * @param {Object} params - `runTurn` parameters
+ * @returns {{surface: string, channel: string}}
+ */
+function turnSurfaceOf(params) {
+  const channel = currentClientChannel({
+    user: params?.user,
+    platform: configCache.getPlatform?.()
+  });
+  if (params?.trigger?.type === 'schedule') return { surface: 'task', channel };
+  if (channel === 'openai_proxy' || channel === 'mcp' || channel === 'a2a') {
+    return { surface: 'api', channel };
+  }
+  return { surface: 'chat', channel };
 }
 
 class ChatService {
@@ -518,7 +539,8 @@ class ChatService {
       chatId: params?.chatId,
       userId: params?.user?.id,
       trigger: params?.trigger?.type,
-      streaming: params?.streaming !== false
+      streaming: params?.streaming !== false,
+      ...turnSurfaceOf(params)
     });
     try {
       const result = await span.run(() => this._runTurnTraced(params));
@@ -1968,7 +1990,9 @@ class ChatService {
       userId: opts?.user?.id,
       trigger: 'agent',
       streaming: false,
-      kind: 'subagent'
+      kind: 'subagent',
+      surface: 'agent',
+      channel: currentClientChannel({ user: opts?.user, platform: configCache.getPlatform?.() })
     });
     try {
       const result = await span.run(() => this._invokeAppTraced(opts));

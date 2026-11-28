@@ -13,6 +13,8 @@ import { anonymizeIp } from '../utils/ipAnonymizer.js';
 import { validateAuditEntry } from '../validators/auditEntrySchema.js';
 import { createJsonlAppender } from '../utils/jsonlAppender.js';
 import { loadUsers } from '../utils/userManager.js';
+import { recordSecurityEvent } from '../telemetry/metrics.js';
+import { securityEventOfAudit } from '../telemetry/securityEvents.js';
 
 const AUDIT_LOG_DIR = 'data/audit-log';
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -232,6 +234,10 @@ export function logAudit({
     }
     const safeDetails = sanitizeDetails(details, action, resource);
     if (safeDetails) entry.details = safeDetails;
+
+    // The rate of security events as a metric; who and what stays here.
+    const securityEvent = securityEventOfAudit(entry);
+    if (securityEvent) recordSecurityEvent(securityEvent);
 
     const validation = validateAuditEntry(entry);
     if (!validation.success) {
