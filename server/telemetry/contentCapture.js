@@ -50,10 +50,10 @@ const REDACTIONS = [
     /\b(?:sk|pk|rk)-[A-Za-z0-9_-]{16,512}|\bAKIA[0-9A-Z]{16}\b|\bgh[pousr]_[A-Za-z0-9]{30,255}|\bgithub_pat_[A-Za-z0-9_]{30,255}|\bxox[abprs]-[A-Za-z0-9-]{10,255}|\bAIza[0-9A-Za-z_-]{35}\b|\bglpat-[A-Za-z0-9_-]{20,255}/g,
     '[REDACTED:key]'
   ],
-  // key=value / key: value secrets
+  // key=value / key: value secrets, also with a quoted (JSON) key
   [
-    /\b((?:api[_-]?key|access[_-]?token|refresh[_-]?token|client[_-]?secret|secret|password|passwd|pwd|token) {0,4}[:=] {0,4})["']?[^\s"'&,;]{4,512}["']?/gi,
-    '$1[REDACTED:secret]'
+    /\b((?:api[_-]?key|access[_-]?token|refresh[_-]?token|client[_-]?secret|secret|password|passwd|pwd|token)["']? {0,4}[:=] {0,4})(["']?)[^\s"'&,;]{4,512}["']?/gi,
+    '$1$2[REDACTED:secret]$2'
   ],
   // E-mail addresses
   // E-mail addresses: the domain is matched as one run of labels and dots and
@@ -194,6 +194,27 @@ export function serializeWithinCap(messages, cap) {
   return JSON.stringify(kept);
 }
 
+/**
+ * Where the longest suffix of `text` starts whose JSON encoding (without the
+ * quotes) fits `budget` characters. Escapes count at their encoded length, so
+ * a run of newlines early in the text does not crowd out the newest content.
+ * At most `budget` characters are looked at.
+ */
+function suffixStart(text, budget) {
+  let used = 0;
+  let start = text.length;
+  while (start > 0) {
+    const cost = JSON.stringify(text[start - 1]).length - 2;
+    if (used + cost > budget) break;
+    used += cost;
+    start--;
+  }
+  // Never start on the second half of a surrogate pair.
+  const code = text.charCodeAt(start);
+  if (start < text.length && code >= 0xdc00 && code <= 0xdfff) start++;
+  return start;
+}
+
 /** A copy of `message` whose text is shortened so `[message, ...rest]` fits `cap`. */
 function cutToFit(message, rest, cap) {
   const textKey = part => (part.type === 'tool_call_response' ? 'response' : 'content');
@@ -216,15 +237,13 @@ function cutToFit(message, rest, cap) {
       continue;
     }
     const text = part[key];
-    // JSON escaping can make the serialised text longer than the text itself.
-    const escapedExtra = JSON.stringify(text).length - 2 - text.length;
-    const room = budget - Math.max(0, escapedExtra);
-    if (room <= 0) {
+    const start = suffixStart(text, budget);
+    if (start === text.length && text.length > 0) {
       parts.unshift({ ...part, [key]: '' });
       continue;
     }
-    const kept = text.length > room ? `…${text.slice(text.length - room)}` : text;
-    budget -= Math.min(text.length, room);
+    const kept = start > 0 ? `…${text.slice(start)}` : text;
+    budget -= JSON.stringify(text.slice(start)).length - 2 + (start > 0 ? '…'.length : 0);
     parts.unshift({ ...part, [key]: kept });
   }
   const cut = { ...message, parts };

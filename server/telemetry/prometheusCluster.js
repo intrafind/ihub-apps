@@ -139,15 +139,21 @@ export function startPrometheusCluster({ host, port, workerId, workerCount, list
         count: errors.length
       });
     }
-    return serializer.serialize(resourceMetrics);
+    return { text: serializer.serialize(resourceMetrics), complete: !errors?.length };
   };
 
-  const unsubscribe = respond(SCRAPE_CHANNEL, async () => ({
-    workerId,
-    text: await ownExposition()
-  }));
+  const unsubscribe = respond(SCRAPE_CHANNEL, async () => {
+    const { text, complete } = await ownExposition();
+    return { workerId, text, complete };
+  });
 
-  const scrape = async () => {
+  /**
+   * One scrape across the cluster. `complete` is false when a worker did not
+   * answer in time or a collection reported errors: the text is still served,
+   * since the workers that answered are worth having, but it does not count
+   * as a successful export.
+   */
+  const collectScrape = async () => {
     const [own, others] = await Promise.all([
       ownExposition(),
       workerCount > 1
@@ -157,8 +163,17 @@ export function startPrometheusCluster({ host, port, workerId, workerCount, list
           })
         : Promise.resolve([])
     ]);
-    return mergeExpositions([{ workerId, text: own }, ...others]);
+    const complete =
+      own.complete &&
+      others.length >= workerCount - 1 &&
+      others.every(reply => reply?.complete !== false);
+    return {
+      text: mergeExpositions([{ workerId, text: own.text }, ...others]),
+      complete
+    };
   };
+
+  const scrape = async () => (await collectScrape()).text;
 
   let server = null;
   if (listen) {
@@ -174,9 +189,10 @@ export function startPrometheusCluster({ host, port, workerId, workerCount, list
         response.end('Not found');
         return;
       }
-      scrape().then(
-        text => {
-          recordExportSuccess('metrics');
+      collectScrape().then(
+        ({ text, complete }) => {
+          if (complete) recordExportSuccess('metrics');
+          else recordExportFailure('metrics', { incomplete: true });
           response.statusCode = 200;
           response.setHeader('content-type', 'text/plain; version=0.0.4; charset=utf-8');
           response.end(text);
@@ -196,6 +212,8 @@ export function startPrometheusCluster({ host, port, workerId, workerCount, list
         port,
         code: error?.code
       });
+      // Nobody can scrape: the export status says failing, not pending.
+      recordExportFailure('metrics', error);
     });
     server.listen({ host, port });
   }
