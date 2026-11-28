@@ -23,7 +23,7 @@ const DEFAULT_TELEMETRY = {
     },
     prometheus: {
       port: 9464,
-      host: '0.0.0.0'
+      host: '127.0.0.1'
     }
   },
   spans: {
@@ -367,7 +367,7 @@ function AdminTelemetryPage() {
                     </label>
                     <input
                       type="text"
-                      value={config.exporters?.prometheus?.host || '0.0.0.0'}
+                      value={config.exporters?.prometheus?.host || '127.0.0.1'}
                       onChange={e => updateField('exporters.prometheus.host', e.target.value)}
                       className="w-full px-3 py-2 border border-admin-control-border dark:border-admin-control-border-dark rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
                     />
@@ -376,7 +376,7 @@ function AdminTelemetryPage() {
                 <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
                   {t(
                     'admin.telemetry.promHelp',
-                    'Metrics will be available at http://{host}:{port}/metrics for Prometheus to scrape.'
+                    'Metrics will be available at http://{host}:{port}/metrics for Prometheus to scrape. The endpoint has no authentication: 127.0.0.1 keeps it on this host; set 0.0.0.0 only behind a firewall or a Kubernetes NetworkPolicy.'
                   )}
                 </p>
               </div>

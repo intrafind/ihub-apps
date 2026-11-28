@@ -70,7 +70,7 @@
       },
       "prometheus": {
         "port": 9464,
-        "host": "0.0.0.0"
+        "host": "127.0.0.1"
       }
     },
     "spans": {
@@ -102,14 +102,11 @@
     "resource": {
       "service.name": "ihub-apps",
       "service.version": "auto",
-      "deployment.environment": "${NODE_ENV:-production}",
       "service": {
         "name": "ihub-apps",
         "version": "auto"
       },
-      "deployment": {
-        "environment": "${NODE_ENV:-production}"
-      }
+      "deployment.environment.name": "${NODE_ENV:-production}"
     }
   },
   "requestConcurrency": 25,

@@ -4,6 +4,7 @@
 import winston from 'winston';
 import { getContext } from './requestContext.js';
 import { anonymizeIp } from './ipAnonymizer.js';
+import { activeTraceIds } from '../telemetry/spans.js';
 
 // Default log level and format (fallback if not configured)
 const DEFAULT_LOG_LEVEL = 'info';
@@ -239,6 +240,20 @@ const fileTextFormat = winston.format.combine(
   })
 );
 
+/** Transports added with {@link addLogTransport}. */
+const extraTransports = [];
+
+/**
+ * Add a transport to the logger, kept across {@link reconfigureLogger}. Used by
+ * telemetry to send log records to the OpenTelemetry logs pipeline.
+ *
+ * @param {import('winston').transport} transport
+ */
+export function addLogTransport(transport) {
+  extraTransports.push(transport);
+  logger.add(transport);
+}
+
 /**
  * Create winston logger instance
  */
@@ -255,6 +270,10 @@ function createLogger() {
       })
     ]
   });
+
+  // Transports added at runtime (the OpenTelemetry log bridge) survive a
+  // reconfiguration.
+  for (const transport of extraTransports) logger.add(transport);
 
   // Add file transport if file logging is enabled
   try {
@@ -354,6 +373,13 @@ function processLogArgs(args) {
   // attributable without each call site having to pass them through.
   // Caller-provided fields always win.
   logData = mergeRequestContext(logData);
+
+  // The trace this line belongs to, so a log line leads to its trace and back
+  // (Loki → Tempo). Only inside an active, valid span.
+  const { trace_id: traceId, span_id: spanId } = activeTraceIds();
+  if (traceId && logData.trace_id === undefined) {
+    logData = { ...logData, trace_id: traceId, span_id: spanId };
+  }
 
   // Redact sensitive information from the log data
   return redactSensitiveData(logData);

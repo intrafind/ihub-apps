@@ -114,6 +114,16 @@ attribute names need updating.
   is `<host>-w<worker>` instead of a random id per process.
 - `process.runtime.nodejs.event_loop.delay` is gone; use `nodejs.eventloop.delay.*` (with
   percentiles) and `nodejs.eventloop.utilization` instead.
+- `process.runtime.nodejs.memory.usage` is `process.memory.usage` (resident set size); heap
+  figures are `v8js.memory.heap.*`.
+- `gen_ai.provider.name` uses the semantic-convention values: `gcp.gemini` for Google,
+  `aws.bedrock` for Bedrock, `openai` for the OpenAI Responses API.
+- The resource attribute `deployment.environment` is `deployment.environment.name`; the
+  migration renames it in `telemetry.resource`.
+- A new installation binds the Prometheus endpoint to `127.0.0.1` instead of `0.0.0.0`;
+  existing configurations keep their value.
+- A missing or unknown `telemetry.provider` exports nothing (with a warning) instead of writing
+  spans and metrics to the container log.
 - `ihub.auth.events` reports an unknown `auth.provider` or `auth.event` as `other`.
 
 **Before upgrading:**

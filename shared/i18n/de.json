@@ -4097,7 +4097,7 @@
       "prometheusSettings": "Prometheus-Einstellungen",
       "promPort": "Port",
       "promHost": "Bind-Host",
-      "promHelp": "Metriken werden unter http://{host}:{port}/metrics zum Scrapen durch Prometheus bereitgestellt.",
+      "promHelp": "Metriken stehen unter http://{host}:{port}/metrics für Prometheus bereit. Der Endpunkt hat keine Authentifizierung: 127.0.0.1 hält ihn auf diesem Host; 0.0.0.0 nur hinter einer Firewall oder einer Kubernetes-NetworkPolicy setzen.",
       "signals": "Signale",
       "spans": "Spans senden (gen_ai.*-Attribute)",
       "metrics": "Metriken senden (Token-Nutzung, Laufzeiten, App-/Conversation-Counter, aktive Benutzer/Chats)",

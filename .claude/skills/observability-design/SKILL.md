@@ -7,7 +7,7 @@ user-invocable: false
 # Observability Design
 
 The canonical rules are in **`docs/observability-guidelines.md`**; read it for the reasoning. This is the working
-summary. What admins configure and what is exported today is in `docs/telemetry.md`; the gap list is issue #4008.
+summary. What admins configure and what is exported is in `docs/telemetry.md`; dashboards, alerts and collector settings are in `docs/observability/`.
 
 ## Before you finish an implementation
 
@@ -66,8 +66,11 @@ dashboards: breaking change).
 ## Touching existing code
 
 Spans go through `server/telemetry/spans.js` (`withSpan` / `startSpan`) or the unit-of-work helpers
-in `server/telemetry/traces.js` (`startTurnSpan`, `startToolSpan`, `withRetrievalSpan`, …); users
-and conversation ids through `server/telemetry/identity.js`, never raw. The LLM call
-(`GenAIInstrumentation.js`) and the tool call (`AgentLoop._executeOne`) are the references to copy.
-Work handed to another process carries `injectContext()`; a resumed run gets `linksFrom(carrier)`.
-Bring code you touch in line when it is cheap; do not widen a task into a telemetry rewrite.
+in `server/telemetry/traces.js` (`startTurnSpan`, `startToolSpan`, `withRetrievalSpan`, …), which also
+record the matching duration metrics; users and conversation ids through
+`server/telemetry/identity.js`, never raw. The LLM call (`GenAIInstrumentation.js`) and the tool call
+(`AgentLoop._executeOne`) are the references to copy. Work handed to another process carries
+`injectContext()`; a resumed run gets `linksFrom(carrier)`. A new outbound dependency passes
+`dependency: '<kind>'` to `httpFetch`. CI runs `scripts/check-observability-guidelines.js` on the
+lines a PR changes. Bring code you touch in line when it is cheap; do not widen a task into a
+telemetry rewrite.

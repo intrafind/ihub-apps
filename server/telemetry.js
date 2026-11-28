@@ -16,7 +16,7 @@ import {
 import { PeriodicExportingMetricReader } from '@opentelemetry/sdk-metrics';
 // Named imports: @opentelemetry/api 1.10 ships a real ESM build without a default export.
 import { diag, DiagLogLevel, metrics as metricsApi } from '@opentelemetry/api';
-import { ConsoleLogRecordExporter, SimpleLogRecordProcessor } from '@opentelemetry/sdk-logs';
+import { BatchLogRecordProcessor } from '@opentelemetry/sdk-logs';
 import {
   envDetector,
   hostDetector,
@@ -29,10 +29,12 @@ import { GenAIInstrumentation } from './telemetry/GenAIInstrumentation.js';
 import { initializeMetrics, registerTelemetryStatusObservers } from './telemetry/metrics.js';
 import { initializeProcessMetrics } from './telemetry/ProcessMetrics.js';
 import {
+  createLogExporter,
   createTraceExporter,
   createMetricExporter,
   parseOTLPEnvVars
 } from './telemetry/exporters.js';
+import { OtelLogTransport } from './telemetry/logBridge.js';
 import { createInstrumentations } from './telemetry/autoInstrumentation.js';
 import { RedactingSpanProcessor } from './telemetry/spanRedaction.js';
 import { configureSpans } from './telemetry/spans.js';
@@ -124,12 +126,14 @@ function describeConfigForLog(config) {
  */
 class AppDiagLogger {
   error(message, ...args) {
+    if (isDeferredExport(message, args)) return;
     appLogger.error('OpenTelemetry SDK error', {
       component: 'OpenTelemetry',
       ...summarize(message, args)
     });
   }
   warn(message, ...args) {
+    if (isDeferredExport(message, args)) return;
     appLogger.warn('OpenTelemetry SDK warning', {
       component: 'OpenTelemetry',
       ...summarize(message, args)
@@ -138,6 +142,18 @@ class AppDiagLogger {
   info() {}
   debug() {}
   verbose() {}
+}
+
+/**
+ * Whether a diagnostic is an export that was held back until the platform
+ * configuration is loaded (`exporters.js`): expected at startup, counted in the
+ * export status as `deferred`, not worth an error line.
+ */
+function isDeferredExport(message, args) {
+  const text = [message, ...args.map(arg => arg?.message)]
+    .filter(part => typeof part === 'string')
+    .join(' ');
+  return text.includes('OTLP export deferred');
 }
 
 function summarize(message, args) {
@@ -254,6 +270,29 @@ export function samplerOption(config) {
   };
 }
 
+/** Whether `telemetry.logs` asks for log export. */
+function logsEnabled(config) {
+  return config.logs?.enabled === true || config.logs === true;
+}
+
+/**
+ * The metric export interval: `OTEL_METRIC_EXPORT_INTERVAL` (ms) when set, else
+ * `metrics.exportInterval`, else 60 s.
+ *
+ * @param {Object} config
+ * @returns {number}
+ */
+export function metricExportInterval(config) {
+  const fromEnv = Number(process.env.OTEL_METRIC_EXPORT_INTERVAL);
+  if (Number.isFinite(fromEnv) && fromEnv > 0) return fromEnv;
+  return config.metrics?.exportInterval || 60000;
+}
+
+/** Whether `OTEL_SDK_DISABLED` switches telemetry off, whatever the config says. */
+export function sdkDisabledByEnv() {
+  return /^(true|1)$/i.test(process.env.OTEL_SDK_DISABLED ?? '');
+}
+
 /** Whether this process runs in a container (Docker, Kubernetes). */
 function isContainer() {
   return Boolean(process.env.KUBERNETES_SERVICE_HOST) || fs.existsSync('/.dockerenv');
@@ -272,7 +311,7 @@ function isContainer() {
  * @returns {{options: Object, exporters: {traces: string|null, metrics: string|null, logs: string|null}}}
  */
 export function buildSdkOptions(config, { instrumentations } = {}) {
-  const provider = config.provider || 'console';
+  const provider = config.provider || 'none';
   const metricsOn = config.metrics?.enabled !== false;
   const exporters = { traces: null, metrics: null, logs: null };
 
@@ -301,20 +340,21 @@ export function buildSdkOptions(config, { instrumentations } = {}) {
       metricReaders.push(
         new PeriodicExportingMetricReader({
           exporter: trackExporter(metricExporter, 'metrics'),
-          exportIntervalMillis: config.metrics?.exportInterval || 60000
+          exportIntervalMillis: metricExportInterval(config)
         })
       );
     }
   }
 
   const logRecordProcessors = [];
-  if (config.logs?.enabled === true || config.logs === true) {
-    exporters.logs = 'console';
-    logRecordProcessors.push(
-      new SimpleLogRecordProcessor({
-        exporter: trackExporter(new ConsoleLogRecordExporter(), 'logs')
-      })
-    );
+  if (logsEnabled(config)) {
+    const logExporter = createLogExporter(config);
+    if (logExporter) {
+      exporters.logs = provider;
+      logRecordProcessors.push(
+        new BatchLogRecordProcessor({ exporter: trackExporter(logExporter, 'logs') })
+      );
+    }
   }
 
   return {
@@ -360,6 +400,13 @@ export async function initTelemetry(rawConfig = {}, { instrumentations, bootstra
   }
   setPseudonymKeySource(() => tokenStorageService.encryptionKey);
   configureIdentity(rawConfig);
+  if (rawConfig.enabled && sdkDisabledByEnv()) {
+    activeConfig = rawConfig;
+    configureSpans({ enabled: false });
+    setTelemetrySetup({ enabled: false });
+    appLogger.info('Telemetry disabled (OTEL_SDK_DISABLED is set)', { component: 'Telemetry' });
+    return;
+  }
   if (!rawConfig.enabled) {
     activeConfig = rawConfig;
     configureSpans({ enabled: false });
@@ -404,7 +451,9 @@ export async function initTelemetry(rawConfig = {}, { instrumentations, bootstra
   if (config.provider === 'prometheus' && config.metrics?.enabled !== false) {
     const { workerId } = processIdentity();
     prometheusCluster = startPrometheusCluster({
-      host: config.exporters?.prometheus?.host || '0.0.0.0',
+      // Loopback unless configured: the endpoint has no authentication. In
+      // Kubernetes set `0.0.0.0` and restrict who scrapes with a NetworkPolicy.
+      host: config.exporters?.prometheus?.host || '127.0.0.1',
       port: config.exporters?.prometheus?.port || 9464,
       workerId: workerId ?? '0',
       workerCount: cluster.isWorker ? getConfiguredWorkerCount() : 1
@@ -413,7 +462,7 @@ export async function initTelemetry(rawConfig = {}, { instrumentations, bootstra
     exporters.metrics = 'prometheus';
   }
 
-  setTelemetrySetup({ enabled: true, provider: config.provider || 'console', exporters });
+  setTelemetrySetup({ enabled: true, provider: config.provider || 'none', exporters });
 
   sdk = new NodeSDK(options);
   await sdk.start();
@@ -431,12 +480,22 @@ export async function initTelemetry(rawConfig = {}, { instrumentations, bootstra
     const version = options.resource.attributes['service.version'];
     registerTelemetryStatusObservers({
       lastSuccess: lastSuccessTimestamps,
-      buildInfo: () => ({ version, provider: config.provider || 'console' })
+      buildInfo: () => ({ version, provider: config.provider || 'none' })
     });
   }
 
   // Initialize GenAI instrumentation now that SDK is up
   genAIInstrumentation = new GenAIInstrumentation(config);
+
+  if (exporters.logs) {
+    // Application log lines to the OpenTelemetry logs pipeline, filtered
+    // (`telemetry/logBridge.js`); `logs.level` is the lowest level sent.
+    // Imported here, not at the top: many test suites mock the logger module
+    // with its default export only, and a static named import would fail to
+    // link wherever telemetry.js is loaded under such a mock.
+    const { addLogTransport } = await import('./utils/logger.js');
+    addLogTransport(new OtelLogTransport({ level: config.logs?.level || 'info' }));
+  }
 
   warnIfContentCaptureOn(config);
   appLogger.info('Telemetry initialization complete', {
@@ -522,8 +581,49 @@ export function reloadTelemetryConfig(newConfig = {}) {
   if (activeConfig.enabled && !wasCapturing) warnIfContentCaptureOn(activeConfig);
 }
 
-export async function shutdownTelemetry() {
-  await prometheusCluster?.close();
-  await sdk?.shutdown();
-  appLogger.info('Telemetry shutdown completed successfully', { component: 'Telemetry' });
+/**
+ * Flush and stop telemetry within `timeoutMs`. The cluster primary force-exits
+ * a worker 5 s after SIGTERM; worker shutdown therefore starts this first and
+ * in parallel with its own flushes, so the last export interval of every
+ * rollout is not lost.
+ *
+ * @param {Object} [options]
+ * @param {number} [options.timeoutMs=1500]
+ * @returns {Promise<void>} Never rejects
+ */
+export async function shutdownTelemetry({ timeoutMs = 1500 } = {}) {
+  // Shutdown can be asked for more than once (several signal handlers); the
+  // SDK may be shut down only once.
+  shutdownPromise ??= runShutdown(timeoutMs);
+  return shutdownPromise;
+}
+
+let shutdownPromise = null;
+
+async function runShutdown(timeoutMs) {
+  const work = (async () => {
+    await prometheusCluster?.close();
+    await sdk?.shutdown();
+  })();
+  let timedOut = false;
+  try {
+    await Promise.race([
+      work,
+      new Promise(resolve =>
+        setTimeout(() => {
+          timedOut = true;
+          resolve();
+        }, timeoutMs).unref()
+      )
+    ]);
+  } catch (error) {
+    appLogger.warn('Telemetry shutdown failed', { component: 'Telemetry', error: error?.message });
+    return;
+  }
+  appLogger.info(
+    timedOut
+      ? 'Telemetry shutdown timed out; the last export may be lost'
+      : 'Telemetry shutdown completed successfully',
+    { component: 'Telemetry', timeoutMs }
+  );
 }

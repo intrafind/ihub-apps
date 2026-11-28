@@ -10,13 +10,18 @@
  * Spec: https://opentelemetry.io/docs/specs/semconv/gen-ai/
  */
 
+// Well-known `gen_ai.provider.name` values of the semantic conventions where
+// one applies; a self-hosted OpenAI-compatible server (`local`, `vllm`) keeps a
+// custom value, so its errors and latency are not mixed with OpenAI's
+// (`server.address` tells the endpoints apart).
 const PROVIDER_NAME_MAP = {
   openai: 'openai',
-  'openai-responses': 'openai-responses',
+  'openai-responses': 'openai',
   anthropic: 'anthropic',
-  google: 'google',
+  google: 'gcp.gemini',
   mistral: 'mistral_ai',
-  local: 'local', // vLLM uses an OpenAI-compatible API
+  bedrock: 'aws.bedrock',
+  local: 'local',
   vllm: 'vllm',
   'iassistant-conversation': 'iassistant'
 };

@@ -108,6 +108,7 @@
 - [Multi-Server Deployment](multi-server-deployment.md)
 - [Logging](logging.md)
 - [Telemetry and Observability](telemetry.md)
+  - [Dashboards, Alerts and Collector Setup](observability/README.md)
 - [Update Signing](update-signing.md)
 - [Rate Limiting](rate-limiting.md)
 

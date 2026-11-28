@@ -145,6 +145,9 @@ export function recordExportFailure(signal, error) {
   const entry = state.signals[signal];
   if (!entry) return;
   const reason = exportFailureReason(error);
+  // Held back until the platform configuration is loaded (startup): not a
+  // failure of the collector, and the next export goes out normally.
+  if (reason === 'deferred') return;
   entry.lastFailureAt = Date.now();
   entry.lastFailureReason = reason;
   entry.failures += 1;

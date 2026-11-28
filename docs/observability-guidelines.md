@@ -179,45 +179,24 @@ gets a test that it is absent (or hashed) by default.
 
 ## Where we are
 
-The rules describe the target. Issue #4008 brings the existing code there, one work package at a time.
+Issue #4008 brought the existing code to these rules. What exists to build on:
 
-Done (P0):
-
-- `server/telemetry/spans.js` is the span helper (`startSpan`, `withSpan`, `SpanHandle`, the
-  attribute filter, `errorTypeOf`, `isAbortError`); the LLM call span uses it
-  (`GenAIInstrumentation.js`). Copy that pattern.
-- `server/telemetry/identity.js` is the pseudonymising helper: `userSpanAttributes()` and
-  `conversationSpanAttributes()` follow `telemetry.spans.userIdMode` (default `pseudonymised`,
-  `user.hash`). Groups are never exported.
-- Content capture is redacted, capped at 4096 characters and in the current semconv format
-  (`contentCapture.js`); every exported span passes `spanRedaction.js`.
-- GenAI metrics no longer read `span.attributes`; they are recorded with spans off.
-- A signal that is off has no processor (no SDK fallback); export failures are counted
-  (`ihub.telemetry.export.failures`) and shown in `/api/health` and the admin system view.
-- Cluster mode: stable `service.instance.id`, one Prometheus endpoint labelling each worker.
-
-Done (P1):
-
-- The server starts through `server/instrumentation.mjs` (`node --import`), so HTTP and Express are
-  instrumented and an incoming `traceparent` is honoured.
-- `server/telemetry/traces.js` starts the spans of §3: `invoke_agent`, `inference`, `tools/call`,
-  `a2a.task`, `execute_tool`, `workflow.run` / `workflow.node`, `scheduled_task.run`, `retrieval`,
-  `extraction`. Use its helpers (or `withSpan`) for a new unit of work.
-- `injectContext` / `extractContext` / `runInCarrierContext` / `linksFrom` carry the trace across
-  the cluster bus and to resumed runs; `SpanHandle.bindIterable` binds an async iterator.
-- `spans.sampleRate` is wired.
-
-Done (P2):
-
-- `ihub.surface` and `ihub.client.channel` (`telemetry/channel.js`) label the turn, app usage,
-  stream outcome and GenAI metrics; `ihub.turns` carries `ihub.turn.outcome`.
-- Turn, tool, workflow, node and human-wait durations are recorded by the `traces.js` helpers that
-  start their spans, so a new unit of work gets both from one call.
-- Outbound requests through `httpFetch` are measured per dependency kind: pass
-  `dependency: 'llm' | 'ifinder' | 'idp' | …` for a new dependency.
-- `ihub.security.events` is derived from audit entries (`telemetry/securityEvents.js`): a new
-  security-relevant audit resource gets a line there.
-
-Still open:
-
-- Log lines carry trace ids only with `autoInstrumentation` (P3 adds them in the logger itself).
+- **Spans:** `server/telemetry/spans.js` (`startSpan`, `withSpan`, `SpanHandle`, the attribute filter,
+  `errorTypeOf`, propagation helpers) and the unit-of-work helpers in `server/telemetry/traces.js`
+  (turn, tool, workflow, job, retrieval, extraction, inference, MCP, A2A). The LLM call
+  (`GenAIInstrumentation.js`) and the tool call (`AgentLoop._executeOne`) are the references to copy.
+- **Identity:** `server/telemetry/identity.js` (`userSpanAttributes`, `conversationSpanAttributes`),
+  following `telemetry.spans.userIdMode` (default `pseudonymised`).
+- **Startup:** `server/instrumentation.mjs` (`node --import`) starts the SDK before the app, so
+  HTTP and Express are instrumented and an incoming `traceparent` is honoured.
+- **Metrics:** `ihub.surface`, `ihub.client.channel` (`telemetry/channel.js`), `ihub.turns` with
+  `ihub.turn.outcome`, per-dependency outbound metrics (`httpFetch({ dependency })`),
+  `ihub.security.events` from audit entries (`telemetry/securityEvents.js`).
+- **Logs:** log lines inside a span carry `trace_id` / `span_id`; `telemetry.logs.enabled` sends
+  them, filtered, to the OpenTelemetry logs pipeline (`telemetry/logBridge.js`).
+- **Operations:** dashboards, alert rules and collector settings in
+  [docs/observability/](observability/README.md); `/api/ready` for readiness.
+- **Ratchet:** `scripts/check-observability-guidelines.js` (CI: "Observability guidelines") fails a
+  pull request that adds `trace.getTracer()` or a metric instrument outside `server/telemetry/`,
+  `span.recordException()`, or a raw `user.id` attribute. A line with a reason carries
+  `// observability-guidelines-ignore: <reason>`.
