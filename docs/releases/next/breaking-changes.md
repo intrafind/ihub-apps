@@ -125,3 +125,24 @@ attribute names need updating.
 - Queries on `user.groups`: there is no replacement on spans; group-level analysis needs the
   usage reports or the audit log instead.
 - Aggregate Prometheus series across workers with `sum` (or `max` for the active-user gauges).
+
+## Telemetry: LLM Metrics Use the OpenTelemetry Inference Names
+
+The LLM call metrics follow the current OpenTelemetry GenAI semantic conventions
+(`semantic-conventions-genai` v0.1.0), which name them after the inference operation. Dashboards
+and alerts built on the old names show no data until they are updated.
+
+| Before | Now |
+| --- | --- |
+| `gen_ai.client.operation.duration` | `gen_ai.client.inference.duration` |
+| `gen_ai.client.token.usage` with `gen_ai.token.type` `input` / `output` | `gen_ai.client.inference.usage.input_tokens` / `.output_tokens` (counters, for totals) and `gen_ai.client.inference.operation.input_tokens` / `.output_tokens` (histograms, per call) |
+| `gen_ai.client.token.usage` with `cache_read` / `cache_write` / `reasoning` | `gen_ai.client.inference.usage.cache_read.input_tokens`, `.cache_write.input_tokens`, `.reasoning.output_tokens` |
+
+- The duration histogram uses the buckets of the conventions, up to 60 seconds.
+- A failed call now also records its tokens (`0`) with `error.type`, so failures show in the
+  per-call token histograms.
+
+**Before upgrading:** Replace the old metric names in your dashboards, alerts and recording rules
+as shown above; in Prometheus, `gen_ai_client_token_usage_sum{gen_ai_token_type="input"}` becomes
+`gen_ai_client_inference_usage_input_tokens_total`. The dashboards and alerts shipped in
+`docs/observability/` already use the new names.

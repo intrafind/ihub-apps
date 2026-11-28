@@ -70,14 +70,17 @@ beforeEach(() => {
   setPseudonymKeySource(() => tokenStorageService.encryptionKey);
 });
 
+/** Histograms and counters by name: `record` and `add` are the same mock. */
 function fakeMeter() {
   const histograms = {};
+  const instrument = name => {
+    const record = jest.fn();
+    histograms[name] = { record, add: record };
+    return histograms[name];
+  };
   const meter = {
-    createHistogram: name => {
-      histograms[name] = { record: jest.fn() };
-      return histograms[name];
-    },
-    createCounter: () => ({ add: jest.fn() }),
+    createHistogram: instrument,
+    createCounter: instrument,
     createUpDownCounter: () => ({ add: () => {} }),
     createObservableGauge: () => ({ addCallback: () => {} })
   };
@@ -176,7 +179,7 @@ describe('errors and stops', () => {
     expect(span.events).toHaveLength(0);
   });
 
-  test('a stop is not an error: ihub.aborted, status unset, no duration recorded', () => {
+  test('a stop is not an error: ihub.aborted, status unset, no metric recorded', () => {
     configureSpans(ON);
     const histograms = fakeMeter();
     call(ON).fail(Object.assign(new Error('stopped'), { code: 'ABORTED' }));
@@ -184,7 +187,24 @@ describe('errors and stops', () => {
     expect(span.attributes['ihub.aborted']).toBe(true);
     expect(span.attributes['error.type']).toBeUndefined();
     expect(span.status.code).toBe(0);
-    expect(histograms['gen_ai.client.operation.duration'].record).not.toHaveBeenCalled();
+    expect(histograms['gen_ai.client.inference.duration'].record).not.toHaveBeenCalled();
+    expect(
+      histograms['gen_ai.client.inference.operation.input_tokens'].record
+    ).not.toHaveBeenCalled();
+  });
+
+  test('a failure records its duration and 0 tokens, both with error.type', () => {
+    const histograms = fakeMeter();
+    call(ON).fail(Object.assign(new Error('upstream'), { status: 503 }));
+    const [[, durationLabels]] = histograms['gen_ai.client.inference.duration'].record.mock.calls;
+    expect(durationLabels['error.type']).toBeDefined();
+    expect(
+      histograms['gen_ai.client.inference.operation.input_tokens'].record
+    ).toHaveBeenCalledWith(
+      0,
+      expect.objectContaining({ 'error.type': durationLabels['error.type'] })
+    );
+    expect(histograms['gen_ai.client.inference.usage.input_tokens'].add).not.toHaveBeenCalled();
   });
 
   test('a stop after the answer started keeps its tokens, is aborted, records no duration', () => {
@@ -194,8 +214,10 @@ describe('errors and stops', () => {
     const [span] = exporter.getFinishedSpans();
     expect(span.attributes['ihub.aborted']).toBe(true);
     expect(span.status.code).toBe(0);
-    expect(histograms['gen_ai.client.operation.duration'].record).not.toHaveBeenCalled();
-    expect(histograms['gen_ai.client.token.usage'].record).toHaveBeenCalled();
+    expect(histograms['gen_ai.client.inference.duration'].record).not.toHaveBeenCalled();
+    expect(
+      histograms['gen_ai.client.inference.operation.input_tokens'].record
+    ).toHaveBeenCalledWith(10, expect.any(Object));
   });
 
   test('an LLM deadline (code TIMEOUT) is error.type timeout, like a socket timeout', () => {
@@ -242,11 +264,16 @@ describe('GenAI metrics do not depend on spans', () => {
       'app.id': 'chat-app',
       'server.address': 'llm.example.com'
     };
-    expect(histograms['gen_ai.client.token.usage'].record.mock.calls).toEqual([
-      [12, { ...labels, 'gen_ai.token.type': 'input' }],
-      [5, { ...labels, 'gen_ai.token.type': 'output' }]
+    expect(histograms['gen_ai.client.inference.operation.input_tokens'].record.mock.calls).toEqual([
+      [12, labels]
     ]);
-    expect(histograms['gen_ai.client.operation.duration'].record).toHaveBeenCalledWith(
+    expect(histograms['gen_ai.client.inference.operation.output_tokens'].record.mock.calls).toEqual(
+      [[5, labels]]
+    );
+    expect(histograms['gen_ai.client.inference.usage.input_tokens'].add.mock.calls).toEqual([
+      [12, { ...labels, 'gen_ai.token.modality': 'unknown' }]
+    ]);
+    expect(histograms['gen_ai.client.inference.duration'].record).toHaveBeenCalledWith(
       expect.any(Number),
       labels
     );

@@ -20,7 +20,7 @@ Developers adding spans or metrics: follow the [Observability Guidelines](observ
 | Signal type | Examples | Where it ends up |
 | --- | --- | --- |
 | **Spans** | `chat gpt-4o`, `generate_content gemini-2.5-pro` | Jaeger, Tempo, OTLP collector |
-| **Metrics** | `gen_ai.client.token.usage`, `gen_ai.client.operation.duration`, `ihub.app.usage`, `ihub.active.users` | Prometheus, OTLP collector |
+| **Metrics** | `gen_ai.client.inference.usage.input_tokens`, `gen_ai.client.inference.duration`, `ihub.app.usage`, `ihub.active.users` | Prometheus, OTLP collector |
 | **Captured content** (opt-in) | `gen_ai.input.messages`, `gen_ai.output.messages` | Attributes of the LLM span |
 | **Logs**    | Activity summary, structured server logs | Stdout, file, OTLP log collector |
 
@@ -283,16 +283,26 @@ iHub-specific span attributes:
 
 ## Metrics
 
-Standard gen-ai histograms:
+The GenAI client inference metrics follow the OpenTelemetry GenAI semantic conventions
+(`semantic-conventions-genai` v0.1.0):
 
-- `gen_ai.client.token.usage` - histogram of tokens per call, by `gen_ai.token.type`: `input`,
-  `output`, and, when the provider reports them, `cache_read`, `cache_write` (prompt cache) and
-  `reasoning`. The last three are subsets of `input` / `output`: sum only `input` and `output`
-  for totals
-- `gen_ai.client.operation.duration` - histogram of operation durations in seconds
-- `gen_ai.client.operation.time_to_first_chunk` - histogram (seconds) from the start of a
+- `gen_ai.client.inference.duration` - histogram (seconds) of a model call, from the request to
+  the end of the response or the failure, retries included
+- `gen_ai.client.inference.time_to_first_chunk` - histogram (seconds) from the start of a
   streamed model call to its first output chunk, retries included. Streamed calls only
-  (semantic conventions v1.41; newer drafts call it `gen_ai.client.inference.time_to_first_chunk`)
+- `gen_ai.client.inference.usage.input_tokens`, `gen_ai.client.inference.usage.output_tokens` -
+  counters of the tokens used: **sum these for totals and cost**. When the provider reports them,
+  `gen_ai.client.inference.usage.cache_read.input_tokens`,
+  `gen_ai.client.inference.usage.cache_write.input_tokens` (prompt cache) and
+  `gen_ai.client.inference.usage.reasoning.output_tokens` count subsets of the input and output
+  tokens. The providers do not say which modality a token was, so `gen_ai.token.modality` is
+  `unknown` (the reasoning counter has no modality)
+- `gen_ai.client.inference.operation.input_tokens`,
+  `gen_ai.client.inference.operation.output_tokens` - histograms of the tokens per call, for
+  percentiles and outliers, not for totals. Every call is recorded, a failed one with `0`
+
+A failed call carries `error.type` on the duration and the token histograms. A call the user
+stopped records no duration; once the answer had started, its tokens are still counted.
 
 The GenAI metrics carry `gen_ai.operation.name`, `gen_ai.provider.name`, `gen_ai.request.model`,
 `app.id`, `ihub.surface` (`chat`, `agent`, `workflow`, `task`, `api`, `magic`, `system`) and
@@ -508,16 +518,17 @@ intentionally.
 
 Names as the built-in Prometheus endpoint exposes them: dots become underscores, counters end in
 `_total`, and no unit suffix is added. Through OTLP into Mimir or Prometheus, the collector's
-translation usually appends the unit (`gen_ai_client_operation_duration_seconds_bucket`); adjust
+translation usually appends the unit (`gen_ai_client_inference_duration_seconds_bucket`); adjust
 the queries and the shipped dashboards' metric names if yours does.
 
 ```promql
 # Token usage by model
-sum by (gen_ai_request_model, gen_ai_token_type) (rate(gen_ai_client_token_usage_sum[5m]))
+sum by (gen_ai_request_model) (rate(gen_ai_client_inference_usage_input_tokens_total[5m]))
+sum by (gen_ai_request_model) (rate(gen_ai_client_inference_usage_output_tokens_total[5m]))
 
 # P95 latency per provider
 histogram_quantile(0.95,
-  sum by (le, gen_ai_provider_name) (rate(gen_ai_client_operation_duration_bucket[5m])))
+  sum by (le, gen_ai_provider_name) (rate(gen_ai_client_inference_duration_bucket[5m])))
 
 # Error rate
 rate(ihub_errors_total[1h])
@@ -531,7 +542,7 @@ sum(rate(ihub_turns_total{ihub_turn_outcome!~"ok|aborted"}[15m])) / sum(rate(ihu
 
 # Time to first chunk p95 per endpoint
 histogram_quantile(0.95,
-  sum by (le, server_address) (rate(gen_ai_client_operation_time_to_first_chunk_bucket[5m])))
+  sum by (le, server_address) (rate(gen_ai_client_inference_time_to_first_chunk_bucket[5m])))
 
 # Is the Outlook / Office add-in used?
 sum by (ihub_client_channel) (increase(ihub_turns_total[7d]))

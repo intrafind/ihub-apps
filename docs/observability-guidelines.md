@@ -88,7 +88,7 @@ which respect the usage tracking mode and retention. Never build a per-user repo
 until telemetry is initialised. Feature code calls the function and never creates an instrument.
 
 **Name** `ihub.<area>.<thing>`, dot-separated and lower case, or the semantic convention name
-(`gen_ai.client.token.usage`). Prometheus turns dots into underscores and appends the unit.
+(`gen_ai.client.inference.duration`). Prometheus turns dots into underscores and appends the unit.
 
 **Unit** in UCUM: seconds `s` (never milliseconds), bytes `By`, counts as `{request}`, `{call}`, `{token}`.
 
