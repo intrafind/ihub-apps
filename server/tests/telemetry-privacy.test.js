@@ -341,6 +341,8 @@ describe('redactContent', () => {
     ["{'access_token': 'abc123def'}", "{'access_token': '[REDACTED:secret]'}"],
     ['{"password":     "hunter2pw"}', '{"password":     "[REDACTED:secret]"}'],
     ['password:\thunter2pw', 'password:\t[REDACTED:secret]'],
+    ['{"password":\n  "hunter2pw"}', '{"password":\n  "[REDACTED:secret]"}'],
+    ['{"token"\r\n:\r\n"abc123def"}', '{"token"\r\n:\r\n"[REDACTED:secret]"}'],
     [`access_token=${'a'.repeat(600)} end`, 'access_token=[REDACTED:secret] end'],
     ['Contact alice@example.com.', 'Contact [REDACTED:email].'],
     ['Write to bob@example.org, please', 'Write to [REDACTED:email], please'],
