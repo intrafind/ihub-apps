@@ -77,6 +77,27 @@ export function textResponse(text, { status = 500, headers = {} } = {}) {
   });
 }
 
+/**
+ * Call telemetry that records how each call ended: `events` holds
+ * `['succeed', result]` and `['fail', err, options]`.
+ */
+export function fakeInstrumentation() {
+  const events = [];
+  return {
+    events,
+    startCall: () => ({
+      span: { run: fn => fn() },
+      recordRequest() {},
+      firstChunk() {},
+      retried() {},
+      continued() {},
+      abandon() {},
+      succeed: result => events.push(['succeed', result]),
+      fail: (err, options) => events.push(['fail', err, options])
+    })
+  };
+}
+
 export function fakeResponse({ status, headers, body, text }) {
   const h = new Headers(headers);
   return {
@@ -266,7 +287,9 @@ export function makeClient(opts = {}) {
     // The AI disclosure guardrail rewrites the system message, so unrelated
     // message assertions run without it. Tests of the guardrail itself pass
     // `guardrail: guardMessagesForModel` (see loop/llmClientGuardrail.test.js).
-    guardrail: opts.guardrail ?? null
+    guardrail: opts.guardrail ?? null,
+    // Call telemetry is off unless a test passes its own instrumentation.
+    getInstrumentation: () => opts.instrumentation ?? null
   });
   return { client, calls };
 }

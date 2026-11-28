@@ -44,7 +44,13 @@ import {
   markNativeWebSearchUnavailable,
   clearNativeWebSearchFallbackMemo
 } from '../services/loop/nativeWebSearchFallback.js';
-import { sseResponse, fakeResponse, makeClient, MODELS } from './loop/helpers/llmFixtures.js';
+import {
+  sseResponse,
+  fakeResponse,
+  fakeInstrumentation,
+  makeClient,
+  MODELS
+} from './loop/helpers/llmFixtures.js';
 
 const directive = provider => ({
   provider,
@@ -902,6 +908,47 @@ describe('LLMClient — pause_turn continuation', () => {
     assert.strictEqual(result.usage.promptTokens, 15);
     assert.strictEqual(result.usage.completionTokens, 10);
     assert.strictEqual(result.usage.webSearchRequests, 3);
+  });
+
+  it('keeps the usage of the paused request when the continuation fails', async () => {
+    const paused = [
+      messageStart({ input_tokens: 5, output_tokens: 0 }),
+      { type: 'content_block_start', index: 0, content_block: { type: 'text', text: '' } },
+      textDelta(0, 'Part one. '),
+      { type: 'content_block_stop', index: 0 },
+      { type: 'message_delta', delta: { stop_reason: 'pause_turn' }, usage: { output_tokens: 4 } },
+      { type: 'message_stop' }
+    ];
+    const responses = [
+      sseResponse(paused),
+      fakeResponse({ status: 400, headers: {}, text: '{"error":"bad request"}' })
+    ];
+    const recorded = [];
+    const instrumentation = fakeInstrumentation();
+    const client = new LLMClient({
+      transport: async () => responses.shift(),
+      createRequest: async () => ({ url: 'https://x', headers: {}, body: {} }),
+      apiKeyVerifier: { verifyApiKey: async () => ({ success: true, apiKey: 'k' }) },
+      getModels: () => ({ data: [model] }),
+      quota: null,
+      usage: { record: call => recorded.push(call) },
+      getInstrumentation: () => instrumentation
+    });
+
+    await assert.rejects(
+      client.complete({
+        model,
+        messages: [{ role: 'user', content: 'go' }],
+        telemetry: { autoRun: false }
+      })
+    );
+    assert.strictEqual(recorded.length, 1);
+    assert.strictEqual(recorded[0].usage.promptTokens, 5);
+    assert.strictEqual(recorded[0].usage.completionTokens, 4);
+    const [[kind, , options]] = instrumentation.events;
+    assert.strictEqual(kind, 'fail');
+    assert.strictEqual(options.usage.inputTokens, 5);
+    assert.strictEqual(options.usage.outputTokens, 4);
   });
 });
 

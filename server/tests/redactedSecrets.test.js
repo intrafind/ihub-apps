@@ -131,6 +131,14 @@ describe('restoreRedacted', () => {
       mode: 'rollback'
     });
     expect(nulled.otlp.headers).toEqual(current.otlp.headers);
+    // A null above the map (no OTLP exporter) is a stored state and stays null.
+    const noExporter = restoreRedacted(
+      { exporters: { otlp: null } },
+      { exporters: current },
+      [{ path: 'exporters.otlp.headers.*' }],
+      { mode: 'rollback' }
+    );
+    expect(noExporter.exporters.otlp).toBeNull();
     // A header the current file lacks is dropped, even one named like an Object member.
     const inherited = restoreRedacted(
       { otlp: { headers: { constructor: 'old' } } },
