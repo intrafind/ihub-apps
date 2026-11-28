@@ -51,12 +51,19 @@ const REDACTIONS = [
     /\b(?:sk|pk|rk)-[A-Za-z0-9_-]{16,512}|\bAKIA[0-9A-Z]{16}\b|\bgh[pousr]_[A-Za-z0-9]{30,255}|\bgithub_pat_[A-Za-z0-9_]{30,255}|\bxox[abprs]-[A-Za-z0-9-]{10,255}|\bAIza[0-9A-Za-z_-]{35}\b|\bglpat-[A-Za-z0-9_-]{20,255}/g,
     '[REDACTED:key]'
   ],
-  // key=value / key: value secrets, also with a quoted (JSON) key
+  // key=value / key: value secrets, also with a quoted (JSON) key. A quoted
+  // value is replaced up to its closing quote (escaped quotes included), so
+  // `&`, commas or blanks inside it leave nothing behind; an unquoted one up
+  // to the first delimiter. Each quoted scan stops at the next quote.
   [
-    /\b((?:api[_-]?key|access[_-]?token|refresh[_-]?token|client[_-]?secret|secret|password|passwd|pwd|token)["']?\s*[:=]\s*)(["']?)[^\s"'&,;]{4,}["']?/gi,
-    '$1$2[REDACTED:secret]$2'
+    /\b((?:api[_-]?key|access[_-]?token|refresh[_-]?token|client[_-]?secret|secret|password|passwd|pwd|token)["']?\s*[:=]\s*)(?:"(?:[^"\\\r\n]|\\.)+"|'(?:[^'\\\r\n]|\\.)+'|(["']?)[^\s"'&,;]{4,}["']?)/gi,
+    (match, assignment, openQuote) => {
+      const quote = openQuote ?? match.charAt(assignment.length);
+      return /["']/.test(quote)
+        ? `${assignment}${quote}[REDACTED:secret]${quote}`
+        : `${assignment}[REDACTED:secret]`;
+    }
   ],
-  // E-mail addresses
   // E-mail addresses: the domain is matched as one run of labels and dots and
   // must end in a dot and a TLD, checked in the replacer (no nested repetition).
   [
