@@ -30,6 +30,7 @@ import {
 } from '../telemetry/identity.js';
 import {
   configureSpans,
+  errorTypeOf,
   filterSpanAttributes,
   resetSpansForTests,
   withSpan
@@ -194,6 +195,11 @@ describe('errors and stops', () => {
     expect(histograms['gen_ai.client.token.usage'].record).toHaveBeenCalled();
   });
 
+  test('an LLM deadline (code TIMEOUT) is error.type timeout, like a socket timeout', () => {
+    expect(errorTypeOf({ code: 'TIMEOUT' })).toBe('timeout');
+    expect(errorTypeOf({ code: 'ETIMEDOUT' })).toBe('timeout');
+  });
+
   test('ending twice ends once', () => {
     configureSpans(ON);
     const c = call(ON);
@@ -350,6 +356,11 @@ describe('redactContent', () => {
     ['password: "unterminated value', 'password: "[REDACTED:secret]" value'],
     [`access_token=${'a'.repeat(600)} end`, 'access_token=[REDACTED:secret] end'],
     ['Contact alice@example.com.', 'Contact [REDACTED:email].'],
+    [
+      `token eyJ${'a'.repeat(5000)}.eyJ${'b'.repeat(5000)}.${'c'.repeat(300)} end`,
+      'token [REDACTED:jwt] end'
+    ],
+    [`Authorization: Bearer ${'x'.repeat(6000)}`, 'Authorization: Bearer [REDACTED:token]'],
     ['Write to bob@example.org, please', 'Write to [REDACTED:email], please'],
     ['AKIAABCDEFGHIJKLMNOP', '[REDACTED:key]'], // gitleaks:allow (fake key, redaction test)
     ['call 0171 2345678 now', 'call [REDACTED:phone] now'],

@@ -408,7 +408,7 @@ For zero-egress deployments, use a local LLM provider — see
 | `server/services/AuditLogService.js` | Audit log entries + retention |
 | `server/utils/logger.js` | Structured logging + request-context merge |
 | `server/utils/ipAnonymizer.js` | Shared IP masking helper |
-| `server/telemetry.js`, `server/telemetry/events.js` | OpenTelemetry emitters |
+| `server/telemetry.js`, `server/telemetry/GenAIInstrumentation.js`, `server/telemetry/contentCapture.js` | OpenTelemetry emitters and content capture |
 | `server/defaults/config/platform.json` | Default platform config (privacy switches) |
 | `server/validators/platformConfigSchema.js` | Zod schema for the platform config |
 | `server/migrations/V060__add_privacy_options.js` | Migration adding the new privacy toggles |
