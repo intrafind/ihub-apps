@@ -117,6 +117,9 @@ export async function readinessChecks() {
 }
 
 export default function registerGeneralRoutes(app, { getLocalizedError }) {
+  // Resolved once: it reads files, and health probes arrive every few seconds.
+  const appVersion = getAppVersion();
+
   /**
    * @swagger
    * /api/apps:
@@ -379,7 +382,7 @@ export default function registerGeneralRoutes(app, { getLocalizedError }) {
     res.json({
       status: 'OK',
       timestamp: new Date().toISOString(),
-      version: getAppVersion(),
+      version: appVersion,
       basePathConfig: basePathInfo,
       requestPath: req.path,
       requestUrl: req.url,

@@ -170,6 +170,17 @@ describe('span redaction before export', () => {
     expect(next.onEnd).not.toHaveBeenCalled();
   });
 
+  test('spans switched off at runtime are dropped, auto-instrumented ones included', () => {
+    const next = { onEnd: jest.fn(), onStart: jest.fn() };
+    let exportEnabled = true;
+    const processor = new RedactingSpanProcessor(next, () => ({ exportEnabled }));
+    const span = () => ({ kind: SpanKind.CLIENT, attributes: { 'url.full': 'https://x/y' } });
+    processor.onEnd(span());
+    exportEnabled = false;
+    processor.onEnd(span());
+    expect(next.onEnd).toHaveBeenCalledTimes(1);
+  });
+
   test('health probes and static assets get no inbound span', () => {
     expect(isIgnoredIncomingRequest({ url: '/api/health' })).toBe(true);
     expect(isIgnoredIncomingRequest({ url: '/ihub/api/ready?x=1' })).toBe(true);
@@ -261,6 +272,75 @@ describe('Prometheus: one endpoint for all workers', () => {
         ''
       ].join('\n')
     );
+  });
+
+  async function scrapeOver(cluster) {
+    // A reader collects only once a meter provider has it.
+    new MeterProvider({ readers: [cluster.reader] });
+    if (!cluster.server.listening)
+      await new Promise(resolve => cluster.server.once('listening', resolve));
+    const { port } = cluster.server.address();
+    return fetch(`http://127.0.0.1:${port}/metrics`);
+  }
+
+  test('a scrape a worker did not answer is served but not counted as a success', async () => {
+    setTelemetrySetup({
+      enabled: true,
+      provider: 'prometheus',
+      exporters: { metrics: 'prometheus' }
+    });
+    const complete = startPrometheusCluster({
+      host: '127.0.0.1',
+      port: 0,
+      workerId: '0',
+      workerCount: 1
+    });
+    expect((await scrapeOver(complete)).status).toBe(200);
+    expect(getTelemetryStatus().signals.metrics.status).toBe('ok');
+    await complete.close();
+
+    // Two workers configured, no cluster bus here: the other one never answers.
+    const partial = startPrometheusCluster({
+      host: '127.0.0.1',
+      port: 0,
+      workerId: '0',
+      workerCount: 2
+    });
+    expect((await scrapeOver(partial)).status).toBe(200);
+    expect(getTelemetryStatus().signals.metrics).toMatchObject({
+      status: 'failing',
+      lastFailureReason: 'incomplete'
+    });
+    await partial.close();
+  });
+
+  test('a port that cannot be bound marks metrics export as failing', async () => {
+    setTelemetrySetup({
+      enabled: true,
+      provider: 'prometheus',
+      exporters: { metrics: 'prometheus' }
+    });
+    const first = startPrometheusCluster({
+      host: '127.0.0.1',
+      port: 0,
+      workerId: '0',
+      workerCount: 1
+    });
+    await new Promise(resolve => first.server.once('listening', resolve));
+    const { port } = first.server.address();
+    const second = startPrometheusCluster({
+      host: '127.0.0.1',
+      port,
+      workerId: '0',
+      workerCount: 1
+    });
+    await new Promise(resolve => second.server.once('error', () => setImmediate(resolve)));
+    expect(getTelemetryStatus().signals.metrics).toMatchObject({
+      status: 'failing',
+      lastFailureReason: 'network'
+    });
+    await first.close();
+    await second.close();
   });
 
   test('a real reader scrapes with the worker label (single process)', async () => {

@@ -62,6 +62,8 @@ let sdk = null;
 let genAIInstrumentation = null;
 let activeConfig = null;
 let prometheusCluster = null;
+// No span processor was registered at startup; turning spans on needs a restart.
+let spansStartedDisabled = false;
 
 /**
  * Flatten a nested object of resource attributes to dotted keys. Used so that
@@ -320,6 +322,7 @@ export function buildSdkOptions(config, { instrumentations } = {}) {
         new RedactingSpanProcessor(
           new BatchSpanProcessor({ exporter: trackExporter(traceExporter, 'traces') }),
           () => ({
+            exportEnabled: activeConfig?.spans?.enabled !== false,
             includeOptInAttributes: activeConfig?.spans?.includeOptInAttributes === true
           })
         )
@@ -439,6 +442,7 @@ export async function initTelemetry(rawConfig = {}, { instrumentations, bootstra
   configureSpans(config);
 
   const { options, exporters } = buildSdkOptions(config, { instrumentations });
+  spansStartedDisabled = exporters.traces === null;
 
   // Prometheus is pulled: one endpoint answers for all workers of the
   // cluster (`prometheusCluster.js`), each series labelled with its worker.
@@ -541,12 +545,21 @@ export function getGenAIInstrumentation() {
  */
 export function reloadTelemetryConfig(newConfig = {}) {
   const previous = activeConfig || {};
+  // The caller passes the complete telemetry block, so a field it lacks was
+  // deleted and falls back to its default; merging `previous` back in would
+  // keep, say, a removed `userIdMode: clear` alive. Provider, exporters and
+  // the signal switches need a restart and stay as they started.
   activeConfig = {
     ...previous,
-    events: newConfig.events ?? previous.events,
-    spans: { ...previous.spans, ...newConfig.spans },
-    activitySummary: newConfig.activitySummary ?? previous.activitySummary
+    events: newConfig.events,
+    spans: { ...newConfig.spans },
+    activitySummary: newConfig.activitySummary
   };
+  if (spansStartedDisabled && activeConfig.spans.enabled !== false && activeConfig.enabled) {
+    appLogger.warn('Spans were off at startup: enabling them takes effect after a restart', {
+      component: 'Telemetry'
+    });
+  }
   configureIdentity(activeConfig);
   configureSpans(activeConfig);
   if (genAIInstrumentation) {
