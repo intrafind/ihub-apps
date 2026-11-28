@@ -37,8 +37,7 @@
  * Findings are printed as GitHub annotations, which show inline on the PR.
  */
 
-import { pathToFileURL } from 'node:url';
-import { parseChangedLines as parseDiff, runRatchet } from './lib/guidelineRatchet.js';
+import { defineRatchet } from './lib/guidelineRatchet.js';
 
 /** Files checked: server sources, not tests and not migrations. */
 const CHECKED = /^server\/(?!tests\/|migrations\/).*\.js$/;
@@ -283,24 +282,12 @@ export function findViolations(source, file, changed = null) {
   return found.sort((a, b) => a.line - b.line);
 }
 
-/**
- * The lines a unified diff (made with `--unified=0`) adds or changes, per checked file.
- *
- * @param {string} diff - Output of `git diff --unified=0 --no-color`
- * @returns {Map<string, Set<number>>}
- */
-export function parseChangedLines(diff) {
-  return parseDiff(diff, CHECKED);
-}
-
-const main = () =>
-  runRatchet({
-    script: 'scripts/check-api-guidelines.js',
-    checked: CHECKED,
-    findViolations,
-    title: 'API guidelines',
-    docs: 'docs/api-guidelines.md',
-    ignoreMarker: IGNORE_MARKER
-  });
-
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) await main();
+/** The lines a unified diff (`--unified=0`) adds or changes, per checked file. */
+export const { parseChangedLines } = defineRatchet(import.meta.url, {
+  script: 'scripts/check-api-guidelines.js',
+  checked: CHECKED,
+  findViolations,
+  title: 'API guidelines',
+  docs: 'docs/api-guidelines.md',
+  ignoreMarker: IGNORE_MARKER
+});

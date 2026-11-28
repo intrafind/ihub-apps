@@ -9,6 +9,7 @@
  */
 
 import { readFileSync } from 'node:fs';
+import { pathToFileURL } from 'node:url';
 
 /** Line numbers a zero-context hunk header ("@@ -a,b +c,d @@") adds or changes. */
 function hunkLines(header) {
@@ -91,4 +92,22 @@ export async function runRatchet({ script, checked, findViolations, title, docs,
     );
     process.exit(1);
   }
+}
+
+/**
+ * Set up a ratchet script: its `parseChangedLines` for tests, and the command
+ * run when the script itself is executed (not when a test imports it).
+ *
+ * @param {string} moduleUrl - The script's `import.meta.url`
+ * @param {Parameters<typeof runRatchet>[0]} options
+ * @returns {{parseChangedLines: (diff: string) => Map<string, Set<number>>}}
+ */
+export function defineRatchet(moduleUrl, options) {
+  if (process.argv[1] && moduleUrl === pathToFileURL(process.argv[1]).href) {
+    runRatchet(options).catch(error => {
+      console.error(error);
+      process.exit(2);
+    });
+  }
+  return { parseChangedLines: diff => parseChangedLines(diff, options.checked) };
 }
