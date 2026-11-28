@@ -3,7 +3,9 @@
 
 /**
  * OpenTelemetry Gen-AI Metrics Recording
- * Implements https://opentelemetry.io/docs/specs/semconv/gen-ai/gen-ai-metrics/
+ * Implements the client inference metrics of the OpenTelemetry GenAI semantic
+ * conventions (semantic-conventions-genai v0.1.0):
+ * https://github.com/open-telemetry/semantic-conventions-genai/blob/main/docs/gen-ai/client-inference.md
  */
 
 import logger from '../utils/logger.js';
@@ -11,12 +13,16 @@ import { errorTypeOf } from './spans.js';
 import { SURFACES } from '../services/usage/callRecord.js';
 import { CLIENT_CHANNELS } from './channel.js';
 
-// Recommended histogram buckets for token usage (in tokens)
+// Spec buckets for the per-inference token histograms (in tokens)
 const TOKEN_USAGE_BUCKETS = [
   1, 4, 16, 64, 256, 1024, 4096, 16384, 65536, 262144, 1048576, 4194304, 16777216, 67108864
 ];
 
-// Recommended histogram buckets for operation duration (in seconds)
+// Spec buckets for gen_ai.client.inference.duration and
+// gen_ai.client.inference.time_to_first_chunk (in seconds)
+const INFERENCE_DURATION_BUCKETS = [0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10, 30, 60];
+
+// Histogram buckets for iHub's own operation durations (in seconds)
 const OPERATION_DURATION_BUCKETS = [
   0.01, 0.02, 0.04, 0.08, 0.16, 0.32, 0.64, 1.28, 2.56, 5.12, 10.24, 20.48, 40.96, 81.92
 ];
@@ -44,7 +50,7 @@ const ALLOWED_METRIC_LABELS = new Set([
   'gen_ai.provider.name',
   'gen_ai.request.model',
   'gen_ai.response.model',
-  'gen_ai.token.type',
+  'gen_ai.token.modality',
   // common
   'error.type',
   'error.context',
@@ -115,8 +121,11 @@ const WORK_DURATION_BUCKETS = [0.005, 0.025, 0.1, 0.25, 0.5, 1, 2.5, 5, 10, 30, 
 // auth events, etc.) - similar to standard HTTP request duration buckets.
 const SHORT_DURATION_BUCKETS = [0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10];
 
-let tokenUsageHistogram = null;
-let operationDurationHistogram = null;
+let inputTokensHistogram = null;
+let outputTokensHistogram = null;
+/** `gen_ai.client.inference.usage.*` counters, keyed by the usage field they count. */
+let tokenUsageCounters = null;
+let inferenceDurationHistogram = null;
 let appUsageCounter = null;
 let errorCounter = null;
 let conversationCounter = null;
@@ -193,22 +202,28 @@ export function initializeMetrics(meterSource) {
 
   const meter = meterSource.getMeter('ihub-apps-genai', '1.0.0');
 
-  // Create token usage histogram
-  tokenUsageHistogram = meter.createHistogram('gen_ai.client.token.usage', {
-    description: 'Number of input and output tokens used',
+  // Per-inference token distribution: one record per inference, failed ones included
+  inputTokensHistogram = meter.createHistogram('gen_ai.client.inference.operation.input_tokens', {
+    description: 'The number of input (prompt) tokens used per inference operation',
     unit: '{token}',
-    advice: {
-      explicitBucketBoundaries: TOKEN_USAGE_BUCKETS
-    }
+    advice: { explicitBucketBoundaries: TOKEN_USAGE_BUCKETS }
+  });
+  outputTokensHistogram = meter.createHistogram('gen_ai.client.inference.operation.output_tokens', {
+    description: 'The number of output (completion) tokens used per inference operation',
+    unit: '{token}',
+    advice: { explicitBucketBoundaries: TOKEN_USAGE_BUCKETS }
   });
 
-  // Create operation duration histogram
-  operationDurationHistogram = meter.createHistogram('gen_ai.client.operation.duration', {
-    description: 'Duration of GenAI operation',
+  // Token consumption: the counters to sum for totals and cost
+  tokenUsageCounters = {};
+  for (const [field, name, description] of TOKEN_USAGE_COUNTERS) {
+    tokenUsageCounters[field] = meter.createCounter(name, { description, unit: '{token}' });
+  }
+
+  inferenceDurationHistogram = meter.createHistogram('gen_ai.client.inference.duration', {
+    description: 'GenAI client inference operation duration',
     unit: 's',
-    advice: {
-      explicitBucketBoundaries: OPERATION_DURATION_BUCKETS
-    }
+    advice: { explicitBucketBoundaries: INFERENCE_DURATION_BUCKETS }
   });
 
   // Create app usage counter
@@ -551,72 +566,116 @@ export function recordExtractionQueueWait(waitSeconds) {
 }
 
 /**
- * Record token usage metrics
- * @param {Object} attributes - The call's metric labels; never `span.attributes`
- * @param {Object} usage - Usage object with token counts
+ * `[usage field, counter name, description, per-modality]` of the
+ * `gen_ai.client.inference.usage.*` counters. The cache and reasoning counters
+ * count subsets of the input and output counters.
  */
-export function recordTokenUsage(attributes, usage) {
-  if (!tokenUsageHistogram || !usage) return;
+const TOKEN_USAGE_COUNTERS = [
+  [
+    'inputTokens',
+    'gen_ai.client.inference.usage.input_tokens',
+    'The number of input (prompt) tokens used, including cached tokens',
+    true
+  ],
+  [
+    'outputTokens',
+    'gen_ai.client.inference.usage.output_tokens',
+    'The number of output (completion) tokens used, including reasoning tokens',
+    true
+  ],
+  [
+    'cacheReadTokens',
+    'gen_ai.client.inference.usage.cache_read.input_tokens',
+    'The number of input tokens served from a provider-managed cache',
+    true
+  ],
+  [
+    'cacheWriteTokens',
+    'gen_ai.client.inference.usage.cache_write.input_tokens',
+    'The number of input tokens written to a provider-managed cache',
+    true
+  ],
+  [
+    'reasoningTokens',
+    'gen_ai.client.inference.usage.reasoning.output_tokens',
+    'The number of output tokens used for reasoning',
+    false
+  ]
+];
+
+/** @returns {number|undefined} A finite, non-negative token count, else undefined. */
+function tokenCount(value) {
+  return typeof value === 'number' && Number.isFinite(value) && value >= 0 ? value : undefined;
+}
+
+/**
+ * Record the tokens of one inference operation.
+ *
+ * - `gen_ai.client.inference.operation.input_tokens` / `.output_tokens`: one
+ *   record each per inference, failed ones included; `0` when the provider
+ *   reported no usage. A failure carries `error.type`.
+ * - `gen_ai.client.inference.usage.*` counters: only known, strictly positive
+ *   counts. The providers do not report the modality of their tokens, so it is
+ *   `unknown` (the reasoning counter has no modality).
+ *
+ * @param {Object} attributes - The call's metric labels; never `span.attributes`
+ * @param {Object} [usage] - inputTokens, outputTokens, cacheReadTokens, cacheWriteTokens,
+ *   reasoningTokens (or the OpenAI `prompt_tokens` / `completion_tokens`)
+ * @param {unknown} [error] - The failure, mapped to `error.type` by `errorTypeOf`
+ */
+export function recordInferenceTokens(attributes, usage, error = null) {
+  if (!inputTokensHistogram) return;
 
   try {
     // Filter to the low-cardinality allow-list: an unbounded key (a
     // conversation id, a token count) belongs on the span, never on a series.
     const baseAttrs = filterMetricLabels(attributes);
+    const errorType = errorTypeOf(error);
+    if (errorType) baseAttrs['error.type'] = errorType;
 
-    // Use nullish coalescing so a legitimate 0 is preserved
-    const inputTokens = usage.inputTokens ?? usage.prompt_tokens;
-    if (typeof inputTokens === 'number') {
-      tokenUsageHistogram.record(inputTokens, {
-        ...baseAttrs,
-        'gen_ai.token.type': 'input'
-      });
-    }
+    const counts = {
+      ...usage,
+      inputTokens: tokenCount(usage?.inputTokens ?? usage?.prompt_tokens),
+      outputTokens: tokenCount(usage?.outputTokens ?? usage?.completion_tokens)
+    };
 
-    const outputTokens = usage.outputTokens ?? usage.completion_tokens;
-    if (typeof outputTokens === 'number') {
-      tokenUsageHistogram.record(outputTokens, {
-        ...baseAttrs,
-        'gen_ai.token.type': 'output'
-      });
-    }
+    inputTokensHistogram.record(counts.inputTokens ?? 0, baseAttrs);
+    outputTokensHistogram.record(counts.outputTokens ?? 0, baseAttrs);
 
-    // Prompt cache and reasoning: subsets of input / output (sum only `input`
-    // and `output` for totals). Recorded when the provider reports them.
-    for (const [field, type] of [
-      ['cacheReadTokens', 'cache_read'],
-      ['cacheWriteTokens', 'cache_write'],
-      ['reasoningTokens', 'reasoning']
-    ]) {
-      if (typeof usage[field] === 'number' && Number.isFinite(usage[field])) {
-        tokenUsageHistogram.record(usage[field], { ...baseAttrs, 'gen_ai.token.type': type });
-      }
+    for (const [field, , , perModality] of TOKEN_USAGE_COUNTERS) {
+      const value = tokenCount(counts[field]);
+      if (!value) continue;
+      tokenUsageCounters[field].add(
+        value,
+        perModality ? { ...baseAttrs, 'gen_ai.token.modality': 'unknown' } : baseAttrs
+      );
     }
-  } catch (error) {
-    logger.warn('Failed to record token usage', { component: 'Telemetry', error: error.message });
+  } catch (err) {
+    logger.warn('Failed to record token usage', { component: 'Telemetry', error: err.message });
   }
 }
 
 /**
- * Record operation duration metric
+ * Record `gen_ai.client.inference.duration`.
  * @param {number} durationSeconds - Duration in seconds
  * @param {Object} attributes - The call's metric labels (operation, provider, model, app);
  *   never `span.attributes`, which a sampled-out span does not have
  * @param {unknown} [error] - The failure, mapped to `error.type` by `errorTypeOf`
  */
-export function recordOperationDuration(durationSeconds, attributes, error = null) {
-  if (!operationDurationHistogram) return;
+export function recordInferenceDuration(durationSeconds, attributes, error = null) {
+  if (!inferenceDurationHistogram) return;
 
   try {
-    // Same allow-list as recordTokenUsage: only low-cardinality labels.
+    // Same allow-list as recordInferenceTokens: only low-cardinality labels.
     const metricAttributes = filterMetricLabels(attributes);
 
     // A failed call carries its `error.type` (a closed code, never the message).
     const errorType = errorTypeOf(error);
     if (errorType) metricAttributes['error.type'] = errorType;
 
-    operationDurationHistogram.record(durationSeconds, metricAttributes);
+    inferenceDurationHistogram.record(durationSeconds, metricAttributes);
   } catch (err) {
-    logger.warn('Failed to record operation duration', {
+    logger.warn('Failed to record inference duration', {
       component: 'Telemetry',
       error: err.message
     });
@@ -857,7 +916,7 @@ export function recordConfigReload(configFile, durationSeconds, error = null) {
 
 /**
  * Record a magic-prompt invocation. Token totals already flow through the
- * gen_ai.client.token.usage histogram via the LLM instrumentation; this
+ * gen_ai.client.inference.usage.* counters via the LLM instrumentation; this
  * counter is just for "how often is magic prompt being used per app."
  * @param {string} appId
  * @param {Object} extra
@@ -1075,9 +1134,6 @@ function attachTelemetryStatusObservers() {
 
 // ---- Operations and product (#4008 P2) -------------------------------------
 
-/** Time to first chunk, seconds: from tens of milliseconds to minutes. */
-const TTFC_BUCKETS = [0.05, 0.1, 0.25, 0.5, 1, 2, 4, 8, 16, 32, 64, 128];
-
 /** A whole turn, seconds: a short answer to several tool rounds. */
 const TURN_DURATION_BUCKETS = [0.25, 0.5, 1, 2.5, 5, 10, 20, 40, 80, 160, 320, 640];
 
@@ -1155,11 +1211,11 @@ function configLabel(value, fallback = 'unknown') {
 const dependencyStates = new Map();
 
 function initializeOperationsInstruments(meter) {
-  timeToFirstChunkHistogram = meter.createHistogram('gen_ai.client.operation.time_to_first_chunk', {
+  timeToFirstChunkHistogram = meter.createHistogram('gen_ai.client.inference.time_to_first_chunk', {
     description:
-      'Time from the start of a streamed model call to its first output chunk (retries included)',
+      'Time from the start of a logical inference operation to the first chunk in its streaming response',
     unit: 's',
-    advice: { explicitBucketBoundaries: TTFC_BUCKETS }
+    advice: { explicitBucketBoundaries: INFERENCE_DURATION_BUCKETS }
   });
   turnDurationHistogram = meter.createHistogram('ihub.turn.duration', {
     description: 'Duration of a whole turn: every model call and tool round until the answer',

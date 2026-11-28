@@ -21,9 +21,9 @@ Ready-made artifacts for the metrics and traces described in [Telemetry](../tele
 
 In Grafana: **Dashboards → New → Import**, upload a JSON file and pick the Prometheus (or Mimir)
 data source. Each dashboard has a `datasource` and a `job` variable. The queries use the metric
-names of iHub's built-in Prometheus endpoint (no unit suffix: `gen_ai_client_operation_duration`).
+names of iHub's built-in Prometheus endpoint (no unit suffix: `gen_ai_client_inference_duration`).
 When metrics reach Mimir or Prometheus through OTLP, the collector's translation usually appends
-the unit (`gen_ai_client_operation_duration_seconds`); replace the names in the JSON if yours does.
+the unit (`gen_ai_client_inference_duration_seconds`); replace the names in the JSON if yours does.
 
 Across cluster workers, counters and histograms are summed and the cluster-wide gauges take the
 `max` (see [Telemetry → Cluster mode](../telemetry.md#cluster-mode)); the dashboards already do.
