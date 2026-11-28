@@ -3591,7 +3591,7 @@
       "prometheusSettings": "Prometheus Settings",
       "promPort": "Port",
       "promHost": "Bind Host",
-      "promHelp": "Metrics will be available at http://{host}:{port}/metrics for Prometheus to scrape.",
+      "promHelp": "Metrics will be available at http://{host}:{port}/metrics for Prometheus to scrape. The endpoint has no authentication: 127.0.0.1 keeps it on this host; set 0.0.0.0 only behind a firewall or a Kubernetes NetworkPolicy.",
       "signals": "Signals",
       "spans": "Emit spans (gen_ai.* attributes)",
       "metrics": "Emit metrics (token usage, durations, app/conversation counters, active users/chats)",

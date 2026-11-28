@@ -1,0 +1,57 @@
+# Observability Guidelines Check
+#
+# docs/observability-guidelines.md sets the rules for spans, metrics and logs. This check is a
+# ratchet like the API guidelines check: it fails only on lines a pull request adds or changes.
+#
+# check: runs scripts/check-observability-guidelines.js on every PR. It reports, outside
+#   server/telemetry/: trace.getTracer() (use the span helpers), metric instruments created in
+#   feature code (define them in metrics.js), span.recordException() anywhere, and a raw
+#   'user.id' attribute (use userSpanAttributes). A line with a reason carries
+#   "// observability-guidelines-ignore: <reason>".
+
+name: Observability Guidelines Check
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: observability-guidelines-check-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    name: Observability guidelines
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout PR head
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+          filter: blob:none
+          persist-credentials: false
+
+      - name: Fetch current base branch
+        run: git fetch --no-tags origin "+refs/heads/${BASE_REF}:refs/remotes/origin/${BASE_REF}"
+        env:
+          BASE_REF: ${{ github.event.pull_request.base.ref }}
+
+      - name: Set up Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '24'
+
+      - name: Check changed server lines against the observability guidelines
+        run: |
+          set -euo pipefail
+          git diff --unified=0 --diff-filter=ACMR --no-color --end-of-options \
+            "origin/${BASE_REF}...HEAD" -- server | node scripts/check-observability-guidelines.js
+        env:
+          BASE_REF: ${{ github.event.pull_request.base.ref }}

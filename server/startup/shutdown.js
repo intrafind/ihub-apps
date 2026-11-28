@@ -15,6 +15,10 @@ import { shutdownTelemetry } from '../telemetry.js';
  * SIGINT by {@link startWorker}.
  */
 export async function shutdown() {
+  // Telemetry flushes first and alongside the rest, within its own budget: it
+  // used to run last, after the waits below, and the primary's 5 s force-exit
+  // cut it off, losing the last export interval of every rollout.
+  const telemetryFlushed = shutdownTelemetry({ timeoutMs: 1500 });
   // Stop the scheduler first, so no new run starts while the rest shuts down.
   try {
     const { stopScheduler } = await import('../services/scheduler/index.js');
@@ -111,6 +115,6 @@ export async function shutdown() {
   // Flush buffered storage writes (chat documents, append-log entries) and
   // release the provider's handles before the process goes away.
   await shutdownStorageBootstrap();
-  await shutdownTelemetry();
+  await telemetryFlushed;
   process.exit(getShutdownExitCode());
 }

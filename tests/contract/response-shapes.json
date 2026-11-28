@@ -1295,8 +1295,7 @@
         },
         "provider": "string",
         "resource": {
-          "deployment": "object",
-          "deployment.environment": "string",
+          "deployment.environment.name": "string",
           "service": "object",
           "service.name": "string",
           "service.version": "string"
@@ -6583,6 +6582,17 @@
         "user_name": "string",
         "year": "string"
       }
+    }
+  },
+  "GET /api/ready": {
+    "status": 200,
+    "shape": {
+      "checks": {
+        "config": "string",
+        "contents": "string",
+        "storage": "string"
+      },
+      "status": "string"
     }
   },
   "GET /api/renderers": {

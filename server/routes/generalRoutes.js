@@ -22,6 +22,8 @@ import {
   listUserAppsFor,
   readUserAppFor
 } from '../services/userApps/resolveApp.js';
+import { constants as fsConstants, promises as fs } from 'node:fs';
+import { getContentsPath } from '../utils/contentsPath.js';
 
 /**
  * @swagger
@@ -91,6 +93,28 @@ import {
  *           type: string
  *           description: Error message
  */
+
+/**
+ * What readiness needs, each `ok` or the reason it is not: the platform
+ * configuration is loaded, the storage provider is up, and the contents
+ * directory can be written (a full or read-only volume fails here instead of
+ * on the next chat save).
+ *
+ * @returns {Promise<{config: string, storage: string, contents: string}>}
+ */
+export async function readinessChecks() {
+  const checks = {
+    config: configCache.getPlatform?.() ? 'ok' : 'not_loaded',
+    storage: isStorageReady() ? 'ok' : 'not_ready',
+    contents: 'ok'
+  };
+  try {
+    await fs.access(getContentsPath(), fsConstants.W_OK);
+  } catch (error) {
+    checks.contents = error?.code === 'ENOENT' ? 'missing' : 'not_writable';
+  }
+  return checks;
+}
 
 export default function registerGeneralRoutes(app, { getLocalizedError }) {
   /**
@@ -378,6 +402,37 @@ export default function registerGeneralRoutes(app, { getLocalizedError }) {
       // failure reason or counts (those are on the admin system view).
       telemetry: getTelemetryHealth()
     });
+  });
+
+  /**
+   * @swagger
+   * /ready:
+   *   get:
+   *     summary: Readiness probe
+   *     description: >-
+   *       200 when this server process can serve requests: the platform
+   *       configuration is loaded and the storage is up and writable. 503
+   *       (problem+json, `details.checks`) otherwise. `/api/health` is the
+   *       liveness probe and always answers 200 while the process runs.
+   *     tags: [General]
+   *     responses:
+   *       200:
+   *         description: Ready
+   *       503:
+   *         description: Not ready
+   */
+  app.get(buildServerPath('/api/ready'), async (req, res) => {
+    const checks = await readinessChecks();
+    const failing = Object.entries(checks)
+      .filter(([, result]) => result !== 'ok')
+      .map(([name]) => name);
+    res.set('Cache-Control', 'no-store');
+    if (failing.length > 0) {
+      throw new ServiceError('SERVICE_UNAVAILABLE', `Not ready: ${failing.join(', ')}`, {
+        details: { checks }
+      });
+    }
+    res.json({ status: 'ready', checks });
   });
 
   // No appAccessRequired here: it answers 403, while this route gives one

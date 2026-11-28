@@ -5,10 +5,15 @@
  * OpenTelemetry Exporter Configuration
  */
 
-import { OTLPTraceExporter } from '@opentelemetry/exporter-trace-otlp-http';
-import { OTLPMetricExporter } from '@opentelemetry/exporter-metrics-otlp-http';
+import { OTLPTraceExporter as OTLPTraceExporterJson } from '@opentelemetry/exporter-trace-otlp-http';
+import { OTLPTraceExporter as OTLPTraceExporterProto } from '@opentelemetry/exporter-trace-otlp-proto';
+import { OTLPMetricExporter as OTLPMetricExporterJson } from '@opentelemetry/exporter-metrics-otlp-http';
+import { OTLPMetricExporter as OTLPMetricExporterProto } from '@opentelemetry/exporter-metrics-otlp-proto';
+import { OTLPLogExporter as OTLPLogExporterJson } from '@opentelemetry/exporter-logs-otlp-http';
+import { OTLPLogExporter as OTLPLogExporterProto } from '@opentelemetry/exporter-logs-otlp-proto';
 import { ConsoleSpanExporter } from '@opentelemetry/sdk-trace';
 import { ConsoleMetricExporter } from '@opentelemetry/sdk-metrics';
+import { ConsoleLogRecordExporter } from '@opentelemetry/sdk-logs';
 import fs from 'node:fs';
 import path from 'node:path';
 import configCache from '../configCache.js';
@@ -78,12 +83,12 @@ export function otlpTlsOptionsFromEnv(signal) {
  * sticking until the server restarts.
  *
  * @param {Object} otlpConfig - `telemetry.exporters.otlp` (`endpoint`, `headers`).
- * @param {string} signalPath - `/v1/traces` or `/v1/metrics`.
- * @param {string} [signal] - `TRACES` or `METRICS`, for the signal-specific TLS variables.
+ * @param {string} signalPath - `/v1/traces`, `/v1/metrics` or `/v1/logs`.
+ * @param {string} [signal] - `TRACES`, `METRICS` or `LOGS`, for the signal-specific variables.
  * @returns {{url: string, headers: Object, httpAgentOptions: Function}} Exporter options.
  */
 export function otlpExporterOptions(otlpConfig, signalPath, signal = 'TRACES') {
-  const url = `${otlpConfig.endpoint}${signalPath}`;
+  const url = otlpSignalUrl(otlpConfig, signalPath, signal);
   const tlsOptions = otlpTlsOptionsFromEnv(signal);
   return {
     url,
@@ -103,6 +108,91 @@ export function otlpExporterOptions(otlpConfig, signalPath, signal = 'TRACES') {
 }
 
 /**
+ * The URL a signal is sent to: `OTEL_EXPORTER_OTLP_<SIGNAL>_ENDPOINT` as it is
+ * (the OTel spec says a signal endpoint is the full URL), otherwise the
+ * configured base endpoint plus the signal path, without a doubled slash
+ * (`http://collector:4318/` used to become `…//v1/traces`).
+ *
+ * @param {Object} otlpConfig
+ * @param {string} signalPath
+ * @param {string} signal
+ * @returns {string}
+ */
+export function otlpSignalUrl(otlpConfig, signalPath, signal) {
+  const signalEndpoint = process.env[`OTEL_EXPORTER_OTLP_${signal}_ENDPOINT`];
+  if (signalEndpoint) return signalEndpoint;
+  return `${String(otlpConfig?.endpoint || '').replace(/\/+$/, '')}${signalPath}`;
+}
+
+let warnedGrpc = false;
+
+/**
+ * The OTLP protocol of a signal: `OTEL_EXPORTER_OTLP_<SIGNAL>_PROTOCOL`, else
+ * `OTEL_EXPORTER_OTLP_PROTOCOL`, else `exporters.otlp.protocol`, else
+ * `http/protobuf`. gRPC is not supported: its client cannot use the platform's
+ * proxy and SSL whitelist (CLAUDE.md, "Outbound connections"), so it falls back
+ * to `http/protobuf` with a warning.
+ *
+ * @param {Object} config - The telemetry config
+ * @param {string} signal - `TRACES`, `METRICS`, `LOGS`
+ * @returns {'http/json'|'http/protobuf'}
+ */
+export function otlpProtocol(config, signal) {
+  const requested = (
+    process.env[`OTEL_EXPORTER_OTLP_${signal}_PROTOCOL`] ||
+    process.env.OTEL_EXPORTER_OTLP_PROTOCOL ||
+    config?.exporters?.otlp?.protocol ||
+    'http/protobuf'
+  )
+    .trim()
+    .toLowerCase();
+  if (requested === 'http/json') return 'http/json';
+  if (requested === 'grpc' && !warnedGrpc) {
+    warnedGrpc = true;
+    logger.warn('OTLP over gRPC is not supported; exporting with http/protobuf instead', {
+      component: 'Telemetry',
+      note: "Point the endpoint at the collector's HTTP receiver (usually port 4318)"
+    });
+  }
+  return 'http/protobuf';
+}
+
+/** The OTLP exporter classes per protocol and signal. */
+const OTLP_EXPORTERS = {
+  'http/json': {
+    TRACES: OTLPTraceExporterJson,
+    METRICS: OTLPMetricExporterJson,
+    LOGS: OTLPLogExporterJson
+  },
+  'http/protobuf': {
+    TRACES: OTLPTraceExporterProto,
+    METRICS: OTLPMetricExporterProto,
+    LOGS: OTLPLogExporterProto
+  }
+};
+
+const SIGNAL_PATHS = { TRACES: '/v1/traces', METRICS: '/v1/metrics', LOGS: '/v1/logs' };
+
+/** An OTLP exporter for a signal with the configured protocol. */
+function createOtlpExporter(config, signal) {
+  const Exporter = OTLP_EXPORTERS[otlpProtocol(config, signal)][signal];
+  return new Exporter(otlpExporterOptions(config.exporters.otlp, SIGNAL_PATHS[signal], signal));
+}
+
+let warnedUnknownProvider = false;
+
+/** Warn once that `provider` names no exporter: nothing is exported. */
+function warnUnknownProvider(provider) {
+  if (warnedUnknownProvider) return;
+  warnedUnknownProvider = true;
+  logger.warn('Telemetry provider names no exporter; nothing is exported', {
+    component: 'Telemetry',
+    provider: String(provider).slice(0, 32),
+    expected: ['otlp', 'prometheus', 'console']
+  });
+}
+
+/**
  * Create trace exporter based on configuration.
  *
  * Returning `undefined` means "spans are still created and the in-process
@@ -116,15 +206,11 @@ export function otlpExporterOptions(otlpConfig, signalPath, signal = 'TRACES') {
  * @returns {Object|undefined} Trace exporter, or undefined when no export is wanted
  */
 export function createTraceExporter(config) {
-  const provider = config.provider || 'console';
+  const provider = config.provider || 'none';
 
   switch (provider) {
     case 'otlp':
-      if (config.exporters?.otlp) {
-        return new OTLPTraceExporter(
-          otlpExporterOptions(config.exporters.otlp, '/v1/traces', 'TRACES')
-        );
-      }
+      if (config.exporters?.otlp) return createOtlpExporter(config, 'TRACES');
       return undefined;
 
     case 'prometheus':
@@ -137,6 +223,7 @@ export function createTraceExporter(config) {
       return new ConsoleSpanExporter();
 
     default:
+      warnUnknownProvider(provider);
       return undefined;
   }
 }
@@ -147,15 +234,11 @@ export function createTraceExporter(config) {
  * @returns {Object} Metric exporter
  */
 export function createMetricExporter(config) {
-  const provider = config.provider || 'console';
+  const provider = config.provider || 'none';
 
   switch (provider) {
     case 'otlp':
-      if (config.exporters?.otlp) {
-        return new OTLPMetricExporter(
-          otlpExporterOptions(config.exporters.otlp, '/v1/metrics', 'METRICS')
-        );
-      }
+      if (config.exporters?.otlp) return createOtlpExporter(config, 'METRICS');
       break;
 
     case 'prometheus':
@@ -164,11 +247,30 @@ export function createMetricExporter(config) {
       return null;
 
     case 'console':
-    default:
       // Console mode also exports metrics to stdout for parity with span output
       return new ConsoleMetricExporter();
+
+    default:
+      // An unknown provider used to fall back to the console silently, which
+      // put spans with their ids into the container log nobody asked for.
+      warnUnknownProvider(provider);
+      return null;
   }
 
+  return null;
+}
+
+/**
+ * Create the log record exporter: OTLP with the configured protocol, the
+ * console for `provider: console`, nothing for Prometheus (metrics only).
+ *
+ * @param {Object} config - Telemetry configuration
+ * @returns {Object|null}
+ */
+export function createLogExporter(config) {
+  const provider = config.provider || 'none';
+  if (provider === 'otlp' && config.exporters?.otlp) return createOtlpExporter(config, 'LOGS');
+  if (provider === 'console') return new ConsoleLogRecordExporter();
   return null;
 }
 

@@ -380,3 +380,21 @@ use, which dependency is failing, and whether someone is trying passwords.
 
 See [Telemetry](../../telemetry.md#metrics) for every metric, its labels and how to aggregate it
 across workers.
+
+## Telemetry: Log Export, Readiness Probe, Dashboards and Alert Rules
+
+Telemetry is ready to run in production with the usual tooling.
+
+- **Logs:** every log line written during a request carries its `trace_id`, so a log line leads to
+  its trace. With `telemetry.logs.enabled`, log lines also go to the collector over OTLP, at
+  `telemetry.logs.level` and above, with users pseudonymised and without IP addresses.
+- **Readiness:** `GET /api/ready` answers 503 until the configuration is loaded and the storage
+  is writable; use it as the Kubernetes readiness probe and `/api/health` as the liveness probe.
+- **Standard settings:** `OTEL_SDK_DISABLED`, `OTEL_EXPORTER_OTLP_PROTOCOL`, the per-signal
+  `OTEL_EXPORTER_OTLP_*_ENDPOINT` variables and `OTEL_METRIC_EXPORT_INTERVAL` are honoured, and
+  `exporters.otlp.protocol: http/protobuf` now really sends protobuf.
+- **Ready-made dashboards and alerts:** five Grafana dashboards (LLM calls, turns and tools,
+  authentication and security, capacity, product usage), Prometheus alert rules and collector
+  settings in `docs/observability/`.
+- On shutdown, telemetry is flushed first, so the last minute of data before a restart is no longer
+  lost.

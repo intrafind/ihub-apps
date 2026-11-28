@@ -15,10 +15,12 @@ describe('resolveProviderName', () => {
     ['openai', 'openai'],
     ['openai-responses', 'openai'],
     ['anthropic', 'anthropic'],
-    ['google', 'google'],
+    ['google', 'gcp.gemini'],
     ['mistral', 'mistral_ai'],
-    ['local', 'openai'],
-    ['vllm', 'openai'],
+    ['bedrock', 'aws.bedrock'],
+    // Self-hosted OpenAI-compatible servers keep their own value (#4008).
+    ['local', 'local'],
+    ['vllm', 'vllm'],
     ['iassistant-conversation', 'iassistant']
   ])('maps iHub provider %s to gen-ai %s', (input, expected) => {
     expect(resolveProviderName(input)).toBe(expected);

@@ -86,7 +86,7 @@ The `telemetry` block in `contents/config/platform.json` (and the matching admin
       },
       "prometheus": {
         "port": 9464,
-        "host": "0.0.0.0"
+        "host": "127.0.0.1"
       }
     },
     "spans": {
@@ -117,7 +117,7 @@ The `telemetry` block in `contents/config/platform.json` (and the matching admin
     "resource": {
       "service.name": "ihub-apps",
       "service.version": "auto",
-      "deployment.environment": "production"
+      "deployment.environment.name": "production"
     }
   }
 }
@@ -175,13 +175,81 @@ exported. Rotating the encryption key (`TOKEN_ENCRYPTION_KEY` or `contents/.encr
 changes every pseudonym, which unlinks older traces. Per-user reports belong in
 [Usage reporting](usage-reporting.md), not in traces.
 
+### Protocols and environment variables
+
+`exporters.otlp.protocol` is `http/protobuf` (the default) or `http/json`. gRPC is not supported:
+its client cannot use the platform's proxy and SSL whitelist. A `grpc` setting exports with
+`http/protobuf` and logs a warning; point the endpoint at the collector's HTTP receiver (4318).
+The endpoint is the collector's base URL; `/v1/traces`, `/v1/metrics` and `/v1/logs` are appended
+(a trailing slash is fine).
+
+The standard OpenTelemetry variables apply:
+
+| Variable | Effect |
+| --- | --- |
+| `OTEL_SDK_DISABLED=true` | Telemetry stays off whatever `telemetry.enabled` says |
+| `OTEL_EXPORTER_OTLP_ENDPOINT` | Base endpoint when `exporters.otlp.endpoint` is not set; also switches a `console` provider to `otlp` |
+| `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT`, `…_METRICS_ENDPOINT`, `…_LOGS_ENDPOINT` | The full URL of one signal (no path appended) |
+| `OTEL_EXPORTER_OTLP_PROTOCOL`, `…_TRACES_PROTOCOL`, … | `http/protobuf` or `http/json`, over the config |
+| `OTEL_EXPORTER_OTLP_HEADERS` | Headers when the config has no endpoint (`key=value,key2=value2`) |
+| `OTEL_EXPORTER_OTLP_CERTIFICATE`, `…_CLIENT_CERTIFICATE`, `…_CLIENT_KEY` | CA bundle and client certificate (mutual TLS), also per signal |
+| `OTEL_RESOURCE_ATTRIBUTES`, `OTEL_SERVICE_NAME` | Extra resource attributes, the service name |
+| `OTEL_METRIC_EXPORT_INTERVAL` | Metric export interval in ms, over `metrics.exportInterval` |
+| `OTEL_TRACES_SAMPLER`, `OTEL_TRACES_SAMPLER_ARG` | Sampler, over `spans.sampleRate` |
+| `OTEL_SEMCONV_STABILITY_OPT_IN` | Defaults to `http` (stable HTTP attribute names) |
+| `K8S_POD_NAME`, `K8S_NAMESPACE_NAME`, `K8S_NODE_NAME` | `k8s.*` resource attributes (downward API) |
+
+A `provider` other than `otlp`, `prometheus` or `console` exports nothing and logs a warning; it
+no longer falls back to the console silently.
+
+The Prometheus endpoint listens on `127.0.0.1` unless `exporters.prometheus.host` says otherwise.
+It has no authentication: in Kubernetes set `0.0.0.0` and restrict who may scrape it with a
+NetworkPolicy (or a `PodMonitor` in the same namespace). Configurations saved before keep their
+value.
+
+### Logs
+
+Every log line written inside a span carries `trace_id` and `span_id`, so Loki (or any log store)
+can link a line to its trace in Tempo.
+
+With `logs.enabled: true`, log lines also go to the OpenTelemetry logs pipeline: over OTLP with
+`provider: otlp`, to stdout with `provider: console`, nowhere with Prometheus. `logs.level` (default
+`info`) is the lowest level sent. The full line stays in the container log; what is exported is
+less:
+
+- the message (already redacted by the logger) and the severity,
+- the `component` and a short list of fields that carry no content or identity (codes, statuses,
+  model and app ids, counts, durations), and `error.type` for an error,
+- the user only pseudonymised (`user.hash`, following `spans.userIdMode`), never the IP address,
+- the trace and span id of the active span.
+
+### Health and readiness
+
+- `GET /api/health` is the **liveness** probe: 200 while the process answers. It also reports the
+  storage and the telemetry state.
+- `GET /api/ready` is the **readiness** probe: 200 when the platform configuration is loaded, the
+  storage provider is up and the contents directory is writable; otherwise 503 with
+  `details.checks` naming what is not ready (`config`, `storage`, `contents`).
+
+```yaml
+livenessProbe:
+  httpGet: { path: /api/health, port: 3000 }
+readinessProbe:
+  httpGet: { path: /api/ready, port: 3000 }
+  periodSeconds: 10
+```
+
+On shutdown the server flushes telemetry first and in parallel with its other flushes, within
+1.5 seconds, so the last export interval of a rollout is not lost.
+
 ### Hot-reload behaviour
 
 | Setting | Restart required |
 | --- | --- |
 | `enabled` | Yes |
 | `provider` (console / otlp / prometheus) | Yes |
-| `exporters.*` (endpoint, port, headers) | Yes |
+| `exporters.*` (endpoint, port, headers, protocol) | Yes |
+| `logs.enabled`, `logs.level` | Yes |
 | `metrics.exportInterval` | Yes |
 | `autoInstrumentation` | Yes |
 | `events.includePrompts`, `events.includeCompletions`, `events.maxEventSize` | No - applied immediately |
@@ -432,7 +500,7 @@ iHub product counters & gauges:
 Process / runtime gauges (registered automatically when telemetry is enabled):
 
 - `process.cpu.utilization` - 0-1 CPU utilisation (user + system, summed)
-- `process.runtime.nodejs.memory.usage` - rss / heap_used / heap_total / external
+- `process.memory.usage` - resident set size in bytes (heap detail: `v8js.memory.heap.*`)
 - `process.open_file_descriptor.count` - open file descriptors (Linux)
 - `nodejs.eventloop.delay.*` (`min`, `max`, `mean`, `stddev`, `p50`, `p90`, `p99`),
   `nodejs.eventloop.utilization`, `v8js.gc.duration`, `v8js.memory.heap.*` - from
@@ -446,7 +514,7 @@ Process / runtime gauges (registered automatically when telemetry is enabled):
 
 - `ihub.telemetry.export.failures` - counter of failed exports, labelled by `telemetry.signal`
   (`traces`, `metrics`, `logs`) and `error.type` (`tls`, `connection_refused`, `dns`, `timeout`,
-  `network`, `authentication`, `http_4xx`, `http_5xx`, `deferred`, `unknown`). Per process: `sum`
+  `network`, `authentication`, `http_4xx`, `http_5xx`, `unknown`). Per process: `sum`
   across workers
 - `ihub.telemetry.export.last_success` - gauge, seconds since the epoch of the last successful
   export per `telemetry.signal`; for Prometheus the last served scrape. Per process: `max` across
@@ -636,6 +704,14 @@ scrape_configs:
       - targets: ["ihub:9464"]
 ```
 
+`exporters.prometheus.host` must be `0.0.0.0` for a scrape from another host or pod.
+
+### Dashboards and alert rules
+
+Grafana dashboards, Prometheus alert rules, the collector settings that keep series counts stable
+(dropping `process.pid` and `host.*` before `resource_to_telemetry_conversion`) and a tail-sampling
+setup are in [Dashboards, Alerts and Collector Setup](observability/README.md).
+
 ## Privacy & security
 
 - No prompts or completions are captured unless `events.includePrompts` /
@@ -671,6 +747,12 @@ scrape_configs:
 | `server/telemetry/autoInstrumentation.js` | The explicit list of library instrumentations |
 | `server/telemetry/exportStatus.js` | Export success / failure per signal, health and admin status |
 | `server/telemetry/prometheusCluster.js` | One Prometheus endpoint for all cluster workers |
+| `server/telemetry/traces.js` | Spans (and their metrics) of turns, tools, workflows, jobs, retrieval, extraction |
+| `server/telemetry/channel.js` | Which client a request came through (`ihub.client.channel`) |
+| `server/telemetry/logBridge.js` | Log lines to the OpenTelemetry logs pipeline, filtered |
+| `server/telemetry/filesystemSampler.js` | Disk usage for the filesystem gauges |
+| `server/telemetry/securityEvents.js` | Which audit entries count as security events |
+| `server/instrumentation.mjs` | The `--import` bootstrap |
 | `server/telemetry/attributes.js` | Attribute builders for the gen-ai conventions |
 | `server/telemetry/metrics.js` | Histograms, counters, observable gauges |
 | `server/telemetry/exporters.js` | Console / OTLP / Prometheus exporter wiring |

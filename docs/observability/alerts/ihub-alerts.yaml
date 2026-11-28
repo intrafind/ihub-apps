@@ -1,0 +1,164 @@
+# SPDX-FileCopyrightText: IntraFind Software AG
+# SPDX-License-Identifier: LicenseRef-iHub-Apps
+#
+# Prometheus alert rules for iHub Apps (docs/telemetry.md, docs/observability/README.md).
+#
+# Metric names as iHub's built-in Prometheus endpoint exposes them (no unit suffix). Through
+# OTLP into Mimir the collector usually appends units (`_seconds`, `_bytes`): adjust the names
+# if yours does. Thresholds are starting points; tune them to your installation.
+#
+# As a PrometheusRule (prometheus-operator), wrap the `groups:` below in:
+#   apiVersion: monitoring.coreos.com/v1
+#   kind: PrometheusRule
+#   metadata: { name: ihub-apps, labels: { release: prometheus } }
+#   spec:
+#     groups: ...
+groups:
+  - name: ihub-telemetry
+    rules:
+      - alert: IHubTelemetryAbsent
+        expr: absent(ihub_build_info)
+        for: 15m
+        labels: { severity: warning }
+        annotations:
+          summary: No iHub metrics arrive
+          description: >-
+            ihub_build_info is missing: telemetry is off, the exporter cannot reach the collector,
+            or iHub is down. Check /api/health (telemetry block) and the "Telemetry export failing"
+            log line.
+      - alert: IHubTelemetryExportStale
+        expr: time() - max by (job) (ihub_telemetry_export_last_success) > 600
+        for: 5m
+        labels: { severity: warning }
+        annotations:
+          summary: iHub has not exported telemetry for 10 minutes
+          description: >-
+            The last successful export is older than 10 minutes. A rotated collector certificate
+            (reason tls) or a proxy in the way are the usual causes.
+      - alert: IHubTelemetryExportFailing
+        expr: sum by (job, telemetry_signal, error_type) (increase(ihub_telemetry_export_failures_total[15m])) > 3
+        labels: { severity: warning }
+        annotations:
+          summary: 'iHub telemetry export of {{ $labels.telemetry_signal }} failing ({{ $labels.error_type }})'
+
+  - name: ihub-llm
+    rules:
+      - alert: IHubLlmErrorRatioHigh
+        expr: |
+          sum by (job, gen_ai_provider_name) (rate(gen_ai_client_operation_duration_count{error_type!=""}[10m]))
+            / sum by (job, gen_ai_provider_name) (rate(gen_ai_client_operation_duration_count[10m])) > 0.05
+        for: 10m
+        labels: { severity: warning }
+        annotations:
+          summary: 'More than 5 % of model calls to {{ $labels.gen_ai_provider_name }} fail'
+      - alert: IHubLlmRateLimited
+        expr: sum by (job, gen_ai_provider_name) (increase(gen_ai_client_operation_duration_count{error_type="rate_limit_exceeded"}[15m])) > 10
+        labels: { severity: warning }
+        annotations:
+          summary: '{{ $labels.gen_ai_provider_name }} answers 429 (rate limited)'
+      - alert: IHubTimeToFirstChunkSlow
+        expr: |
+          histogram_quantile(0.95, sum by (le, job, server_address)
+            (rate(gen_ai_client_operation_time_to_first_chunk_bucket[10m]))) > 10
+        for: 15m
+        labels: { severity: warning }
+        annotations:
+          summary: 'p95 time to first chunk above 10 s on {{ $labels.server_address }}'
+
+  - name: ihub-turns
+    rules:
+      - alert: IHubTurnLatencySlo
+        expr: |
+          histogram_quantile(0.95, sum by (le, job, ihub_surface)
+            (rate(ihub_turn_duration_bucket{ihub_surface="chat"}[15m]))) > 60
+        for: 15m
+        labels: { severity: warning }
+        annotations:
+          summary: p95 chat turn takes more than 60 s
+      - alert: IHubTurnsFailing
+        expr: |
+          sum by (job) (rate(ihub_turns_total{ihub_turn_outcome=~"error|empty"}[15m]))
+            / sum by (job) (rate(ihub_turns_total[15m])) > 0.05
+        for: 15m
+        labels: { severity: warning }
+        annotations:
+          summary: More than 5 % of turns end in an error or without an answer
+      - alert: IHubStreamErrorRatioHigh
+        expr: |
+          sum by (job) (rate(ihub_stream_outcome_total{stream_outcome="error"}[15m]))
+            / sum by (job) (rate(ihub_stream_outcome_total[15m])) > 0.05
+        for: 15m
+        labels: { severity: warning }
+        annotations:
+          summary: More than 5 % of streamed chat calls end in an error
+
+  - name: ihub-auth
+    rules:
+      - alert: IHubLoginFailureSpike
+        expr: sum by (job, auth_provider) (increase(ihub_auth_events_total{auth_event="login_failure"}[5m])) > 20
+        labels: { severity: warning }
+        annotations:
+          summary: '{{ $value }} failed sign-ins via {{ $labels.auth_provider }} in 5 minutes'
+          description: Credential stuffing, a broken IdP or a clock-skew problem. The audit log has who.
+      - alert: IHubNoLogins
+        expr: |
+          sum by (job) (increase(ihub_auth_events_total{auth_event="login_success"}[2h])) == 0
+            and on (job) sum by (job) (increase(ihub_auth_events_total{auth_event="login_success"}[2h] offset 1d)) > 10
+        labels: { severity: warning }
+        annotations:
+          summary: Nobody signed in for 2 hours, unlike the same time yesterday
+      - alert: IHubIdentityProviderDown
+        expr: min by (job) (ihub_dependency_up{ihub_dependency_kind="idp"}) == 0
+        for: 5m
+        labels: { severity: critical }
+        annotations:
+          summary: The identity provider (OIDC userinfo / JWKS / token exchange) does not answer
+
+  - name: ihub-capacity
+    rules:
+      - alert: IHubEventLoopDelayHigh
+        expr: max by (job, service_instance_id) (nodejs_eventloop_delay_p99) > 0.2
+        for: 10m
+        labels: { severity: warning }
+        annotations:
+          summary: 'Event-loop delay p99 above 200 ms on {{ $labels.service_instance_id }}'
+      - alert: IHubMemoryNearLimit
+        expr: |
+          max by (job, service_instance_id) (process_memory_usage)
+            / on (job) group_left max by (job) (container_spec_memory_limit_bytes{container="ihub-apps"}) > 0.9
+        for: 10m
+        labels: { severity: warning }
+        annotations:
+          summary: 'Resident memory near the container limit on {{ $labels.service_instance_id }}'
+          description: Needs cAdvisor's container_spec_memory_limit_bytes; drop this rule without it.
+      - alert: IHubDiskAlmostFull
+        expr: |
+          max by (job, ihub_storage_mount) (ihub_storage_filesystem_usage)
+            / max by (job, ihub_storage_mount) (ihub_storage_filesystem_limit) > 0.85
+        for: 10m
+        labels: { severity: warning }
+        annotations:
+          summary: 'The {{ $labels.ihub_storage_mount }} volume is more than 85 % full'
+      - alert: IHubDependencyDown
+        expr: min by (job, ihub_dependency_kind) (ihub_dependency_up{ihub_dependency_kind!~"other|web"}) == 0
+        for: 5m
+        labels: { severity: warning }
+        annotations:
+          summary: 'Requests to {{ $labels.ihub_dependency_kind }} fail'
+      - alert: IHubOutboundTlsErrors
+        expr: sum by (job, ihub_dependency_kind) (increase(ihub_outbound_tls_errors_total[15m])) > 5
+        labels: { severity: warning }
+        annotations:
+          summary: 'TLS handshakes to {{ $labels.ihub_dependency_kind }} fail'
+          description: A rotated private CA or an intercepting proxy; see docs/ssl-certificates.md.
+      - alert: IHubExtractionQueueSlow
+        expr: histogram_quantile(0.95, sum by (le, job) (rate(ihub_extraction_queue_duration_bucket[15m]))) > 30
+        for: 15m
+        labels: { severity: warning }
+        annotations:
+          summary: Files wait more than 30 s (p95) for an extraction thread; consider more WORKERS
+      - alert: IHubConfigReloadErrors
+        expr: sum by (job, config_file) (increase(ihub_config_reload_total{error_type!=""}[15m])) > 0
+        labels: { severity: warning }
+        annotations:
+          summary: 'Reloading {{ $labels.config_file }} fails'

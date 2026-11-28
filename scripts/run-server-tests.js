@@ -73,8 +73,7 @@ const QUARANTINED = {
   'toolCallingIntegration.test.js': 'configured tools not found in the test environment',
   'pageReader-ssrf.test.js': 'redirect SSRF assertions fail: redirects are not rejected',
   'WebhookTrigger.test.js': 'raw signature assertion fails',
-  'teamsAuth.test.js': 'imports `getClearAuthCookieOptions`, no longer exported by cookieSettings',
-  'telemetry-providerMap.test.js': 'provider mapping assertions fail'
+  'teamsAuth.test.js': 'imports `getClearAuthCookieOptions`, no longer exported by cookieSettings'
 };
 
 function walk(dir, out = []) {

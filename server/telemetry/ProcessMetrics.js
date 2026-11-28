@@ -12,9 +12,12 @@ import logger from '../utils/logger.js';
  *
  * Exposed metrics:
  *   process.cpu.utilization               (gauge, 1)            - 0..1, normalised CPU usage
- *   process.runtime.nodejs.memory.usage   (gauge, By, by `mem.type` ∈ rss/heap_used/heap_total/external)
- *   process.runtime.nodejs.event_loop.delay (gauge, s)          - mean event-loop delay
- *   ihub.workers.count                    (gauge, {worker})     - number of cluster workers from this process's POV
+ *   process.memory.usage                  (gauge, By)           - resident set size
+ *   process.open_file_descriptor.count    (gauge)               - open file descriptors (Linux)
+ *   ihub.workers.count                    (gauge, {worker})     - 1 per worker process
+ *
+ * Event loop, GC and heap spaces: @opentelemetry/instrumentation-runtime-node
+ * (`nodejs.eventloop.*`, `v8js.*`), registered in telemetry.js.
  */
 export function initializeProcessMetrics(meterSource) {
   if (!meterSource || typeof meterSource.getMeter !== 'function') return;
@@ -50,30 +53,21 @@ export function initializeProcessMetrics(meterSource) {
     });
 
   meter
-    .createObservableGauge('process.runtime.nodejs.memory.usage', {
-      description: 'Node.js process memory usage by type',
+    .createObservableGauge('process.memory.usage', {
+      description:
+        'Resident set size of this process (per process: sum across workers). Heap detail: v8js.memory.heap.*',
       unit: 'By'
     })
     .addCallback(observableResult => {
       try {
-        const m = process.memoryUsage();
-        observableResult.observe(m.rss, { 'mem.type': 'rss' });
-        observableResult.observe(m.heapUsed, { 'mem.type': 'heap_used' });
-        observableResult.observe(m.heapTotal, { 'mem.type': 'heap_total' });
-        observableResult.observe(m.external, { 'mem.type': 'external' });
+        observableResult.observe(process.memoryUsage.rss());
       } catch (error) {
-        logger.warn('Failed to observe process.runtime.nodejs.memory.usage', {
+        logger.warn('Failed to observe process.memory.usage', {
           component: 'ProcessMetrics',
           error: error.message
         });
       }
     });
-
-  // Event-loop delay, utilisation, GC and heap spaces come from
-  // @opentelemetry/instrumentation-runtime-node (`nodejs.eventloop.*`,
-  // `v8js.*`), which reads them without resetting anything per scrape. The
-  // former `process.runtime.nodejs.event_loop.delay` reset its histogram on
-  // every read, so two scrapers (an HA Prometheus pair) each saw half.
 
   meter
     .createObservableGauge('process.open_file_descriptor.count', {
