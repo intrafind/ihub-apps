@@ -104,6 +104,8 @@ afterAll(() => {
 
 const DAY = '2026-10-15';
 const dailyFile = () => path.join(mockRollupDir, 'daily', `${DAY}.json`);
+const monthlyFile = () => path.join(mockRollupDir, 'monthly', `${DAY.slice(0, 7)}.json`);
+const NOW = Date.parse('2026-11-28T12:00:00Z');
 const listed = dir => {
   try {
     return fs.readdirSync(path.join(mockRollupDir, dir));
@@ -189,6 +191,34 @@ describe('runRollups serialization', () => {
     const stats = await runRollups();
     expect(stats).toMatchObject({ daysGenerated: 0 });
     expect(listed('daily')).toEqual([]);
+  });
+
+  it('rebuilds a month whose monthly rollup has the same time as a daily one', async () => {
+    mockDays = [DAY];
+    await runRollups();
+    // A filesystem with whole-second timestamps cannot tell which came first.
+    const at = new Date('2026-11-01T00:00:00Z');
+    fs.utimesSync(dailyFile(), at, at);
+    fs.utimesSync(monthlyFile(), at, at);
+    const stats = await runRollups();
+    expect(stats).toMatchObject({ daysGenerated: 0, monthsGenerated: 1 });
+    // The rebuild leaves the monthly rollup newer, so the next run leaves it alone.
+    expect(await runRollups()).toMatchObject({ monthsGenerated: 0 });
+  });
+
+  it('does not rebuild a month some of whose days daily retention removed', async () => {
+    mockDays = [DAY];
+    await runRollups();
+    const monthlyBefore = fs.readFileSync(monthlyFile(), 'utf8');
+    fs.utimesSync(
+      monthlyFile(),
+      new Date('2026-10-20T00:00:00Z'),
+      new Date('2026-10-20T00:00:00Z')
+    );
+    // 40 days before NOW reaches into 2026-10: that month's earlier days are gone.
+    const stats = await runRollups({ dailyRetentionDays: 40 }, { now: NOW });
+    expect(stats).toMatchObject({ daysGenerated: 0, monthsGenerated: 0 });
+    expect(fs.readFileSync(monthlyFile(), 'utf8')).toBe(monthlyBefore);
   });
 
   it('does not rebuild months that monthly retention removed', async () => {

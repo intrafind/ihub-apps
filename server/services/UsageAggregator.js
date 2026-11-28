@@ -170,26 +170,43 @@ export async function generateDailyRollups({ now = Date.now(), all = false, leas
   return { daysGenerated: days.length, eventsProcessed, days };
 }
 
+/** The `YYYY-MM` of the retention cutoff `retentionDays` before `now`, or '' to keep all. */
+function cutoffMonth(retentionDays, now) {
+  return Number.isFinite(retentionDays) && retentionDays > 0
+    ? new Date(now - retentionDays * DAY_MS).toISOString().slice(0, 7)
+    : '';
+}
+
 /**
- * Months whose monthly rollup is missing or older than one of their daily
+ * Months whose monthly rollup is missing or not newer than one of their daily
  * rollups: a run that stopped between a day and its month (a lost lease, a
  * crash) left them behind, and the next run does not rebuild that day again,
- * because its rollup is now newer than its event file. Months past the monthly
- * retention are left out, or retention and this would delete and rebuild them
- * on every run.
+ * because its rollup is now newer than its event file. Equal times count as
+ * behind (a filesystem with coarse timestamps); the rebuild then gives the
+ * monthly rollup a later time, so a month is rebuilt at most once for that.
+ *
+ * Left out:
+ * - months past the monthly retention, or retention and this would delete and
+ *   rebuild them on every run;
+ * - months reaching back past the daily retention (the month of its cutoff and
+ *   older): some of their days are gone, and rebuilding from the rest would
+ *   replace a complete monthly rollup with a partial one.
  *
  * @param {string[]} files - The daily rollup directory's entries
  * @param {Object} opts
  * @param {number} [opts.retentionDays] - platform `monthlyRetentionDays`
+ * @param {number} [opts.dailyRetentionDays] - platform `dailyRetentionDays`
  * @param {number} [opts.now]
  * @returns {Promise<string[]>}
  */
-async function staleMonths(files, { retentionDays, now = Date.now() }) {
-  const cutoff =
-    Number.isFinite(retentionDays) && retentionDays > 0
-      ? new Date(now - retentionDays * DAY_MS).toISOString().slice(0, 7)
-      : '';
-  const daily = files.filter(f => /^\d{4}-\d{2}-\d{2}\.json$/.test(f) && f.slice(0, 7) >= cutoff);
+async function staleMonths(files, { retentionDays, dailyRetentionDays, now = Date.now() }) {
+  const monthlyCutoff = cutoffMonth(retentionDays, now);
+  const dailyCutoff = cutoffMonth(dailyRetentionDays, now);
+  const daily = files.filter(f => {
+    if (!/^\d{4}-\d{2}-\d{2}\.json$/.test(f)) return false;
+    const month = f.slice(0, 7);
+    return month >= monthlyCutoff && (!dailyCutoff || month > dailyCutoff);
+  });
   const times = await Promise.all(daily.map(f => mtimeOf(path.join(getDailyDir(), f))));
   const newestDaily = new Map();
   daily.forEach((file, i) => {
@@ -200,7 +217,7 @@ async function staleMonths(files, { retentionDays, now = Date.now() }) {
   });
   const months = [...newestDaily.keys()];
   const monthlyTimes = await Promise.all(months.map(m => mtimeOf(monthlyRollupFile(m))));
-  return months.filter((m, i) => monthlyTimes[i] === null || monthlyTimes[i] < newestDaily.get(m));
+  return months.filter((m, i) => monthlyTimes[i] === null || monthlyTimes[i] <= newestDaily.get(m));
 }
 
 /**
@@ -211,10 +228,14 @@ async function staleMonths(files, { retentionDays, now = Date.now() }) {
  * @param {Object} [opts]
  * @param {Object} [opts.lease] - the rollup lease to check before each write
  * @param {number} [opts.retentionDays] - platform `monthlyRetentionDays`
+ * @param {number} [opts.dailyRetentionDays] - platform `dailyRetentionDays`
  * @param {number} [opts.now]
  * @returns {Promise<{monthsGenerated: number}>}
  */
-export async function generateMonthlyRollups(days, { lease, retentionDays, now } = {}) {
+export async function generateMonthlyRollups(
+  days,
+  { lease, retentionDays, dailyRetentionDays, now } = {}
+) {
   let files = [];
   try {
     files = await fs.readdir(getDailyDir());
@@ -224,7 +245,7 @@ export async function generateMonthlyRollups(days, { lease, retentionDays, now }
   const months = [
     ...new Set([
       ...days.map(d => d.slice(0, 7)),
-      ...(await staleMonths(files, { retentionDays, now }))
+      ...(await staleMonths(files, { retentionDays, dailyRetentionDays, now }))
     ])
   ].sort();
   let generated = 0;
@@ -378,6 +399,7 @@ async function rollUp(retentionConfig, opts) {
   const { monthsGenerated } = await generateMonthlyRollups(days, {
     lease: opts.lease,
     retentionDays: retentionConfig.monthlyRetentionDays,
+    dailyRetentionDays: retentionConfig.dailyRetentionDays,
     now: opts.now
   });
   let eventsDeleted = 0;
