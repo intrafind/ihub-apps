@@ -247,7 +247,7 @@ export async function generateMonthlyRollups(
       ...days.map(d => d.slice(0, 7)),
       ...(await staleMonths(files, { retentionDays, dailyRetentionDays, now }))
     ])
-  ].sort();
+  ].sort((a, b) => a.localeCompare(b));
   let generated = 0;
   for (const month of months) {
     const rollups = [];
