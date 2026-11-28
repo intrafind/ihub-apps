@@ -21,7 +21,7 @@ Developers adding spans or metrics: follow the [Observability Guidelines](observ
 | --- | --- | --- |
 | **Spans** | `chat gpt-4o`, `generate_content gemini-2.5-pro` | Jaeger, Tempo, OTLP collector |
 | **Metrics** | `gen_ai.client.token.usage`, `gen_ai.client.operation.duration`, `ihub.app.usage`, `ihub.active.users` | Prometheus, OTLP collector |
-| **Events**  | `gen_ai.content.prompt`, `gen_ai.content.completion`, `gen_ai.choice` | Attached to spans |
+| **Captured content** (opt-in) | `gen_ai.input.messages`, `gen_ai.output.messages` | Attributes of the LLM span |
 | **Logs**    | Activity summary, structured server logs | Stdout, file, OTLP log collector |
 
 Telemetry is **disabled by default**. No PII (prompts, completions) is captured unless
@@ -187,6 +187,7 @@ changes every pseudonym, which unlinks older traces. Per-user reports belong in
 | `events.includePrompts`, `events.includeCompletions`, `events.maxEventSize` | No - applied immediately |
 | `spans.includeOptInAttributes`, `spans.userIdMode` | No - applied immediately |
 | `spans.sampleRate` | Yes |
+| `spans.enabled` | Turning spans **off**: no - applied immediately, auto-instrumentation spans included. Turning them **on** after a start with spans off: yes |
 | `activitySummary.*` | No - re-armed on save |
 
 ## Spans
@@ -446,7 +447,8 @@ Process / runtime gauges (registered automatically when telemetry is enabled):
 
 - `ihub.telemetry.export.failures` - counter of failed exports, labelled by `telemetry.signal`
   (`traces`, `metrics`, `logs`) and `error.type` (`tls`, `connection_refused`, `dns`, `timeout`,
-  `network`, `authentication`, `http_4xx`, `http_5xx`, `deferred`, `unknown`). Per process: `sum`
+  `network`, `authentication`, `http_4xx`, `http_5xx`, `deferred`, `incomplete` (a Prometheus
+  scrape that lacked a worker's answer), `unknown`). Per process: `sum`
   across workers
 - `ihub.telemetry.export.last_success` - gauge, seconds since the epoch of the last successful
   export per `telemetry.signal`; for Prometheus the last served scrape. Per process: `max` across

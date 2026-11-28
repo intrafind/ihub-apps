@@ -141,8 +141,13 @@ export class RedactingSpanProcessor {
   }
 
   onEnd(span) {
+    let options;
     try {
-      redactSpan(span, this.getOptions());
+      options = this.getOptions();
+      // spans.enabled is switched off at runtime: the helpers stop creating
+      // spans, and this drops the ones auto-instrumentation still creates.
+      if (options.exportEnabled === false) return;
+      redactSpan(span, options);
     } catch {
       // A span that could not be redacted is dropped, never exported as it is.
       return;

@@ -167,23 +167,41 @@ function elementKey(element) {
  * @param {Array<{key: string, array: boolean}>} segments
  * @param {(holder: Object, storedHolder: Object|undefined, leaf: string, pointer: string[]) => void} visit
  * @param {string[]} [pointer] - The path walked so far
+ * @param {Object} [options]
+ * @param {boolean} [options.storedKeys=false] - A `*` leaf also visits the keys
+ *   only `stored` has (rollback: the current secrets stay), creating the
+ *   holding object in `next` when only `stored` has one
  */
-function walk(next, stored, segments, visit, pointer = []) {
+function walk(next, stored, segments, visit, pointer = [], options = {}) {
   if (!isPlainObject(next)) return;
   const [segment, ...rest] = segments;
   if (rest.length === 0) {
     const storedHolder = isPlainObject(stored) ? stored : undefined;
     if (segment.key === '*') {
-      for (const key of Object.keys(next)) visit(next, storedHolder, key, pointer);
+      const keys = new Set(Object.keys(next));
+      if (options.storedKeys && storedHolder) {
+        for (const key of Object.keys(storedHolder)) keys.add(key);
+      }
+      for (const key of keys) visit(next, storedHolder, key, pointer);
       return;
     }
     visit(next, storedHolder, segment.key, pointer);
     return;
   }
-  const child = next[segment.key];
   const storedChild = isPlainObject(stored) ? stored[segment.key] : undefined;
+  if (
+    options.storedKeys &&
+    rest.length === 1 &&
+    rest[0].key === '*' &&
+    !segment.array &&
+    next[segment.key] === undefined &&
+    isPlainObject(storedChild)
+  ) {
+    next[segment.key] = {};
+  }
+  const child = next[segment.key];
   if (!segment.array) {
-    walk(child, storedChild, rest, visit, [...pointer, segment.key]);
+    walk(child, storedChild, rest, visit, [...pointer, segment.key], options);
     return;
   }
   if (!Array.isArray(child)) return;
@@ -196,11 +214,14 @@ function walk(next, stored, segments, visit, pointer = []) {
   }
   child.forEach((element, index) => {
     const key = elementKey(element);
-    walk(element, key ? storedByKey.get(key) : undefined, rest, visit, [
-      ...pointer,
-      segment.key,
-      String(index)
-    ]);
+    walk(
+      element,
+      key ? storedByKey.get(key) : undefined,
+      rest,
+      visit,
+      [...pointer, segment.key, String(index)],
+      options
+    );
   });
 }
 
@@ -365,8 +386,14 @@ export function restoreRedacted(
   { mode = 'save' } = {}
 ) {
   for (const { path, kind = 'secret' } of secretPaths) {
-    walk(next, stored, parsePath(path), (holder, storedHolder, leaf) =>
-      restoreLeaf(holder, storedHolder?.[leaf], leaf, { kind, mode })
+    walk(
+      next,
+      stored,
+      parsePath(path),
+      (holder, storedHolder, leaf) =>
+        restoreLeaf(holder, storedHolder?.[leaf], leaf, { kind, mode }),
+      [],
+      { storedKeys: mode === 'rollback' && kind === 'secret' }
     );
   }
   return next;

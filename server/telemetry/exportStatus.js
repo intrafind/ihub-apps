@@ -41,6 +41,7 @@ export const EXPORT_FAILURE_REASONS = Object.freeze([
   'http_4xx',
   'http_5xx',
   'deferred',
+  'incomplete',
   'unknown'
 ]);
 
@@ -90,6 +91,7 @@ export function exportFailureReason(error) {
       if (status >= 500 && status < 600) return 'http_5xx';
     }
     if (current.deferred === true) return 'deferred';
+    if (current.incomplete === true) return 'incomplete';
   }
   return networkErrorClass(error).type;
 }

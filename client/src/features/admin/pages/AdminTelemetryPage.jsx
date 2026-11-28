@@ -111,6 +111,21 @@ function AdminTelemetryPage() {
 
   const handleSave = async () => {
     if (!ready) return;
+    const maxEventSize = config.events?.maxEventSize;
+    if (
+      maxEventSize !== undefined &&
+      !(Number.isInteger(maxEventSize) && maxEventSize >= 1 && maxEventSize <= 4096)
+    ) {
+      setSaveFailed(true);
+      setMessage({
+        type: 'error',
+        text: t(
+          'admin.telemetry.maxEventSizeInvalid',
+          'Max captured characters must be a whole number from 1 to 4096.'
+        )
+      });
+      return;
+    }
     try {
       setSaving(true);
       setSaveFailed(false);
