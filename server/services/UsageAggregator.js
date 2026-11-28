@@ -92,11 +92,15 @@ async function writeJsonAtomic(file, data, lease) {
   await fs.mkdir(path.dirname(file), { recursive: true });
   const tmp = `${file}.${process.pid}.${Date.now()}.tmp`;
   await fs.writeFile(tmp, JSON.stringify(data));
-  if (lease && !(await lease.isCurrent())) {
+  try {
+    if (lease && !(await lease.isCurrent())) throw new RollupLeaseLostError();
+    await renameWithRetry(tmp, file);
+  } catch (error) {
+    // A lost lease, a lease that cannot be read, a failed rename: retention
+    // only removes `.json` files, so the snapshot would stay behind for good.
     await fs.unlink(tmp).catch(() => {});
-    throw new RollupLeaseLostError();
+    throw error;
   }
-  await renameWithRetry(tmp, file);
 }
 
 export function dailyRollupFile(date) {
@@ -167,21 +171,62 @@ export async function generateDailyRollups({ now = Date.now(), all = false, leas
 }
 
 /**
- * Rebuild the monthly rollups of the given days' months from their daily
- * rollups.
+ * Months whose monthly rollup is missing or older than one of their daily
+ * rollups: a run that stopped between a day and its month (a lost lease, a
+ * crash) left them behind, and the next run does not rebuild that day again,
+ * because its rollup is now newer than its event file. Months past the monthly
+ * retention are left out, or retention and this would delete and rebuild them
+ * on every run.
+ *
+ * @param {string[]} files - The daily rollup directory's entries
+ * @param {Object} opts
+ * @param {number} [opts.retentionDays] - platform `monthlyRetentionDays`
+ * @param {number} [opts.now]
+ * @returns {Promise<string[]>}
+ */
+async function staleMonths(files, { retentionDays, now = Date.now() }) {
+  const cutoff =
+    Number.isFinite(retentionDays) && retentionDays > 0
+      ? new Date(now - retentionDays * DAY_MS).toISOString().slice(0, 7)
+      : '';
+  const daily = files.filter(f => /^\d{4}-\d{2}-\d{2}\.json$/.test(f) && f.slice(0, 7) >= cutoff);
+  const times = await Promise.all(daily.map(f => mtimeOf(path.join(getDailyDir(), f))));
+  const newestDaily = new Map();
+  daily.forEach((file, i) => {
+    const month = file.slice(0, 7);
+    if (times[i] !== null && times[i] > (newestDaily.get(month) ?? -Infinity)) {
+      newestDaily.set(month, times[i]);
+    }
+  });
+  const months = [...newestDaily.keys()];
+  const monthlyTimes = await Promise.all(months.map(m => mtimeOf(monthlyRollupFile(m))));
+  return months.filter((m, i) => monthlyTimes[i] === null || monthlyTimes[i] < newestDaily.get(m));
+}
+
+/**
+ * Rebuild the monthly rollups of the given days' months, and of every month
+ * whose monthly rollup is behind its daily rollups ({@link staleMonths}), from
+ * their daily rollups.
  * @param {string[]} days
  * @param {Object} [opts]
  * @param {Object} [opts.lease] - the rollup lease to check before each write
+ * @param {number} [opts.retentionDays] - platform `monthlyRetentionDays`
+ * @param {number} [opts.now]
  * @returns {Promise<{monthsGenerated: number}>}
  */
-export async function generateMonthlyRollups(days, { lease } = {}) {
-  const months = [...new Set(days.map(d => d.slice(0, 7)))];
+export async function generateMonthlyRollups(days, { lease, retentionDays, now } = {}) {
   let files = [];
   try {
     files = await fs.readdir(getDailyDir());
   } catch {
     return { monthsGenerated: 0 };
   }
+  const months = [
+    ...new Set([
+      ...days.map(d => d.slice(0, 7)),
+      ...(await staleMonths(files, { retentionDays, now }))
+    ])
+  ].sort();
   let generated = 0;
   for (const month of months) {
     const rollups = [];
@@ -330,7 +375,11 @@ export function runRollups(retentionConfig = {}, opts = {}) {
 async function rollUp(retentionConfig, opts) {
   const eventsFlushed = (await flushQueue().catch(() => 0)) || 0;
   const { daysGenerated, eventsProcessed, days } = await generateDailyRollups(opts);
-  const { monthsGenerated } = await generateMonthlyRollups(days, { lease: opts.lease });
+  const { monthsGenerated } = await generateMonthlyRollups(days, {
+    lease: opts.lease,
+    retentionDays: retentionConfig.monthlyRetentionDays,
+    now: opts.now
+  });
   let eventsDeleted = 0;
   if (retentionConfig.eventRetentionDays != null) {
     eventsDeleted = await cleanupEvents(retentionConfig.eventRetentionDays, opts.now);

@@ -163,6 +163,42 @@ describe('runRollups serialization', () => {
     expect(listed('monthly')).toEqual([]);
   });
 
+  it('rebuilds a month the run before stopped short of, when it lost the lease after the day', async () => {
+    mockStorage = storageWithLock();
+    mockDays = [DAY];
+    // Current for the daily write, lost for the monthly one.
+    const answers = [true, false];
+    mockStorage.lease.isCurrent = async () => answers.shift() ?? true;
+    await expect(runRollups()).rejects.toThrow(/lost its lease/);
+    expect(fs.existsSync(dailyFile())).toBe(true);
+    expect(listed('monthly')).toEqual([]);
+
+    // The day is fresh now and not rebuilt again; its month still is.
+    const stats = await runRollups();
+    expect(stats).toMatchObject({ daysGenerated: 0, monthsGenerated: 1 });
+    expect(listed('monthly')).toEqual(['2026-10.json']);
+  });
+
+  it('leaves no temporary file behind when the lease cannot be read', async () => {
+    mockStorage = storageWithLock();
+    mockStorage.lease.isCurrent = async () => {
+      throw new Error('fence file unreadable');
+    };
+    mockDays = [DAY];
+    // Like any failed write of one day, it is logged and the run goes on.
+    const stats = await runRollups();
+    expect(stats).toMatchObject({ daysGenerated: 0 });
+    expect(listed('daily')).toEqual([]);
+  });
+
+  it('does not rebuild months that monthly retention removed', async () => {
+    mockDays = [DAY];
+    await runRollups({ monthlyRetentionDays: 1 });
+    expect(listed('monthly')).toEqual([]);
+    const stats = await runRollups({ monthlyRetentionDays: 1 });
+    expect(stats).toMatchObject({ daysGenerated: 0, monthsGenerated: 0, monthlyDeleted: 0 });
+  });
+
   it('keeps going after a run that failed', async () => {
     mockFailNext = true;
     const [first, second] = await Promise.allSettled([runRollups(), runRollups()]);
