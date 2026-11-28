@@ -91,6 +91,7 @@ Which decisions might a reviewer question? Few, if any: a simple fix has none, a
 
 ## Impact
 What changes for users / operators / downstream code?
+How will an operator see that it works, is used and fails: the span or metric added, the existing signal that covers it, or why nothing applies (`docs/observability-guidelines.md`). One line is enough.
 
 ## Notes
 Which alternatives were actually considered? Omit when none.

@@ -74,6 +74,17 @@ Full rules: `docs/api-guidelines.md` (use the `api-design` skill when adding or 
 - Lists are `{ items, nextCursor }` with `limit` / `cursor`; no `page`, `offset`, `pageSize`, `after`.
 - Changes are additive. Breaking an endpoint with external callers needs `Deprecation` / `Sunset` headers; ask before adding a shim.
 
+### Observability: Spans, Metrics, Logs ⚠️
+
+Full rules: `docs/observability-guidelines.md` (use the `observability-design` skill when implementing a feature, an outbound dependency, a tool, a background job, or touching `server/telemetry/`). Short form:
+
+- **Every implementation answers it**: how will an operator know that this works, is used, and is failing? Write the answer in the PR's **Impact** section: the span/metric you added, the existing signal that covers it, or why nothing applies (UI-only, refactor, test).
+- New outbound dependency → CLIENT span + duration histogram with `error.type`, called via `httpFetch()`. New background job / worker thread → root span, outcome counter, duration; context propagated. New queue/cache/pool → size gauge + wait histogram. New auth/security event → `ihub.auth.events` (or a security counter) **and** an audit entry. LLM calls through `LLMClient` and tools through the agent loop are already instrumented.
+- Spans: low-cardinality names (`execute_tool {tool.name}`), semconv attributes first, created through `server/telemetry/` helpers, active when they have children, ended in `finally`; errors set `error.type` only (no `recordException`, no `error.message`); a user stop is not an error.
+- Metrics: defined only in `server/telemetry/metrics.js` behind a `recordX()` function; `ihub.<area>.<thing>`, units `s`/`By`; every label from a closed set and in `ALLOWED_METRIC_LABELS`. Never a user, email, group, id, file name, URL, query or free text as a label.
+- Privacy: no prompts, completions, queries, tool arguments, titles, file names, URL queries, clear-text identities, secrets or raw provider error messages on any span, metric or log line. Content only through the opt-in content events.
+- Tests assert the labels/attributes and the privacy default; new signals go into the reference in `docs/telemetry.md`.
+
 ### Breaking Changes
 
 **Always ask the user before implementing backward compatibility shims.** Describe what breaks (endpoints, fields, data shapes), let them choose compat vs clean break. Never silently add compat wrappers or deprecated re-exports.

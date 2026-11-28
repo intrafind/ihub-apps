@@ -157,6 +157,7 @@
 - [Chat Persistence](chat-persistence.md)
 - [Artifacts](artifacts.md)
 - [API Guidelines](api-guidelines.md)
+- [Observability Guidelines](observability-guidelines.md)
 - [Configuration Migrations](configuration-migrations.md)
 - [Building an Integration](integration-development.md)
 - [Release Process](release-process.md)
