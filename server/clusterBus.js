@@ -83,6 +83,7 @@ import cluster from 'node:cluster';
 import logger from './utils/logger.js';
 import { Histogram, registerGauge, statRecord } from './telemetry/waitDiagnostics.js';
 import { injectContext, runInCarrierContext } from './telemetry/spans.js';
+import { recordClusterBusTimeout } from './telemetry/metrics.js';
 
 /** Envelope marker so bus traffic never collides with other IPC messages. */
 const ENVELOPE = '__ihubBus';
@@ -773,6 +774,7 @@ export function request(type, payload, { route, timeoutMs = 1500, primaryOnly = 
     const timer = setTimeout(() => {
       pendingRequests.delete(requestId);
       diag.timeouts += 1;
+      recordClusterBusTimeout('request');
       logger.warn({
         component: 'ClusterBus',
         message: 'Cross-worker request timed out',
@@ -846,6 +848,9 @@ export function gather(type, payload, { expected, timeoutMs = 1000 } = {}) {
     };
     const timer = setTimeout(() => {
       diag.fullTimeouts += 1;
+      // Without `expected` a gather always runs to its timeout; with it, a
+      // timeout means a worker stayed silent.
+      if (Number.isFinite(expected)) recordClusterBusTimeout('gather');
       finish();
     }, timeoutMs);
     timer.unref?.();
@@ -1019,6 +1024,7 @@ export function lookupRemote(kind, key, { timeoutMs = 1000 } = {}) {
     const timer = setTimeout(() => {
       pendingLookups.delete(lookupId);
       diag.timeouts += 1;
+      recordClusterBusTimeout('request');
       logger.warn({
         component: 'ClusterBus',
         message: 'Presence lookup timed out',

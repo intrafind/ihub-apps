@@ -112,6 +112,9 @@ attribute names need updating.
   inbound spans without the caller's IP address, and winston no longer sends log records.
 - In Prometheus mode every series carries a `cluster_worker_id` label, and `service.instance.id`
   is `<host>-w<worker>` instead of a random id per process.
+- `process.runtime.nodejs.event_loop.delay` is gone; use `nodejs.eventloop.delay.*` (with
+  percentiles) and `nodejs.eventloop.utilization` instead.
+- `ihub.auth.events` reports an unknown `auth.provider` or `auth.event` as `other`.
 
 **Before upgrading:**
 

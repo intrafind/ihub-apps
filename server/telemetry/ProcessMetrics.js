@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
-import { monitorEventLoopDelay } from 'node:perf_hooks';
+import fs from 'node:fs';
 import cluster from 'node:cluster';
 import logger from '../utils/logger.js';
 
@@ -20,11 +20,6 @@ export function initializeProcessMetrics(meterSource) {
   if (!meterSource || typeof meterSource.getMeter !== 'function') return;
 
   const meter = meterSource.getMeter('ihub-apps-process', '1.0.0');
-
-  // Event-loop delay histogram - once per process. Use a 100ms resolution
-  // monitor; we only read the mean / stddev each scrape.
-  const elDelay = monitorEventLoopDelay({ resolution: 100 });
-  elDelay.enable();
 
   // CPU utilisation needs a previous sample to compute against.
   let lastCpu = process.cpuUsage();
@@ -74,25 +69,20 @@ export function initializeProcessMetrics(meterSource) {
       }
     });
 
+  // Event-loop delay, utilisation, GC and heap spaces come from
+  // @opentelemetry/instrumentation-runtime-node (`nodejs.eventloop.*`,
+  // `v8js.*`), which reads them without resetting anything per scrape. The
+  // former `process.runtime.nodejs.event_loop.delay` reset its histogram on
+  // every read, so two scrapers (an HA Prometheus pair) each saw half.
+
   meter
-    .createObservableGauge('process.runtime.nodejs.event_loop.delay', {
-      description: 'Mean event-loop delay since the last scrape (seconds)',
-      unit: 's'
+    .createObservableGauge('process.open_file_descriptor.count', {
+      description: 'Open file descriptors of this process (Linux; per process: sum across workers)',
+      unit: '{file_descriptor}'
     })
     .addCallback(observableResult => {
-      try {
-        // .mean is in nanoseconds; convert to seconds for the unit
-        const meanSec = elDelay.mean / 1e9;
-        if (Number.isFinite(meanSec)) {
-          observableResult.observe(meanSec);
-        }
-        elDelay.reset();
-      } catch (error) {
-        logger.warn('Failed to observe event_loop.delay', {
-          component: 'ProcessMetrics',
-          error: error.message
-        });
-      }
+      const count = openFileDescriptors();
+      if (count !== null) observableResult.observe(count);
     });
 
   meter
@@ -126,4 +116,18 @@ export function initializeProcessMetrics(meterSource) {
     });
 
   logger.info('Process metrics initialized', { component: 'ProcessMetrics' });
+}
+
+/**
+ * The number of open file descriptors of this process, from `/proc/self/fd`;
+ * null where there is no procfs (macOS, Windows).
+ *
+ * @returns {number|null}
+ */
+export function openFileDescriptors() {
+  try {
+    return fs.readdirSync('/proc/self/fd').length;
+  } catch {
+    return null;
+  }
 }

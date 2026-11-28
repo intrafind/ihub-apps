@@ -96,6 +96,7 @@ import * as defaultTelemetry from './chatTelemetry.js';
 import modelDiscoveryService from '../ModelDiscoveryService.js';
 import { recordTextOutput } from '../provenance/turnProvenance.js';
 import { endTurnSpan, startTurnSpan } from '../../telemetry/traces.js';
+import { currentClientChannel } from '../../telemetry/channel.js';
 
 const COMPONENT = 'ChatService';
 
@@ -295,6 +296,26 @@ function clientConnectedOf(persist, chatId) {
     }
   }
   return hasChatClient(chatId);
+}
+
+/**
+ * The surface and client channel of a turn, for its metrics: a scheduled run
+ * is a `task`, a turn through the inference API, MCP or A2A is `api`, every
+ * other turn `chat`.
+ *
+ * @param {Object} params - `runTurn` parameters
+ * @returns {{surface: string, channel: string}}
+ */
+function turnSurfaceOf(params) {
+  const channel = currentClientChannel({
+    user: params?.user,
+    platform: configCache.getPlatform?.()
+  });
+  if (params?.trigger?.type === 'schedule') return { surface: 'task', channel };
+  if (channel === 'openai_proxy' || channel === 'mcp' || channel === 'a2a') {
+    return { surface: 'api', channel };
+  }
+  return { surface: 'chat', channel };
 }
 
 class ChatService {
@@ -518,7 +539,8 @@ class ChatService {
       chatId: params?.chatId,
       userId: params?.user?.id,
       trigger: params?.trigger?.type,
-      streaming: params?.streaming !== false
+      streaming: params?.streaming !== false,
+      ...turnSurfaceOf(params)
     });
     try {
       const result = await span.run(() => this._runTurnTraced(params));
@@ -1962,17 +1984,25 @@ class ChatService {
    * @returns {Promise<Object>} The invocation result
    */
   async invokeAppInternal(opts) {
+    // MCP and A2A pass `turnSurface: 'api'`: their invocation is the client's
+    // turn. An app called as another app's tool passes none: it is part of the
+    // calling turn and records no turn of its own.
+    const turnSurface = opts?.turnSurface;
     const span = startTurnSpan({
       appId: opts?.appId,
       chatId: opts?.chatId,
       userId: opts?.user?.id,
       trigger: 'agent',
       streaming: false,
-      kind: 'subagent'
+      kind: 'subagent',
+      surface: turnSurface ?? 'agent',
+      channel: currentClientChannel({ user: opts?.user, platform: configCache.getPlatform?.() }),
+      metrics: turnSurface !== undefined
     });
     try {
       const result = await span.run(() => this._invokeAppTraced(opts));
-      endTurnSpan(span, result);
+      // A stopped invocation is returned as an error to its caller; the turn was aborted.
+      endTurnSpan(span, result?.aborted ? { ...result, status: 'aborted' } : result);
       return result;
     } catch (error) {
       span.fail(error);
@@ -2197,6 +2227,7 @@ class ChatService {
         });
         return {
           status: 'error',
+          ...(result.status === 'aborted' ? { aborted: true } : {}),
           runId,
           error: {
             message: result.error?.message || `App invocation ${result.status}`,

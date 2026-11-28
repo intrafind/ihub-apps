@@ -27,7 +27,12 @@ import {
 } from './attributes.js';
 import { inputMessagesAttributes, outputMessagesAttributes } from './contentCapture.js';
 import { conversationSpanAttributes, userSpanAttributes } from './identity.js';
-import { recordOperationDuration, recordTokenUsage } from './metrics.js';
+import {
+  recordLlmInflight,
+  recordOperationDuration,
+  recordTimeToFirstChunk,
+  recordTokenUsage
+} from './metrics.js';
 import { errorTypeOf, isAbortError, SpanKind, startSpan } from './spans.js';
 
 /**
@@ -46,6 +51,7 @@ export class LLMCallTelemetry {
    * @param {string} [call.conversationId] - Hashed by `identity.js`
    * @param {number} [call.messageCount]
    * @param {boolean} [call.isFollowUp]
+   * @param {string} [call.surface] - `chat`, `agent`, `workflow`, `task`, `api`, `magic`, `system`
    * @param {number} [call.startedAt] - ms timestamp; defaults to now
    */
   constructor(config, call) {
@@ -53,19 +59,25 @@ export class LLMCallTelemetry {
     this.startedAt = call.startedAt ?? Date.now();
     this.ended = false;
     const modelId = call.model?.modelId;
-    // The metric labels: closed sets only (operation, provider, model id from
-    // config, app id from config). Never read back from the span.
+    const server = buildServerAttributes(call.model);
+    // The metric labels: closed sets only (operation, provider, model id and
+    // endpoint host from config, app id from config, surface). Never read back
+    // from the span.
     this.metricAttributes = {
       ...buildOperationAttributes(call.operation),
       ...buildProviderAttributes(call.provider),
       ...(modelId ? { 'gen_ai.request.model': modelId } : {}),
-      ...(call.appId ? { 'app.id': call.appId } : {})
+      ...(call.appId ? { 'app.id': call.appId } : {}),
+      ...(call.surface ? { 'ihub.surface': call.surface } : {}),
+      ...(server['server.address'] ? { 'server.address': server['server.address'] } : {})
     };
+    this.firstChunkSeen = false;
+    recordLlmInflight(1, this.metricAttributes['gen_ai.provider.name']);
     this.span = startSpan(`${this.metricAttributes['gen_ai.operation.name']} ${modelId}`, {
       kind: SpanKind.CLIENT,
       attributes: {
         ...this.metricAttributes,
-        ...buildServerAttributes(call.model),
+        ...server,
         ...userSpanAttributes(call.userId),
         ...conversationSpanAttributes(call.conversationId),
         ...(Number.isInteger(call.messageCount)
@@ -128,6 +140,7 @@ export class LLMCallTelemetry {
     } catch {
       /* telemetry must never break a call */
     } finally {
+      this._settled();
       this.span.end();
     }
   }
@@ -150,6 +163,7 @@ export class LLMCallTelemetry {
     } catch {
       /* telemetry must never break a call */
     } finally {
+      this._settled();
       this.span.end();
     }
   }
@@ -187,7 +201,25 @@ export class LLMCallTelemetry {
     if (this.ended) return;
     this.ended = true;
     this.span.setAttributes({ 'ihub.stream.abandoned': true });
+    this._settled();
     this.span.end();
+  }
+
+  /**
+   * The first output chunk of a streamed call arrived: records
+   * `gen_ai.client.operation.time_to_first_chunk` (once) and the span attribute.
+   */
+  firstChunk() {
+    if (this.firstChunkSeen || this.ended) return;
+    this.firstChunkSeen = true;
+    const seconds = this.durationSeconds();
+    recordTimeToFirstChunk(seconds, this.metricAttributes);
+    this.span.setAttributes({ 'gen_ai.response.time_to_first_chunk': seconds });
+  }
+
+  /** The call is over: one less in flight. */
+  _settled() {
+    recordLlmInflight(-1, this.metricAttributes['gen_ai.provider.name']);
   }
 
   /** @returns {number} Seconds since the call started. */

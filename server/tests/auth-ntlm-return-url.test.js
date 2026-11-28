@@ -12,6 +12,7 @@
 import { jest } from '@jest/globals';
 import express from 'express';
 import request from 'supertest';
+import { metricsMock } from './helpers/metricsMock.js';
 
 const platform = { ntlmAuth: { enabled: true } };
 
@@ -34,7 +35,7 @@ jest.unstable_mockModule('../middleware/ntlmAuth.js', () => ({
   NTLM_REQUESTED_COOKIE: 'ntlmRequested'
 }));
 jest.unstable_mockModule('../services/AuditLogService.js', () => ({ logAudit: () => {} }));
-jest.unstable_mockModule('../telemetry/metrics.js', () => ({ recordAuthEvent: () => {} }));
+jest.unstable_mockModule('../telemetry/metrics.js', () => metricsMock());
 
 const { default: registerAuthRoutes, sameOriginReturnPath } = await import('../routes/auth.js');
 const { default: errorHandler } = await import('../middleware/errorHandler.js');

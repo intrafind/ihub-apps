@@ -121,7 +121,9 @@ export async function recordLlmCall(call) {
  */
 export async function recordFeedback(fb) {
   try {
-    recordFeedbackMetric(fb.appId, fb.rating);
+    // The model id is what the client sent: a label only when it is configured.
+    const knownModel = (configCache.getModels?.()?.data || []).some(m => m.id === fb.modelId);
+    recordFeedbackMetric(fb.appId, fb.rating, { modelId: knownModel ? fb.modelId : null });
     if (!isUsageTrackingEnabled()) return null;
     // Feedback storage off (`features.feedbackTracking: false`) keeps nothing,
     // the usage statistics included.

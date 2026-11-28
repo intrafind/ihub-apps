@@ -18,6 +18,12 @@ import logger from './logger.js';
 import { guardedLookup } from './dnsGuard.js';
 import tokenStorageService from '../services/TokenStorageService.js';
 import { redactUrlSecrets } from './secretNames.js';
+import { recordOutboundRequest } from '../telemetry/metrics.js';
+import {
+  isAbortedRequest,
+  isTimeoutReason,
+  networkErrorClass
+} from '../telemetry/networkErrors.js';
 
 /**
  * Workaround for `https-proxy-agent` >=7.0.0 (verified through 9.0.0).
@@ -932,8 +938,9 @@ export { redactUrlSecrets };
  *   A `lookup` property (dns.lookup-compatible) is extracted to pin DNS resolution for
  *   direct connections, and a `proxyConfig` property is extracted to route this one call
  *   by a config other than the live one, and an `onConnect` function is called once the
- *   request has a connected socket (see {@link trackConnection}); none of the three is
- *   forwarded to the underlying fetch.
+ *   request has a connected socket (see {@link trackConnection}), and a `dependency` string
+ *   names the kind of dependency for the outbound metrics (`llm`, `ifinder`, `idp`, …;
+ *   `other` by default); none of these is forwarded to the underlying fetch.
  * @param {boolean} [forceIgnoreSSL] - Force ignore SSL (overrides global setting)
  * @returns {Promise<Response>} node-fetch Response
  */
@@ -964,12 +971,45 @@ async function sendHttpFetch(url, options = {}, forceIgnoreSSL = null) {
   // unsaved draft through this same path instead of a bespoke fetch of its own.
   // `onConnect` is not a node-fetch option either: it is called once the
   // request has a connected socket (see trackConnection).
-  const { lookup = null, proxyConfig = null, onConnect = null, ...fetchOptions } = options;
+  const {
+    lookup = null,
+    proxyConfig = null,
+    onConnect = null,
+    dependency = 'other',
+    ...fetchOptions
+  } = options;
   const enhanced = enhanceFetchOptions(fetchOptions, url, forceIgnoreSSL, lookup, proxyConfig);
   if (typeof onConnect === 'function') {
     enhanced.agent = trackConnection(enhanced.agent, url, onConnect);
   }
-  return nodeFetch(url, enhanced);
+  // `ihub.outbound.request.duration` / `ihub.dependency.up` per dependency
+  // kind, until the response headers (the body is read by the caller).
+  const startedAt = performance.now();
+  try {
+    const response = await nodeFetch(url, enhanced);
+    recordOutboundRequest({
+      kind: dependency,
+      seconds: (performance.now() - startedAt) / 1000,
+      status: response.status
+    });
+    return response;
+  } catch (error) {
+    // node-fetch rejects with its own AbortError whatever aborted the signal;
+    // a deadline (`AbortSignal.timeout()`, a caller's timer) leaves a
+    // TimeoutError as the reason. That is the hung dependency this metric is
+    // for, not the caller stopping.
+    const aborted = isAbortedRequest(error);
+    if (!aborted || isTimeoutReason(fetchOptions.signal?.reason)) {
+      const { type, tls } = aborted ? { type: 'timeout', tls: false } : networkErrorClass(error);
+      recordOutboundRequest({
+        kind: dependency,
+        seconds: (performance.now() - startedAt) / 1000,
+        errorType: type,
+        tls
+      });
+    }
+    throw error;
+  }
 }
 
 /**

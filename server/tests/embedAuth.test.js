@@ -21,6 +21,7 @@ import express from 'express';
 import jwt from 'jsonwebtoken';
 import request from 'supertest';
 import { parseCookies } from './helpers/parseCookies.js';
+import { metricsMock } from './helpers/metricsMock.js';
 
 const SECRET = 'embed-auth-test-secret';
 process.env.JWT_SECRET = SECRET;
@@ -34,10 +35,7 @@ jest.unstable_mockModule('../services/TokenStorageService.js', () => ({
   default: { getJwtSecret: () => SECRET, getRSAPrivateKey: () => null, getRSAPublicKey: () => null }
 }));
 jest.unstable_mockModule('../services/AuditLogService.js', () => ({ logAudit: () => {} }));
-jest.unstable_mockModule('../telemetry/metrics.js', () => ({
-  recordAuthEvent: () => {},
-  recordRateLimitHit: () => {}
-}));
+jest.unstable_mockModule('../telemetry/metrics.js', () => metricsMock());
 
 const { default: registerEmbedAuthRoutes } = await import('../routes/embedAuth.js');
 const { default: errorHandler } = await import('../middleware/errorHandler.js');

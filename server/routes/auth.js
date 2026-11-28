@@ -511,6 +511,7 @@ export default function registerAuthRoutes(app) {
       }
 
       const result = await processNtlmLogin(req, ntlmAuthConfig);
+      recordAuthEvent('ntlm', 'login_success');
 
       // Set HTTP-only cookie for authentication
       setAuthCookie(req, res, result.token, result.expiresIn);
@@ -543,6 +544,7 @@ export default function registerAuthRoutes(app) {
     } catch (error) {
       // A browser navigation, not an API call: answer with the app and the
       // reason instead of an error document the user would be stranded on.
+      recordAuthEvent('ntlm', 'login_failure');
       const failure = loginFailure(error, 'NTLM login error', 'NTLM authentication failed');
       logger.warn('NTLM login failed', { component: 'Auth', code: failure.code });
       res.locals.signInFailed = true; // counts as a failed sign-in (rateLimiting.js)
@@ -573,6 +575,7 @@ export default function registerAuthRoutes(app) {
       }
 
       const result = await processNtlmLogin(req, ntlmAuthConfig);
+      recordAuthEvent('ntlm', 'login_success');
 
       logAudit({
         req,
@@ -599,6 +602,7 @@ export default function registerAuthRoutes(app) {
 
       res.json({ user: result.user, expiresIn: result.expiresIn });
     } catch (error) {
+      recordAuthEvent('ntlm', 'login_failure');
       throw loginFailure(error, 'NTLM login error', 'NTLM authentication failed');
     }
   });

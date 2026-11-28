@@ -25,6 +25,7 @@ import {
 } from '../services/integrations/iFinderTokenProvider.js';
 
 import { ServiceError } from '../utils/ServiceError.js';
+import { recordAuthEvent } from '../telemetry/metrics.js';
 // Store configured providers
 const configuredProviders = new Map();
 
@@ -355,6 +356,7 @@ async function fetchUserInfo(userInfoURL, accessToken, providerName, sessionId) 
     );
 
     const response = await httpFetch(userInfoURL, {
+      dependency: 'idp',
       headers: {
         Authorization: `Bearer ${accessToken}`,
         Accept: 'application/json'
@@ -738,6 +740,7 @@ export function createOidcCallbackHandler(providerName) {
           });
         }
 
+        recordAuthEvent('oidc', 'login_failure');
         // Redirect back to the app with error message instead of returning JSON
         const errorMessage = encodeURIComponent(
           err.message || 'Unable to verify authorization request state.'
@@ -764,6 +767,7 @@ export function createOidcCallbackHandler(providerName) {
           info
         });
 
+        recordAuthEvent('oidc', 'login_failure');
         // Redirect back to the app with error message
         const errorMessage = encodeURIComponent(info?.message || 'Authentication failed');
         return res.redirect(`${buildServerPath('/')}?auth=error&message=${errorMessage}`);
@@ -826,6 +830,7 @@ export function createOidcCallbackHandler(providerName) {
           sessionId
         );
 
+        recordAuthEvent('oidc', 'login_success');
         logAudit({
           req,
           action: 'login',

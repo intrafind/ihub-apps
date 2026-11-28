@@ -356,3 +356,27 @@ read off one trace.
 - The server starts through a small bootstrap (`node --import ./server/instrumentation.mjs`). The
   Docker image, `npm start` and the binary do this already; a custom start command needs the flag
   for HTTP and Express spans.
+
+## Telemetry: Metrics for Latency, Saturation, Dependencies and Security
+
+New metrics answer the questions operations ask first: how long users wait, which client they
+use, which dependency is failing, and whether someone is trying passwords.
+
+- **Turns:** `ihub.turn.duration` and `ihub.turns` with the outcome as the user saw it (`ok`,
+  `error`, `quota`, `rate_limited`, `aborted`, `empty`, `tool_degraded`), by surface, client
+  channel (web, Office add-in, browser extension, Teams, Nextcloud, MCP, A2A, API) and app.
+- **Model calls:** time to the first chunk, calls in flight and waiting for a slot, the model
+  endpoint host (`server.address`), and prompt-cache and reasoning tokens.
+- **Tools and workflows:** duration per tool; workflow executions, durations, node durations and
+  the time a workflow waited for a human.
+- **Dependencies and capacity:** outbound request duration and TLS errors per dependency
+  (model, iFinder, iAssistant, identity provider, search, web, …), an up gauge per dependency,
+  disk usage per storage location, file lock waits and cross-worker timeouts.
+- **Security:** sign-ins and failures for OIDC, NTLM, Teams and proxy authentication, and
+  `ihub.security.events` (failed logins, configuration, permission and API key changes, OAuth
+  grants and revocations, rejected tool approvals, exports, shares) from the audit log.
+- **Runtime:** event-loop delay percentiles and utilisation, GC and heap spaces, open file
+  descriptors.
+
+See [Telemetry](../../telemetry.md#metrics) for every metric, its labels and how to aggregate it
+across workers.

@@ -627,7 +627,11 @@ export default function registerResponsesRoutes(
       }
 
       activityTracker.recordActivity({ userId: user?.id, chatId });
-      recordAppUsage(appConfig.id, user?.id, { 'gen_ai.request.model': prepared.model.id });
+      recordAppUsage(appConfig.id, user?.id, {
+        'gen_ai.request.model': prepared.model.id,
+        'ihub.surface': 'api',
+        'ihub.client.channel': 'openai_proxy'
+      });
       if (stream) {
         assembler.start();
         ctx.assembler = assembler;
@@ -818,7 +822,11 @@ export default function registerResponsesRoutes(
       }
 
       activityTracker.recordActivity({ userId: user?.id, chatId });
-      recordAppUsage(APP_ID, user?.id, { 'gen_ai.request.model': model.id });
+      recordAppUsage(APP_ID, user?.id, {
+        'gen_ai.request.model': model.id,
+        'ihub.surface': 'api',
+        'ihub.client.channel': 'openai_proxy'
+      });
       if (stream) {
         assembler.start();
         ctx.assembler = assembler;

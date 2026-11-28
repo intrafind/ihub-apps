@@ -183,7 +183,10 @@ async function fetchPage(
     );
 
     try {
-      response = await throttledFetch(throttleId, hopUrl.toString(), enhancedOptions);
+      response = await throttledFetch(throttleId, hopUrl.toString(), {
+        ...enhancedOptions,
+        dependency: 'web'
+      });
     } finally {
       clearTimeout(timeoutId);
       signal?.removeEventListener('abort', onAbort);

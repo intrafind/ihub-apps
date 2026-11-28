@@ -455,7 +455,11 @@ export default function registerOpenAIProxyRoutes(
     const userId = user && user.id !== 'anonymous' ? user.id : undefined;
     const chatId = `${APP_ID}:${userId || 'anonymous'}`;
     activityTracker.recordActivity({ userId, chatId });
-    recordAppUsage(APP_ID, userId, { 'gen_ai.request.model': modelId });
+    recordAppUsage(APP_ID, userId, {
+      'gen_ai.request.model': modelId,
+      'ihub.surface': 'api',
+      'ihub.client.channel': 'openai_proxy'
+    });
     recordConversation(chatId, messages.length > 2, {
       'app.id': APP_ID,
       'gen_ai.request.model': modelId
@@ -870,7 +874,11 @@ export default function registerOpenAIProxyRoutes(
 
     const { app: appConfig, label } = prepared;
     activityTracker.recordActivity({ userId: user?.id, chatId });
-    recordAppUsage(appConfig.id, user?.id, { 'gen_ai.request.model': prepared.model.id });
+    recordAppUsage(appConfig.id, user?.id, {
+      'gen_ai.request.model': prepared.model.id,
+      'ihub.surface': 'api',
+      'ihub.client.channel': 'openai_proxy'
+    });
 
     const completionId = newCompletionId();
     // Allocated before the first byte: the streaming headers carry it.

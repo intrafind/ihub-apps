@@ -14,7 +14,7 @@
 import cluster from 'node:cluster';
 import configCache from './configCache.js';
 import { httpFetch } from './utils/httpConfig.js';
-import { recordRateLimitHit } from './telemetry/metrics.js';
+import { recordLlmQueued, recordRateLimitHit } from './telemetry/metrics.js';
 import { isClusterBusActive, request, respondInPrimary } from './clusterBus.js';
 import logger from './utils/logger.js';
 import { Histogram, registerGauge, statRecord } from './telemetry/waitDiagnostics.js';
@@ -60,6 +60,12 @@ function normalizeLimit(value) {
  * @param {string} id - Model id, tool id or 'default'
  * @returns {number} The limit; Infinity for none
  */
+/** Whether a throttle id is a configured model (not a tool or 'default'). */
+function isModelId(id) {
+  const { data: models = [] } = configCache.getModels() || {};
+  return models.some(m => m.id === id);
+}
+
 export function getConcurrency(id = 'default') {
   const platform = configCache.getPlatform() || {};
   const { data: models = [] } = configCache.getModels() || {};
@@ -214,7 +220,17 @@ function localThrottledRun(
       // Pass id as the "route" so dashboards can group by model id.
       recordRateLimitHit('llm', id);
       diag.queued += 1;
-      queue.push(execute);
+      // Saturation before the provider's 429s: a model call waiting for a slot.
+      const isModel = isModelId(id);
+      if (isModel) recordLlmQueued(1, id);
+      queue.push(
+        isModel
+          ? () => {
+              recordLlmQueued(-1, id);
+              return execute();
+            }
+          : execute
+      );
     }
   });
 }
@@ -241,11 +257,20 @@ async function clusterThrottledRun(id, limit, delayMs, fn, concurrencyOf, delayO
   const diag = throttleStats(id);
   const startedAt = performance.now();
   const askedAt = Date.now();
-  const grant = await request(
-    ACQUIRE_CHANNEL,
-    { id, limit, delayMs, ticket, pid: process.pid },
-    { timeoutMs: CLUSTER_ACQUIRE_TIMEOUT_MS, primaryOnly: true }
-  );
+  // Waiting for the primary's slot counts as queued (the ask itself is a
+  // round trip of about a millisecond).
+  const isModel = isModelId(id);
+  if (isModel) recordLlmQueued(1, id);
+  let grant;
+  try {
+    grant = await request(
+      ACQUIRE_CHANNEL,
+      { id, limit, delayMs, ticket, pid: process.pid },
+      { timeoutMs: CLUSTER_ACQUIRE_TIMEOUT_MS, primaryOnly: true }
+    );
+  } finally {
+    if (isModel) recordLlmQueued(-1, id);
+  }
   if (!grant?.granted) {
     // No answer from the primary. Withdraw the ticket, in case a slot is
     // granted to it after all, and fall back to this worker's own limits.
@@ -378,5 +403,21 @@ export function throttledFetch(id, url, options = {}) {
     url = id;
     id = 'default';
   }
-  return throttledRun(id, () => httpFetch(url, options));
+  return throttledRun(id, () =>
+    httpFetch(url, { dependency: dependencyOfThrottleId(id), ...options })
+  );
+}
+
+/**
+ * The dependency kind of a throttle id, for the outbound metrics; a caller's
+ * own `options.dependency` wins.
+ *
+ * @param {string} id
+ * @returns {string}
+ */
+function dependencyOfThrottleId(id) {
+  if (/^iFinder/i.test(id)) return 'ifinder';
+  if (/^iAssistant/i.test(id)) return 'iassistant';
+  if (/search$/i.test(id) || /^(brave|searx|staan)/i.test(id)) return 'search';
+  return 'other';
 }

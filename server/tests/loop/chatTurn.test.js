@@ -2264,6 +2264,7 @@ test('a tool round counts the search by origin and outcome, and the answer by it
     createCounter: name => ({
       add: (value, labels) => (adds[name] ||= []).push(labels ?? {})
     }),
+    createUpDownCounter: () => ({ add() {} }),
     createObservableGauge: () => ({ addCallback() {} })
   };
   initializeMetrics({ getMeter: () => meter });
@@ -2290,6 +2291,7 @@ test('a search that returns an error too large to keep is still counted as an er
     createCounter: name => ({
       add: (value, labels) => (adds[name] ||= []).push(labels ?? {})
     }),
+    createUpDownCounter: () => ({ add() {} }),
     createObservableGauge: () => ({ addCallback() {} })
   };
   initializeMetrics({ getMeter: () => meter });

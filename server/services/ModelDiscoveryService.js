@@ -148,6 +148,7 @@ class ModelDiscoveryService {
 
       const response = await throttledFetch(model.id, modelsUrl, {
         method: 'GET',
+        dependency: 'llm',
         headers,
         // 10 second timeout for discovery. Callers' own deadlines are applied
         // per waiter (getEffectiveModelId), never to this shared request.

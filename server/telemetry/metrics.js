@@ -8,6 +8,8 @@
 
 import logger from '../utils/logger.js';
 import { errorTypeOf } from './spans.js';
+import { SURFACES } from '../services/usage/callRecord.js';
+import { CLIENT_CHANNELS } from './channel.js';
 
 // Recommended histogram buckets for token usage (in tokens)
 const TOKEN_USAGE_BUCKETS = [
@@ -71,8 +73,23 @@ const ALLOWED_METRIC_LABELS = new Set([
   'telemetry.signal',
   'telemetry.provider',
   'telemetry.enabled',
-  'service.version'
+  'service.version',
+  // operations and product (#4008 P2): closed sets, mapped to `other` outside them
+  'ihub.surface',
+  'ihub.client.channel',
+  'ihub.turn.outcome',
+  'tool.name',
+  'ihub.workflow.outcome',
+  'ihub.workflow.node.type',
+  'server.address',
+  'ihub.dependency.kind',
+  'ihub.storage.mount',
+  'clusterbus.operation',
+  'security.event'
 ]);
+
+/** The label keys metrics may carry (tests and docs read it). */
+export const METRIC_LABEL_KEYS = Object.freeze([...ALLOWED_METRIC_LABELS]);
 
 function filterMetricLabels(attrs) {
   if (!attrs) return {};
@@ -143,6 +160,27 @@ let telemetryExportFailuresCounter = null;
 let telemetryLastSuccessGauge = null;
 let buildInfoGauge = null;
 let pendingTelemetryStatusProvider = null;
+
+// Operations and product (#4008 P2)
+let timeToFirstChunkHistogram = null;
+let turnDurationHistogram = null;
+let turnsCounter = null;
+let toolDurationHistogram = null;
+let workflowExecutionsCounter = null;
+let workflowDurationHistogram = null;
+let workflowNodeDurationHistogram = null;
+let hitlWaitHistogram = null;
+let llmInflightCounter = null;
+let llmQueuedCounter = null;
+let outboundDurationHistogram = null;
+let outboundTlsErrorsCounter = null;
+let dependencyUpGauge = null;
+let filesystemUsageGauge = null;
+let filesystemLimitGauge = null;
+let lockWaitHistogram = null;
+let clusterBusTimeoutsCounter = null;
+let securityEventsCounter = null;
+let pendingFilesystemProvider = null;
 
 /**
  * Initialize metrics from a meter source. Accepts anything with a
@@ -355,8 +393,11 @@ export function initializeMetrics(meterSource) {
     unit: '1'
   });
 
+  initializeOperationsInstruments(meter);
+
   attachIndexCacheObservers();
   attachTelemetryStatusObservers();
+  attachFilesystemObservers();
 
   logger.info('Telemetry metrics initialized', {
     component: 'Telemetry',
@@ -538,6 +579,18 @@ export function recordTokenUsage(attributes, usage) {
         'gen_ai.token.type': 'output'
       });
     }
+
+    // Prompt cache and reasoning: subsets of input / output (sum only `input`
+    // and `output` for totals). Recorded when the provider reports them.
+    for (const [field, type] of [
+      ['cacheReadTokens', 'cache_read'],
+      ['cacheWriteTokens', 'cache_write'],
+      ['reasoningTokens', 'reasoning']
+    ]) {
+      if (typeof usage[field] === 'number' && Number.isFinite(usage[field])) {
+        tokenUsageHistogram.record(usage[field], { ...baseAttrs, 'gen_ai.token.type': type });
+      }
+    }
   } catch (error) {
     logger.warn('Failed to record token usage', { component: 'Telemetry', error: error.message });
   }
@@ -660,11 +713,40 @@ export function recordConversation(conversationId, isFollowUp = false, additiona
 export function recordAuthEvent(provider, event) {
   if (!authEventCounter) return;
   try {
-    authEventCounter.add(1, filterMetricLabels({ 'auth.provider': provider, 'auth.event': event }));
+    authEventCounter.add(
+      1,
+      filterMetricLabels({
+        'auth.provider': inSet(provider, AUTH_PROVIDERS),
+        'auth.event': inSet(event, AUTH_EVENTS)
+      })
+    );
   } catch (error) {
     logger.warn('Failed to record auth event', { component: 'Telemetry', error: error.message });
   }
 }
+
+/** The auth providers and events `ihub.auth.events` knows; anything else is `other`. */
+const AUTH_PROVIDERS = new Set([
+  'local',
+  'ldap',
+  'oidc',
+  'ntlm',
+  'proxy',
+  'teams',
+  'jwt',
+  'oauth',
+  'anonymous',
+  'unknown'
+]);
+const AUTH_EVENTS = new Set([
+  'login_success',
+  'login_failure',
+  'logout',
+  'token_validated',
+  'token_invalid',
+  'token_expired',
+  'embed_login_success'
+]);
 
 /**
  * Record a rate-limit / throttler hit.
@@ -797,7 +879,7 @@ export function recordMagicPromptUsage(appId, extra = {}) {
  * @param {string} appId
  * @param {number} rating - numeric 1-5
  */
-export function recordFeedbackEvent(appId, rating) {
+export function recordFeedbackEvent(appId, rating, { modelId = null } = {}) {
   if (!feedbackCounter) return;
   try {
     let label = 'unknown';
@@ -806,7 +888,14 @@ export function recordFeedbackEvent(appId, rating) {
       numeric = Math.max(1, Math.min(5, Math.ceil(rating)));
       label = String(numeric);
     }
-    const labels = filterMetricLabels({ 'app.id': appId, 'feedback.rating': label });
+    // The model id comes from the client: the caller passes it only when it
+    // is a configured model, anything else is `other`.
+    const labels = filterMetricLabels({
+      'app.id': appId,
+      'feedback.rating': label,
+      'gen_ai.request.model': modelId ? configLabel(modelId) : 'other',
+      'ihub.surface': 'chat'
+    });
     feedbackCounter.add(1, labels);
     if (numeric !== null && feedbackRatingHistogram) {
       feedbackRatingHistogram.record(numeric, filterMetricLabels({ 'app.id': appId }));
@@ -982,4 +1071,412 @@ function attachTelemetryStatusObservers() {
       logger.warn('Failed to observe build info', { component: 'Telemetry', error: error.message });
     }
   });
+}
+
+// ---- Operations and product (#4008 P2) -------------------------------------
+
+/** Time to first chunk, seconds: from tens of milliseconds to minutes. */
+const TTFC_BUCKETS = [0.05, 0.1, 0.25, 0.5, 1, 2, 4, 8, 16, 32, 64, 128];
+
+/** A whole turn, seconds: a short answer to several tool rounds. */
+const TURN_DURATION_BUCKETS = [0.25, 0.5, 1, 2.5, 5, 10, 20, 40, 80, 160, 320, 640];
+
+/** Waits for a human, seconds: a minute to a week. */
+const HITL_WAIT_BUCKETS = [60, 300, 900, 3600, 14400, 43200, 86400, 259200, 604800];
+
+const SURFACE_SET = new Set(SURFACES);
+const CHANNEL_SET = new Set(CLIENT_CHANNELS);
+
+/** How a turn ended, as the user saw it. */
+export const TURN_OUTCOMES = Object.freeze([
+  'ok',
+  'error',
+  'quota',
+  'rate_limited',
+  'aborted',
+  'empty',
+  'tool_degraded'
+]);
+const TURN_OUTCOME_SET = new Set(TURN_OUTCOMES);
+
+const WORKFLOW_OUTCOMES = new Set(['completed', 'failed', 'cancelled', 'paused']);
+const NODE_OUTCOMES = new Set(['ok', 'error']);
+
+/** The kinds of outbound dependency. */
+export const DEPENDENCY_KINDS = Object.freeze([
+  'llm',
+  'ifinder',
+  'iassistant',
+  'mcp',
+  'idp',
+  'search',
+  'web',
+  'integration',
+  'smtp',
+  'ocr',
+  'transcription',
+  'storage',
+  'other'
+]);
+const DEPENDENCY_SET = new Set(DEPENDENCY_KINDS);
+
+/** The volumes the filesystem gauges report (`services/systemResources.js`). */
+export const STORAGE_MOUNTS = Object.freeze(['contents', 'data', 'uploads', 'logs', 'temp']);
+const MOUNT_SET = new Set(STORAGE_MOUNTS);
+
+/** Security events counted by `ihub.security.events` (the audit log has the detail). */
+export const SECURITY_EVENTS = Object.freeze([
+  'login_failure',
+  'admin_config_change',
+  'content_capture_change',
+  'permission_change',
+  'user_change',
+  'api_key_change',
+  'oauth_client_change',
+  'oauth_grant',
+  'oauth_revoke',
+  'tool_approval_denied',
+  'bulk_export',
+  'share_created'
+]);
+const SECURITY_SET = new Set(SECURITY_EVENTS);
+
+/** A value from `set`, else `fallback`. */
+function inSet(value, set, fallback = 'other') {
+  return typeof value === 'string' && set.has(value) ? value : fallback;
+}
+
+/** A label value from config (an app id, a tool id, a node type): cut to 64 characters. */
+function configLabel(value, fallback = 'unknown') {
+  return typeof value === 'string' && value !== '' ? value.slice(0, 64) : fallback;
+}
+
+/** Dependency kind → `{ up, at }` of its last outbound request. */
+const dependencyStates = new Map();
+
+function initializeOperationsInstruments(meter) {
+  timeToFirstChunkHistogram = meter.createHistogram('gen_ai.client.operation.time_to_first_chunk', {
+    description:
+      'Time from the start of a streamed model call to its first output chunk (retries included)',
+    unit: 's',
+    advice: { explicitBucketBoundaries: TTFC_BUCKETS }
+  });
+  turnDurationHistogram = meter.createHistogram('ihub.turn.duration', {
+    description: 'Duration of a whole turn: every model call and tool round until the answer',
+    unit: 's',
+    advice: { explicitBucketBoundaries: TURN_DURATION_BUCKETS }
+  });
+  turnsCounter = meter.createCounter('ihub.turns', {
+    description: 'Turns by how they ended for the user (ihub.turn.outcome)',
+    unit: '{turn}'
+  });
+  toolDurationHistogram = meter.createHistogram('ihub.tool.duration', {
+    description: 'Duration of a tool call in the agent loop',
+    unit: 's',
+    advice: { explicitBucketBoundaries: OPERATION_DURATION_BUCKETS }
+  });
+  workflowExecutionsCounter = meter.createCounter('ihub.workflow.executions', {
+    description: 'Workflow execution segments by how they ended (paused = waits for a human)',
+    unit: '{execution}'
+  });
+  workflowDurationHistogram = meter.createHistogram('ihub.workflow.duration', {
+    description: 'Duration of a workflow execution segment',
+    unit: 's',
+    advice: { explicitBucketBoundaries: TURN_DURATION_BUCKETS }
+  });
+  workflowNodeDurationHistogram = meter.createHistogram('ihub.workflow.node.duration', {
+    description: 'Duration of one workflow node attempt',
+    unit: 's',
+    advice: { explicitBucketBoundaries: OPERATION_DURATION_BUCKETS }
+  });
+  hitlWaitHistogram = meter.createHistogram('ihub.hitl.wait.duration', {
+    description: 'Time a workflow waited for a human decision before it resumed',
+    unit: 's',
+    advice: { explicitBucketBoundaries: HITL_WAIT_BUCKETS }
+  });
+  llmInflightCounter = meter.createUpDownCounter('ihub.llm.requests.inflight', {
+    description: 'Model calls in progress (per process: sum across workers)',
+    unit: '{request}'
+  });
+  llmQueuedCounter = meter.createUpDownCounter('ihub.llm.requests.queued', {
+    description:
+      'Model calls waiting for a concurrency slot of their model (per process: sum across workers)',
+    unit: '{request}'
+  });
+  outboundDurationHistogram = meter.createHistogram('ihub.outbound.request.duration', {
+    description: 'Outbound HTTP requests through httpFetch, until the response headers',
+    unit: 's',
+    advice: { explicitBucketBoundaries: OPERATION_DURATION_BUCKETS }
+  });
+  outboundTlsErrorsCounter = meter.createCounter('ihub.outbound.tls.errors', {
+    description: 'Outbound requests that failed on the TLS handshake (certificate, protocol)',
+    unit: '{request}'
+  });
+  dependencyUpGauge = meter.createObservableGauge('ihub.dependency.up', {
+    description:
+      '1 when the last outbound request to a dependency kind got a response below 500, 0 when it failed (per process: min across workers)',
+    unit: '1'
+  });
+  dependencyUpGauge.addCallback(result => {
+    for (const [kind, state] of dependencyStates) {
+      result.observe(state.up ? 1 : 0, { 'ihub.dependency.kind': kind });
+    }
+  });
+  filesystemUsageGauge = meter.createObservableGauge('ihub.storage.filesystem.usage', {
+    description: 'Bytes used on the volume of a storage location (same on every worker: max)',
+    unit: 'By'
+  });
+  filesystemLimitGauge = meter.createObservableGauge('ihub.storage.filesystem.limit', {
+    description: 'Size of the volume of a storage location (same on every worker: max)',
+    unit: 'By'
+  });
+  lockWaitHistogram = meter.createHistogram('ihub.lock.wait.duration', {
+    description: 'Time spent waiting for a file lock before a write',
+    unit: 's',
+    advice: { explicitBucketBoundaries: SHORT_DURATION_BUCKETS }
+  });
+  clusterBusTimeoutsCounter = meter.createCounter('ihub.clusterbus.timeouts', {
+    description: 'Cross-worker requests that got no answer in time',
+    unit: '{request}'
+  });
+  securityEventsCounter = meter.createCounter('ihub.security.events', {
+    description: 'Security-relevant events by kind; who and what is in the audit log',
+    unit: '{event}'
+  });
+}
+
+function safely(name, fn) {
+  try {
+    fn();
+  } catch (error) {
+    logger.warn(`Failed to record ${name}`, { component: 'Telemetry', error: error.message });
+  }
+}
+
+/**
+ * Record the time to the first output chunk of a streamed model call.
+ *
+ * @param {number} seconds
+ * @param {Object} labels - The call's metric labels (operation, provider, model, surface)
+ */
+export function recordTimeToFirstChunk(seconds, labels) {
+  if (!timeToFirstChunkHistogram || !Number.isFinite(seconds) || seconds < 0) return;
+  safely('time to first chunk', () =>
+    timeToFirstChunkHistogram.record(seconds, filterMetricLabels(labels))
+  );
+}
+
+/**
+ * Record a finished turn: `ihub.turn.duration` and `ihub.turns`.
+ *
+ * @param {Object} turn
+ * @param {number} turn.seconds
+ * @param {string} turn.outcome - One of {@link TURN_OUTCOMES}
+ * @param {string} [turn.surface] - One of `SURFACES`
+ * @param {string} [turn.channel] - One of `CLIENT_CHANNELS`
+ * @param {string} [turn.appId]
+ */
+export function recordTurn({ seconds, outcome, surface, channel, appId }) {
+  if (!turnsCounter) return;
+  const labels = {
+    'ihub.surface': inSet(surface, SURFACE_SET, 'system'),
+    'ihub.client.channel': inSet(channel, CHANNEL_SET, 'system'),
+    'ihub.turn.outcome': inSet(outcome, TURN_OUTCOME_SET, 'error'),
+    ...(appId ? { 'app.id': configLabel(appId) } : {})
+  };
+  safely('turn', () => {
+    turnsCounter.add(1, labels);
+    if (Number.isFinite(seconds) && seconds >= 0) turnDurationHistogram.record(seconds, labels);
+  });
+}
+
+/**
+ * Record one tool call's duration.
+ *
+ * @param {Object} call
+ * @param {number} call.seconds
+ * @param {string} call.toolName - Bounded: a configured tool id, `mcp`, `a2a` or `unknown`
+ * @param {string} [call.origin] - `web`, `project`, …
+ * @param {string} [call.outcome] - `results`, `empty`, `error`, `unknown`
+ */
+export function recordToolDuration({ seconds, toolName, origin, outcome }) {
+  if (!toolDurationHistogram || !Number.isFinite(seconds)) return;
+  safely('tool duration', () =>
+    toolDurationHistogram.record(seconds, {
+      'tool.name': configLabel(toolName),
+      'tool.origin': inSet(origin, TOOL_ORIGINS, 'none'),
+      'tool.outcome': inSet(outcome, TOOL_OUTCOMES, 'unknown')
+    })
+  );
+}
+
+/**
+ * Record a workflow execution segment that ended (or paused).
+ *
+ * @param {string} outcome - `completed`, `failed`, `cancelled`, `paused`
+ * @param {number} seconds
+ */
+export function recordWorkflowExecution(outcome, seconds) {
+  if (!workflowExecutionsCounter) return;
+  const labels = { 'ihub.workflow.outcome': inSet(outcome, WORKFLOW_OUTCOMES) };
+  safely('workflow execution', () => {
+    workflowExecutionsCounter.add(1, labels);
+    if (Number.isFinite(seconds) && seconds >= 0) workflowDurationHistogram.record(seconds, labels);
+  });
+}
+
+/**
+ * Record one workflow node attempt.
+ *
+ * @param {string} nodeType - From the node registry
+ * @param {number} seconds
+ * @param {boolean} ok
+ */
+export function recordWorkflowNode(nodeType, seconds, ok) {
+  if (!workflowNodeDurationHistogram || !Number.isFinite(seconds)) return;
+  safely('workflow node', () =>
+    workflowNodeDurationHistogram.record(seconds, {
+      'ihub.workflow.node.type': configLabel(nodeType),
+      'ihub.workflow.outcome': inSet(ok ? 'ok' : 'error', NODE_OUTCOMES)
+    })
+  );
+}
+
+/**
+ * Record how long a workflow waited for a human decision.
+ *
+ * @param {number} seconds
+ */
+export function recordHitlWait(seconds) {
+  if (!hitlWaitHistogram || !Number.isFinite(seconds) || seconds < 0) return;
+  safely('human-in-the-loop wait', () => hitlWaitHistogram.record(seconds));
+}
+
+/**
+ * A model call started (+1) or ended (-1).
+ *
+ * @param {number} delta
+ * @param {string} provider - `gen_ai.provider.name`
+ */
+export function recordLlmInflight(delta, provider) {
+  if (!llmInflightCounter) return;
+  safely('in-flight model calls', () =>
+    llmInflightCounter.add(delta, { 'gen_ai.provider.name': configLabel(provider) })
+  );
+}
+
+/**
+ * A model call started (+1) or stopped (-1) waiting for a concurrency slot.
+ *
+ * @param {number} delta
+ * @param {string} modelId - The throttled model's id (from config)
+ */
+export function recordLlmQueued(delta, modelId) {
+  if (!llmQueuedCounter) return;
+  safely('queued model calls', () =>
+    llmQueuedCounter.add(delta, { 'gen_ai.request.model': configLabel(modelId) })
+  );
+}
+
+/**
+ * Record one outbound HTTP request: duration with `error.type`, TLS failures,
+ * and the dependency's up state.
+ *
+ * @param {Object} request
+ * @param {string} [request.kind] - One of {@link DEPENDENCY_KINDS}
+ * @param {number} request.seconds
+ * @param {number} [request.status] - HTTP status, when a response came
+ * @param {string} [request.errorType] - Closed network error class, when it failed
+ * @param {boolean} [request.tls] - The failure was a TLS one
+ */
+export function recordOutboundRequest({ kind, seconds, status, errorType, tls = false }) {
+  const dependency = inSet(kind, DEPENDENCY_SET);
+  const up = !errorType && Number.isInteger(status) && status < 500;
+  dependencyStates.set(dependency, { up, at: Date.now() });
+  if (!outboundDurationHistogram) return;
+  safely('outbound request', () => {
+    const failure =
+      errorType || (Number.isInteger(status) && status >= 400 ? `http_${status}` : undefined);
+    outboundDurationHistogram.record(seconds, {
+      'ihub.dependency.kind': dependency,
+      ...(failure ? { 'error.type': failure.slice(0, 32) } : {})
+    });
+    if (tls) {
+      outboundTlsErrorsCounter.add(1, {
+        'ihub.dependency.kind': dependency,
+        'error.type': (errorType || 'tls').slice(0, 32)
+      });
+    }
+  });
+}
+
+/**
+ * Register the source of the filesystem gauges: a synchronous function that
+ * returns the last measured volumes (`[{ mount, used, total }]`).
+ *
+ * @param {() => Array<{mount: string, used: number, total: number}>} provider
+ */
+export function registerFilesystemObservers(provider) {
+  pendingFilesystemProvider = provider;
+  attachFilesystemObservers();
+}
+
+function attachFilesystemObservers() {
+  const provider = pendingFilesystemProvider;
+  if (!provider || !filesystemUsageGauge || !filesystemLimitGauge) return;
+  const observe = (gauge, field) =>
+    gauge.addCallback(result => {
+      try {
+        for (const volume of provider() || []) {
+          if (!MOUNT_SET.has(volume.mount) || !Number.isFinite(volume[field])) continue;
+          result.observe(volume[field], { 'ihub.storage.mount': volume.mount });
+        }
+      } catch (error) {
+        logger.warn('Failed to observe filesystem usage', {
+          component: 'Telemetry',
+          error: error.message
+        });
+      }
+    });
+  observe(filesystemUsageGauge, 'used');
+  observe(filesystemLimitGauge, 'total');
+}
+
+/**
+ * Record the wait for a file lock.
+ *
+ * @param {number} seconds
+ */
+export function recordLockWait(seconds) {
+  if (!lockWaitHistogram || !Number.isFinite(seconds) || seconds < 0) return;
+  safely('lock wait', () => lockWaitHistogram.record(seconds));
+}
+
+/**
+ * Record a cross-worker request that got no answer in time.
+ *
+ * @param {'request'|'gather'} operation
+ */
+export function recordClusterBusTimeout(operation) {
+  if (!clusterBusTimeoutsCounter) return;
+  safely('cluster bus timeout', () =>
+    clusterBusTimeoutsCounter.add(1, {
+      'clusterbus.operation': operation === 'gather' ? 'gather' : 'request'
+    })
+  );
+}
+
+/**
+ * Count a security event. Who and what goes to the audit log, never here.
+ *
+ * @param {string} event - One of {@link SECURITY_EVENTS}
+ */
+export function recordSecurityEvent(event) {
+  if (!securityEventsCounter || !SECURITY_SET.has(event)) return;
+  safely('security event', () => securityEventsCounter.add(1, { 'security.event': event }));
+}
+
+/** Forget the dependency states (tests only). */
+export function resetDependencyStatesForTests() {
+  dependencyStates.clear();
 }

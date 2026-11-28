@@ -29,6 +29,11 @@ jest.unstable_mockModule('../utils/userManager.js', () => ({ validateAndPersistE
 jest.unstable_mockModule('../utils/logger.js', () => ({
   default: { info: () => {}, warn: () => {}, error: () => {}, debug: () => {} }
 }));
+const authEvents = [];
+const { metricsMock } = await import('./helpers/metricsMock.js');
+jest.unstable_mockModule('../telemetry/metrics.js', () =>
+  metricsMock({ recordAuthEvent: (...args) => authEvents.push(args) })
+);
 
 const { proxyAuth } = await import('../middleware/proxyAuth.js');
 const { resetProxyTrustForTests } = await import('../utils/proxyAuthTrust.js');
@@ -62,6 +67,8 @@ beforeEach(() => {
   handlerRuns = 0;
   seenUser = undefined;
   validateAndPersistExternalUser.mockReset();
+  authEvents.length = 0;
+  delete platform.proxyAuth.jwtProviders;
 });
 
 describe('proxyAuth: user validation', () => {
@@ -97,5 +104,26 @@ describe('proxyAuth: user validation', () => {
     expect(res.status).toBe(200);
     expect(validateAndPersistExternalUser).not.toHaveBeenCalled();
     expect(seenUser).toBeNull();
+  });
+});
+
+describe('proxyAuth: auth events', () => {
+  it('a user the platform refuses is a login_failure, not a bad token', async () => {
+    validateAndPersistExternalUser.mockRejectedValue(new Error('Your account is disabled.'));
+    await request(app).get('/api/probe').set('X-Forwarded-User', 'alice');
+    expect(authEvents).toEqual([['proxy', 'login_failure']]);
+  });
+
+  it('a JWT no provider accepts is token_invalid', async () => {
+    // Nothing listens on port 1: the key set cannot be fetched, so verification fails.
+    platform.proxyAuth.jwtProviders = [
+      { name: 'idp', header: 'x-proxy-jwt', jwkUrl: 'http://127.0.0.1:1/jwks', issuer: 'i' }
+    ];
+    validateAndPersistExternalUser.mockImplementation(async user => user);
+    await request(app)
+      .get('/api/probe')
+      .set('X-Forwarded-User', 'alice')
+      .set('x-proxy-jwt', 'eyJhbGciOiJSUzI1NiJ9.eyJzdWIiOiJhIn0.c2ln');
+    expect(authEvents).toContainEqual(['proxy', 'token_invalid']);
   });
 });
