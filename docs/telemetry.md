@@ -48,7 +48,22 @@ described below.
    Setting `OTEL_EXPORTER_OTLP_ENDPOINT` automatically switches the provider to `otlp`
    on startup if the admin hasn't configured a different exporter.
 
-3. **Verify** Prometheus is being scraped:
+3. **Start the server through the telemetry bootstrap.** The Docker image, `npm start`,
+   `npm run dev` and the binary do this already. A custom start command needs
+   `--import ./server/instrumentation.mjs` (path relative to the working directory) before the
+   script:
+
+   ```bash
+   node --import ./server/instrumentation.mjs server/server.js
+   ```
+
+   The bootstrap starts telemetry before the application loads, which is what lets
+   `autoInstrumentation` patch HTTP and Express (inbound spans with `http.route`, an incoming
+   `traceparent` honoured, outbound calls carrying the trace). Without it the server still exports
+   its own spans and metrics, logs a warning when `autoInstrumentation` is on, and creates no
+   HTTP spans.
+
+4. **Verify** Prometheus is being scraped:
 
    ```bash
    curl http://localhost:9464/metrics | grep gen_ai

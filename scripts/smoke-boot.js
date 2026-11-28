@@ -138,19 +138,24 @@ async function runScenario(scenario, keepLogs) {
   await mkdir(contentsPath, { recursive: true });
 
   let output = '';
-  const child = spawn(process.execPath, ['server/server.js'], {
-    cwd: rootDir,
-    env: {
-      ...process.env,
-      NODE_ENV: 'production',
-      CONTENTS_DIR: contentsDir,
-      HOST: '127.0.0.1',
-      PORT: String(port),
-      TELEMETRY_ENABLED: 'false',
-      ...scenario.env
-    },
-    stdio: ['ignore', 'pipe', 'pipe']
-  });
+  // Started like the Docker image: through the telemetry bootstrap.
+  const child = spawn(
+    process.execPath,
+    ['--import', './server/instrumentation.mjs', 'server/server.js'],
+    {
+      cwd: rootDir,
+      env: {
+        ...process.env,
+        NODE_ENV: 'production',
+        CONTENTS_DIR: contentsDir,
+        HOST: '127.0.0.1',
+        PORT: String(port),
+        TELEMETRY_ENABLED: 'false',
+        ...scenario.env
+      },
+      stdio: ['ignore', 'pipe', 'pipe']
+    }
+  );
   child.stdout.on('data', chunk => (output += chunk));
   child.stderr.on('data', chunk => (output += chunk));
 

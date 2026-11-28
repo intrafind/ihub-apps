@@ -975,9 +975,15 @@ export class LLMClient {
             abortErr.name = 'AbortError';
             throw abortErr;
           }
-          let res = await this._connect(request, callSignal, model);
+          // The LLM span is active around the request, so the HTTP client
+          // span (auto-instrumentation) becomes its child.
+          let res = await inCallContext(callTelemetry, () =>
+            this._connect(request, callSignal, model)
+          );
           if (isFailedResponse(res) && (await this._reviseAfterError(res, request, model))) {
-            res = await this._connect(request, callSignal, model);
+            res = await inCallContext(callTelemetry, () =>
+              this._connect(request, callSignal, model)
+            );
           }
           if (isFailedResponse(res)) {
             throw await this._httpError(res, model, language, request);
@@ -989,6 +995,7 @@ export class LLMClient {
           maxRetries: Number.isFinite(retries) ? retries : this.maxRetries,
           sleep: this.sleep,
           onRetry: ({ attempt, err, delayMs }) => {
+            callTelemetry?.retried(attempt + 1, err);
             logger.warn('Transient LLM error — retrying', {
               component: COMPONENT,
               requestId,
@@ -1170,6 +1177,7 @@ export class LLMClient {
             modelId: model.id,
             continuation: continuations
           });
+          callTelemetry?.continued(continuations);
           client._ledger(runId, RUN_LOG_EVENTS.REQUEST_RETRY, {
             step,
             requestId,
@@ -1191,7 +1199,9 @@ export class LLMClient {
             callSignal,
             () => abortError('Aborted while the continuation request was built')
           );
-          const res = await client._connect(currentRequest, callSignal, model);
+          const res = await inCallContext(callTelemetry, () =>
+            client._connect(currentRequest, callSignal, model)
+          );
           if (!res || res.ok === false || (typeof res.status === 'number' && res.status >= 400)) {
             throw await client._httpError(res, model, language, currentRequest);
           }
@@ -1226,7 +1236,11 @@ export class LLMClient {
             toolCalls
           });
         } else {
-          client._endCallTelemetry(callTelemetry, { model, accumulator });
+          client._endCallTelemetry(callTelemetry, {
+            model,
+            accumulator,
+            aborted: !accumulator.complete && callSignal?.aborted === true
+          });
           // A consumer that stopped reading before the end (a stop button
           // that broke out of the loop) ended the call early.
           recordUsage({
@@ -1239,7 +1253,11 @@ export class LLMClient {
       }
     };
 
-    return new LLMStream({ meta, iterate, accumulator });
+    const llmStream = new LLMStream({ meta, iterate, accumulator });
+    // A stream nobody iterates never reaches the `finally` above, and its span
+    // would stay open forever. When it is collected, end the span as abandoned.
+    if (callTelemetry) abandonedStreams.register(llmStream, callTelemetry, callTelemetry);
+    return llmStream;
   }
 
   /**
@@ -1800,7 +1818,7 @@ export class LLMClient {
    * End a call's telemetry after it completed.
    * @private
    */
-  _endCallTelemetry(callTelemetry, { model, accumulator }) {
+  _endCallTelemetry(callTelemetry, { model, accumulator, aborted = false }) {
     if (!callTelemetry) return;
     try {
       const usage = accumulator.usage
@@ -1813,6 +1831,9 @@ export class LLMClient {
           }
         : undefined;
       callTelemetry.succeed({
+        // A user stop after the answer started: tokens count, the call is not
+        // an error and its duration says nothing about latency.
+        aborted,
         usage,
         finishReasons: accumulator.finishReason ? [accumulator.finishReason] : undefined,
         responseModel: model.modelId,
@@ -1827,6 +1848,20 @@ export class LLMClient {
 }
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
+
+/**
+ * Run `fn` with a call's LLM span active, or just run it without telemetry.
+ * @template T
+ * @param {import('../../telemetry/GenAIInstrumentation.js').LLMCallTelemetry|null} callTelemetry
+ * @param {() => T} fn
+ * @returns {T}
+ */
+function inCallContext(callTelemetry, fn) {
+  return callTelemetry ? callTelemetry.span.run(fn) : fn();
+}
+
+/** Ends the span of a stream that was dropped without being iterated (see execute()). */
+const abandonedStreams = new FinalizationRegistry(callTelemetry => callTelemetry.abandon());
 
 /** The quota service, loaded on first use (it reads config this module must not import early). */
 let quotaModule = null;

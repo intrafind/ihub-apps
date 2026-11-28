@@ -8,7 +8,11 @@ import appLogger from './utils/logger.js';
 import { resolveEnvVarsInObject } from './utils/envVars.js';
 import { getAppVersion } from './utils/versionHelper.js';
 import { NodeSDK } from '@opentelemetry/sdk-node';
-import { BatchSpanProcessor } from '@opentelemetry/sdk-trace';
+import {
+  BatchSpanProcessor,
+  ParentBasedSampler,
+  TraceIdRatioBasedSampler
+} from '@opentelemetry/sdk-trace';
 import { PeriodicExportingMetricReader } from '@opentelemetry/sdk-metrics';
 // Named imports: @opentelemetry/api 1.10 ships a real ESM build without a default export.
 import { diag, DiagLogLevel, metrics as metricsApi } from '@opentelemetry/api';
@@ -218,6 +222,28 @@ export function buildResourceAttributes(config) {
   };
 }
 
+/**
+ * The trace sampler: `spans.sampleRate` (0–1) of new traces, and whatever the
+ * caller decided for a trace that arrives with a parent
+ * (`ParentBased(TraceIdRatioBased)`). `OTEL_TRACES_SAMPLER` /
+ * `OTEL_TRACES_SAMPLER_ARG` win when set: then the SDK reads them itself.
+ *
+ * Head sampling decides before anything is known about the trace. To keep
+ * every failed or slow trace at a low rate, sample in the collector instead
+ * (tail sampling, see docs/telemetry.md) and leave this at 1.
+ *
+ * @param {Object} config
+ * @returns {{sampler?: import('@opentelemetry/sdk-trace').Sampler}}
+ */
+export function samplerOption(config) {
+  if (process.env.OTEL_TRACES_SAMPLER) return {};
+  const raw = Number(config.spans?.sampleRate);
+  const ratio = Number.isFinite(raw) ? Math.min(1, Math.max(0, raw)) : 1;
+  return {
+    sampler: new ParentBasedSampler({ root: new TraceIdRatioBasedSampler(ratio) })
+  };
+}
+
 /** Whether this process runs in a container (Docker, Kubernetes). */
 function isContainer() {
   return Boolean(process.env.KUBERNETES_SERVICE_HOST) || fs.existsSync('/.dockerenv');
@@ -230,9 +256,12 @@ function isContainer() {
  * `localhost:4318`, bypassing the platform's TLS and proxy settings.
  *
  * @param {Object} config - Resolved telemetry config
+ * @param {Object} [setup]
+ * @param {Array} [setup.instrumentations] - Created by the `--import` bootstrap
+ *   (`instrumentation.mjs`) before the app loaded; created here otherwise
  * @returns {{options: Object, exporters: {traces: string|null, metrics: string|null, logs: string|null}}}
  */
-export function buildSdkOptions(config) {
+export function buildSdkOptions(config, { instrumentations } = {}) {
   const provider = config.provider || 'console';
   const exporters = { traces: null, metrics: null, logs: null };
 
@@ -291,12 +320,28 @@ export function buildSdkOptions(config) {
       spanProcessors,
       metricReaders,
       logRecordProcessors,
-      instrumentations: config.autoInstrumentation === true ? createInstrumentations() : []
+      instrumentations:
+        instrumentations ?? (config.autoInstrumentation === true ? createInstrumentations() : []),
+      ...samplerOption(config)
     }
   };
 }
 
-export async function initTelemetry(rawConfig = {}) {
+/**
+ * Start telemetry. Called by the `--import` bootstrap (`instrumentation.mjs`)
+ * before the app loads, and again by worker startup; the second call does
+ * nothing when the SDK is already running.
+ *
+ * @param {Object} rawConfig - The `telemetry` block of platform.json, as stored
+ * @param {Object} [setup]
+ * @param {Array} [setup.instrumentations] - Library instrumentations created early
+ * @param {boolean} [setup.bootstrap] - Called from the bootstrap
+ */
+export async function initTelemetry(rawConfig = {}, { instrumentations, bootstrap = false } = {}) {
+  if (sdk) {
+    appLogger.debug('Telemetry already started by the bootstrap', { component: 'Telemetry' });
+    return;
+  }
   configureIdentity(rawConfig);
   if (!rawConfig.enabled) {
     activeConfig = rawConfig;
@@ -334,7 +379,7 @@ export async function initTelemetry(rawConfig = {}) {
   configureIdentity(config);
   configureSpans(config);
 
-  const { options, exporters } = buildSdkOptions(config);
+  const { options, exporters } = buildSdkOptions(config, { instrumentations });
 
   // Prometheus is pulled: one endpoint answers for all workers of the
   // cluster (`prometheusCluster.js`), each series labelled with its worker.
@@ -376,8 +421,17 @@ export async function initTelemetry(rawConfig = {}) {
     component: 'Telemetry',
     provider: config.provider,
     exporters,
-    userIdMode: resolveUserIdMode(config)
+    userIdMode: resolveUserIdMode(config),
+    startedBy: bootstrap ? 'bootstrap' : 'worker',
+    libraryInstrumentation:
+      config.autoInstrumentation === true ? (bootstrap ? 'patched' : 'no-loader-hook') : 'off'
   });
+  if (config.autoInstrumentation === true && !bootstrap) {
+    appLogger.warn(
+      'autoInstrumentation is on but the server was started without --import ./instrumentation.mjs: HTTP and Express are not instrumented',
+      { component: 'Telemetry' }
+    );
+  }
 }
 
 /**

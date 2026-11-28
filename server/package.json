@@ -6,7 +6,7 @@
   "type": "module",
   "main": "server.js",
   "scripts": {
-    "start": "node server.js",
+    "start": "node --import ./instrumentation.mjs server.js",
     "dev": "nodemon server.js",
     "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js",
     "test:auth": "node --experimental-vm-modules node_modules/jest/bin/jest.js tests/authentication-security.test.js",
