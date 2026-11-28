@@ -114,6 +114,26 @@ describe('restoreRedacted', () => {
       mode: 'rollback'
     });
     expect(noHeaders.otlp.headers).toEqual(current.otlp.headers);
+    // Nor when the snapshot lacks the object above `headers` too.
+    const deep = restoreRedacted({}, current, [{ path: 'exporters.otlp.headers.*' }], {
+      mode: 'rollback'
+    });
+    expect(deep).toEqual({});
+    const deeper = restoreRedacted(
+      { exporters: {} },
+      { exporters: current },
+      [{ path: 'exporters.otlp.headers.*' }],
+      { mode: 'rollback' }
+    );
+    expect(deeper.exporters.otlp.headers).toEqual(current.otlp.headers);
+    // A header the current file lacks is dropped, even one named like an Object member.
+    const inherited = restoreRedacted(
+      { otlp: { headers: { constructor: 'old' } } },
+      { otlp: { headers: {} } },
+      HEADERS,
+      { mode: 'rollback' }
+    );
+    expect(inherited.otlp.headers).toEqual({});
     // A save names every header it keeps: one left out is removed.
     expect(
       restoreRedacted({ otlp: { headers: { 'X-Old': SECRET_MARKER } } }, current, HEADERS)

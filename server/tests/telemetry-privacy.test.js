@@ -307,6 +307,17 @@ describe('content capture', () => {
     expect(parsed[0].parts[0].content.endsWith('newest')).toBe(true);
   });
 
+  test('an emoji is measured as one code point, not as two escaped halves', () => {
+    const message = { role: 'user', content: `${'x'.repeat(50)}abc😀` };
+    // 60 characters leave room for "…c😀" after the empty message shell.
+    const json = inputMessagesAttributes([message], {
+      ...ON,
+      events: { enabled: true, includePrompts: true, maxEventSize: 60 }
+    })['gen_ai.input.messages'];
+    expect(json.length).toBeLessThanOrEqual(60);
+    expect(JSON.parse(json)[0].parts[0].content.endsWith('😀')).toBe(true);
+  });
+
   test('escaped characters in the cut-off part do not crowd out the newest text', () => {
     const config = { ...ON, events: { enabled: true, includePrompts: true, maxEventSize: 4096 } };
     const long = [{ role: 'user', content: `${'\n'.repeat(5000)}newest` }];
@@ -328,6 +339,11 @@ describe('redactContent', () => {
     ['api_key=supersecretvalue&x=1', 'api_key=[REDACTED:secret]&x=1'],
     ['{"password":"hunter2pw","user":"x"}', '{"password":"[REDACTED:secret]","user":"x"}'],
     ["{'access_token': 'abc123def'}", "{'access_token': '[REDACTED:secret]'}"],
+    ['{"password":     "hunter2pw"}', '{"password":     "[REDACTED:secret]"}'],
+    ['password:\thunter2pw', 'password:\t[REDACTED:secret]'],
+    [`access_token=${'a'.repeat(600)} end`, 'access_token=[REDACTED:secret] end'],
+    ['Contact alice@example.com.', 'Contact [REDACTED:email].'],
+    ['Write to bob@example.org, please', 'Write to [REDACTED:email], please'],
     ['AKIAABCDEFGHIJKLMNOP', '[REDACTED:key]'], // gitleaks:allow (fake key, redaction test)
     ['call 0171 2345678 now', 'call [REDACTED:phone] now'],
     ['on 01.02.2024 at noon', 'on 01.02.2024 at noon'],

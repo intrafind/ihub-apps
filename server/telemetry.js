@@ -36,6 +36,7 @@ import { capturesCompletions, capturesPrompts, contentCap } from './telemetry/co
 import {
   getTelemetryStatus,
   lastSuccessTimestamps,
+  setSignalEnabled,
   setTelemetrySetup,
   trackExporter
 } from './telemetry/exportStatus.js';
@@ -437,6 +438,7 @@ export function reloadTelemetryConfig(newConfig = {}) {
   }
   configureIdentity(activeConfig);
   configureSpans(activeConfig);
+  setSignalEnabled('traces', activeConfig.spans.enabled !== false);
   if (genAIInstrumentation) {
     genAIInstrumentation.config = activeConfig;
   }

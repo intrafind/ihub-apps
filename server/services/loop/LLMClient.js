@@ -1226,16 +1226,19 @@ export class LLMClient {
             toolCalls
           });
         } else {
-          client._endCallTelemetry(callTelemetry, {
-            model,
-            accumulator,
-            aborted: !accumulator.complete && callSignal?.aborted === true
-          });
+          const stopped = !accumulator.complete && callSignal?.aborted === true;
+          if (stopped && (timedOut || streamIdleTimedOut)) {
+            // The deadline ran out while the consumer held a chunk, so no read
+            // threw: a timeout all the same, not the user's stop.
+            callTelemetry?.fail(toLLMError(callSignal.reason, errCtx()));
+          } else {
+            client._endCallTelemetry(callTelemetry, { model, accumulator, aborted: stopped });
+          }
           // A consumer that stopped reading before the end (a stop button
           // that broke out of the loop) ended the call early.
           recordUsage({
             usage: accumulator.usage || estimateCallUsage(messages, accumulator),
-            aborted: !accumulator.complete && callSignal?.aborted === true,
+            aborted: stopped,
             requestId,
             toolCalls
           });
