@@ -42,10 +42,14 @@ export const DEFAULT_MAX_EVENT_SIZE = 1024;
  * is consumed to its end, however long, so no tail of it is left behind.
  */
 const REDACTIONS = [
-  // JSON Web Tokens (three base64url parts, header starts with `{"`)
-  [/\beyJ[A-Za-z0-9_-]{5,4096}\.[A-Za-z0-9_-]{5,4096}\.[A-Za-z0-9_-]{5,4096}/g, '[REDACTED:jwt]'],
-  // Authorization header values
-  [/\b(Bearer|Basic) {1,4}[A-Za-z0-9._~+/=-]{8,4096}/gi, '$1 [REDACTED:token]'],
+  // JSON Web Tokens (three base64url parts, header starts with `{"`), however
+  // long: a match starts only where a base64url run starts, so it stays linear.
+  [
+    /(?<![A-Za-z0-9_-])eyJ[A-Za-z0-9_-]{5,}\.[A-Za-z0-9_-]{5,}\.[A-Za-z0-9_-]{5,}/g,
+    '[REDACTED:jwt]'
+  ],
+  // Authorization header values, to their end
+  [/\b(Bearer|Basic) {1,4}[A-Za-z0-9._~+/=-]{8,}/gi, '$1 [REDACTED:token]'],
   // Well-known API key formats
   [
     /\b(?:sk|pk|rk)-[A-Za-z0-9_-]{16,512}|\bAKIA[0-9A-Z]{16}\b|\bgh[pousr]_[A-Za-z0-9]{30,255}|\bgithub_pat_[A-Za-z0-9_]{30,255}|\bxox[abprs]-[A-Za-z0-9-]{10,255}|\bAIza[0-9A-Za-z_-]{35}\b|\bglpat-[A-Za-z0-9_-]{20,255}/g,

@@ -144,6 +144,10 @@ export function startPrometheusCluster({ host, port, workerId, workerCount, list
 
   const unsubscribe = respond(SCRAPE_CHANNEL, async () => {
     const { text, complete } = await ownExposition();
+    // This worker's series are exported through whichever worker took the
+    // scrape; its own status (/api/health, admin) says so too.
+    if (complete) recordExportSuccess('metrics');
+    else recordExportFailure('metrics', { incomplete: true });
     return { workerId, text, complete };
   });
 

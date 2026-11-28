@@ -126,7 +126,11 @@ export function errorTypeOf(err) {
     if (status === 408) return 'timeout';
     return `http_${status}`;
   }
-  if (err.code === 'ETIMEDOUT' || err.name === 'TimeoutError') return 'timeout';
+  // `TIMEOUT` is the LLM client's code for its deadlines: the same class as a
+  // socket timeout, so an alert on `timeout` sees both.
+  if (err.code === 'ETIMEDOUT' || err.code === 'TIMEOUT' || err.name === 'TimeoutError') {
+    return 'timeout';
+  }
   if (typeof err.code === 'string' && /^[A-Z][A-Z0-9_]{1,63}$/.test(err.code)) return err.code;
   const name = err.name || err.constructor?.name;
   return typeof name === 'string' && /^[A-Za-z_][\w.]{0,63}$/.test(name) ? name : 'Error';

@@ -60,7 +60,9 @@ let sdk = null;
 let genAIInstrumentation = null;
 let activeConfig = null;
 let prometheusCluster = null;
-// No span processor was registered at startup; turning spans on needs a restart.
+// Spans were switched off at startup, so no span processor exists: turning
+// them on needs a restart. (No processor for lack of a trace exporter is not
+// something a restart after switching spans on would change.)
 let spansStartedDisabled = false;
 
 /**
@@ -395,7 +397,7 @@ export async function initTelemetry(rawConfig = {}, { instrumentations, bootstra
   configureSpans(config);
 
   const { options, exporters } = buildSdkOptions(config, { instrumentations });
-  spansStartedDisabled = exporters.traces === null;
+  spansStartedDisabled = config.spans?.enabled === false;
 
   // Prometheus is pulled: one endpoint answers for all workers of the
   // cluster (`prometheusCluster.js`), each series labelled with its worker.
@@ -500,7 +502,12 @@ export function reloadTelemetryConfig(newConfig = {}) {
     spans: { ...newConfig.spans },
     activitySummary: newConfig.activitySummary
   };
-  if (spansStartedDisabled && activeConfig.spans.enabled !== false && activeConfig.enabled) {
+  if (
+    spansStartedDisabled &&
+    previous.spans?.enabled === false &&
+    activeConfig.spans.enabled !== false &&
+    activeConfig.enabled
+  ) {
     appLogger.warn('Spans were off at startup: enabling them takes effect after a restart', {
       component: 'Telemetry'
     });

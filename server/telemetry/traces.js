@@ -300,9 +300,9 @@ function rememberWorkflowCarrier(executionId, span) {
  */
 export function endWorkflowRunSpan(span, status, executionId) {
   span.setAttributes({ 'ihub.workflow.status': String(status || 'unknown').slice(0, 32) });
-  if (status === 'completed' || status === 'failed' || status === 'cancelled') {
-    workflowCarriers.delete(executionId);
-  }
+  // Failed and cancelled runs can be resumed (WorkflowEngine.resumeFromTerminated),
+  // so their carrier stays for the link; MAX_WORKFLOW_CARRIERS bounds the map.
+  if (status === 'completed') workflowCarriers.delete(executionId);
   if (status === 'paused') {
     workflowPausedAt.set(executionId, Date.now());
     if (workflowPausedAt.size > MAX_WORKFLOW_CARRIERS) {
