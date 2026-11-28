@@ -103,6 +103,7 @@ export async function invokeApp({
 
   const result = await chatService.invokeAppInternal({
     appId: app.id, // trusted value from configCache, not user input
+    turnSurface: 'api', // an MCP / A2A client's turn (`ihub.turns`)
     user,
     messages: list,
     variables,

@@ -337,10 +337,14 @@ export async function proxyAuth(req, res, next) {
   }
 
   let tokenPayload = null;
+  // A JWT header was sent; whether any provider accepted it is known only
+  // after the loop (two providers may read the same header).
+  let tokenPresented = false;
   for (const provider of proxyCfg.jwtProviders) {
     const hdr = (provider.header || 'authorization').toLowerCase();
     const value = req.headers[hdr];
     if (!value) continue;
+    tokenPresented = true;
     let token = value;
     if (hdr === 'authorization' && token.startsWith('Bearer ')) {
       token = token.slice(7);
@@ -391,6 +395,8 @@ export async function proxyAuth(req, res, next) {
       break;
     }
   }
+  // Forged, expired or wrongly signed, or from an auth method that is off.
+  if (tokenPresented && !tokenPayload) recordAuthEvent('proxy', 'token_invalid');
 
   if (tokenPayload) {
     if (!userId) {
@@ -451,7 +457,8 @@ export async function proxyAuth(req, res, next) {
     user = enhanceUserGroups(user, authConfig);
   } catch (error) {
     logger.error('Proxy user validation error', { component: 'ProxyAuth', error });
-    recordAuthEvent('proxy', 'token_invalid');
+    // A user the platform refuses (disabled, unknown), not a bad token.
+    recordAuthEvent('proxy', 'login_failure');
     // A 403 with the validation's own, user-friendly message; the request never goes on.
     // Passed to `next` rather than thrown: `createAuthChain` calls this middleware with its own
     // callback and never observes the returned promise, so a rejection would leave the request hanging.

@@ -309,7 +309,9 @@ Turns and tools:
 - `ihub.turns` - counter of turns by `ihub.turn.outcome`: `ok`, `error`, `quota` (usage limit),
   `rate_limited`, `aborted` (the user stopped it), `empty` (no answer, question or result to
   show), `tool_degraded` (it answered, but a tool call failed). Both carry `ihub.surface`,
-  `ihub.client.channel` and `app.id`
+  `ihub.client.channel` and `app.id`. An MCP or A2A app call is a turn with surface `api`; an app
+  that another app calls as a tool is part of that turn and is not counted on its own (it keeps
+  its `invoke_agent` span with `ihub.turn.kind=subagent`)
 - `ihub.client.channel` - which client a turn came through: `web`, `office` (the Office add-in in
   Outlook, Word, Excel or PowerPoint; the server cannot tell the host apart), `browser_extension`,
   `teams`, `nextcloud`, `mcp`, `a2a`, `openai_proxy`, or `system` outside a request. Decided from
@@ -353,7 +355,8 @@ Capacity and dependencies:
 Security:
 
 - `ihub.auth.events` - now also for OIDC, NTLM, Teams (`login_success`, `login_failure`) and
-  proxy authentication (`token_validated`, `token_invalid`). `auth.provider` and `auth.event`
+  proxy authentication (`token_validated`; `token_invalid` for a JWT no provider accepts,
+  `login_failure` for a user the platform refuses). `auth.provider` and `auth.event`
   are closed sets; anything else is `other`
 - `ihub.security.events` - counter by `security.event`: `login_failure`, `admin_config_change`,
   `content_capture_change`, `permission_change`, `user_change`, `api_key_change`,
