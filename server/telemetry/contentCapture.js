@@ -35,30 +35,36 @@ export const DEFAULT_MAX_EVENT_SIZE = 1024;
 /**
  * Redaction rules, applied in order. Secrets first, so a token that contains
  * something e-mail-like is removed as a whole.
+ *
+ * Every repetition is bounded and no two adjacent ones can match the same
+ * characters, so a pattern runs in linear time on any input (the text is
+ * conversation content, possibly crafted to stall a regex).
  */
 const REDACTIONS = [
   // JSON Web Tokens (three base64url parts, header starts with `{"`)
-  [/\beyJ[A-Za-z0-9_-]{5,}\.[A-Za-z0-9_-]{5,}\.[A-Za-z0-9_-]{5,}/g, '[REDACTED:jwt]'],
+  [/\beyJ[A-Za-z0-9_-]{5,4096}\.[A-Za-z0-9_-]{5,4096}\.[A-Za-z0-9_-]{5,4096}/g, '[REDACTED:jwt]'],
   // Authorization header values
-  [/\b(Bearer|Basic)\s+[A-Za-z0-9._~+/=-]{8,}/gi, '$1 [REDACTED:token]'],
+  [/\b(Bearer|Basic) {1,4}[A-Za-z0-9._~+/=-]{8,4096}/gi, '$1 [REDACTED:token]'],
   // Well-known API key formats
   [
-    /\b(?:sk|pk|rk)-(?:[A-Za-z0-9]+-)*[A-Za-z0-9_-]{16,}|\bAKIA[0-9A-Z]{16}\b|\bgh[pousr]_[A-Za-z0-9]{30,}\b|\bgithub_pat_[A-Za-z0-9_]{30,}\b|\bxox[abprs]-[A-Za-z0-9-]{10,}\b|\bAIza[0-9A-Za-z_-]{35}\b|\bglpat-[A-Za-z0-9_-]{20,}\b/g,
+    /\b(?:sk|pk|rk)-[A-Za-z0-9_-]{16,512}|\bAKIA[0-9A-Z]{16}\b|\bgh[pousr]_[A-Za-z0-9]{30,255}|\bgithub_pat_[A-Za-z0-9_]{30,255}|\bxox[abprs]-[A-Za-z0-9-]{10,255}|\bAIza[0-9A-Za-z_-]{35}\b|\bglpat-[A-Za-z0-9_-]{20,255}/g,
     '[REDACTED:key]'
   ],
   // key=value / key: value secrets
   [
-    /\b((?:api[_-]?key|access[_-]?token|refresh[_-]?token|client[_-]?secret|secret|password|passwd|pwd|token)\s*[:=]\s*)["']?[^\s"'&,;]{4,}["']?/gi,
+    /\b((?:api[_-]?key|access[_-]?token|refresh[_-]?token|client[_-]?secret|secret|password|passwd|pwd|token) {0,4}[:=] {0,4})["']?[^\s"'&,;]{4,512}["']?/gi,
     '$1[REDACTED:secret]'
   ],
   // E-mail addresses
-  [/[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}/g, '[REDACTED:email]'],
+  // E-mail addresses: the domain is matched as one run of labels and dots and
+  // must end in a dot and a TLD, checked in the replacer (no nested repetition).
+  [/[A-Za-z0-9._%+-]{1,64}@[A-Za-z0-9.-]{1,253}/g, email => (/\.[A-Za-z]{2,}$/.test(email) ? '[REDACTED:email]' : email)],
   // IBANs, with or without the usual blanks every four characters
   [/\b[A-Z]{2}\d{2}(?: ?[A-Z0-9]{4}){2,7}(?: ?[A-Z0-9]{1,4})?\b/g, '[REDACTED:iban]']
 ];
 
 /** A phone number candidate: international (+, 00) or national (leading 0) prefix. */
-const PHONE_CANDIDATE = /(?<![\w+])(?:\+|00|0)\d[\d\s()./-]{5,}\d(?![\w])/g;
+const PHONE_CANDIDATE = /(?<![\w+])(?:\+|00|0)\d[\d ()./-]{5,24}(?![\w])/g;
 /** A date like 01.02.2024 or 1/2/24, which the candidate pattern would also match. */
 const DATE_LIKE = /^\d{1,4}[./-]\d{1,2}[./-]\d{1,4}$/;
 
@@ -72,11 +78,14 @@ export function redactContent(text) {
   if (typeof text !== 'string' || text === '') return text;
   let out = text;
   for (const [pattern, replacement] of REDACTIONS) out = out.replace(pattern, replacement);
-  out = out.replace(PHONE_CANDIDATE, match => {
+  out = out.replace(PHONE_CANDIDATE, candidate => {
+    // The candidate may end in separators; they stay in the text.
+    const match = candidate.replace(/[ ()./-]+$/, '');
+    const tail = candidate.slice(match.length);
     const digits = match.replace(/\D/g, '').length;
-    if (digits < 7 || digits > 15) return match;
-    if (DATE_LIKE.test(match.trim())) return match;
-    return '[REDACTED:phone]';
+    if (digits < 7 || digits > 15) return candidate;
+    if (DATE_LIKE.test(match.trim())) return candidate;
+    return `[REDACTED:phone]${tail}`;
   });
   return out;
 }
