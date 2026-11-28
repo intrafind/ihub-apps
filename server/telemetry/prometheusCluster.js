@@ -111,7 +111,11 @@ export function mergeExpositions(expositions) {
   }
   const out = [];
   for (const { meta, samples } of families.values()) {
-    out.push(...meta, ...samples, '');
+    // One push per line: spreading a large family into push() would pass
+    // every sample as an argument and overflow the stack.
+    for (const line of meta) out.push(line);
+    for (const line of samples) out.push(line);
+    out.push('');
   }
   return out.join('\n');
 }

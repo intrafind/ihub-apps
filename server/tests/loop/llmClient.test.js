@@ -749,3 +749,59 @@ test('execute — a call that fails before any answer carries no usage', async (
   assert.equal(recorded.length, 1);
   assert.equal(recorded[0].usage, null);
 });
+
+/** A stream that sends one chunk and then hangs until its request is aborted. */
+function oneChunkThenHang() {
+  const encoder = new TextEncoder();
+  const chunk = `data: ${JSON.stringify({ choices: [{ index: 0, delta: { content: 'partial' } }] })}\n\n`;
+  return async () =>
+    new Response(
+      new ReadableStream({
+        start(controller) {
+          controller.enqueue(encoder.encode(chunk));
+        }
+      }),
+      { status: 200, headers: { 'content-type': 'text/event-stream' } }
+    );
+}
+
+/** Read the first chunk, wait past the deadline, then stop reading. */
+async function holdFirstChunk(stream, { onFirst } = {}) {
+  for await (const _chunk of stream) {
+    onFirst?.();
+    await new Promise(resolve => setTimeout(resolve, 60));
+    break;
+  }
+}
+
+test('execute — the deadline expiring while the consumer holds a chunk is a timeout', async () => {
+  const recorded = [];
+  const { client } = makeClient({
+    usage: { record: call => recorded.push(call) },
+    transport: oneChunkThenHang()
+  });
+  const stream = await client.execute({ modelId: 'oa', messages, timeoutMs: 20, retries: 0 });
+  await holdFirstChunk(stream);
+  assert.equal(recorded.length, 1);
+  assert.equal(recorded[0].errorCode, LLM_ERROR_CODES.TIMEOUT);
+});
+
+test('execute — a user stop stays a stop when the deadline fires after it', async () => {
+  const recorded = [];
+  const { client } = makeClient({
+    usage: { record: call => recorded.push(call) },
+    transport: oneChunkThenHang()
+  });
+  const stop = new AbortController();
+  const stream = await client.execute({
+    modelId: 'oa',
+    messages,
+    signal: stop.signal,
+    timeoutMs: 20,
+    retries: 0
+  });
+  await holdFirstChunk(stream, { onFirst: () => stop.abort() });
+  assert.equal(recorded.length, 1);
+  assert.equal(recorded[0].errorCode, null);
+  assert.equal(recorded[0].outcome, 'aborted');
+});

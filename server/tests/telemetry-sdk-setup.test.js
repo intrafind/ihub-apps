@@ -293,6 +293,13 @@ describe('Prometheus: one endpoint for all workers', () => {
     );
   });
 
+  test('mergeExpositions handles a family larger than the argument limit', () => {
+    const samples = Array.from({ length: 200_000 }, (_, i) => `big_total{n="${i}"} 1`);
+    const text = ['# TYPE big_total counter', ...samples, ''].join('\n');
+    const merged = mergeExpositions([{ workerId: '0', text }]);
+    expect(merged.split('\n')).toHaveLength(200_000 + 2);
+  });
+
   async function scrapeOver(cluster) {
     // A reader collects only once a meter provider has it.
     new MeterProvider({ readers: [cluster.reader] });

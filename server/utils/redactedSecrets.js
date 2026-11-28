@@ -195,7 +195,7 @@ function walk(next, stored, segments, visit, pointer = [], options = {}) {
     options.storedKeys &&
     segments.at(-1).key === '*' &&
     !segment.array &&
-    next[segment.key] === undefined &&
+    next[segment.key] == null &&
     isPlainObject(storedChild)
   ) {
     next[segment.key] = {};

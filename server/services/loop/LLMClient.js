@@ -1227,7 +1227,13 @@ export class LLMClient {
         await accumulator.settleMedia();
         const toolCalls = accumulator.toolCalls.length;
         if (failure) {
-          client._recordError({ runId, step, err: failure, callTelemetry });
+          client._recordError({
+            runId,
+            step,
+            err: failure,
+            callTelemetry,
+            usage: accumulator.usage
+          });
           // A call that failed or was stopped after the answer started still
           // used tokens: the provider's count when it sent one, an estimate
           // otherwise (most providers report usage only in the last chunk, so
@@ -1242,13 +1248,21 @@ export class LLMClient {
         } else {
           const stopped = !accumulator.complete && callSignal?.aborted === true;
           // The deadline ran out while the consumer held a chunk, so no read
-          // threw: a timeout all the same, not the user's stop.
+          // threw: a timeout all the same, not the user's stop. The reason
+          // that aborted the signal first decides: a user stop stays a stop
+          // even when a timer fires after it.
+          const deadlineWon =
+            callSignal?.reason === TIMEOUT_REASON || callSignal?.reason === STREAM_IDLE_REASON;
           const expired =
-            stopped && (timedOut || streamIdleTimedOut)
-              ? toLLMError(callSignal.reason, errCtx())
+            stopped && deadlineWon
+              ? toLLMError(callSignal.reason, {
+                  ...errCtx(),
+                  timedOut: callSignal.reason === TIMEOUT_REASON,
+                  streamIdleTimedOut: callSignal.reason === STREAM_IDLE_REASON
+                })
               : null;
           if (expired) {
-            callTelemetry?.fail(expired);
+            callTelemetry?.fail(expired, { usage: accumulator.usage });
           } else {
             client._endCallTelemetry(callTelemetry, { model, accumulator, aborted: stopped });
           }
@@ -1753,9 +1767,11 @@ export class LLMClient {
    * ledger keeps a safe sentence ({@link ledgerErrorMessage}), never the raw
    * failure text, because the ledger is replayed to the run's owner
    * (`GET /api/runs/:runId/events`); the raw text goes to the server log.
+   * `usage` is what the provider reported before the failure, for the token
+   * metrics.
    * @private
    */
-  _recordError({ runId, step, err, callTelemetry }) {
+  _recordError({ runId, step, err, callTelemetry, usage = null }) {
     if (runId && err && typeof err === 'object') ledgeredErrors.set(err, runId);
     if (runId && err?.code !== LLM_ERROR_CODES.ABORTED) {
       logger.warn('Model call failed', {
@@ -1779,7 +1795,7 @@ export class LLMClient {
       recoverable: err.retryable === true || err.code === LLM_ERROR_CODES.CONTEXT_WINDOW_EXCEEDED
     });
     // A stop is not a failure: the call telemetry records it as aborted.
-    callTelemetry?.fail(err);
+    callTelemetry?.fail(err, { usage });
   }
 
   /**

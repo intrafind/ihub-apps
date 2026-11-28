@@ -126,6 +126,11 @@ describe('restoreRedacted', () => {
       { mode: 'rollback' }
     );
     expect(deeper.exporters.otlp.headers).toEqual(current.otlp.headers);
+    // A snapshot that stored the header map as null keeps the current headers too.
+    const nulled = restoreRedacted({ otlp: { headers: null } }, current, HEADERS, {
+      mode: 'rollback'
+    });
+    expect(nulled.otlp.headers).toEqual(current.otlp.headers);
     // A header the current file lacks is dropped, even one named like an Object member.
     const inherited = restoreRedacted(
       { otlp: { headers: { constructor: 'old' } } },
