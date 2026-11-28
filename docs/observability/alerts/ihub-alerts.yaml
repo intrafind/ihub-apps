@@ -117,20 +117,21 @@ groups:
   - name: ihub-capacity
     rules:
       - alert: IHubEventLoopDelayHigh
-        expr: max by (job, service_instance_id) (nodejs_eventloop_delay_p99) > 0.2
+        expr: max by (job, instance, cluster_worker_id) (nodejs_eventloop_delay_p99) > 0.2
         for: 10m
         labels: { severity: warning }
         annotations:
-          summary: 'Event-loop delay p99 above 200 ms on {{ $labels.service_instance_id }}'
+          summary: 'Event-loop delay p99 above 200 ms on {{ $labels.instance }} worker {{ $labels.cluster_worker_id }}'
       - alert: IHubMemoryNearLimit
+        # All workers share the container's memory limit, so the container's working set is
+        # compared, not one worker's RSS. Needs cAdvisor (kubelet) metrics; drop it without.
         expr: |
-          max by (job, service_instance_id) (process_memory_usage)
-            / on (job) group_left max by (job) (container_spec_memory_limit_bytes{container="ihub-apps"}) > 0.9
+          max by (namespace, pod) (container_memory_working_set_bytes{container="ihub-apps"})
+            / max by (namespace, pod) (container_spec_memory_limit_bytes{container="ihub-apps"} > 0) > 0.9
         for: 10m
         labels: { severity: warning }
         annotations:
-          summary: 'Resident memory near the container limit on {{ $labels.service_instance_id }}'
-          description: Needs cAdvisor's container_spec_memory_limit_bytes; drop this rule without it.
+          summary: 'Memory of {{ $labels.pod }} above 90 % of its container limit'
       - alert: IHubDiskAlmostFull
         expr: |
           max by (job, ihub_storage_mount) (ihub_storage_filesystem_usage)

@@ -321,7 +321,7 @@ Required and conditionally required attributes follow the gen-ai conventions:
 | Attribute | Notes |
 | --- | --- |
 | `gen_ai.operation.name` | `chat`, `generate_content`, `text_completion` |
-| `gen_ai.provider.name`  | `openai`, `anthropic`, `google`, `mistral_ai` |
+| `gen_ai.provider.name`  | `openai`, `anthropic`, `gcp.gemini`, `mistral_ai`, `aws.bedrock`, `local`, `vllm`, `iassistant` |
 | `gen_ai.request.model`  | Model id sent to the provider |
 | `gen_ai.request.temperature` | Only when the model config sets `sampling.temperature` |
 | `gen_ai.request.top_p`       | Only when the model config sets `sampling.topP` |

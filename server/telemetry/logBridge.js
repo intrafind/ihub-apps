@@ -22,6 +22,9 @@ import winston from 'winston';
 import { logs, SeverityNumber } from '@opentelemetry/api';
 import { userSpanAttributes } from './identity.js';
 
+/** A string value exported as it is: an id or a code, no blanks, at most 128 characters. */
+const CODE_LIKE = /^[\w.:@/+-]{1,128}$/;
+
 /** Structured fields exported as they are (primitives only). */
 const EXPORTED_FIELDS = new Set([
   'component',
@@ -66,7 +69,9 @@ export function exportedLogAttributes(info) {
     const value = info?.[key];
     if (typeof value === 'number' && Number.isFinite(value)) attributes[key] = value;
     else if (typeof value === 'boolean') attributes[key] = value;
-    else if (typeof value === 'string' && value !== '') attributes[key] = value.slice(0, 256);
+    // Ids and codes only: some call sites put a raw error message into `reason`
+    // or `status`, and free text can echo a prompt or a provider's answer.
+    else if (typeof value === 'string' && CODE_LIKE.test(value)) attributes[key] = value;
   }
   const error = info?.error;
   if (error && typeof error === 'object') {

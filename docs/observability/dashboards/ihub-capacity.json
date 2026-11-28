@@ -295,8 +295,8 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "max by (service_instance_id) (nodejs_eventloop_delay_p99{job=~\"$job\"})",
-          "legendFormat": "{{service_instance_id}}"
+          "expr": "max by (instance, cluster_worker_id) (nodejs_eventloop_delay_p99{job=~\"$job\"})",
+          "legendFormat": "{{instance}} w{{cluster_worker_id}}"
         }
       ],
       "id": 7
@@ -341,8 +341,8 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "max by (service_instance_id) (nodejs_eventloop_utilization{job=~\"$job\"})",
-          "legendFormat": "{{service_instance_id}}"
+          "expr": "max by (instance, cluster_worker_id) (nodejs_eventloop_utilization{job=~\"$job\"})",
+          "legendFormat": "{{instance}} w{{cluster_worker_id}}"
         }
       ],
       "id": 8
@@ -387,8 +387,8 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "max by (service_instance_id) (process_memory_usage{job=~\"$job\"})",
-          "legendFormat": "{{service_instance_id}}"
+          "expr": "max by (instance, cluster_worker_id) (process_memory_usage{job=~\"$job\"})",
+          "legendFormat": "{{instance}} w{{cluster_worker_id}}"
         }
       ],
       "id": 9
@@ -433,8 +433,8 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "max by (service_instance_id) (process_open_file_descriptor_count{job=~\"$job\"})",
-          "legendFormat": "{{service_instance_id}}"
+          "expr": "max by (instance, cluster_worker_id) (process_open_file_descriptor_count{job=~\"$job\"})",
+          "legendFormat": "{{instance}} w{{cluster_worker_id}}"
         }
       ],
       "id": 10

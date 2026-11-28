@@ -187,6 +187,18 @@ describe('logs', () => {
   test('nested objects and unknown fields are not exported', () => {
     expect(exportedLogAttributes({ component: 'x', nested: { a: 1 } })).toEqual({ component: 'x' });
   });
+
+  test('free text in an allowed field is not exported; ids and codes are', () => {
+    expect(
+      exportedLogAttributes({
+        component: 'AgentLoop',
+        reason: 'Provider said: the user asked about the salary of Jane Doe',
+        status: 'tool_choice_rejected',
+        modelId: 'gpt-4o-mini',
+        code: 'a'.repeat(200)
+      })
+    ).toEqual({ component: 'AgentLoop', status: 'tool_choice_rejected', modelId: 'gpt-4o-mini' });
+  });
 });
 
 describe('readiness', () => {
