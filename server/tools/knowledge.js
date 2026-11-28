@@ -32,6 +32,7 @@ import {
 } from '../services/sources/toolCallScope.js';
 import { RESULT_BUDGET_CHARS } from '../sources/documentRetrieval.js';
 import { normalizeFocus } from '../services/knowledge/focusQuery.js';
+import { withRetrievalSpan } from '../telemetry/traces.js';
 
 const MAX_LIMIT = 20;
 
@@ -153,11 +154,16 @@ export async function search(params) {
       // applied once the hits of every project are ranked together, so the
       // passages of a project that matches are not dropped for the room an
       // unrelated attached project leaves unused.
-      const found = await provider.search(entry.project, ctx, {
-        query,
-        limit,
-        budgetChars: RESULT_BUDGET_CHARS
-      });
+      const found = await withRetrievalSpan(
+        'project',
+        () =>
+          provider.search(entry.project, ctx, {
+            query,
+            limit,
+            budgetChars: RESULT_BUDGET_CHARS
+          }),
+        result => result?.hits?.length
+      );
       for (const hit of found.hits) gathered.push({ hit, project: entry.project });
       for (const u of found.unavailable) unavailable.push({ ...u, project: entry.project.id });
       retrieval.push({ project: entry.project.id, ...found.retrieval });

@@ -82,6 +82,7 @@
 import cluster from 'node:cluster';
 import logger from './utils/logger.js';
 import { Histogram, registerGauge, statRecord } from './telemetry/waitDiagnostics.js';
+import { injectContext, runInCarrierContext } from './telemetry/spans.js';
 
 /** Envelope marker so bus traffic never collides with other IPC messages. */
 const ENVELOPE = '__ihubBus';
@@ -791,7 +792,13 @@ export function request(type, payload, { route, timeoutMs = 1500, primaryOnly = 
     });
 
     if (
-      !publish(type, { requestId, payload, replyTo: cluster.worker?.id }, route, { primaryOnly })
+      !publish(
+        type,
+        // `trace`: the asker's trace context, so the answering worker's spans join it.
+        { requestId, payload, replyTo: cluster.worker?.id, trace: injectContext() },
+        route,
+        { primaryOnly }
+      )
     ) {
       clearTimeout(timer);
       pendingRequests.delete(requestId);
@@ -848,7 +855,11 @@ export function gather(type, payload, { expected, timeoutMs = 1000 } = {}) {
       if (Number.isFinite(expected) && replies.length >= expected) finish();
     });
 
-    if (!publish(type, { requestId, payload, replyTo: cluster.worker?.id })) finish();
+    if (
+      !publish(type, { requestId, payload, replyTo: cluster.worker?.id, trace: injectContext() })
+    ) {
+      finish();
+    }
   });
 }
 
@@ -895,7 +906,7 @@ export function respond(type, handler) {
 
     let reply;
     try {
-      reply = await handler(message.payload);
+      reply = await runInCarrierContext(message.trace, () => handler(message.payload));
     } catch (error) {
       logger.error({
         component: 'ClusterBus',

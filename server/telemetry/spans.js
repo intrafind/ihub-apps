@@ -432,6 +432,20 @@ export function extractContext(carrier) {
 }
 
 /**
+ * Run `fn` in the context a carrier stands for, so spans it starts continue
+ * the sender's trace. Without a carrier `fn` runs as it is.
+ *
+ * @template T
+ * @param {Object<string, string>|undefined|null} carrier
+ * @param {() => T} fn
+ * @returns {T}
+ */
+export function runInCarrierContext(carrier, fn) {
+  if (!carrier || typeof carrier !== 'object' || !carrier.traceparent) return fn();
+  return otelContext.with(extractContext(carrier), fn);
+}
+
+/**
  * A span link to the trace a carrier came from. A run that resumes hours later
  * (a workflow after a human decision) starts a new trace that links to the
  * old one instead of a parent that ended long ago.

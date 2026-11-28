@@ -186,11 +186,67 @@ changes every pseudonym, which unlinks older traces. Per-user reports belong in
 | `autoInstrumentation` | Yes |
 | `events.includePrompts`, `events.includeCompletions`, `events.maxEventSize` | No - applied immediately |
 | `spans.includeOptInAttributes`, `spans.userIdMode` | No - applied immediately |
+| `spans.sampleRate` | Yes |
 | `activitySummary.*` | No - re-armed on save |
 
 ## Spans
 
-Each LLM call produces one span named `<operation> <model>` (e.g. `chat gpt-4o`).
+### Span tree
+
+Every unit of work starts a span, and what it does becomes a child, so one chat turn is one
+trace:
+
+```text
+POST /api/apps/{appId}/chat/{chatId}         SERVER  (autoInstrumentation, http.route)
+└─ invoke_agent {app.id}                     the turn (ChatService.runTurn)
+   ├─ chat {model}                           one per model call (CLIENT)
+   │  └─ POST                                the provider request (autoInstrumentation)
+   ├─ execute_tool {tool}                    one per tool call
+   │  ├─ retrieval {provider}                knowledge search, iFinder, iAssistant (CLIENT)
+   │  │  └─ POST                             the outbound request
+   │  └─ invoke_agent {app.id}               an app called as a tool (ihub.turn.kind=subagent)
+   └─ chat {model}                           the next round of the tool loop
+```
+
+| Span | Where it starts | Notable attributes |
+| --- | --- | --- |
+| `invoke_agent {app.id}` | a chat turn, an app run through the inference API, a scheduled task, an app called as a tool, MCP / A2A app calls | `app.id`, `ihub.turn.kind` (`turn`, `subagent`), `ihub.trigger.type`, `ihub.turn.status`, `user.hash`, `gen_ai.conversation.id` (hashed) |
+| `inference {api}` | `/api/inference/v1/chat/completions` (`chat_completions`) and `/responses` | `ihub.inference.target` (`app`, `model`), `ihub.streaming` |
+| `tools/call {tool}` (SERVER) | a tool call to iHub's MCP server | `mcp.method.name`, `gen_ai.tool.name` |
+| `a2a.task {kind}` | an A2A task (`app`, `workflow`) | `ihub.a2a.skill.kind`, `ihub.a2a.skill.id` |
+| `execute_tool {tool}` | a tool call in the agent loop. A tool an MCP server or A2A agent reports at runtime is named `mcp` / `a2a`; a tool the app does not offer `unknown` | `gen_ai.tool.name`, `gen_ai.tool.call.id`, `tool.origin`, `tool.outcome`, `ihub.result.count`, `ihub.result.bytes` |
+| `workflow.run` | one segment of a workflow execution. A run that resumes (after a human decision, a checkpoint, a restart) starts a **new trace with a span link** to the segment before | `ihub.workflow.id`, `ihub.workflow.execution_id`, `ihub.workflow.resumed`, `ihub.workflow.status` |
+| `workflow.node {node.type}` | one node attempt | `ihub.workflow.node.type`, `ihub.workflow.node.id`, `ihub.retry.attempt` |
+| `scheduled_task.run` | a scheduled task run, always a new trace | `app.id`, `ihub.trigger.type` |
+| `retrieval {provider}` (CLIENT) | `project` (knowledge search), `ifinder`, `iassistant` | `source.provider`, `ihub.result.count` |
+| `extraction {format}` | text extraction from a file; the extraction thread's work is timed from the calling thread | `ihub.extraction.format`, `ihub.input.bytes` |
+
+A failure sets `error.type` and status `ERROR`; a user stop sets `ihub.aborted=true` and leaves
+the status unset. No span carries prompts, queries, tool arguments or results unless content
+capture is on, and then only the LLM span.
+
+**Trace context** comes in through `traceparent` / `tracestate` (allowed through CORS for the
+Office add-in, browser extension and API clients) and goes out with every outbound request. It is
+carried across the cluster bus, so the spans a request causes on another worker join its trace.
+Log lines written inside a span carry `trace_id` and `span_id` when `autoInstrumentation` is on
+(winston instrumentation).
+
+### Sampling
+
+`spans.sampleRate` (0–1, default 1) is applied as `ParentBased(TraceIdRatioBased)`: that share of
+new traces is recorded, and a request that arrives with a `traceparent` follows its caller's
+decision. `OTEL_TRACES_SAMPLER` / `OTEL_TRACES_SAMPLER_ARG` override it. Head sampling decides
+before anything is known about the trace; to keep every failed or slow trace at a low rate,
+leave `sampleRate` at 1 and sample in the collector (tail sampling, see
+[Backend integration](#backend-integration)).
+
+### The LLM span
+
+Each LLM call produces one span named `<operation> <model>` (e.g. `chat gpt-4o`). It is active
+while the provider request runs, so the HTTP client span is its child. A retried attempt adds an
+`ihub.llm.retry` event (`ihub.retry.attempt`, `error.type`), a provider `pause_turn` an
+`ihub.llm.pause_turn` event. A stream that is dropped without being read ends its span with
+`ihub.stream.abandoned=true`.
 Required and conditionally required attributes follow the gen-ai conventions:
 
 | Attribute | Notes |

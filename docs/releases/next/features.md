@@ -338,3 +338,21 @@ traffic".
 - New metrics `ihub.telemetry.export.failures`, `ihub.telemetry.export.last_success` and
   `ihub.build.info` allow an alert when exports stop.
 - Turning on prompt or completion capture logs a warning and writes an audit entry.
+
+## Telemetry: One Connected Trace per Chat Turn
+
+A chat turn, an inference API request, a workflow run or a scheduled task now shows up in the
+trace backend as one trace: the turn, each model call, each tool call, searches in projects,
+iFinder and iAssistant, and the outbound requests below them. "Why was this answer slow?" can be
+read off one trace.
+
+- New spans: `invoke_agent`, `execute_tool`, `retrieval`, `workflow.run` and `workflow.node`,
+  `scheduled_task.run`, `inference`, `extraction`, and MCP and A2A calls. A workflow that resumes
+  after a human decision starts a new trace linked to the earlier one.
+- With `autoInstrumentation` on, inbound requests get route names, a `traceparent` sent by a
+  caller (Office add-in, browser extension, API client) continues its trace, and log lines carry
+  the trace id.
+- `spans.sampleRate` now takes effect (`OTEL_TRACES_SAMPLER` overrides it).
+- The server starts through a small bootstrap (`node --import ./server/instrumentation.mjs`). The
+  Docker image, `npm start` and the binary do this already; a custom start command needs the flag
+  for HTTP and Express spans.

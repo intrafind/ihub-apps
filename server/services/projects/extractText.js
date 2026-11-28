@@ -43,6 +43,7 @@ import { MAX_ITEM_TEXT_CHARS } from './projectConstants.js';
 import { recordExtractionDuration, recordExtractionQueueWait } from '../../telemetry/metrics.js';
 import { extractHtmlPage } from '../pageReader/pageContent.js';
 import { cleanItemInfo, infoFromText } from './itemInfo.js';
+import { withExtractionSpan } from '../../telemetry/traces.js';
 
 /** The most characters one item keeps (about 10 MB of text). */
 export const MAX_TEXT_CHARS = MAX_ITEM_TEXT_CHARS;
@@ -937,6 +938,17 @@ export async function extractText(input, options = {}) {
   const { bytes } = input || {};
   // Empty or invalid input needs no thread to be refused.
   if (!Buffer.isBuffer(bytes) || bytes.length === 0) return extractTextInProcess(input, options);
+  // One span per file (`extraction {format}`), on this thread: the extraction
+  // thread runs no telemetry, so its work is timed from here.
+  const accepted = acceptedTypeOf(input);
+  return withExtractionSpan(
+    { format: accepted ? formatLabel(accepted) : 'unknown', bytes: bytes.length },
+    () => extractTextRouted(input, options)
+  );
+}
+
+/** {@link extractText} for valid input: in a thread when threads are on. */
+async function extractTextRouted(input, options) {
   // Loaded on first call so the extraction thread, which imports this module
   // for `extractTextCore`, does not load the pool and its config readers.
   const pool = await import('./extractionPool.js');

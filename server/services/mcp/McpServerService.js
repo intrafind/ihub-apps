@@ -29,6 +29,7 @@ import { APPROVAL_ERROR_CODES } from '../../../shared/toolApproval.js';
 import { argumentsDigest, gatewayRequestStateCodec } from './gatewayRequestState.js';
 import { attachGatewaySkills } from './gatewaySkills.js';
 import { attachGatewayTasks, clientAcceptsTasks, startGatewayTask } from './gatewayTasks.js';
+import { withMcpToolSpan } from '../../telemetry/traces.js';
 
 /**
  * Whether a tool exposed through the gateway needs a person's approval
@@ -452,7 +453,11 @@ export async function buildMcpServer({ user, platform, era = 'legacy' }) {
           userId: user.id,
           era
         });
-        return handler(declaredArguments(args, parameters), ctx);
+        // A task-capable client gets a handle back at once; the span covers
+        // the call, the run it starts continues in the same trace.
+        return withMcpToolSpan({ tool: name, userId: user.id }, () =>
+          handler(declaredArguments(args, parameters), ctx)
+        );
       }
     );
 

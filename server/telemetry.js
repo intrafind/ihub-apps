@@ -35,7 +35,11 @@ import {
 import { createInstrumentations } from './telemetry/autoInstrumentation.js';
 import { RedactingSpanProcessor } from './telemetry/spanRedaction.js';
 import { configureSpans } from './telemetry/spans.js';
-import { configureIdentity, resolveUserIdMode } from './telemetry/identity.js';
+import {
+  configureIdentity,
+  resolveUserIdMode,
+  setPseudonymKeySource
+} from './telemetry/identity.js';
 import { capturesCompletions, capturesPrompts, contentCap } from './telemetry/contentCapture.js';
 import {
   getTelemetryStatus,
@@ -342,6 +346,7 @@ export async function initTelemetry(rawConfig = {}, { instrumentations, bootstra
     appLogger.debug('Telemetry already started by the bootstrap', { component: 'Telemetry' });
     return;
   }
+  setPseudonymKeySource(() => tokenStorageService.encryptionKey);
   configureIdentity(rawConfig);
   if (!rawConfig.enabled) {
     activeConfig = rawConfig;

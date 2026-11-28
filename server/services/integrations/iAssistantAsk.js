@@ -55,6 +55,7 @@ import { iAssistantSourceFrame } from '../sources/producers/ifinder.js';
 import { allocatePassageMarkers, reportToolCallSources } from '../sources/toolCallScope.js';
 import { citeMarker } from '../../../shared/sources/citations.js';
 import logger from '../../utils/logger.js';
+import { withRetrievalSpan } from '../../telemetry/traces.js';
 
 const COMPONENT = 'IAssistantAsk';
 
@@ -207,6 +208,17 @@ function conversationLabels(appConfig, configured) {
 }
 
 /**
+ * Ask iAssistant inside a retrieval span (`retrieval iassistant`); see
+ * {@link askIAssistantTraced}.
+ *
+ * @param {Object} params - As for `askIAssistantTraced`
+ * @returns {Promise<*>}
+ */
+export function askIAssistant(params) {
+  return withRetrievalSpan('iassistant', () => askIAssistantTraced(params));
+}
+
+/**
  * Ask the iAssistant one question.
  *
  * @param {Object} params
@@ -223,7 +235,7 @@ function conversationLabels(appConfig, configured) {
  * @throws {IAssistantAskError} for a call the model or the user can act on
  * @throws {Error} when iFinder fails
  */
-export async function askIAssistant({
+async function askIAssistantTraced({
   question,
   assistant,
   chatScope = null,

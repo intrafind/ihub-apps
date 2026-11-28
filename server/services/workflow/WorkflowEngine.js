@@ -18,6 +18,11 @@ import { createPresenceMap, hasRemote, publish, subscribe } from '../../clusterB
 import logger from '../../utils/logger.js';
 import { actorSnapshot } from './executionActor.js';
 import interactionService from '../loop/InteractionService.js';
+import {
+  endWorkflowRunSpan,
+  startWorkflowRunSpan,
+  withWorkflowNodeSpan
+} from '../../telemetry/traces.js';
 import { getLocalizedString } from '../../utils/localize.js';
 
 /** Presence kind announcing which worker holds a running execution's abort controller. */
@@ -471,15 +476,15 @@ export class WorkflowEngine {
     });
 
     // 7. Begin execution loop (non-blocking)
-    this._runExecutionLoop(workflowDefinition, executionId, options, abortController.signal).catch(
-      error => {
-        logger.error('Workflow execution failed', {
-          component: 'WorkflowEngine',
-          executionId,
-          error
-        });
-      }
-    );
+    this._runExecutionLoop(workflowDefinition, executionId, options, abortController.signal, {
+      resumed: false
+    }).catch(error => {
+      logger.error('Workflow execution failed', {
+        component: 'WorkflowEngine',
+        executionId,
+        error
+      });
+    });
 
     // 8. Return initial state (execution continues in background)
     return state;
@@ -590,15 +595,15 @@ export class WorkflowEngine {
     });
 
     // Re-enter the same loop; it reads currentNodes/completedNodes from state.
-    this._runExecutionLoop(workflowDefinition, executionId, options, abortController.signal).catch(
-      error => {
-        logger.error('Resumed workflow execution failed', {
-          component: 'WorkflowEngine',
-          executionId,
-          error
-        });
-      }
-    );
+    this._runExecutionLoop(workflowDefinition, executionId, options, abortController.signal, {
+      resumed: true
+    }).catch(error => {
+      logger.error('Resumed workflow execution failed', {
+        component: 'WorkflowEngine',
+        executionId,
+        error
+      });
+    });
 
     return this.stateManager.get(executionId);
   }
@@ -609,9 +614,39 @@ export class WorkflowEngine {
    * @param {string} executionId - The execution identifier
    * @param {Object} options - Execution options
    * @param {AbortSignal} signal - Abort signal for cancellation
+   * @param {Object} [trace]
+   * @param {boolean} [trace.resumed] - The run continues (after a human
+   *   decision, a checkpoint, a restart): a new trace linked to the last one
    * @private
    */
-  async _runExecutionLoop(workflow, executionId, options, signal) {
+  async _runExecutionLoop(workflow, executionId, options, signal, { resumed = false } = {}) {
+    const span = startWorkflowRunSpan({
+      executionId,
+      workflowId: workflow?.id,
+      userId: options?.user?.id,
+      resumed,
+      depth: options?.depth
+    });
+    try {
+      await span.run(() => this._runExecutionLoopTraced(workflow, executionId, options, signal));
+    } finally {
+      let status = 'unknown';
+      try {
+        status = (await this.stateManager.get(executionId))?.status ?? 'unknown';
+      } catch {
+        /* the status is only for the span */
+      }
+      endWorkflowRunSpan(span, status, executionId);
+      if (status === 'failed') span.fail({ code: 'WORKFLOW_FAILED' });
+      span.end();
+    }
+  }
+
+  /**
+   * The execution loop itself; see {@link WorkflowEngine#_runExecutionLoop}.
+   * @private
+   */
+  async _runExecutionLoopTraced(workflow, executionId, options, signal) {
     let iterationCount = 0;
 
     try {
@@ -779,7 +814,9 @@ export class WorkflowEngine {
 
             while (true) {
               try {
-                result = await this.executeNode(node, workflow, executionId, options);
+                result = await withWorkflowNodeSpan({ type: node.type, id: node.id, attempt }, () =>
+                  this.executeNode(node, workflow, executionId, options)
+                );
                 break; // Success - exit retry loop
               } catch (executeError) {
                 attempt++;
@@ -1395,7 +1432,9 @@ export class WorkflowEngine {
     }
 
     // Continue execution loop
-    this._runExecutionLoop(workflow, executionId, options, abortController.signal).catch(error => {
+    this._runExecutionLoop(workflow, executionId, options, abortController.signal, {
+      resumed: true
+    }).catch(error => {
       logger.error('Resumed workflow execution failed', {
         component: 'WorkflowEngine',
         executionId,
@@ -1598,7 +1637,9 @@ export class WorkflowEngine {
     const abortController = new AbortController();
     this.abortControllers.set(executionId, abortController);
 
-    this._runExecutionLoop(workflow, executionId, options, abortController.signal).catch(error => {
+    this._runExecutionLoop(workflow, executionId, options, abortController.signal, {
+      resumed: true
+    }).catch(error => {
       logger.error('Resumed workflow execution failed', {
         component: 'WorkflowEngine',
         executionId,
