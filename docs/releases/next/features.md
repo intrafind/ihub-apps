@@ -324,3 +324,17 @@ migration history records them all as applied in one step.
   no longer gets that file and `sources/meeting-knowledge-base.md` in `contents/`.
 - A `contents/` directory that already holds files, such as apps copied over from an older
   installation or a data volume with documents, is migrated as before.
+
+## Telemetry: See Whether It Is On and Exporting
+
+Admins can now tell "telemetry is off" and "the collector is unreachable" apart from "no
+traffic".
+
+- The server logs whether telemetry is on at startup, a warning when exports start failing (with
+  a reason such as `tls` or `connection_refused`) and a note when they recover.
+- **Admin → System resources** shows each signal (traces, metrics, logs) with its last successful
+  export, last failure and failure count. `/api/health` has a `telemetry` block with the state of
+  each signal.
+- New metrics `ihub.telemetry.export.failures`, `ihub.telemetry.export.last_success` and
+  `ihub.build.info` allow an alert when exports stop.
+- Turning on prompt or completion capture logs a warning and writes an audit entry.

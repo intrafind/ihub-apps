@@ -60,10 +60,11 @@ export function decryptCredentials(config) {
 }
 
 /**
- * Decrypt the speech secret platform.json stores encrypted at rest, in place.
+ * Decrypt the secrets platform.json stores encrypted at rest, in place: the
+ * Azure Speech key and the OTLP exporter headers.
  *
- * The Azure token broker (`/api/voice/azure/token`) reads it from the cache and
- * expects plaintext. Env-var placeholders are resolved later, when the entry is
+ * The Azure token broker (`/api/voice/azure/token`) reads the key from the
+ * cache and expects plaintext. Env-var placeholders are resolved later, when the entry is
  * stored. Transcription and TTS endpoints keep their keys on their models.
  *
  * @param {Object} platformData - Parsed platform.json
@@ -76,15 +77,24 @@ export function decryptPlatformSecrets(platformData) {
       { configPath: 'config/platform.json', setting: 'speech.azure.subscriptionKey' }
     );
   }
+  const otlpHeaders = platformData.telemetry?.exporters?.otlp?.headers;
+  if (otlpHeaders && typeof otlpHeaders === 'object' && !Array.isArray(otlpHeaders)) {
+    for (const [name, value] of Object.entries(otlpHeaders)) {
+      otlpHeaders[name] = decryptIfEncrypted(value, {
+        configPath: 'config/platform.json',
+        setting: 'telemetry.exporters.otlp.headers'
+      });
+    }
+  }
   return platformData;
 }
 
 /**
  * The inverse of {@link decryptPlatformSecrets}, for the way back to disk.
  *
- * The runtime cache holds the Azure Speech subscription key decrypted, so a
- * route that builds the file it saves from the cache would store the key in
- * plain text. This encrypts it again; an environment variable placeholder
+ * The runtime cache holds the Azure Speech subscription key and the OTLP
+ * exporter headers decrypted, and an admin save sends new values in plain
+ * text, so a write would store them in plain text. This encrypts them; an environment variable placeholder
  * (`${NAME}`) and a value that is already encrypted stay as they are, so
  * calling it twice is harmless.
  *
@@ -94,20 +104,61 @@ export function decryptPlatformSecrets(platformData) {
  */
 export async function encryptPlatformSecrets(platformData) {
   const key = platformData?.speech?.azure?.subscriptionKey;
-  if (!key || typeof key !== 'string') return platformData;
-  if (/^\$\{[A-Z_][A-Z0-9_]*\}$/i.test(key)) return platformData;
-  if (tokenStorageService.isEncrypted(key)) return platformData;
+  const otlpHeaders = platformData?.telemetry?.exporters?.otlp?.headers;
+  const headerNeedsEncryption =
+    otlpHeaders && typeof otlpHeaders === 'object' && !Array.isArray(otlpHeaders)
+      ? Object.values(otlpHeaders).some(needsEncryption)
+      : false;
+  const keyNeedsEncryption = needsEncryption(key);
+  if (!keyNeedsEncryption && !headerNeedsEncryption) return platformData;
   // The file is also saved early in startup (migrations), before the server
   // has set the key up.
   if (!tokenStorageService.encryptionKey) await tokenStorageService.initializeEncryptionKey();
-  return {
-    ...platformData,
-    speech: {
-      ...platformData.speech,
-      azure: {
-        ...platformData.speech.azure,
-        subscriptionKey: tokenStorageService.encryptString(key)
+  let next = platformData;
+  if (keyNeedsEncryption) {
+    next = {
+      ...next,
+      speech: {
+        ...next.speech,
+        azure: {
+          ...next.speech.azure,
+          subscriptionKey: tokenStorageService.encryptString(key)
+        }
       }
-    }
-  };
+    };
+  }
+  if (headerNeedsEncryption) {
+    next = {
+      ...next,
+      telemetry: {
+        ...next.telemetry,
+        exporters: {
+          ...next.telemetry.exporters,
+          otlp: {
+            ...next.telemetry.exporters.otlp,
+            headers: Object.fromEntries(
+              Object.entries(otlpHeaders).map(([name, value]) => [
+                name,
+                needsEncryption(value) ? tokenStorageService.encryptString(value) : value
+              ])
+            )
+          }
+        }
+      }
+    };
+  }
+  return next;
+}
+
+/**
+ * Whether a stored secret value is plain text that belongs encrypted: a
+ * non-empty string that is neither an `${ENV}` placeholder nor already `ENC[...]`.
+ *
+ * @param {unknown} value
+ * @returns {boolean}
+ */
+function needsEncryption(value) {
+  if (!value || typeof value !== 'string') return false;
+  if (/^\$\{[A-Z_][A-Z0-9_]*\}$/i.test(value)) return false;
+  return !tokenStorageService.isEncrypted(value);
 }

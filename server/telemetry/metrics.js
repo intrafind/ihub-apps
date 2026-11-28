@@ -6,6 +6,9 @@
  * Implements https://opentelemetry.io/docs/specs/semconv/gen-ai/gen-ai-metrics/
  */
 
+import logger from '../utils/logger.js';
+import { errorTypeOf } from './spans.js';
+
 // Recommended histogram buckets for token usage (in tokens)
 const TOKEN_USAGE_BUCKETS = [
   1, 4, 16, 64, 256, 1024, 4096, 16384, 65536, 262144, 1048576, 4194304, 16777216, 67108864
@@ -63,7 +66,12 @@ const ALLOWED_METRIC_LABELS = new Set([
   'tool.outcome',
   'answer.kinds_bucket',
   'source.provider',
-  'source.action'
+  'source.action',
+  // telemetry self-monitoring (#4008): closed sets
+  'telemetry.signal',
+  'telemetry.provider',
+  'telemetry.enabled',
+  'service.version'
 ]);
 
 function filterMetricLabels(attrs) {
@@ -129,6 +137,12 @@ let indexBuildDurationHistogram = null;
 let extractionDurationHistogram = null;
 let extractionQueueHistogram = null;
 let pendingIndexCacheProvider = null;
+
+// Telemetry self-monitoring (#4008)
+let telemetryExportFailuresCounter = null;
+let telemetryLastSuccessGauge = null;
+let buildInfoGauge = null;
+let pendingTelemetryStatusProvider = null;
 
 /**
  * Initialize metrics from a meter source. Accepts anything with a
@@ -326,11 +340,28 @@ export function initializeMetrics(meterSource) {
     advice: { explicitBucketBoundaries: WORK_DURATION_BUCKETS }
   });
 
-  attachIndexCacheObservers();
+  telemetryExportFailuresCounter = meter.createCounter('ihub.telemetry.export.failures', {
+    description:
+      'Telemetry exports that failed, by signal and reason (per process: sum across workers)',
+    unit: '{export}'
+  });
+  telemetryLastSuccessGauge = meter.createObservableGauge('ihub.telemetry.export.last_success', {
+    description:
+      'Time of the last successful telemetry export per signal, seconds since the epoch (per process: max across workers)',
+    unit: 's'
+  });
+  buildInfoGauge = meter.createObservableGauge('ihub.build.info', {
+    description: 'Always 1; the labels say which version runs and how telemetry is set up',
+    unit: '1'
+  });
 
-  console.info(
-    `GenAI metrics initialized - allowed labels: ${[...ALLOWED_METRIC_LABELS].join(', ')}`
-  );
+  attachIndexCacheObservers();
+  attachTelemetryStatusObservers();
+
+  logger.info('Telemetry metrics initialized', {
+    component: 'Telemetry',
+    allowedLabels: [...ALLOWED_METRIC_LABELS]
+  });
 }
 
 /**
@@ -360,7 +391,10 @@ export function registerActivityObservers(provider) {
       const value = provider.getActiveUsers() || 0;
       observableResult.observe(value, resolveAttrs());
     } catch (error) {
-      console.warn('Failed to observe active users:', error.message);
+      logger.warn('Failed to observe active users', {
+        component: 'Telemetry',
+        error: error.message
+      });
     }
   });
 
@@ -369,7 +403,10 @@ export function registerActivityObservers(provider) {
       const value = provider.getActiveChats() || 0;
       observableResult.observe(value, resolveAttrs());
     } catch (error) {
-      console.warn('Failed to observe active chats:', error.message);
+      logger.warn('Failed to observe active chats', {
+        component: 'Telemetry',
+        error: error.message
+      });
     }
   });
 }
@@ -388,7 +425,10 @@ export function registerProjectObservers(provider) {
         result.observe(w.projects, { 'window.minutes': w.minutes });
       }
     } catch (error) {
-      console.warn('Failed to observe active projects:', error.message);
+      logger.warn('Failed to observe active projects', {
+        component: 'Telemetry',
+        error: error.message
+      });
     }
   });
   projectsActiveCharsGauge.addCallback(result => {
@@ -397,7 +437,10 @@ export function registerProjectObservers(provider) {
         result.observe(w.chars, { 'window.minutes': w.minutes });
       }
     } catch (error) {
-      console.warn('Failed to observe active project characters:', error.message);
+      logger.warn('Failed to observe active project characters', {
+        component: 'Telemetry',
+        error: error.message
+      });
     }
   });
 }
@@ -468,17 +511,15 @@ export function recordExtractionQueueWait(waitSeconds) {
 
 /**
  * Record token usage metrics
- * @param {Object} attributes - Span attributes (includes provider, model, etc.)
+ * @param {Object} attributes - The call's metric labels; never `span.attributes`
  * @param {Object} usage - Usage object with token counts
  */
 export function recordTokenUsage(attributes, usage) {
   if (!tokenUsageHistogram || !usage) return;
 
   try {
-    // Filter to a low-cardinality allow-list. The caller passes the full span
-    // attributes which include unbounded keys (conversation id, response id,
-    // even the token counts themselves) - those are great on spans but ruin
-    // a Prometheus histogram if used as labels.
+    // Filter to the low-cardinality allow-list: an unbounded key (a
+    // conversation id, a token count) belongs on the span, never on a series.
     const baseAttrs = filterMetricLabels(attributes);
 
     // Use nullish coalescing so a legitimate 0 is preserved
@@ -498,59 +539,42 @@ export function recordTokenUsage(attributes, usage) {
       });
     }
   } catch (error) {
-    console.warn('Failed to record token usage:', error.message);
+    logger.warn('Failed to record token usage', { component: 'Telemetry', error: error.message });
   }
 }
 
 /**
  * Record operation duration metric
  * @param {number} durationSeconds - Duration in seconds
- * @param {Object} attributes - Span attributes (includes provider, model, operation, etc.)
- * @param {Error} [error] - Optional error object
+ * @param {Object} attributes - The call's metric labels (operation, provider, model, app);
+ *   never `span.attributes`, which a sampled-out span does not have
+ * @param {unknown} [error] - The failure, mapped to `error.type` by `errorTypeOf`
  */
 export function recordOperationDuration(durationSeconds, attributes, error = null) {
   if (!operationDurationHistogram) return;
 
   try {
-    // Same allow-list pattern as recordTokenUsage - the caller passes the
-    // full span attributes and we narrow to low-cardinality labels.
+    // Same allow-list as recordTokenUsage: only low-cardinality labels.
     const metricAttributes = filterMetricLabels(attributes);
 
-    // Add error type if operation failed
-    if (error) {
-      metricAttributes['error.type'] = error.name || 'Error';
-
-      // Map HTTP status codes
-      if (error.status || error.statusCode) {
-        const status = error.status || error.statusCode;
-        if (status === 429) {
-          metricAttributes['error.type'] = 'rate_limit_exceeded';
-        } else if (status === 401 || status === 403) {
-          metricAttributes['error.type'] = 'authentication_error';
-        } else if (status === 408) {
-          metricAttributes['error.type'] = 'timeout';
-        } else {
-          metricAttributes['error.type'] = `http_${status}`;
-        }
-      }
-
-      // Map timeout errors
-      if (error.code === 'ETIMEDOUT' || error.message?.includes('timeout')) {
-        metricAttributes['error.type'] = 'timeout';
-      }
-    }
+    // A failed call carries its `error.type` (a closed code, never the message).
+    const errorType = errorTypeOf(error);
+    if (errorType) metricAttributes['error.type'] = errorType;
 
     operationDurationHistogram.record(durationSeconds, metricAttributes);
   } catch (err) {
-    console.warn('Failed to record operation duration:', err.message);
+    logger.warn('Failed to record operation duration', {
+      component: 'Telemetry',
+      error: err.message
+    });
   }
 }
 
 /**
  * Record app usage metric. user.id is intentionally NOT a label - in a
  * deployment with many users it explodes Prometheus cardinality. Per-user
- * lookups belong on spans (`user.id` is set on the span attributes via
- * buildCustomAttributes); the counter only carries app.id and the
+ * lookups belong in usage records, and a span names a user only through
+ * `telemetry/identity.js` (pseudonymised by default); the counter only carries app.id and the
  * already-resolved gen-ai dimensions.
  *
  * @param {string} appId - Application ID
@@ -568,7 +592,7 @@ export function recordAppUsage(appId, userId = null, additionalAttributes = {}) 
 
     appUsageCounter.add(1, attributes);
   } catch (error) {
-    console.warn('Failed to record app usage:', error.message);
+    logger.warn('Failed to record app usage', { component: 'Telemetry', error: error.message });
   }
   // userId is intentionally unused on the metric; reference for linters
   void userId;
@@ -592,7 +616,7 @@ export function recordError(errorType, context, additionalAttributes = {}) {
 
     errorCounter.add(1, attributes);
   } catch (error) {
-    console.warn('Failed to record error metric:', error.message);
+    logger.warn('Failed to record error metric', { component: 'Telemetry', error: error.message });
   }
 }
 
@@ -617,7 +641,10 @@ export function recordConversation(conversationId, isFollowUp = false, additiona
 
     conversationCounter.add(1, attributes);
   } catch (error) {
-    console.warn('Failed to record conversation metric:', error.message);
+    logger.warn('Failed to record conversation metric', {
+      component: 'Telemetry',
+      error: error.message
+    });
   }
   void conversationId;
 }
@@ -635,7 +662,7 @@ export function recordAuthEvent(provider, event) {
   try {
     authEventCounter.add(1, filterMetricLabels({ 'auth.provider': provider, 'auth.event': event }));
   } catch (error) {
-    console.warn('Failed to record auth event:', error.message);
+    logger.warn('Failed to record auth event', { component: 'Telemetry', error: error.message });
   }
 }
 
@@ -652,7 +679,10 @@ export function recordRateLimitHit(scope, route) {
       filterMetricLabels({ 'ratelimit.scope': scope, 'ratelimit.route': route })
     );
   } catch (error) {
-    console.warn('Failed to record rate limit hit:', error.message);
+    logger.warn('Failed to record rate limit hit', {
+      component: 'Telemetry',
+      error: error.message
+    });
   }
 }
 
@@ -666,7 +696,10 @@ export function recordStreamOutcome(outcome, extra = {}) {
   try {
     streamOutcomeCounter.add(1, filterMetricLabels({ 'stream.outcome': outcome, ...extra }));
   } catch (error) {
-    console.warn('Failed to record stream outcome:', error.message);
+    logger.warn('Failed to record stream outcome', {
+      component: 'Telemetry',
+      error: error.message
+    });
   }
 }
 
@@ -684,7 +717,10 @@ export function recordStructuredOutputValidation(outcome, extra = {}) {
       filterMetricLabels({ 'structured_output.outcome': outcome, ...extra })
     );
   } catch (error) {
-    console.warn('Failed to record structured output validation:', error.message);
+    logger.warn('Failed to record structured output validation', {
+      component: 'Telemetry',
+      error: error.message
+    });
   }
 }
 
@@ -703,7 +739,7 @@ export function recordUpload(kind, outcome, sizeBytes) {
       uploadSizeHistogram.record(sizeBytes, labels);
     }
   } catch (error) {
-    console.warn('Failed to record upload:', error.message);
+    logger.warn('Failed to record upload', { component: 'Telemetry', error: error.message });
   }
 }
 
@@ -722,14 +758,17 @@ export function recordConfigReload(configFile, durationSeconds, error = null) {
     try {
       configReloadCounter.add(1, labels);
     } catch (err) {
-      console.warn('Failed to record config reload:', err.message);
+      logger.warn('Failed to record config reload', { component: 'Telemetry', error: err.message });
     }
   }
   if (configReloadDurationHistogram && typeof durationSeconds === 'number') {
     try {
       configReloadDurationHistogram.record(durationSeconds, labels);
     } catch (err) {
-      console.warn('Failed to record config reload duration:', err.message);
+      logger.warn('Failed to record config reload duration', {
+        component: 'Telemetry',
+        error: err.message
+      });
     }
   }
 }
@@ -746,7 +785,10 @@ export function recordMagicPromptUsage(appId, extra = {}) {
   try {
     magicPromptUsageCounter.add(1, filterMetricLabels({ 'app.id': appId, ...extra }));
   } catch (error) {
-    console.warn('Failed to record magic prompt usage:', error.message);
+    logger.warn('Failed to record magic prompt usage', {
+      component: 'Telemetry',
+      error: error.message
+    });
   }
 }
 
@@ -770,7 +812,10 @@ export function recordFeedbackEvent(appId, rating) {
       feedbackRatingHistogram.record(numeric, filterMetricLabels({ 'app.id': appId }));
     }
   } catch (error) {
-    console.warn('Failed to record feedback event:', error.message);
+    logger.warn('Failed to record feedback event', {
+      component: 'Telemetry',
+      error: error.message
+    });
   }
 }
 
@@ -809,7 +854,7 @@ export function recordToolCall(origin, outcome) {
       })
     );
   } catch (error) {
-    console.warn('Failed to record tool call:', error.message);
+    logger.warn('Failed to record tool call', { component: 'Telemetry', error: error.message });
   }
 }
 
@@ -819,7 +864,10 @@ export function recordAnswerOriginMismatch() {
   try {
     originMismatchCounter.add(1);
   } catch (error) {
-    console.warn('Failed to record origin mismatch:', error.message);
+    logger.warn('Failed to record origin mismatch', {
+      component: 'Telemetry',
+      error: error.message
+    });
   }
 }
 
@@ -840,7 +888,7 @@ export function recordAnswerBasis(kinds) {
   try {
     answerBasisCounter.add(1, filterMetricLabels({ 'answer.kinds_bucket': kindsBucketOf(kinds) }));
   } catch (error) {
-    console.warn('Failed to record answer basis:', error.message);
+    logger.warn('Failed to record answer basis', { component: 'Telemetry', error: error.message });
   }
 }
 
@@ -867,6 +915,71 @@ export function recordSourceAction(provider, action) {
       })
     );
   } catch (error) {
-    console.warn('Failed to record source action:', error.message);
+    logger.warn('Failed to record source action', { component: 'Telemetry', error: error.message });
   }
+}
+
+/**
+ * Count a failed telemetry export.
+ *
+ * @param {string} signal - `traces`, `metrics` or `logs`
+ * @param {string} reason - From `EXPORT_FAILURE_REASONS` (`exportStatus.js`)
+ */
+export function recordTelemetryExportFailure(signal, reason) {
+  if (!telemetryExportFailuresCounter) return;
+  try {
+    telemetryExportFailuresCounter.add(1, {
+      'telemetry.signal': TELEMETRY_SIGNALS.has(signal) ? signal : 'unknown',
+      'error.type': typeof reason === 'string' ? reason.slice(0, 32) : 'unknown'
+    });
+  } catch (error) {
+    logger.warn('Failed to record telemetry export failure', {
+      component: 'Telemetry',
+      error: error.message
+    });
+  }
+}
+
+const TELEMETRY_SIGNALS = new Set(['traces', 'metrics', 'logs']);
+
+/**
+ * Register the sources of `ihub.telemetry.export.last_success` and
+ * `ihub.build.info`. Works before or after `initializeMetrics`.
+ *
+ * @param {Object} provider
+ * @param {() => Array<[string, number]>} provider.lastSuccess - `[signal, epochSeconds]` pairs
+ * @param {() => {version: string, provider: string}} provider.buildInfo
+ */
+export function registerTelemetryStatusObservers(provider) {
+  pendingTelemetryStatusProvider = provider;
+  attachTelemetryStatusObservers();
+}
+
+function attachTelemetryStatusObservers() {
+  const provider = pendingTelemetryStatusProvider;
+  if (!provider || !telemetryLastSuccessGauge || !buildInfoGauge) return;
+  telemetryLastSuccessGauge.addCallback(result => {
+    try {
+      for (const [signal, seconds] of provider.lastSuccess()) {
+        result.observe(seconds, { 'telemetry.signal': signal });
+      }
+    } catch (error) {
+      logger.warn('Failed to observe telemetry export status', {
+        component: 'Telemetry',
+        error: error.message
+      });
+    }
+  });
+  buildInfoGauge.addCallback(result => {
+    try {
+      const info = provider.buildInfo();
+      result.observe(1, {
+        'service.version': info.version,
+        'telemetry.provider': info.provider,
+        'telemetry.enabled': 'true'
+      });
+    } catch (error) {
+      logger.warn('Failed to observe build info', { component: 'Telemetry', error: error.message });
+    }
+  });
 }

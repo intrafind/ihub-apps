@@ -108,6 +108,16 @@ const FULL_PLATFORM = {
     ]
   },
   speech: { azure: { region: 'westeurope', subscriptionKey: 'ENC[speech-key]' } },
+  telemetry: {
+    enabled: false,
+    provider: 'otlp',
+    exporters: {
+      otlp: {
+        endpoint: 'https://otel.example.com',
+        headers: { Authorization: 'ENC[Bearer otlp-token]', 'X-Scope': '${OTLP_SCOPE}' }
+      }
+    }
+  },
   ssl: { ignoreInvalidCertificates: false, domainWhitelist: [] },
   features: { anything: true }
 };
@@ -173,7 +183,13 @@ describe('GET /api/admin/configs/platform redacts, and its body saves back uncha
     const [sso, internal] = response.body.proxyAuth.jwtProviders;
     expect(sso).toEqual(FULL_PLATFORM.proxyAuth.jwtProviders[0]);
     expect(internal.jwkUrl).toBe('https://REDACTED@idp.internal/keys?token=REDACTED');
-    expect(JSON.stringify(response.body)).not.toMatch(/pa55|abc123|jwt-secret|speech-key/);
+    expect(response.body.telemetry.exporters.otlp.headers).toEqual({
+      Authorization: '***REDACTED***',
+      'X-Scope': '${OTLP_SCOPE}'
+    });
+    expect(JSON.stringify(response.body)).not.toMatch(
+      /pa55|abc123|jwt-secret|speech-key|otlp-token/
+    );
   });
 
   test('GET → POST of the unchanged body leaves platform.json identical', async () => {
@@ -294,6 +310,44 @@ describe('omitted vs null secrets', () => {
     expect((await readPlatform()).speech.azure.subscriptionKey).toBe('ENC[new-key]');
   });
 
+  test('OTLP headers: a redacted header keeps the stored one, a new one is encrypted, a removed one is gone', async () => {
+    const app = appFor();
+    await request(app)
+      .post('/api/admin/configs/platform')
+      .send({
+        telemetry: {
+          ...FULL_PLATFORM.telemetry,
+          exporters: {
+            otlp: {
+              endpoint: 'https://otel.example.com',
+              headers: { Authorization: '***REDACTED***', 'X-Api-Key': 'plain-key' }
+            }
+          }
+        }
+      })
+      .expect(200);
+    expect((await readPlatform()).telemetry.exporters.otlp.headers).toEqual({
+      Authorization: 'ENC[Bearer otlp-token]',
+      'X-Api-Key': 'ENC[plain-key]'
+    });
+  });
+
+  test('turning content capture on writes its own audit entry', async () => {
+    await request(appFor())
+      .post('/api/admin/configs/platform')
+      .send({
+        telemetry: {
+          ...FULL_PLATFORM.telemetry,
+          events: { enabled: true, includePrompts: true }
+        }
+      })
+      .expect(200);
+    const entry = auditEntries.find(e => e.resource === 'telemetryContentCapture');
+    expect(entry).toBeDefined();
+    expect(entry.details.changed).toEqual(['events.enabled', 'events.includePrompts']);
+    expect(entry.details.after['events.includePrompts']).toBe(true);
+  });
+
   test('a marker with no stored value behind it is refused, naming the field, and nothing is written', async () => {
     const before = await fs.readFile(file('platform.json'), 'utf8');
 
@@ -343,7 +397,7 @@ describe('change-history snapshots of platform.json', () => {
     expect(response.status).toBe(200);
     const text = JSON.stringify(response.body);
     expect(text).not.toMatch(
-      /auth-jwt-secret|rotated-secret|local-jwt-secret|speech-key|pa55|abc123/
+      /auth-jwt-secret|rotated-secret|local-jwt-secret|speech-key|pa55|abc123|otlp-token/
     );
     expect(response.body.before.auth.jwtSecret).toBe('***REDACTED***');
     expect(response.body.after.auth.jwtSecret).toBe('***REDACTED***');

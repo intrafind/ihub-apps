@@ -29,7 +29,8 @@ const DEFAULT_TELEMETRY = {
   spans: {
     enabled: true,
     sampleRate: 1.0,
-    includeOptInAttributes: false
+    includeOptInAttributes: false,
+    userIdMode: 'pseudonymised'
   },
   events: {
     enabled: true,
@@ -110,6 +111,21 @@ function AdminTelemetryPage() {
 
   const handleSave = async () => {
     if (!ready) return;
+    const maxEventSize = config.events?.maxEventSize;
+    if (
+      maxEventSize !== undefined &&
+      !(Number.isInteger(maxEventSize) && maxEventSize >= 1 && maxEventSize <= 4096)
+    ) {
+      setSaveFailed(true);
+      setMessage({
+        type: 'error',
+        text: t(
+          'admin.telemetry.maxEventSizeInvalid',
+          'Max captured characters must be a whole number from 1 to 4096.'
+        )
+      });
+      return;
+    }
     try {
       setSaving(true);
       setSaveFailed(false);
@@ -421,7 +437,7 @@ function AdminTelemetryPage() {
                   <span className="ml-2 text-sm text-gray-700 dark:text-gray-300">
                     {t(
                       'admin.telemetry.autoInstrumentation',
-                      'Auto-instrument HTTP/Express/DNS/fs/net (requires restart)'
+                      'Auto-instrument HTTP, fetch and Express; URLs are exported without query strings (requires restart)'
                     )}
                   </span>
                 </label>
@@ -434,10 +450,47 @@ function AdminTelemetryPage() {
                 <p className="text-xs text-amber-700 dark:text-amber-400 mb-3">
                   {t(
                     'admin.telemetry.privacyWarn',
-                    'Including prompts and completions may capture PII or sensitive data. Disabled by default.'
+                    'Including prompts and completions exports conversation text to the trace backend. E-mail addresses, phone numbers, IBANs and keys are redacted on a best-effort basis; names and other personal data are not. Keep it off in production; turning it on is written to the audit log.'
                   )}
                 </p>
                 <div className="space-y-3">
+                  <div>
+                    <label
+                      htmlFor="telemetry-user-id-mode"
+                      className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1"
+                    >
+                      {t('admin.telemetry.userIdMode', 'User on spans')}
+                    </label>
+                    <select
+                      id="telemetry-user-id-mode"
+                      value={config.spans?.userIdMode || 'pseudonymised'}
+                      onChange={e => updateField('spans.userIdMode', e.target.value)}
+                      aria-describedby="telemetry-user-id-mode-help"
+                      className="w-full md:w-1/2 px-3 py-2 border border-admin-control-border dark:border-admin-control-border-dark rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+                    >
+                      <option value="pseudonymised">
+                        {t(
+                          'admin.telemetry.userIdModePseudonymised',
+                          'Pseudonymised (recommended)'
+                        )}
+                      </option>
+                      <option value="off">
+                        {t('admin.telemetry.userIdModeOff', 'Not recorded')}
+                      </option>
+                      <option value="clear">
+                        {t('admin.telemetry.userIdModeClear', 'Clear text user id')}
+                      </option>
+                    </select>
+                    <p
+                      id="telemetry-user-id-mode-help"
+                      className="text-xs text-gray-500 dark:text-gray-400 mt-1"
+                    >
+                      {t(
+                        'admin.telemetry.userIdModeHelp',
+                        'Pseudonymised spans carry a keyed hash (user.hash) instead of the login, so traces of one user can be grouped without naming them. Clear text exports the login and may need a works agreement.'
+                      )}
+                    </p>
+                  </div>
                   <label className="flex items-center">
                     <input
                       type="checkbox"
@@ -466,13 +519,19 @@ function AdminTelemetryPage() {
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
                       <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                        {t('admin.telemetry.maxEventSize', 'Max event size (bytes)')}
+                        {t('admin.telemetry.maxEventSize', 'Max captured characters (up to 4096)')}
                       </label>
                       <input
                         type="number"
+                        min={1}
+                        max={4096}
                         value={config.events?.maxEventSize || 1024}
                         onChange={e =>
-                          updateField('events.maxEventSize', Number.parseInt(e.target.value, 10))
+                          // Kept as typed (1.5 stays 1.5) so the save can refuse it.
+                          updateField(
+                            'events.maxEventSize',
+                            e.target.value === '' ? undefined : Number(e.target.value)
+                          )
                         }
                         className="w-full px-3 py-2 border border-admin-control-border dark:border-admin-control-border-dark rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
                       />

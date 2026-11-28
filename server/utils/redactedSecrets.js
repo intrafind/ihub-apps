@@ -14,7 +14,9 @@
  *
  * Secret locations are described by dotted paths. A segment ending in `[]` is an
  * array whose elements are matched by `name` (falling back to `id`), never by
- * index, so reordering two providers cannot swap their secrets:
+ * index, so reordering two providers cannot swap their secrets. A last segment
+ * `*` stands for every key of the object before it (a map of headers), and
+ * applies to the keys the body being written has:
  *
  * ```js
  * restoreRedacted(next, stored, [
@@ -111,7 +113,9 @@ export const PLATFORM_SECRET_PATHS = Object.freeze([
   Object.freeze({ path: 'auth.jwtSecret' }),
   Object.freeze({ path: 'localAuth.jwtSecret' }),
   Object.freeze({ path: 'speech.azure.subscriptionKey' }),
-  Object.freeze({ path: 'proxyAuth.jwtProviders[].jwkUrl', kind: 'url' })
+  Object.freeze({ path: 'proxyAuth.jwtProviders[].jwkUrl', kind: 'url' }),
+  // Every OTLP exporter header (`Authorization: Bearer …`, API keys).
+  Object.freeze({ path: 'telemetry.exporters.otlp.headers.*' })
 ]);
 
 /**
@@ -133,7 +137,7 @@ function isPlainObject(value) {
 /**
  * Split a dotted secret path into segments: `{ key, array }`.
  *
- * @param {string} path - e.g. `proxyAuth.jwtProviders[].jwkUrl`
+ * @param {string} path - e.g. `proxyAuth.jwtProviders[].jwkUrl` or `telemetry.exporters.otlp.headers.*`
  * @returns {Array<{key: string, array: boolean}>}
  */
 function parsePath(path) {
@@ -163,18 +167,42 @@ function elementKey(element) {
  * @param {Array<{key: string, array: boolean}>} segments
  * @param {(holder: Object, storedHolder: Object|undefined, leaf: string, pointer: string[]) => void} visit
  * @param {string[]} [pointer] - The path walked so far
+ * @param {Object} [options]
+ * @param {boolean} [options.storedKeys=false] - A `*` leaf also visits the keys
+ *   only `stored` has (rollback: the current secrets stay), creating the
+ *   holding object in `next` when only `stored` has one
  */
-function walk(next, stored, segments, visit, pointer = []) {
+function walk(next, stored, segments, visit, pointer = [], options = {}) {
   if (!isPlainObject(next)) return;
   const [segment, ...rest] = segments;
   if (rest.length === 0) {
-    visit(next, isPlainObject(stored) ? stored : undefined, segment.key, pointer);
+    const storedHolder = isPlainObject(stored) ? stored : undefined;
+    if (segment.key === '*') {
+      const keys = new Set(Object.keys(next));
+      if (options.storedKeys && storedHolder) {
+        for (const key of Object.keys(storedHolder)) keys.add(key);
+      }
+      for (const key of keys) visit(next, storedHolder, key, pointer);
+      return;
+    }
+    visit(next, storedHolder, segment.key, pointer);
     return;
   }
-  const child = next[segment.key];
   const storedChild = isPlainObject(stored) ? stored[segment.key] : undefined;
+  // Rollback of a `*` path: an object the snapshot lacks along the way (the
+  // `otlp` above `headers`) is created, so the current secrets below it stay.
+  if (
+    options.storedKeys &&
+    segments.at(-1).key === '*' &&
+    !segment.array &&
+    next[segment.key] === undefined &&
+    isPlainObject(storedChild)
+  ) {
+    next[segment.key] = {};
+  }
+  const child = next[segment.key];
   if (!segment.array) {
-    walk(child, storedChild, rest, visit, [...pointer, segment.key]);
+    walk(child, storedChild, rest, visit, [...pointer, segment.key], options);
     return;
   }
   if (!Array.isArray(child)) return;
@@ -187,11 +215,14 @@ function walk(next, stored, segments, visit, pointer = []) {
   }
   child.forEach((element, index) => {
     const key = elementKey(element);
-    walk(element, key ? storedByKey.get(key) : undefined, rest, visit, [
-      ...pointer,
-      segment.key,
-      String(index)
-    ]);
+    walk(
+      element,
+      key ? storedByKey.get(key) : undefined,
+      rest,
+      visit,
+      [...pointer, segment.key, String(index)],
+      options
+    );
   });
 }
 
@@ -356,8 +387,20 @@ export function restoreRedacted(
   { mode = 'save' } = {}
 ) {
   for (const { path, kind = 'secret' } of secretPaths) {
-    walk(next, stored, parsePath(path), (holder, storedHolder, leaf) =>
-      restoreLeaf(holder, storedHolder?.[leaf], leaf, { kind, mode })
+    walk(
+      next,
+      stored,
+      parsePath(path),
+      (holder, storedHolder, leaf) =>
+        restoreLeaf(
+          holder,
+          // Own keys only: a header named `constructor` is not Object's.
+          storedHolder && Object.hasOwn(storedHolder, leaf) ? storedHolder[leaf] : undefined,
+          leaf,
+          { kind, mode }
+        ),
+      [],
+      { storedKeys: mode === 'rollback' && kind === 'secret' }
     );
   }
   return next;

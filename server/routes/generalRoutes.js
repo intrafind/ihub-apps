@@ -12,6 +12,8 @@ import { buildServerPath, getRelativeRequestPath } from '../utils/basePath.js';
 import { ServiceError } from '../utils/ServiceError.js';
 import { responseEtag } from '../utils/etag.js';
 import { getStorage, isStorageReady } from '../storage/bootstrap.js';
+import { getTelemetryHealth } from '../telemetry/exportStatus.js';
+import { getAppVersion } from '../utils/versionHelper.js';
 import { describeWebSearchAvailability } from '../services/tools/webSearchResolver.js';
 import { withoutUsageGuideContent } from '../utils/appUsageGuide.js';
 import { isUserAppId } from '../../shared/userAppContent.js';
@@ -91,6 +93,9 @@ import {
  */
 
 export default function registerGeneralRoutes(app, { getLocalizedError }) {
+  // Resolved once: it reads files, and health probes arrive every few seconds.
+  const appVersion = getAppVersion();
+
   /**
    * @swagger
    * /api/apps:
@@ -353,7 +358,7 @@ export default function registerGeneralRoutes(app, { getLocalizedError }) {
     res.json({
       status: 'OK',
       timestamp: new Date().toISOString(),
-      version: process.env.npm_package_version || '1.0.0',
+      version: appVersion,
       basePathConfig: basePathInfo,
       requestPath: req.path,
       requestUrl: req.url,
@@ -369,7 +374,12 @@ export default function registerGeneralRoutes(app, { getLocalizedError }) {
       // `chats.persistence` reports false, which is indistinguishable from
       // the feature being switched off. The probe stays green and, once the
       // boot log has rotated, there is nothing left to query.
-      storage: { ready: isStorageReady(), provider: getStorage()?.name ?? null }
+      storage: { ready: isStorageReady(), provider: getStorage()?.name ?? null },
+      // Whether telemetry is on and exporting, so "dashboards are flat" can be
+      // told apart from "telemetry is off" or "the collector is unreachable".
+      // The probe is public: state per signal only, no endpoint, header,
+      // failure reason or counts (those are on the admin system view).
+      telemetry: getTelemetryHealth()
     });
   });
 

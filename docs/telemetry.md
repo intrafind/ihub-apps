@@ -21,7 +21,7 @@ Developers adding spans or metrics: follow the [Observability Guidelines](observ
 | --- | --- | --- |
 | **Spans** | `chat gpt-4o`, `generate_content gemini-2.5-pro` | Jaeger, Tempo, OTLP collector |
 | **Metrics** | `gen_ai.client.token.usage`, `gen_ai.client.operation.duration`, `ihub.app.usage`, `ihub.active.users` | Prometheus, OTLP collector |
-| **Events**  | `gen_ai.content.prompt`, `gen_ai.content.completion`, `gen_ai.choice` | Attached to spans |
+| **Captured content** (opt-in) | `gen_ai.input.messages`, `gen_ai.output.messages` | Attributes of the LLM span |
 | **Logs**    | Activity summary, structured server logs | Stdout, file, OTLP log collector |
 
 Telemetry is **disabled by default**. No PII (prompts, completions) is captured unless
@@ -77,7 +77,8 @@ The `telemetry` block in `contents/config/platform.json` (and the matching admin
     "spans": {
       "enabled": true,
       "sampleRate": 1.0,
-      "includeOptInAttributes": false
+      "includeOptInAttributes": false,
+      "userIdMode": "pseudonymised"
     },
     "events": {
       "enabled": true,
@@ -116,6 +117,49 @@ collector that requires mutual TLS keeps working. Exports that run before the co
 finished loading at startup are dropped rather than sent without these settings. See
 [SSL certificates](ssl-certificates.md) and [Proxy configuration](proxy-configuration.md).
 
+`exporters.otlp.headers` usually carries a bearer token or an API key. Every header value is a
+secret: it is stored encrypted in `platform.json` (`ENC[...]`, the key in
+`contents/.encryption-key`), shown as `***REDACTED***` by the admin API and in the change history,
+and kept when a page sends the redacted value back. A value written as an `${ENV_VAR}` placeholder
+stays a placeholder. Plain-text headers in an existing `platform.json` are encrypted on the next
+save.
+
+A signal that is off exports nothing: no span processor, no log processor and no metric reader
+is registered for it, so the SDK never falls back to its own `OTEL_*` defaults (OTLP to
+`localhost:4318`). With `provider: "prometheus"` no traces are exported; run an OTLP collector to
+get traces as well.
+
+### Is telemetry on and exporting?
+
+- At startup the server logs `Telemetry disabled (telemetry.enabled is false)` or
+  `Initializing telemetry` followed by `Telemetry initialization complete` with the exporter per
+  signal.
+- When exports to the collector start failing the server logs `Telemetry export failing` (WARN,
+  with the signal and a reason such as `tls`, `connection_refused` or `http_5xx`), once, and
+  `Telemetry export recovered` when they succeed again. Errors of the OpenTelemetry SDK itself go
+  to the application log at WARN (`component: OpenTelemetry`).
+- `GET /api/health` has a `telemetry` block: `enabled` and per signal (`traces`, `metrics`,
+  `logs`) its `status` (`off`, `pending`, `ok`, `failing`) and `lastSuccessAt`.
+- **Admin → System resources** shows the same per signal, with the last failure reason and the
+  failure count, as the answering worker sees it.
+- The metrics `ihub.telemetry.export.failures`, `ihub.telemetry.export.last_success` and
+  `ihub.build.info` (see [Metrics](#telemetry-self-monitoring)) let an alert fire when exports stop.
+
+### User identity on spans
+
+`spans.userIdMode` decides how a span names the user:
+
+| Value | On the span |
+| --- | --- |
+| `pseudonymised` (default) | `user.hash`: an HMAC-SHA256 of the user id under a key derived from the installation's encryption key. The same user gets the same value on every span and in every worker; the login is not exported |
+| `off` | No user attribute |
+| `clear` | `user.id` with the login in clear text. A per-employee activity profile in the trace backend; agree it with the works council first |
+
+`gen_ai.conversation.id` is hashed with the same key unless the mode is `clear`. Groups are never
+exported. Rotating the encryption key (`TOKEN_ENCRYPTION_KEY` or `contents/.encryption-key`)
+changes every pseudonym, which unlinks older traces. Per-user reports belong in
+[Usage reporting](usage-reporting.md), not in traces.
+
 ### Hot-reload behaviour
 
 | Setting | Restart required |
@@ -124,8 +168,10 @@ finished loading at startup are dropped rather than sent without these settings.
 | `provider` (console / otlp / prometheus) | Yes |
 | `exporters.*` (endpoint, port, headers) | Yes |
 | `metrics.exportInterval` | Yes |
+| `autoInstrumentation` | Yes |
 | `events.includePrompts`, `events.includeCompletions`, `events.maxEventSize` | No - applied immediately |
-| `spans.includeOptInAttributes` | No - applied immediately |
+| `spans.includeOptInAttributes`, `spans.userIdMode` | No - applied immediately |
+| `spans.enabled` | Turning spans **off**: no - applied immediately, auto-instrumentation spans included. Turning them **on** after a start with spans off: yes |
 | `activitySummary.*` | No - re-armed on save |
 
 ## Spans
@@ -150,15 +196,17 @@ Required and conditionally required attributes follow the gen-ai conventions:
 | `gen_ai.usage.cache_read.input_tokens` | Input tokens served from the provider's prompt cache (when reported) |
 | `gen_ai.usage.cache_creation.input_tokens` | Input tokens written to the prompt cache (Anthropic, Bedrock; when reported) |
 | `gen_ai.usage.reasoning.output_tokens` | Output tokens spent on reasoning (OpenAI, Gemini; when reported) |
-| `error.type`                 | `rate_limit_exceeded`, `authentication_error`, `timeout`, `http_<code>` |
+| `error.type`                 | `rate_limit_exceeded`, `authentication_error`, `timeout`, `http_<code>`, or the call's error code (`CONTEXT_WINDOW_EXCEEDED`, `NETWORK`, …). Never the error message |
+| `server.address`, `server.port` | Host and port of the model endpoint |
 
 iHub-specific span attributes:
 
 | Attribute | Description |
 | --- | --- |
-| `app.id`, `app.name` | iHub app receiving the request |
-| `user.id`, `user.groups` | Identified user (when authentication is enabled) |
-| `gen_ai.conversation.id` | Chat session id |
+| `app.id` | iHub app receiving the request |
+| `user.hash` | Pseudonymised user (default `spans.userIdMode`); `user.id` only with `userIdMode: clear` |
+| `gen_ai.conversation.id` | Chat session id, hashed unless `userIdMode` is `clear` |
+| `ihub.aborted` | `true` when the user stopped the answer or the client went away. Not an error: the status stays unset and no duration is recorded |
 | `conversation.is_follow_up` | True when the chat already had >2 messages |
 | `conversation.message_count` | Length of the message array |
 
@@ -244,17 +292,63 @@ Process / runtime gauges (registered automatically when telemetry is enabled):
 - `process.cpu.utilization` - 0-1 CPU utilisation (user + system, summed)
 - `process.runtime.nodejs.memory.usage` - rss / heap_used / heap_total / external
 - `process.runtime.nodejs.event_loop.delay` - mean event-loop delay in seconds
-- `ihub.workers.count` - number of cluster workers visible from this process
+- `ihub.workers.count` - 1 per worker process (`cluster.role=worker`); `sum` across workers is
+  the number of live workers
+
+### Telemetry self-monitoring
+
+- `ihub.telemetry.export.failures` - counter of failed exports, labelled by `telemetry.signal`
+  (`traces`, `metrics`, `logs`) and `error.type` (`tls`, `connection_refused`, `dns`, `timeout`,
+  `network`, `authentication`, `http_4xx`, `http_5xx`, `deferred`, `incomplete` (a Prometheus
+  scrape that lacked a worker's answer), `unknown`). Per process: `sum`
+  across workers
+- `ihub.telemetry.export.last_success` - gauge, seconds since the epoch of the last successful
+  export per `telemetry.signal`; for Prometheus the last served scrape. Per process: `max` across
+  workers. `time() - max(ihub_telemetry_export_last_success_seconds) > 600` means exports stopped
+- `ihub.build.info` - always 1, labelled by `service.version`, `telemetry.provider` and
+  `telemetry.enabled`. `absent(ihub_build_info)` means nothing arrives at all
+
+### Cluster mode
+
+With more than one worker (`WORKERS`, sized automatically by default) every worker is its own
+process with its own metrics:
+
+- **Resource.** `service.instance.id` is `<host>-w<slot>` (the pod name in Kubernetes plus the
+  worker slot) instead of the SDK's random UUID, so the series stay the same across restarts and
+  rollouts; `cluster.worker.id` names the slot. `k8s.pod.name`, `k8s.namespace.name` and
+  `k8s.node.name` are set from `K8S_POD_NAME` (or `POD_NAME`), `K8S_NAMESPACE_NAME` (or
+  `POD_NAMESPACE`) and `K8S_NODE_NAME` (or `NODE_NAME`); pass them through the downward API, or set
+  `OTEL_RESOURCE_ATTRIBUTES`. The process id and command line are not detected.
+- **Prometheus.** One endpoint answers for the whole pod. Whichever worker receives the scrape asks
+  the others over the cluster bus and returns every worker's series, each labelled
+  `cluster_worker_id`. A counter therefore only resets when its own worker restarts, and
+  `rate()` handles that. A worker that does not answer within 2 seconds is missing from that one
+  scrape.
+- **OTLP.** Every worker exports its own series, told apart by `service.instance.id`.
+
+How to aggregate across workers:
+
+| Signal | Across workers |
+| --- | --- |
+| Counters and histograms (`ihub.*`, `gen_ai.*`) | `sum` |
+| `ihub.active.users`, `ihub.active.chats`, `ihub.projects.active*` (cluster union) | `max` |
+| `ihub.knowledge.index.cache.entries` / `.chars`, process gauges | `sum` (or per worker) |
+| `ihub.telemetry.export.last_success` | `max` |
+| `ihub.workers.count` | `sum` |
 
 No metrics backend? **Admin → System Resources** shows the same process numbers, plus disk space
 and host memory, without enabling telemetry. See the
 [Admin UI Guide](admin-ui.md#system-resources).
 
 Optional: enable `telemetry.autoInstrumentation: true` (admin UI / platform.json)
-to also load the Node auto-instrumentations: HTTP/Express/DNS/fs/net. That gives
-you `http.server.duration`, `http.server.active_requests`, request/response
-size histograms etc. for free, but every HTTP request becomes a span - turn it
-on intentionally.
+to also load these library instrumentations: HTTP (inbound requests and outbound calls through
+`httpFetch`), undici (the global `fetch`), Express (route names) and winston (trace ids in log
+records; it never sends logs). DNS, net and fs are not instrumented. Health probes
+(`/api/health`, `/api/ready`) and static assets get no span. The stable HTTP semantic conventions
+are used (`OTEL_SEMCONV_STABILITY_OPT_IN=http` unless set otherwise). URLs are exported without
+query string and user info, and inbound spans without the caller's IP address (see
+[Privacy & security](#privacy--security)). Every API request becomes a span - turn it on
+intentionally.
 
 ### Useful PromQL examples
 
@@ -281,17 +375,27 @@ ihub_active_users
 ihub_active_chats
 ```
 
-## Events
+## Content capture
 
-When `telemetry.events.enabled` is true and the corresponding opt-in is set:
+Off by default. When `telemetry.events.enabled` is true and `events.includePrompts` /
+`events.includeCompletions` is set, the LLM span carries the content in the current GenAI
+semantic conventions:
 
-- `gen_ai.content.prompt` - emitted with `gen_ai.prompt = "<role>: <message>..."`
-- `gen_ai.content.completion` - emitted with `gen_ai.completion`
-- `gen_ai.choice` - emitted for tool calls; tool arguments are *not* included by
-  default to avoid leaking sensitive payloads
+- `gen_ai.input.messages`: the messages sent, as a JSON array of `{ role, parts }`
+- `gen_ai.output.messages`: the answer, with the names of the tools the model called (never their
+  arguments)
 
-Event content is truncated to `events.maxEventSize` bytes (default 1 KB) before being
-attached to the span.
+The content is:
+
+- **redacted**, best effort: e-mail addresses, phone numbers, IBANs, JWTs, bearer tokens, common
+  API key formats and `key=value` secrets are replaced by `[REDACTED:<kind>]`. Names, addresses and
+  other personal data in free text are not recognised;
+- **capped** at `events.maxEventSize` characters per attribute, and never more than 4096 whatever
+  the setting says. The newest messages are kept, older ones dropped first;
+- free of file and image data: an attachment becomes `{ "type": "blob", "modality": "image" }`.
+
+Turning capture on logs a WARN at startup and on save, and the save writes an audit entry
+(`resource: telemetryContentCapture`). Keep it off in production.
 
 ## Activity summary log (bonus feature)
 
@@ -367,12 +471,20 @@ scrape_configs:
 ## Privacy & security
 
 - No prompts or completions are captured unless `events.includePrompts` /
-  `events.includeCompletions` is explicitly enabled.
+  `events.includeCompletions` is explicitly enabled; then they are redacted and capped (see
+  [Content capture](#content-capture)).
+- Users are pseudonymised on spans by default and groups are never exported (see
+  [User identity on spans](#user-identity-on-spans)).
+- Every span passes a final redaction before export: `url.full` / `http.url` lose user info,
+  query string and fragment, `url.query` is dropped, inbound (SERVER) spans lose the caller's IP
+  address, and exception events lose message and stack trace. The OIDC callback `code` and
+  `state`, signed URLs and `token` / `key` parameters therefore never reach the trace backend.
 - `error.type` is always a generic classification (e.g. `rate_limit_exceeded`),
   never a raw error message. The exception object's `.message` and `.stack`
   are **not** attached to spans by default; set `spans.includeOptInAttributes:
   true` to opt into capturing them for debugging.
-- Tool-call arguments are excluded from `gen_ai.choice` events by default.
+- Tool-call arguments are never captured.
+- OTLP headers are secrets: encrypted at rest and redacted on admin reads.
 - Resource attributes can include service version and deployment environment to
   correlate signals across deployments.
 - The startup log line for telemetry redacts OTLP headers (which often contain
@@ -384,11 +496,17 @@ scrape_configs:
 | File | Purpose |
 | --- | --- |
 | `server/telemetry.js` | SDK bootstrap, public API |
+| `server/telemetry/spans.js` | **The** span helper: `startSpan`, `withSpan`, the attribute filter, `error.type`, abort handling |
+| `server/telemetry/identity.js` | Pseudonymised user and conversation attributes (`userIdMode`) |
+| `server/telemetry/contentCapture.js` | Opt-in prompt / completion capture: redaction, cap, semconv format |
+| `server/telemetry/spanRedaction.js` | Last redaction of every span before export (URLs, caller address, exceptions) |
+| `server/telemetry/autoInstrumentation.js` | The explicit list of library instrumentations |
+| `server/telemetry/exportStatus.js` | Export success / failure per signal, health and admin status |
+| `server/telemetry/prometheusCluster.js` | One Prometheus endpoint for all cluster workers |
 | `server/telemetry/attributes.js` | Attribute builders for the gen-ai conventions |
-| `server/telemetry/events.js` | Prompt / completion / choice event emission |
 | `server/telemetry/metrics.js` | Histograms, counters, observable gauges |
 | `server/telemetry/exporters.js` | Console / OTLP / Prometheus exporter wiring |
-| `server/telemetry/GenAIInstrumentation.js` | Span lifecycle helper |
+| `server/telemetry/GenAIInstrumentation.js` | Span and metrics of one LLM call (`LLMCallTelemetry`) |
 | `server/telemetry/ActivityTracker.js` | Rolling-window active users / chats tracker |
 | `server/telemetry/ProjectActivityTracker.js` | Project working set (5 / 15 / 60 min windows) |
 | `server/telemetry/clusterUnion.js` | Union of active ids across cluster workers (via the cluster bus) |

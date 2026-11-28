@@ -2,224 +2,181 @@
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
 /**
- * OpenTelemetry Gen-AI Instrumentation
- * Main class for instrumenting GenAI operations
+ * Telemetry of one LLM call: the GenAI client span and the GenAI metrics.
+ *
+ * `LLMClient` starts an {@link LLMCallTelemetry} per model call and ends it with
+ * `succeed()` or `fail()`. The span goes through the helpers of `spans.js` (the
+ * attribute filter, `error.type`, abort handling, idempotent end) and names the
+ * user only through `identity.js`.
+ *
+ * The metrics (`gen_ai.client.token.usage`, `gen_ai.client.operation.duration`)
+ * are built from the call's own data, never from `span.attributes`: a span that
+ * is sampled out or switched off has none, and the metrics must not depend on
+ * either. They are recorded whenever the metric instruments exist.
+ *
+ * @see https://opentelemetry.io/docs/specs/semconv/gen-ai/
  */
 
-import { trace, SpanStatusCode, SpanKind } from '@opentelemetry/api';
 import {
-  buildProviderAttributes,
   buildOperationAttributes,
+  buildProviderAttributes,
   buildRequestAttributes,
   buildResponseAttributes,
-  buildUsageAttributes,
   buildServerAttributes,
-  buildErrorAttributes,
-  buildCustomAttributes,
-  mergeAttributes
+  buildUsageAttributes
 } from './attributes.js';
-import { emitPromptEvent, emitCompletionEvent, emitChoiceEvent } from './events.js';
-import { recordTokenUsage, recordOperationDuration } from './metrics.js';
+import { inputMessagesAttributes, outputMessagesAttributes } from './contentCapture.js';
+import { conversationSpanAttributes, userSpanAttributes } from './identity.js';
+import { recordOperationDuration, recordTokenUsage } from './metrics.js';
+import { isAbortError, SpanKind, startSpan } from './spans.js';
 
 /**
- * GenAI Instrumentation Class
+ * One LLM call's span and metrics. Every method is safe to call more than
+ * once and after the call ended, and never throws.
+ */
+export class LLMCallTelemetry {
+  /**
+   * @param {Object} config - The telemetry config (read for content capture)
+   * @param {Object} call
+   * @param {string} call.operation - `gen_ai.operation.name`
+   * @param {Object} call.model - The model config (`modelId`, `url`)
+   * @param {string} call.provider - `gen_ai.provider.name`
+   * @param {string} [call.appId]
+   * @param {string} [call.userId] - Pseudonymised by `identity.js`
+   * @param {string} [call.conversationId] - Hashed by `identity.js`
+   * @param {number} [call.messageCount]
+   * @param {boolean} [call.isFollowUp]
+   * @param {number} [call.startedAt] - ms timestamp; defaults to now
+   */
+  constructor(config, call) {
+    this.config = config || {};
+    this.startedAt = call.startedAt ?? Date.now();
+    this.ended = false;
+    const modelId = call.model?.modelId;
+    // The metric labels: closed sets only (operation, provider, model id from
+    // config, app id from config). Never read back from the span.
+    this.metricAttributes = {
+      ...buildOperationAttributes(call.operation),
+      ...buildProviderAttributes(call.provider),
+      ...(modelId ? { 'gen_ai.request.model': modelId } : {}),
+      ...(call.appId ? { 'app.id': call.appId } : {})
+    };
+    this.span = startSpan(`${this.metricAttributes['gen_ai.operation.name']} ${modelId}`, {
+      kind: SpanKind.CLIENT,
+      attributes: {
+        ...this.metricAttributes,
+        ...buildServerAttributes(call.model),
+        ...userSpanAttributes(call.userId),
+        ...conversationSpanAttributes(call.conversationId),
+        ...(Number.isInteger(call.messageCount)
+          ? { 'conversation.message_count': call.messageCount }
+          : {}),
+        ...(typeof call.isFollowUp === 'boolean'
+          ? { 'conversation.is_follow_up': call.isFollowUp }
+          : {})
+      }
+    });
+  }
+
+  /**
+   * Request parameters, and the prompt when prompt capture is on.
+   *
+   * @param {Array<Object>} messages
+   * @param {Object} [options] - temperature, maxTokens, topP, topK, …
+   */
+  recordRequest(messages, options = {}) {
+    if (this.ended || !this.span.isRecording) return;
+    try {
+      this.span.setAttributes({
+        ...buildRequestAttributes(null, options),
+        ...inputMessagesAttributes(messages, this.config)
+      });
+    } catch {
+      /* telemetry must never break a call */
+    }
+  }
+
+  /**
+   * The call finished: response attributes, token and duration metrics, end.
+   *
+   * @param {Object} [result]
+   * @param {Object} [result.usage] - inputTokens, outputTokens, cache/reasoning tokens
+   * @param {Array<string>} [result.finishReasons]
+   * @param {string} [result.responseModel]
+   * @param {string} [result.outputText] - Captured only when completion capture is on
+   * @param {Array<Object>} [result.toolCalls] - Names captured only when completion capture is on
+   * @param {boolean} [result.aborted] - The user stopped the answer after it started:
+   *   `ihub.aborted` on the span, tokens recorded, no duration
+   */
+  succeed({ usage, finishReasons, responseModel, outputText, toolCalls, aborted = false } = {}) {
+    if (this.ended) return;
+    this.ended = true;
+    try {
+      recordTokenUsage(this.metricAttributes, usage);
+      if (aborted) this.span.abort();
+      else recordOperationDuration(this.durationSeconds(), this.metricAttributes);
+      if (this.span.isRecording) {
+        this.span.setAttributes({
+          ...buildResponseAttributes({ finishReasons, model: responseModel }),
+          ...buildUsageAttributes(usage || {}),
+          ...outputMessagesAttributes(
+            { text: outputText, toolCalls, finishReason: finishReasons?.[0] },
+            this.config
+          )
+        });
+      }
+    } catch {
+      /* telemetry must never break a call */
+    } finally {
+      this.span.end();
+    }
+  }
+
+  /**
+   * The call failed or was stopped. A failure sets `error.type` on the span
+   * and the duration metric; a stop (user, client disconnect) sets
+   * `ihub.aborted` and records no duration, since the user chose it.
+   *
+   * @param {unknown} err
+   */
+  fail(err) {
+    if (this.ended) return;
+    this.ended = true;
+    try {
+      if (!isAbortError(err)) {
+        recordOperationDuration(this.durationSeconds(), this.metricAttributes, err);
+      }
+      this.span.fail(err);
+    } catch {
+      /* telemetry must never break a call */
+    } finally {
+      this.span.end();
+    }
+  }
+
+  /** @returns {number} Seconds since the call started. */
+  durationSeconds() {
+    return (Date.now() - this.startedAt) / 1000;
+  }
+}
+
+/**
+ * Starts the telemetry of LLM calls. One instance exists while telemetry is
+ * initialised (`getGenAIInstrumentation()`); it reads the live config, so
+ * admin changes to content capture apply to the next call.
  */
 export class GenAIInstrumentation {
   constructor(config = {}) {
     this.config = config;
-    this.tracer = trace.getTracer('ihub-apps-genai', '1.0.0');
-    this.enabled = config.enabled !== false && config.spans?.enabled !== false;
   }
 
   /**
-   * Create a span for an LLM operation
-   * @param {string} operation - Operation name (chat, text_completion, etc.)
-   * @param {Object} model - Model configuration
-   * @param {string} provider - Provider name
-   * @param {Object} customContext - Custom context (appId, userId, etc.)
-   * @returns {Object} OpenTelemetry span
-   */
-  createLLMSpan(operation, model, provider, customContext = {}) {
-    if (!this.enabled) return null;
-
-    try {
-      const spanName = `${operation} ${model.modelId}`;
-      const spanAttributes = mergeAttributes(
-        buildOperationAttributes(operation),
-        buildProviderAttributes(provider),
-        { 'gen_ai.request.model': model.modelId },
-        buildServerAttributes(model),
-        buildCustomAttributes(customContext)
-      );
-
-      return this.tracer.startSpan(spanName, {
-        kind: SpanKind.CLIENT,
-        attributes: spanAttributes
-      });
-    } catch (error) {
-      console.warn('Failed to create LLM span:', error.message);
-      return null;
-    }
-  }
-
-  /**
-   * Record request attributes and emit prompt event
-   * @param {Object} span - Active span
-   * @param {Object} model - Model configuration
-   * @param {Array} messages - Prompt messages
-   * @param {Object} options - Request options
-   */
-  recordRequest(span, model, messages, options = {}) {
-    if (!span || !this.enabled) return;
-
-    try {
-      // Set request attributes
-      const requestAttrs = buildRequestAttributes(model, options);
-      span.setAttributes(requestAttrs);
-
-      // Emit prompt event if configured
-      if (this.config.events?.enabled) {
-        emitPromptEvent(span, messages, this.config);
-      }
-    } catch (error) {
-      console.warn('Failed to record request:', error.message);
-    }
-  }
-
-  /**
-   * Record response attributes and emit completion event
-   * @param {Object} span - Active span
-   * @param {Object} response - API response
-   * @param {Object} usage - Token usage information
-   */
-  recordResponse(span, response, usage) {
-    if (!span || !this.enabled) return;
-
-    try {
-      // Set response attributes
-      const responseAttrs = mergeAttributes(
-        buildResponseAttributes(response),
-        buildUsageAttributes(usage)
-      );
-      span.setAttributes(responseAttrs);
-
-      // Emit completion event if configured
-      if (this.config.events?.enabled) {
-        emitCompletionEvent(span, response, this.config);
-      }
-
-      // Record token usage metrics
-      if (this.config.metrics?.enabled && usage) {
-        const spanAttrs = span.attributes || {};
-        recordTokenUsage(spanAttrs, usage);
-      }
-    } catch (error) {
-      console.warn('Failed to record response:', error.message);
-    }
-  }
-
-  /**
-   * Record tool/function call choice
-   * @param {Object} span - Active span
-   * @param {Object} choice - Choice object with tool calls
-   * @param {number} index - Choice index
-   */
-  recordChoice(span, choice, index = 0) {
-    if (!span || !this.enabled) return;
-
-    try {
-      if (this.config.events?.enabled) {
-        emitChoiceEvent(span, choice, index, this.config);
-      }
-    } catch (error) {
-      console.warn('Failed to record choice:', error.message);
-    }
-  }
-
-  /**
-   * End span with optional error
-   * @param {Object} span - Span to end
-   * @param {Error} error - Optional error object
-   * @param {number} durationSeconds - Operation duration in seconds
-   */
-  endSpan(span, error = null, durationSeconds = null) {
-    if (!span || !this.enabled) return;
-
-    try {
-      if (error) {
-        // Privacy: do NOT call span.recordException() (which copies error.message
-        // and the full stack onto the span) and do NOT include error.message in
-        // the status by default. Provider error payloads can contain prompts,
-        // request snippets or auth tokens. We only export a classified
-        // gen-ai/HTTP error.type. Operators who explicitly opt in via
-        // events.includeOptInAttributes can still capture full stacks.
-        const errorAttrs = buildErrorAttributes(error);
-        span.setAttributes(errorAttrs);
-
-        if (this.config.spans?.includeOptInAttributes === true) {
-          span.recordException(error);
-          span.setStatus({ code: SpanStatusCode.ERROR, message: error.message });
-        } else {
-          span.setStatus({ code: SpanStatusCode.ERROR });
-        }
-
-        // Record duration with error
-        if (this.config.metrics?.enabled && durationSeconds !== null) {
-          const spanAttrs = span.attributes || {};
-          recordOperationDuration(durationSeconds, spanAttrs, error);
-        }
-      } else {
-        // Set OK status
-        span.setStatus({ code: SpanStatusCode.OK });
-
-        // Record duration without error
-        if (this.config.metrics?.enabled && durationSeconds !== null) {
-          const spanAttrs = span.attributes || {};
-          recordOperationDuration(durationSeconds, spanAttrs);
-        }
-      }
-
-      span.end();
-    } catch (err) {
-      console.warn('Failed to end span:', err.message);
-      span?.end();
-    }
-  }
-
-  /**
-   * Wrap an async function with instrumentation as a one-shot helper.
+   * Start the telemetry of one call.
    *
-   * @param {string} operation
-   * @param {Object} model
-   * @param {string} provider
-   * @param {Array} messages
-   * @param {Object} options
-   * @param {Object} customContext
-   * @param {Function} fn
-   * @returns {Promise<*>}
+   * @param {Object} call - See {@link LLMCallTelemetry}
+   * @returns {LLMCallTelemetry}
    */
-  async instrumentOperation(operation, model, provider, messages, options, customContext, fn) {
-    const span = this.createLLMSpan(operation, model, provider, customContext);
-    const startTime = Date.now();
-    try {
-      this.recordRequest(span, model, messages, options);
-      const result = await fn();
-      const duration = (Date.now() - startTime) / 1000;
-      this.recordResponse(span, result, result?.usage);
-      this.endSpan(span, null, duration);
-      return result;
-    } catch (error) {
-      const duration = (Date.now() - startTime) / 1000;
-      this.endSpan(span, error, duration);
-      throw error;
-    }
-  }
-
-  /**
-   * Check if instrumentation is enabled
-   * @returns {boolean} True if enabled
-   */
-  isEnabled() {
-    return this.enabled;
+  startCall(call) {
+    return new LLMCallTelemetry(this.config, call);
   }
 }

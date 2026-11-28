@@ -6,15 +6,6 @@
  * Implements https://opentelemetry.io/docs/specs/semconv/gen-ai/
  */
 
-// Provider name mappings to semantic convention values
-const PROVIDER_MAP = {
-  openai: 'openai',
-  anthropic: 'anthropic',
-  google: 'google',
-  mistral: 'mistral_ai',
-  vllm: 'openai' // vLLM uses OpenAI-compatible API
-};
-
 // Operation name mappings
 const OPERATION_MAP = {
   chat: 'chat',
@@ -25,13 +16,13 @@ const OPERATION_MAP = {
 
 /**
  * Build provider-specific attributes
- * @param {string} provider - Provider identifier (openai, anthropic, google, mistral)
+ * @param {string} provider - `gen_ai.provider.name`, as `resolveProviderName()` returns it
  * @returns {Object} Provider attributes
  */
 export function buildProviderAttributes(provider) {
-  const normalizedProvider = provider?.toLowerCase() || 'unknown';
+  // Already resolved to the semconv value by `providerMap.js`.
   return {
-    'gen_ai.provider.name': PROVIDER_MAP[normalizedProvider] || normalizedProvider
+    'gen_ai.provider.name': provider || 'unknown'
   };
 }
 
@@ -193,148 +184,10 @@ export function buildServerAttributes(model = {}) {
       if (url.port) {
         attributes['server.port'] = Number.parseInt(url.port, 10);
       }
-    } catch (error) {
+    } catch {
       // Invalid URL, skip server attributes
     }
   }
 
   return attributes;
-}
-
-/**
- * Build error attributes
- * @param {Error} error - Error object
- * @returns {Object} Error attributes
- */
-export function buildErrorAttributes(error) {
-  const attributes = {};
-
-  if (error) {
-    // Error type - use error name or class name
-    attributes['error.type'] = error.name || error.constructor?.name || 'Error';
-
-    // Map HTTP status codes to error types
-    if (error.status || error.statusCode) {
-      const status = error.status || error.statusCode;
-      attributes['error.type'] = `http_${status}`;
-
-      // Common HTTP error mappings
-      if (status === 429) {
-        attributes['error.type'] = 'rate_limit_exceeded';
-      } else if (status === 401 || status === 403) {
-        attributes['error.type'] = 'authentication_error';
-      } else if (status === 408) {
-        attributes['error.type'] = 'timeout';
-      }
-    }
-
-    // Map timeout errors
-    if (error.code === 'ETIMEDOUT' || error.message?.includes('timeout')) {
-      attributes['error.type'] = 'timeout';
-    }
-  }
-
-  return attributes;
-}
-
-/**
- * Build custom iHub-specific attributes
- * @param {Object} context - Request context
- * @returns {Object} Custom attributes
- */
-export function buildCustomAttributes(context = {}) {
-  const attributes = {};
-
-  // App ID
-  if (context.appId) {
-    attributes['app.id'] = context.appId;
-  }
-
-  // App name
-  if (context.appName) {
-    attributes['app.name'] = context.appName;
-  }
-
-  // User ID
-  if (context.userId) {
-    attributes['user.id'] = context.userId;
-  }
-
-  // User groups
-  if (context.userGroups && Array.isArray(context.userGroups)) {
-    attributes['user.groups'] = context.userGroups;
-  }
-
-  // Conversation/session ID
-  if (context.conversationId || context.chatId) {
-    attributes['gen_ai.conversation.id'] = context.conversationId || context.chatId;
-  }
-
-  // Follow-up message tracking
-  if (context.isFollowUp !== undefined) {
-    attributes['conversation.is_follow_up'] = context.isFollowUp;
-  }
-
-  if (context.messageCount !== undefined) {
-    attributes['conversation.message_count'] = Number.parseInt(context.messageCount, 10);
-  }
-
-  // Thinking mode (for models that support it)
-  if (context.thinkingEnabled !== undefined) {
-    attributes['thinking.enabled'] = context.thinkingEnabled;
-  }
-
-  if (context.thinkingLevel !== undefined) {
-    attributes['thinking.level'] = String(context.thinkingLevel);
-  }
-
-  // Tool usage
-  if (context.toolCount !== undefined) {
-    attributes['tool.count'] = Number.parseInt(context.toolCount, 10);
-  }
-
-  // Source usage
-  if (context.sourceCount !== undefined) {
-    attributes['source.count'] = Number.parseInt(context.sourceCount, 10);
-  }
-
-  return attributes;
-}
-
-/**
- * Sanitize content to remove PII and sensitive data
- * @param {string|Object} content - Content to sanitize
- * @param {Object} config - Sanitization config
- * @returns {string|Object} Sanitized content
- */
-export function sanitizeContent(content, config = {}) {
-  if (!content) return content;
-
-  const maxSize = config.maxEventSize || 1024;
-
-  // Convert to string if object
-  let sanitized = typeof content === 'string' ? content : JSON.stringify(content);
-
-  // Truncate if too large
-  if (sanitized.length > maxSize) {
-    sanitized = sanitized.substring(0, maxSize) + '... [truncated]';
-  }
-
-  // TODO: Add PII detection and redaction patterns
-  // - Email addresses
-  // - Phone numbers
-  // - Credit card numbers
-  // - API keys
-  // - etc.
-
-  return sanitized;
-}
-
-/**
- * Merge multiple attribute objects
- * @param {...Object} attributeSets - Attribute objects to merge
- * @returns {Object} Merged attributes
- */
-export function mergeAttributes(...attributeSets) {
-  return Object.assign({}, ...attributeSets);
 }

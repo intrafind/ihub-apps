@@ -76,7 +76,8 @@
     "spans": {
       "enabled": true,
       "sampleRate": 1,
-      "includeOptInAttributes": false
+      "includeOptInAttributes": false,
+      "userIdMode": "pseudonymised"
     },
     "events": {
       "enabled": true,

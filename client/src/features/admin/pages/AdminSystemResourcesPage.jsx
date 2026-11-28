@@ -9,7 +9,8 @@ import {
   CpuChipIcon,
   ExclamationTriangleIcon,
   FolderOpenIcon,
-  ServerStackIcon
+  ServerStackIcon,
+  SignalIcon
 } from '@heroicons/react/24/outline';
 import { makeAdminApiCall } from '../../../api/adminApi';
 import {
@@ -157,6 +158,104 @@ function StorageSection({ storage }) {
             );
           })}
         </ul>
+      )}
+    </Section>
+  );
+}
+
+const TELEMETRY_STATE_STYLES = {
+  ok: 'bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300',
+  pending: 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300',
+  off: 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300',
+  failing: 'bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300'
+};
+
+function TelemetrySection({ telemetry }) {
+  const { t } = useTranslation();
+  const time = iso =>
+    iso ? new Date(iso).toLocaleString() : t('admin.systemResources.telemetry.never', 'never');
+  const signalLabels = {
+    traces: t('admin.systemResources.telemetry.signal.traces', 'Traces'),
+    metrics: t('admin.systemResources.telemetry.signal.metrics', 'Metrics'),
+    logs: t('admin.systemResources.telemetry.signal.logs', 'Logs')
+  };
+  const stateLabels = {
+    off: t('admin.systemResources.telemetry.state.off', 'Off'),
+    pending: t('admin.systemResources.telemetry.state.pending', 'No export yet'),
+    ok: t('admin.systemResources.telemetry.state.ok', 'Exporting'),
+    failing: t('admin.systemResources.telemetry.state.failing', 'Failing')
+  };
+  return (
+    <Section
+      icon={SignalIcon}
+      title={t('admin.systemResources.telemetry.title', 'Telemetry')}
+      description={t(
+        'admin.systemResources.telemetry.description',
+        'Whether OpenTelemetry is on and whether its last exports succeeded, as seen by the server process that answered.'
+      )}
+    >
+      {!telemetry.enabled ? (
+        <p className="text-sm text-gray-600 dark:text-gray-400">
+          {t(
+            'admin.systemResources.telemetry.disabled',
+            'Telemetry is off. Turn it on under Telemetry to export traces and metrics.'
+          )}
+        </p>
+      ) : (
+        <div className="space-y-4">
+          <dl className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+            <InfoItem
+              label={t('admin.systemResources.telemetry.provider', 'Exporter')}
+              value={telemetry.provider || '–'}
+            />
+          </dl>
+          <ul className="divide-y divide-gray-200 dark:divide-gray-700">
+            {Object.entries(telemetry.signals || {}).map(([signal, status]) => (
+              <li key={signal} className="py-3 flex flex-wrap items-start justify-between gap-2">
+                <div>
+                  <p className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                    {signalLabels[signal] || signal}
+                    {status.exporter && (
+                      <span className="ml-2 font-normal text-gray-500 dark:text-gray-400">
+                        {status.exporter}
+                      </span>
+                    )}
+                  </p>
+                  {status.enabled && (
+                    <p className="mt-1 text-xs text-gray-600 dark:text-gray-400">
+                      {t('admin.systemResources.telemetry.lastSuccess', 'Last success: {{time}}', {
+                        time: time(status.lastSuccessAt)
+                      })}
+                      {status.lastFailureAt && (
+                        <>
+                          {' · '}
+                          {t(
+                            'admin.systemResources.telemetry.lastFailure',
+                            'Last failure: {{time}} ({{reason}})',
+                            { time: time(status.lastFailureAt), reason: status.lastFailureReason }
+                          )}
+                          {' · '}
+                          {t(
+                            'admin.systemResources.telemetry.failures',
+                            '{{count}} failed exports since start',
+                            { count: status.failures }
+                          )}
+                        </>
+                      )}
+                    </p>
+                  )}
+                </div>
+                <span
+                  className={`px-2 py-0.5 rounded text-xs font-medium ${
+                    TELEMETRY_STATE_STYLES[status.status] || TELEMETRY_STATE_STYLES.off
+                  }`}
+                >
+                  {stateLabels[status.status] || status.status}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
       )}
     </Section>
   );
@@ -678,6 +777,7 @@ function AdminSystemResourcesPage() {
               processes={data.processes}
             />
           )}
+          {data.telemetry && <TelemetrySection telemetry={data.telemetry} />}
         </div>
       )}
     </div>
