@@ -11,6 +11,7 @@ import {
   getStorageSnapshot,
   summarizeStorage
 } from '../../services/systemResources.js';
+import { getTelemetryStatus } from '../../telemetry/exportStatus.js';
 
 export default function registerAdminSystemRoutes(app) {
   /**
@@ -21,12 +22,15 @@ export default function registerAdminSystemRoutes(app) {
    * In cluster mode the serving worker asks the others over the cluster bus
    * and waits briefly for stragglers; workers that do not answer are listed in
    * `cluster.missingWorkers` rather than silently omitted.
+   *
+   * `telemetry` says whether OpenTelemetry is on and how its last exports
+   * went, as the answering worker sees it.
    */
   app.get(buildServerPath('/api/admin/system/resources'), adminAuth, async (req, res) => {
     const platform = configCache.getPlatform() || {};
     const snapshot = await collectSystemResources({ logFile: getLogFilePath(platform) });
     res.set('Cache-Control', 'no-store');
-    res.json(snapshot);
+    res.json({ ...snapshot, telemetry: getTelemetryStatus() });
   });
 
   /**

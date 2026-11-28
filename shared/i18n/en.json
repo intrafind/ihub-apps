@@ -3596,12 +3596,12 @@
       "spans": "Emit spans (gen_ai.* attributes)",
       "metrics": "Emit metrics (token usage, durations, app/conversation counters, active users/chats)",
       "events": "Emit gen_ai events (prompts, completions, tool calls)",
-      "autoInstrumentation": "Auto-instrument HTTP/Express/DNS/fs/net (requires restart)",
+      "autoInstrumentation": "Auto-instrument HTTP, fetch and Express; URLs are exported without query strings (requires restart)",
       "privacy": "Content & Privacy",
-      "privacyWarn": "Including prompts and completions may capture PII or sensitive data. Disabled by default.",
+      "privacyWarn": "Including prompts and completions exports conversation text to the trace backend. E-mail addresses, phone numbers, IBANs and keys are redacted on a best-effort basis; names and other personal data are not. Keep it off in production; turning it on is written to the audit log.",
       "includePrompts": "Include prompt content in events",
       "includeCompletions": "Include completion content in events",
-      "maxEventSize": "Max event size (bytes)",
+      "maxEventSize": "Max captured characters (up to 4096)",
       "exportInterval": "Metric export interval (ms)",
       "activitySummary": "Activity Summary",
       "activitySummaryDescription": "Periodically log the number of distinct active users and chats observed in a rolling window. Counts are also exposed as the OpenTelemetry observable gauges ihub.active.users and ihub.active.chats.",
@@ -3614,7 +3614,12 @@
       "refEnvHint": "Standard OTEL_* environment variables (OTEL_EXPORTER_OTLP_ENDPOINT, OTEL_SERVICE_NAME, ...) are honored at startup.",
       "refMetricsHint": "Custom iHub metrics: ihub.app.usage, ihub.prompt.usage, ihub.errors, ihub.conversations, ihub.active.users, ihub.active.chats.",
       "resource": "telemetry settings",
-      "genAiConventions": "OpenTelemetry Gen-AI semantic conventions:"
+      "genAiConventions": "OpenTelemetry Gen-AI semantic conventions:",
+      "userIdMode": "User on spans",
+      "userIdModePseudonymised": "Pseudonymised (recommended)",
+      "userIdModeOff": "Not recorded",
+      "userIdModeClear": "Clear text user id",
+      "userIdModeHelp": "Pseudonymised spans carry a keyed hash (user.hash) instead of the login, so traces of one user can be grouped without naming them. Clear text exports the login and may need a works agreement."
     },
     "systemResources": {
       "title": "System resources",
@@ -3696,6 +3701,27 @@
         "cachedChars": "Cached text",
         "characters": "{{count}} characters",
         "capacity": "Each worker caches at most {{chars}} characters (about {{bytes}} of memory). Totals above add up all workers since they started."
+      },
+      "telemetry": {
+        "title": "Telemetry",
+        "description": "Whether OpenTelemetry is on and whether its last exports succeeded, as seen by the server process that answered.",
+        "disabled": "Telemetry is off. Turn it on under Telemetry to export traces and metrics.",
+        "provider": "Exporter",
+        "signal": {
+          "traces": "Traces",
+          "metrics": "Metrics",
+          "logs": "Logs"
+        },
+        "state": {
+          "off": "Off",
+          "pending": "No export yet",
+          "ok": "Exporting",
+          "failing": "Failing"
+        },
+        "lastSuccess": "Last success: {{time}}",
+        "lastFailure": "Last failure: {{time}} ({{reason}})",
+        "failures": "{{count}} failed exports since start",
+        "never": "never"
       }
     },
     "storageAlert": {

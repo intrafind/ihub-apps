@@ -214,10 +214,33 @@ files at `logs/app.log`.
 
 ### 6. OpenTelemetry
 
-Telemetry is **disabled by default**. When enabled, only structural metadata
-(model name, token counts, durations) is emitted. Prompt and completion text
-sit behind two opt-in flags: `telemetry.events.includePrompts` and
-`telemetry.events.includeCompletions`, both default `false`.
+Telemetry is **disabled by default**. When enabled, spans and metrics carry
+structural data (app, model, provider, token counts, durations, error types)
+and, on spans, these identifiers:
+
+- **The user**, as set by `telemetry.spans.userIdMode`: by default
+  `pseudonymised`, a keyed hash (`user.hash`, HMAC-SHA256 under a key derived
+  from the installation's encryption key) that groups one user's spans without
+  naming them; `off` records no user; `clear` exports the login (`user.id`) in
+  clear text, which is a per-employee activity profile in the trace backend and
+  usually needs a works agreement (BetrVG §87(1) Nr. 6) and a DPIA. Groups are
+  never exported. Re-identifying a pseudonym needs the installation key and the
+  user list, so treat the trace backend as pseudonymous personal data, not as
+  anonymous.
+- **The conversation id** (`gen_ai.conversation.id`), hashed with the same key
+  unless the mode is `clear`.
+- **With `autoInstrumentation`**, HTTP spans with method, route, path and
+  status. Query strings, user info in URLs and the caller's IP address are
+  removed before export, as are exception messages.
+
+Metric labels never carry a user, group or id.
+
+Prompt and completion text sit behind two opt-in flags:
+`telemetry.events.includePrompts` and `telemetry.events.includeCompletions`,
+both default `false`. When on, e-mail addresses, phone numbers, IBANs and
+secrets are redacted on a best-effort basis (names and other free-text personal
+data are not), each attribute is capped at 4096 characters, and turning it on
+is written to the audit log. Keep them off in production.
 
 ## Privacy controls
 

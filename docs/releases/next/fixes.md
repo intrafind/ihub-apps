@@ -80,3 +80,21 @@ the usage records ran at the same time, for example the hourly one and one start
   storage provides a lock (the default file storage does, between the workers of one machine).
 - A rollup started while another is running waits for it and then runs itself, so it includes
   the records that arrived in the meantime.
+
+## Telemetry: Safe to Turn On
+
+Turning telemetry on could send data where nobody configured it and expose secrets.
+
+- With spans off, or with the Prometheus exporter, traces and logs were still sent to
+  `localhost:4318`, outside the proxy and certificate settings. A signal that is off now sends
+  nothing.
+- OTLP exporter headers (bearer tokens, API keys) came back in clear text from the admin
+  configuration API and the change history. They are now stored encrypted and shown as
+  `***REDACTED***`.
+- The OIDC sign-in `code` and `state`, and `token` or `key` URL parameters, reached the trace
+  backend in HTTP spans. Query strings and exception messages are now removed before export.
+- With several workers, Prometheus answered each scrape from a random worker, so counters seemed
+  to reset. One endpoint now returns every worker's series.
+- Token and duration metrics lost their model and app labels, or disappeared, when spans were off
+  or sampled out. They are now recorded either way.
+- `service.version` was always `1.0.0` in Docker; it is now the installed version.

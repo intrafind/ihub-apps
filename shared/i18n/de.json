@@ -4102,12 +4102,12 @@
       "spans": "Spans senden (gen_ai.*-Attribute)",
       "metrics": "Metriken senden (Token-Nutzung, Laufzeiten, App-/Conversation-Counter, aktive Benutzer/Chats)",
       "events": "Gen-AI-Events senden (Prompts, Completions, Tool-Calls)",
-      "autoInstrumentation": "HTTP/Express/DNS/fs/net automatisch instrumentieren (Neustart erforderlich)",
+      "autoInstrumentation": "HTTP, fetch und Express automatisch instrumentieren; URLs werden ohne Query-String exportiert (Neustart erforderlich)",
       "privacy": "Inhalt & Datenschutz",
-      "privacyWarn": "Das Aufnehmen von Prompts und Completions kann personenbezogene oder sensible Daten erfassen. Standardmäßig deaktiviert.",
+      "privacyWarn": "Mit Prompts und Antworten wird Gesprächstext an das Trace-Backend exportiert. E-Mail-Adressen, Telefonnummern, IBANs und Schlüssel werden nach Möglichkeit geschwärzt, Namen und andere personenbezogene Daten nicht. In Produktion ausgeschaltet lassen; das Einschalten wird im Audit-Log festgehalten.",
       "includePrompts": "Prompt-Inhalt in Events aufnehmen",
       "includeCompletions": "Completion-Inhalt in Events aufnehmen",
-      "maxEventSize": "Maximale Event-Größe (Bytes)",
+      "maxEventSize": "Höchstzahl erfasster Zeichen (bis 4096)",
       "exportInterval": "Metrik-Export-Intervall (ms)",
       "activitySummary": "Aktivitäts-Zusammenfassung",
       "activitySummaryDescription": "Regelmäßiges Loggen der Anzahl unterschiedlicher aktiver Benutzer und Chats in einem rollierenden Zeitfenster. Die Werte werden außerdem als OpenTelemetry Observable Gauges ihub.active.users und ihub.active.chats bereitgestellt.",
@@ -4120,7 +4120,12 @@
       "refEnvHint": "Standard-OTEL_*-Umgebungsvariablen (OTEL_EXPORTER_OTLP_ENDPOINT, OTEL_SERVICE_NAME, ...) werden beim Start berücksichtigt.",
       "refMetricsHint": "Eigene iHub-Metriken: ihub.app.usage, ihub.prompt.usage, ihub.errors, ihub.conversations, ihub.active.users, ihub.active.chats.",
       "resource": "Telemetrie-Einstellungen",
-      "genAiConventions": "Semantische Konventionen von OpenTelemetry für Gen-AI:"
+      "genAiConventions": "Semantische Konventionen von OpenTelemetry für Gen-AI:",
+      "userIdMode": "Benutzer in Spans",
+      "userIdModePseudonymised": "Pseudonymisiert (empfohlen)",
+      "userIdModeOff": "Nicht erfassen",
+      "userIdModeClear": "Benutzerkennung im Klartext",
+      "userIdModeHelp": "Pseudonymisierte Spans enthalten statt des Logins einen Hash mit Schlüssel (user.hash). So lassen sich Traces eines Benutzers gruppieren, ohne ihn zu nennen. Klartext exportiert den Login und kann eine Betriebsvereinbarung erfordern."
     },
     "systemResources": {
       "title": "Systemressourcen",
@@ -4202,6 +4207,27 @@
         "cachedChars": "Gecachter Text",
         "characters": "{{count}} Zeichen",
         "capacity": "Jeder Worker cacht höchstens {{chars}} Zeichen (etwa {{bytes}} Speicher). Die Summen oben addieren alle Worker seit deren Start."
+      },
+      "telemetry": {
+        "title": "Telemetrie",
+        "description": "Ob OpenTelemetry eingeschaltet ist und ob die letzten Exporte gelungen sind, aus Sicht des Serverprozesses, der geantwortet hat.",
+        "disabled": "Telemetrie ist ausgeschaltet. Unter „Telemetrie“ einschalten, um Traces und Metriken zu exportieren.",
+        "provider": "Exporter",
+        "signal": {
+          "traces": "Traces",
+          "metrics": "Metriken",
+          "logs": "Logs"
+        },
+        "state": {
+          "off": "Aus",
+          "pending": "Noch kein Export",
+          "ok": "Exportiert",
+          "failing": "Fehlgeschlagen"
+        },
+        "lastSuccess": "Zuletzt erfolgreich: {{time}}",
+        "lastFailure": "Zuletzt fehlgeschlagen: {{time}} ({{reason}})",
+        "failures": "{{count}} fehlgeschlagene Exporte seit dem Start",
+        "never": "nie"
       }
     },
     "storageAlert": {

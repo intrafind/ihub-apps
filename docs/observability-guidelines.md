@@ -179,13 +179,28 @@ gets a test that it is absent (or hashed) by default.
 
 ## Where we are
 
-The rules describe the target. Issue #4008 brings the existing code there. Until it lands:
+The rules describe the target. Issue #4008 brings the existing code there, one work package at a time.
 
-- Only the LLM call has a span. The turn, tool, workflow, retrieval and job spans of [§3](#3-spans) do not exist
-  yet; new code that adds one follows the rules and becomes a child once the root span exists.
-- There is no span helper in `server/telemetry/` yet besides `GenAIInstrumentation`. Add new span code next to it
-  rather than in the feature.
-- `user.id` is still exported in clear text and groups are attached (`attributes.js`). Do not copy that pattern.
-- Log lines do not carry trace ids yet, and ESM auto-instrumentation needs a loader hook that the server does not
-  start with yet, so incoming `traceparent` is not honoured.
-- `ihub.surface`, `ihub.client.channel`, `ihub.turn.outcome` and `ihub.aborted` are introduced by #4008.
+Done (P0):
+
+- `server/telemetry/spans.js` is the span helper (`startSpan`, `withSpan`, `SpanHandle`, the
+  attribute filter, `errorTypeOf`, `isAbortError`); the LLM call span uses it
+  (`GenAIInstrumentation.js`). Copy that pattern.
+- `server/telemetry/identity.js` is the pseudonymising helper: `userSpanAttributes()` and
+  `conversationSpanAttributes()` follow `telemetry.spans.userIdMode` (default `pseudonymised`,
+  `user.hash`). Groups are never exported.
+- Content capture is redacted, capped at 4096 characters and in the current semconv format
+  (`contentCapture.js`); every exported span passes `spanRedaction.js`.
+- GenAI metrics no longer read `span.attributes`; they are recorded with spans off.
+- A signal that is off has no processor (no SDK fallback); export failures are counted
+  (`ihub.telemetry.export.failures`) and shown in `/api/health` and the admin system view.
+- Cluster mode: stable `service.instance.id`, one Prometheus endpoint labelling each worker.
+
+Still open:
+
+- Only the LLM call has a span. The turn, tool, workflow, retrieval and job spans of [§3](#3-spans)
+  do not exist yet; new code that adds one uses `withSpan` and becomes a child once the root span
+  exists.
+- Log lines do not carry trace ids yet, and ESM auto-instrumentation needs a loader hook that the
+  server does not start with yet, so incoming `traceparent` is not honoured.
+- `ihub.surface`, `ihub.client.channel` and `ihub.turn.outcome` are introduced by #4008.

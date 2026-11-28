@@ -14,7 +14,9 @@
  *
  * Secret locations are described by dotted paths. A segment ending in `[]` is an
  * array whose elements are matched by `name` (falling back to `id`), never by
- * index, so reordering two providers cannot swap their secrets:
+ * index, so reordering two providers cannot swap their secrets. A last segment
+ * `*` stands for every key of the object before it (a map of headers), and
+ * applies to the keys the body being written has:
  *
  * ```js
  * restoreRedacted(next, stored, [
@@ -111,7 +113,9 @@ export const PLATFORM_SECRET_PATHS = Object.freeze([
   Object.freeze({ path: 'auth.jwtSecret' }),
   Object.freeze({ path: 'localAuth.jwtSecret' }),
   Object.freeze({ path: 'speech.azure.subscriptionKey' }),
-  Object.freeze({ path: 'proxyAuth.jwtProviders[].jwkUrl', kind: 'url' })
+  Object.freeze({ path: 'proxyAuth.jwtProviders[].jwkUrl', kind: 'url' }),
+  // Every OTLP exporter header (`Authorization: Bearer …`, API keys).
+  Object.freeze({ path: 'telemetry.exporters.otlp.headers.*' })
 ]);
 
 /**
@@ -133,7 +137,7 @@ function isPlainObject(value) {
 /**
  * Split a dotted secret path into segments: `{ key, array }`.
  *
- * @param {string} path - e.g. `proxyAuth.jwtProviders[].jwkUrl`
+ * @param {string} path - e.g. `proxyAuth.jwtProviders[].jwkUrl` or `telemetry.exporters.otlp.headers.*`
  * @returns {Array<{key: string, array: boolean}>}
  */
 function parsePath(path) {
@@ -168,7 +172,12 @@ function walk(next, stored, segments, visit, pointer = []) {
   if (!isPlainObject(next)) return;
   const [segment, ...rest] = segments;
   if (rest.length === 0) {
-    visit(next, isPlainObject(stored) ? stored : undefined, segment.key, pointer);
+    const storedHolder = isPlainObject(stored) ? stored : undefined;
+    if (segment.key === '*') {
+      for (const key of Object.keys(next)) visit(next, storedHolder, key, pointer);
+      return;
+    }
+    visit(next, storedHolder, segment.key, pointer);
     return;
   }
   const child = next[segment.key];

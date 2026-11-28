@@ -65,6 +65,8 @@ dashboards: breaking change).
 
 ## Touching existing code
 
-Until #4008 lands, only the LLM call has a span and `user.id` goes out in clear text (`server/telemetry/attributes.js`).
-Do not copy that pattern into new code. Bring code you touch in line when it is cheap; do not widen a task into a
-telemetry rewrite.
+Spans go through `server/telemetry/spans.js` (`withSpan` / `startSpan`); users and conversation ids
+through `server/telemetry/identity.js`, never raw. The LLM call (`GenAIInstrumentation.js`) is the
+reference to copy. Until #4008 is complete, only the LLM call has a span and log lines carry no
+trace id; do not work around that in feature code. Bring code you touch in line when it is cheap; do
+not widen a task into a telemetry rewrite.

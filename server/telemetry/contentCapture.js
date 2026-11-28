@@ -1,0 +1,269 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
+/**
+ * Opt-in capture of prompt and completion content on the LLM span.
+ *
+ * Off by default (`telemetry.events.includePrompts` / `includeCompletions`).
+ * When an admin turns it on for debugging, what reaches the trace backend is:
+ *
+ * - in the current GenAI semantic convention format: `gen_ai.input.messages`
+ *   and `gen_ai.output.messages`, JSON arrays of `{ role, parts: [...] }`;
+ * - **redacted**, best effort: e-mail addresses, phone numbers, IBANs, JWTs,
+ *   bearer tokens, common API key formats and `key=value` secrets
+ *   ({@link redactContent});
+ * - **capped** at `events.maxEventSize` characters, and never more than
+ *   {@link MAX_CONTENT_LENGTH} whatever the setting says. The newest messages
+ *   are kept, older ones dropped first;
+ * - without file or image data: a multimodal part becomes `{ type: 'blob',
+ *   modality }`, tool call arguments are left out.
+ *
+ * Redaction is pattern-based and cannot recognise names, addresses or free-text
+ * personal data. Keep capture off in production.
+ *
+ * @module telemetry/contentCapture
+ */
+
+import { MAX_CONTENT_ATTRIBUTE_LENGTH } from './spans.js';
+
+/** Hard cap on one captured attribute, in characters. */
+export const MAX_CONTENT_LENGTH = MAX_CONTENT_ATTRIBUTE_LENGTH;
+
+/** Default `events.maxEventSize`. */
+export const DEFAULT_MAX_EVENT_SIZE = 1024;
+
+/**
+ * Redaction rules, applied in order. Secrets first, so a token that contains
+ * something e-mail-like is removed as a whole.
+ */
+const REDACTIONS = [
+  // JSON Web Tokens (three base64url parts, header starts with `{"`)
+  [/\beyJ[A-Za-z0-9_-]{5,}\.[A-Za-z0-9_-]{5,}\.[A-Za-z0-9_-]{5,}/g, '[REDACTED:jwt]'],
+  // Authorization header values
+  [/\b(Bearer|Basic)\s+[A-Za-z0-9._~+/=-]{8,}/gi, '$1 [REDACTED:token]'],
+  // Well-known API key formats
+  [
+    /\b(?:sk|pk|rk)-(?:[A-Za-z0-9]+-)*[A-Za-z0-9_-]{16,}|\bAKIA[0-9A-Z]{16}\b|\bgh[pousr]_[A-Za-z0-9]{30,}\b|\bgithub_pat_[A-Za-z0-9_]{30,}\b|\bxox[abprs]-[A-Za-z0-9-]{10,}\b|\bAIza[0-9A-Za-z_-]{35}\b|\bglpat-[A-Za-z0-9_-]{20,}\b/g,
+    '[REDACTED:key]'
+  ],
+  // key=value / key: value secrets
+  [
+    /\b((?:api[_-]?key|access[_-]?token|refresh[_-]?token|client[_-]?secret|secret|password|passwd|pwd|token)\s*[:=]\s*)["']?[^\s"'&,;]{4,}["']?/gi,
+    '$1[REDACTED:secret]'
+  ],
+  // E-mail addresses
+  [/[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}/g, '[REDACTED:email]'],
+  // IBANs, with or without the usual blanks every four characters
+  [/\b[A-Z]{2}\d{2}(?: ?[A-Z0-9]{4}){2,7}(?: ?[A-Z0-9]{1,4})?\b/g, '[REDACTED:iban]']
+];
+
+/** A phone number candidate: international (+, 00) or national (leading 0) prefix. */
+const PHONE_CANDIDATE = /(?<![\w+])(?:\+|00|0)\d[\d\s()./-]{5,}\d(?![\w])/g;
+/** A date like 01.02.2024 or 1/2/24, which the candidate pattern would also match. */
+const DATE_LIKE = /^\d{1,4}[./-]\d{1,2}[./-]\d{1,4}$/;
+
+/**
+ * Remove the personal data and secrets the patterns recognise. Best effort.
+ *
+ * @param {string} text
+ * @returns {string}
+ */
+export function redactContent(text) {
+  if (typeof text !== 'string' || text === '') return text;
+  let out = text;
+  for (const [pattern, replacement] of REDACTIONS) out = out.replace(pattern, replacement);
+  out = out.replace(PHONE_CANDIDATE, match => {
+    const digits = match.replace(/\D/g, '').length;
+    if (digits < 7 || digits > 15) return match;
+    if (DATE_LIKE.test(match.trim())) return match;
+    return '[REDACTED:phone]';
+  });
+  return out;
+}
+
+/**
+ * The cap in effect for one attribute: the configured size, never more than
+ * {@link MAX_CONTENT_LENGTH}.
+ *
+ * @param {Object} [eventsConfig] - `telemetry.events`
+ * @returns {number}
+ */
+export function contentCap(eventsConfig) {
+  const configured = Number(eventsConfig?.maxEventSize);
+  const size = Number.isFinite(configured) && configured > 0 ? configured : DEFAULT_MAX_EVENT_SIZE;
+  return Math.min(Math.floor(size), MAX_CONTENT_LENGTH);
+}
+
+/** Whether the config captures prompts. */
+export function capturesPrompts(config) {
+  return config?.events?.enabled !== false && config?.events?.includePrompts === true;
+}
+
+/** Whether the config captures completions. */
+export function capturesCompletions(config) {
+  return config?.events?.enabled !== false && config?.events?.includeCompletions === true;
+}
+
+/** Map a message role to the semconv role. */
+function roleOf(role) {
+  if (role === 'system' || role === 'developer') return 'system';
+  if (role === 'assistant' || role === 'model') return 'assistant';
+  if (role === 'tool' || role === 'function') return 'tool';
+  return 'user';
+}
+
+/** The semconv parts of one message's content, text redacted, binary data left out. */
+function partsOf(message) {
+  const parts = [];
+  const content = message?.content;
+  const isTool = roleOf(message?.role) === 'tool';
+  const addText = text => {
+    if (typeof text !== 'string' || text === '') return;
+    parts.push(
+      isTool
+        ? { type: 'tool_call_response', response: redactContent(text) }
+        : { type: 'text', content: redactContent(text) }
+    );
+  };
+  if (typeof content === 'string') {
+    addText(content);
+  } else if (Array.isArray(content)) {
+    for (const part of content) {
+      if (typeof part === 'string') addText(part);
+      else if (part && typeof part === 'object') {
+        if (typeof part.text === 'string') addText(part.text);
+        else if (typeof part.content === 'string') addText(part.content);
+        else parts.push({ type: 'blob', modality: modalityOf(part) });
+      }
+    }
+  } else if (content && typeof content === 'object') {
+    if (typeof content.text === 'string') addText(content.text);
+    else parts.push({ type: 'blob', modality: modalityOf(content) });
+  }
+  const toolCalls = message?.tool_calls || message?.toolCalls;
+  if (Array.isArray(toolCalls)) {
+    for (const call of toolCalls) {
+      const name = call?.function?.name || call?.name;
+      parts.push({ type: 'tool_call', ...(typeof name === 'string' ? { name } : {}) });
+    }
+  }
+  return parts;
+}
+
+function modalityOf(part) {
+  const type = String(part?.type || part?.mimeType || part?.mime_type || '').toLowerCase();
+  if (type.includes('image')) return 'image';
+  if (type.includes('audio')) return 'audio';
+  if (type.includes('video')) return 'video';
+  return 'file';
+}
+
+/**
+ * Serialise semconv messages within `cap` characters, newest first: older
+ * messages are dropped and the oldest kept text part is cut to fit.
+ *
+ * @param {Array<{role: string, parts: Array<Object>}>} messages
+ * @param {number} cap
+ * @returns {string|undefined} JSON, or undefined when nothing fits
+ */
+export function serializeWithinCap(messages, cap) {
+  const kept = [];
+  for (let index = messages.length - 1; index >= 0; index--) {
+    const candidate = [messages[index], ...kept];
+    if (JSON.stringify(candidate).length <= cap) {
+      kept.unshift(messages[index]);
+      continue;
+    }
+    const cut = cutToFit(messages[index], kept, cap);
+    if (cut) kept.unshift(cut);
+    break;
+  }
+  if (kept.length === 0) return undefined;
+  return JSON.stringify(kept);
+}
+
+/** A copy of `message` whose text is shortened so `[message, ...rest]` fits `cap`. */
+function cutToFit(message, rest, cap) {
+  const textKey = part => (part.type === 'tool_call_response' ? 'response' : 'content');
+  const shell = {
+    ...message,
+    parts: message.parts.map(part =>
+      typeof part[textKey(part)] === 'string' ? { ...part, [textKey(part)]: '' } : part
+    )
+  };
+  let budget = cap - JSON.stringify([shell, ...rest]).length - '…'.length;
+  if (budget <= 0) return undefined;
+  const parts = [];
+  // Keep the end of the text: the newest content of a long message is what
+  // the model answered to.
+  for (let index = message.parts.length - 1; index >= 0; index--) {
+    const part = message.parts[index];
+    const key = textKey(part);
+    if (typeof part[key] !== 'string') {
+      parts.unshift(part);
+      continue;
+    }
+    const text = part[key];
+    // JSON escaping can make the serialised text longer than the text itself.
+    const escapedExtra = JSON.stringify(text).length - 2 - text.length;
+    const room = budget - Math.max(0, escapedExtra);
+    if (room <= 0) {
+      parts.unshift({ ...part, [key]: '' });
+      continue;
+    }
+    const kept = text.length > room ? `…${text.slice(text.length - room)}` : text;
+    budget -= Math.min(text.length, room);
+    parts.unshift({ ...part, [key]: kept });
+  }
+  const cut = { ...message, parts };
+  return JSON.stringify([cut, ...rest]).length <= cap ? cut : undefined;
+}
+
+/**
+ * The `gen_ai.input.messages` attribute for a call's messages, or nothing when
+ * prompt capture is off.
+ *
+ * @param {Array<Object>} messages - The call's messages (any provider-neutral shape)
+ * @param {Object} config - The telemetry config
+ * @returns {Object} `{ 'gen_ai.input.messages': string }` or `{}`
+ */
+export function inputMessagesAttributes(messages, config) {
+  if (!capturesPrompts(config) || !Array.isArray(messages) || messages.length === 0) return {};
+  const converted = messages
+    .map(message =>
+      typeof message === 'string'
+        ? { role: 'user', parts: [{ type: 'text', content: redactContent(message) }] }
+        : { role: roleOf(message?.role), parts: partsOf(message) }
+    )
+    .filter(message => message.parts.length > 0);
+  const json = serializeWithinCap(converted, contentCap(config.events));
+  return json ? { 'gen_ai.input.messages': json } : {};
+}
+
+/**
+ * The `gen_ai.output.messages` attribute for a completion, or nothing when
+ * completion capture is off.
+ *
+ * @param {Object} output
+ * @param {string} [output.text] - The answer text
+ * @param {Array<Object>} [output.toolCalls] - Tool calls the model made (names only are kept)
+ * @param {string} [output.finishReason]
+ * @param {Object} config - The telemetry config
+ * @returns {Object} `{ 'gen_ai.output.messages': string }` or `{}`
+ */
+export function outputMessagesAttributes({ text, toolCalls, finishReason } = {}, config) {
+  if (!capturesCompletions(config)) return {};
+  const message = partsOf({ role: 'assistant', content: text, toolCalls });
+  if (message.length === 0) return {};
+  const json = serializeWithinCap(
+    [
+      {
+        role: 'assistant',
+        parts: message,
+        ...(finishReason ? { finish_reason: finishReason } : {})
+      }
+    ],
+    contentCap(config.events)
+  );
+  return json ? { 'gen_ai.output.messages': json } : {};
+}

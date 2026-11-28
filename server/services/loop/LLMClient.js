@@ -946,7 +946,14 @@ export class LLMClient {
       await dumpRequest(request, model, 'request').catch(() => {});
     }
 
-    const span = this._beginSpan({ model, messages, request, telemetry, effectiveStream });
+    const callTelemetry = this._beginCallTelemetry({
+      model,
+      messages,
+      request,
+      telemetry,
+      effectiveStream,
+      startedAt
+    });
 
     logger.debug('Executing LLM request', {
       component: COMPONENT,
@@ -1015,7 +1022,7 @@ export class LLMClient {
           errorCode: err.code
         });
       }
-      this._recordError({ runId, step, err, span, startedAt });
+      this._recordError({ runId, step, err, callTelemetry });
       recordUsage({ err, requestId });
       throw err;
     }
@@ -1206,7 +1213,7 @@ export class LLMClient {
         await accumulator.settleMedia();
         const toolCalls = accumulator.toolCalls.length;
         if (failure) {
-          client._recordError({ runId, step, err: failure, span, startedAt });
+          client._recordError({ runId, step, err: failure, callTelemetry });
           // A call that failed or was stopped after the answer started still
           // used tokens: the provider's count when it sent one, an estimate
           // otherwise (most providers report usage only in the last chunk, so
@@ -1219,7 +1226,7 @@ export class LLMClient {
             toolCalls
           });
         } else {
-          client._endSpan(span, { model, accumulator, startedAt });
+          client._endCallTelemetry(callTelemetry, { model, accumulator });
           // A consumer that stopped reading before the end (a stop button
           // that broke out of the loop) ended the call early.
           recordUsage({
@@ -1719,7 +1726,7 @@ export class LLMClient {
    * (`GET /api/runs/:runId/events`); the raw text goes to the server log.
    * @private
    */
-  _recordError({ runId, step, err, span, startedAt }) {
+  _recordError({ runId, step, err, callTelemetry }) {
     if (runId && err && typeof err === 'object') ledgeredErrors.set(err, runId);
     if (runId && err?.code !== LLM_ERROR_CODES.ABORTED) {
       logger.warn('Model call failed', {
@@ -1742,39 +1749,32 @@ export class LLMClient {
       status: err.status ?? null,
       recoverable: err.retryable === true || err.code === LLM_ERROR_CODES.CONTEXT_WINDOW_EXCEEDED
     });
-    if (span) {
-      try {
-        const instrumentation = getGenAIInstrumentation();
-        if (instrumentation) instrumentation.endSpan(span, err, (Date.now() - startedAt) / 1000);
-      } catch {
-        /* telemetry must never break a call */
-      }
-    }
+    // A stop is not a failure: the call telemetry records it as aborted.
+    callTelemetry?.fail(err);
   }
 
-  _beginSpan({ model, messages, request, telemetry, effectiveStream }) {
-    let instrumentation;
+  /**
+   * Start the telemetry of one model call: the GenAI span (when spans are on)
+   * and the GenAI metrics (whenever metrics are on). Null when telemetry is not
+   * initialised.
+   * @private
+   */
+  _beginCallTelemetry({ model, messages, request, telemetry, effectiveStream, startedAt }) {
     try {
-      instrumentation = getGenAIInstrumentation();
-    } catch {
-      return null;
-    }
-    if (!instrumentation || !instrumentation.isEnabled()) return null;
-    try {
-      const span = instrumentation.createLLMSpan(
-        resolveOperation(model.provider),
+      const instrumentation = getGenAIInstrumentation();
+      if (!instrumentation) return null;
+      const call = instrumentation.startCall({
+        operation: resolveOperation(model.provider),
         model,
-        resolveProviderName(model.provider),
-        {
-          appId: telemetry.appId,
-          userId: telemetry.userId,
-          chatId: telemetry.chatId || telemetry.runId,
-          runId: telemetry.runId,
-          messageCount: messages.length,
-          isFollowUp: messages.length > 2
-        }
-      );
-      instrumentation.recordRequest(span, model, messages, {
+        provider: resolveProviderName(model.provider),
+        appId: telemetry.appId,
+        userId: telemetry.userId,
+        conversationId: telemetry.chatId || telemetry.runId,
+        messageCount: messages.length,
+        isFollowUp: messages.length > 2,
+        startedAt
+      });
+      call.recordRequest(messages, {
         temperature:
           request.body?.temperature ??
           request.body?.generationConfig?.temperature ??
@@ -1790,17 +1790,19 @@ export class LLMClient {
         topK: request.body?.top_k ?? request.body?.generationConfig?.topK,
         stream: effectiveStream
       });
-      return span;
+      return call;
     } catch {
       return null;
     }
   }
 
-  _endSpan(span, { model, accumulator, startedAt }) {
-    if (!span) return;
+  /**
+   * End a call's telemetry after it completed.
+   * @private
+   */
+  _endCallTelemetry(callTelemetry, { model, accumulator }) {
+    if (!callTelemetry) return;
     try {
-      const instrumentation = getGenAIInstrumentation();
-      if (!instrumentation) return;
       const usage = accumulator.usage
         ? {
             inputTokens: accumulator.usage.promptTokens,
@@ -1810,15 +1812,14 @@ export class LLMClient {
             reasoningTokens: accumulator.usage.reasoningTokens
           }
         : undefined;
-      instrumentation.recordResponse(
-        span,
-        {
-          finishReasons: accumulator.finishReason ? [accumulator.finishReason] : undefined,
-          model: model.modelId
-        },
-        usage
-      );
-      instrumentation.endSpan(span, null, (Date.now() - startedAt) / 1000);
+      callTelemetry.succeed({
+        usage,
+        finishReasons: accumulator.finishReason ? [accumulator.finishReason] : undefined,
+        responseModel: model.modelId,
+        // Captured only when an admin turned completion capture on.
+        outputText: accumulator.content,
+        toolCalls: accumulator.toolCalls
+      });
     } catch {
       /* telemetry must never break a call */
     }

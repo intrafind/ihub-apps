@@ -108,14 +108,16 @@ function isSecretLeaf(path) {
     ({ path: secretPath }, index) =>
       !secretPath.includes('[]') &&
       SECRET_SEGMENTS[index].length === path.length &&
-      SECRET_SEGMENTS[index].every((segment, i) => segment === path[i])
+      SECRET_SEGMENTS[index].every((segment, i) => segment === '*' || segment === path[i])
   );
 }
 
 /** Whether `path` encloses a secret (a `null` there would delete the secret with it). */
 function enclosesSecret(path) {
   return SECRET_SEGMENTS.some(
-    segments => segments.length > path.length && path.every((segment, i) => segment === segments[i])
+    segments =>
+      segments.length > path.length &&
+      path.every((segment, i) => segments[i] === '*' || segment === segments[i])
   );
 }
 
@@ -212,6 +214,33 @@ function assertPatchShape(patch) {
       { details: issues }
     );
   }
+}
+
+/** The telemetry settings that decide whether content leaves the server. */
+const CONTENT_CAPTURE_FIELDS = [
+  ['events', 'enabled'],
+  ['events', 'includePrompts'],
+  ['events', 'includeCompletions'],
+  ['events', 'maxEventSize']
+];
+
+/**
+ * What a save changed about telemetry content capture, for its audit entry.
+ *
+ * @param {Object|undefined} before - `telemetry` as stored
+ * @param {Object|undefined} after - `telemetry` as saved
+ * @returns {{changed: string[], before: Object, after: Object}|null} null when
+ *   nothing relevant changed
+ */
+export function describeContentCaptureChange(before, after) {
+  const read = (config, [section, field]) => config?.[section]?.[field] ?? null;
+  const changed = CONTENT_CAPTURE_FIELDS.filter(
+    path => read(before, path) !== read(after, path)
+  ).map(path => path.join('.'));
+  if (changed.length === 0) return null;
+  const pick = config =>
+    Object.fromEntries(CONTENT_CAPTURE_FIELDS.map(path => [path.join('.'), read(config, path)]));
+  return { changed, before: pick(before), after: pick(after) };
 }
 
 /** Keys a merge must never assign: they reach the prototype, not a member. */
@@ -555,15 +584,34 @@ async function applyPlatformChange(req, body, { mode }) {
     });
   }
 
-  // Apply runtime-mutable telemetry settings without server restart
+  // Content capture sends prompt or completion text to the trace backend:
+  // turning it on (or off) gets its own audit entry, not only the generic
+  // "platform updated" one.
+  const captureChange = describeContentCaptureChange(
+    existingConfig.telemetry,
+    mergedConfig.telemetry
+  );
+  if (captureChange) {
+    await logAudit({
+      req,
+      action: 'update',
+      resource: 'telemetryContentCapture',
+      resourceId: 'settings',
+      summary: `Telemetry content capture changed: ${captureChange.changed.join(', ')}`,
+      details: captureChange
+    });
+  }
+
+  // Apply runtime-mutable telemetry settings without server restart. Compared
+  // with the merged body: a PATCH names only the fields it changes.
   try {
     const telemetryChanged =
-      JSON.stringify(existingConfig.telemetry) !== JSON.stringify(newConfig.telemetry);
-    if (telemetryChanged && newConfig.telemetry) {
+      JSON.stringify(existingConfig.telemetry) !== JSON.stringify(mergedConfig.telemetry);
+    if (telemetryChanged && mergedConfig.telemetry) {
       const { reloadTelemetryConfig } = await import('../../telemetry.js');
       const { default: activityTracker } = await import('../../telemetry/ActivityTracker.js');
-      reloadTelemetryConfig(newConfig.telemetry);
-      activityTracker.configure(newConfig.telemetry.activitySummary || {});
+      reloadTelemetryConfig(mergedConfig.telemetry);
+      activityTracker.configure(mergedConfig.telemetry.activitySummary || {});
       logger.info('Telemetry runtime configuration updated', { component: 'AdminConfigs' });
     }
   } catch (telemetryError) {

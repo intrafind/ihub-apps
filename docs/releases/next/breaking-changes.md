@@ -91,3 +91,29 @@ first-page header) and the PowerPoint template (master and layouts), and check w
 template's page setup gives your PDFs. The migration deletes the logo, font and letterhead files of
 your templates: keep copies of them if you still need them.
 
+
+## Telemetry: Users Are Pseudonymised on Spans, Content Capture Has a New Format
+
+Telemetry spans no longer name the user in clear text, and captured prompts and answers use the
+current OpenTelemetry format. Dashboards, trace queries or collector rules built on the old
+attribute names need updating.
+
+- The LLM span carries `user.hash`, a keyed hash of the user, instead of `user.id`. The new
+  setting `telemetry.spans.userIdMode` (**Admin → Telemetry → User on spans**) chooses
+  `pseudonymised` (default), `off` or `clear`; only `clear` exports `user.id`. `user.groups` is no
+  longer exported. `gen_ai.conversation.id` is hashed unless the mode is `clear`.
+- Captured content moves from the `gen_ai.content.prompt` / `gen_ai.content.completion` events to
+  the span attributes `gen_ai.input.messages` / `gen_ai.output.messages`. It is redacted (e-mail
+  addresses, phone numbers, IBANs, keys) and capped at 4096 characters whatever
+  `events.maxEventSize` says; a larger stored value is lowered to 4096. The `gen_ai.choice` event
+  is gone.
+- `telemetry.autoInstrumentation` now instruments HTTP, `fetch` and Express only. DNS, network
+  socket and file-system spans are no longer produced, URLs are exported without query string,
+  inbound spans without the caller's IP address, and winston no longer sends log records.
+- In Prometheus mode every series carries a `cluster_worker_id` label, and `service.instance.id`
+  is `<host>-w<worker>` instead of a random id per process.
+
+**Before upgrading:** if dashboards or queries filter on `user.id`, `user.groups` or the
+`gen_ai.content.*` events, switch them to `user.hash` and `gen_ai.input.messages` /
+`gen_ai.output.messages`, or set `userIdMode` to `clear` where your works agreement allows it.
+Aggregate Prometheus series across workers with `sum` (or `max` for the active-user gauges).

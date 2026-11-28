@@ -7,7 +7,6 @@
 
 import { OTLPTraceExporter } from '@opentelemetry/exporter-trace-otlp-http';
 import { OTLPMetricExporter } from '@opentelemetry/exporter-metrics-otlp-http';
-import { PrometheusExporter } from '@opentelemetry/exporter-prometheus';
 import { ConsoleSpanExporter } from '@opentelemetry/sdk-trace';
 import { ConsoleMetricExporter } from '@opentelemetry/sdk-metrics';
 import fs from 'node:fs';
@@ -91,7 +90,12 @@ export function otlpExporterOptions(otlpConfig, signalPath, signal = 'TRACES') {
     headers: otlpConfig.headers || {},
     httpAgentOptions: () => {
       if (!configCache.getPlatform()) {
-        throw new Error('OTLP export deferred: the platform configuration is not loaded yet');
+        const deferred = new Error(
+          'OTLP export deferred: the platform configuration is not loaded yet'
+        );
+        // Classified as `deferred` by the export status, not as a failure cause.
+        deferred.deferred = true;
+        throw deferred;
       }
       return createAgentWithTls(url, tlsOptions);
     }
@@ -155,13 +159,9 @@ export function createMetricExporter(config) {
       break;
 
     case 'prometheus':
-      if (config.exporters?.prometheus) {
-        return new PrometheusExporter({
-          port: config.exporters.prometheus.port || 9464,
-          host: config.exporters.prometheus.host || '0.0.0.0'
-        });
-      }
-      break;
+      // A pull exporter: `telemetry/prometheusCluster.js` creates the reader
+      // and the one scrape endpoint for all workers.
+      return null;
 
     case 'console':
     default:
