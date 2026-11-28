@@ -94,7 +94,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "histogram_quantile(0.95, sum by (le, gen_ai_provider_name, gen_ai_request_model) (rate(gen_ai_client_operation_duration_bucket{job=~\"$job\"}[5m])))",
+          "expr": "histogram_quantile(0.95, sum by (le, gen_ai_provider_name, gen_ai_request_model) (rate(gen_ai_client_inference_duration_bucket{job=~\"$job\"}[5m])))",
           "legendFormat": "{{gen_ai_provider_name}} {{gen_ai_request_model}}"
         }
       ],
@@ -140,7 +140,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "histogram_quantile(0.95, sum by (le, server_address) (rate(gen_ai_client_operation_time_to_first_chunk_bucket{job=~\"$job\"}[5m])))",
+          "expr": "histogram_quantile(0.95, sum by (le, server_address) (rate(gen_ai_client_inference_time_to_first_chunk_bucket{job=~\"$job\"}[5m])))",
           "legendFormat": "{{server_address}}"
         }
       ],
@@ -199,7 +199,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (gen_ai_provider_name) (rate(gen_ai_client_operation_duration_count{job=~\"$job\",error_type!=``}[5m])) / sum by (gen_ai_provider_name) (rate(gen_ai_client_operation_duration_count{job=~\"$job\"}[5m]))",
+          "expr": "sum by (gen_ai_provider_name) (rate(gen_ai_client_inference_duration_count{job=~\"$job\",error_type!=``}[5m])) / sum by (gen_ai_provider_name) (rate(gen_ai_client_inference_duration_count{job=~\"$job\"}[5m]))",
           "legendFormat": "{{gen_ai_provider_name}}"
         }
       ],
@@ -245,7 +245,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (gen_ai_provider_name) (rate(gen_ai_client_operation_duration_count{job=~\"$job\",error_type=`rate_limit_exceeded`}[5m]))",
+          "expr": "sum by (gen_ai_provider_name) (rate(gen_ai_client_inference_duration_count{job=~\"$job\",error_type=`rate_limit_exceeded`}[5m]))",
           "legendFormat": "{{gen_ai_provider_name}}"
         }
       ],
@@ -358,7 +358,7 @@
     },
     {
       "type": "timeseries",
-      "title": "Tokens per second by model and type",
+      "title": "Tokens per second by model",
       "datasource": {
         "type": "prometheus",
         "uid": "${datasource}"
@@ -396,8 +396,13 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (gen_ai_request_model, gen_ai_token_type) (rate(gen_ai_client_token_usage_sum{job=~\"$job\"}[5m]))",
-          "legendFormat": "{{gen_ai_request_model}} {{gen_ai_token_type}}"
+          "expr": "sum by (gen_ai_request_model) (rate(gen_ai_client_inference_usage_input_tokens_total{job=~\"$job\"}[5m]))",
+          "legendFormat": "{{gen_ai_request_model}} input"
+        },
+        {
+          "refId": "B",
+          "expr": "sum by (gen_ai_request_model) (rate(gen_ai_client_inference_usage_output_tokens_total{job=~\"$job\"}[5m]))",
+          "legendFormat": "{{gen_ai_request_model}} output"
         }
       ],
       "id": 10
@@ -442,7 +447,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (gen_ai_request_model) (rate(gen_ai_client_token_usage_sum{job=~\"$job\",gen_ai_token_type=`cache_read`}[1h])) / sum by (gen_ai_request_model) (rate(gen_ai_client_token_usage_sum{job=~\"$job\",gen_ai_token_type=`input`}[1h]))",
+          "expr": "sum by (gen_ai_request_model) (rate(gen_ai_client_inference_usage_cache_read_input_tokens_total{job=~\"$job\"}[1h])) / sum by (gen_ai_request_model) (rate(gen_ai_client_inference_usage_input_tokens_total{job=~\"$job\"}[1h]))",
           "legendFormat": "{{gen_ai_request_model}}"
         }
       ],

@@ -45,21 +45,21 @@ groups:
     rules:
       - alert: IHubLlmErrorRatioHigh
         expr: |
-          sum by (job, gen_ai_provider_name) (rate(gen_ai_client_operation_duration_count{error_type!=""}[10m]))
-            / sum by (job, gen_ai_provider_name) (rate(gen_ai_client_operation_duration_count[10m])) > 0.05
+          sum by (job, gen_ai_provider_name) (rate(gen_ai_client_inference_duration_count{error_type!=""}[10m]))
+            / sum by (job, gen_ai_provider_name) (rate(gen_ai_client_inference_duration_count[10m])) > 0.05
         for: 10m
         labels: { severity: warning }
         annotations:
           summary: 'More than 5 % of model calls to {{ $labels.gen_ai_provider_name }} fail'
       - alert: IHubLlmRateLimited
-        expr: sum by (job, gen_ai_provider_name) (increase(gen_ai_client_operation_duration_count{error_type="rate_limit_exceeded"}[15m])) > 10
+        expr: sum by (job, gen_ai_provider_name) (increase(gen_ai_client_inference_duration_count{error_type="rate_limit_exceeded"}[15m])) > 10
         labels: { severity: warning }
         annotations:
           summary: '{{ $labels.gen_ai_provider_name }} answers 429 (rate limited)'
       - alert: IHubTimeToFirstChunkSlow
         expr: |
           histogram_quantile(0.95, sum by (le, job, server_address)
-            (rate(gen_ai_client_operation_time_to_first_chunk_bucket[10m]))) > 10
+            (rate(gen_ai_client_inference_time_to_first_chunk_bucket[10m]))) > 10
         for: 15m
         labels: { severity: warning }
         annotations:
