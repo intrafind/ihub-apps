@@ -85,6 +85,7 @@ import { newOutputId } from '../../services/provenance/records.js';
 import { recordTextOutput } from '../../services/provenance/turnProvenance.js';
 import { recordRunEvidence } from '../../services/chat/evidenceRecord.js';
 import { applyProvenanceHeaders } from '../../services/provenance/httpProvenance.js';
+import { withInferenceSpan } from '../../telemetry/traces.js';
 
 const COMPONENT = 'ResponsesApi';
 const APP_ID = 'inference-api';
@@ -326,8 +327,11 @@ export default function registerResponsesRoutes(
         const { messages: stored } = await loaded.repository.getMessages(loaded.chat.id);
         params.conversation = { ...loaded, stored };
       }
-      if (target.kind === 'app') await runAppResponse(params);
-      else await runModelResponse(params);
+      // One span per request; the turn or the model call below are its children.
+      await withInferenceSpan(
+        { api: 'responses', target: target.kind, stream, userId: user?.id },
+        () => (target.kind === 'app' ? runAppResponse(params) : runModelResponse(params))
+      );
     } catch (error) {
       if (ctx.assembler && res.headersSent) {
         ctx.assembler.fail(isInferenceApiErrorLike(error) ? error : fromLLMError(error));

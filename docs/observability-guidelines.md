@@ -196,11 +196,18 @@ Done (P0):
   (`ihub.telemetry.export.failures`) and shown in `/api/health` and the admin system view.
 - Cluster mode: stable `service.instance.id`, one Prometheus endpoint labelling each worker.
 
+Done (P1):
+
+- The server starts through `server/instrumentation.mjs` (`node --import`), so HTTP and Express are
+  instrumented and an incoming `traceparent` is honoured.
+- `server/telemetry/traces.js` starts the spans of §3: `invoke_agent`, `inference`, `tools/call`,
+  `a2a.task`, `execute_tool`, `workflow.run` / `workflow.node`, `scheduled_task.run`, `retrieval`,
+  `extraction`. Use its helpers (or `withSpan`) for a new unit of work.
+- `injectContext` / `extractContext` / `runInCarrierContext` / `linksFrom` carry the trace across
+  the cluster bus and to resumed runs; `SpanHandle.bindIterable` binds an async iterator.
+- `spans.sampleRate` is wired.
+
 Still open:
 
-- Only the LLM call has a span. The turn, tool, workflow, retrieval and job spans of [§3](#3-spans)
-  do not exist yet; new code that adds one uses `withSpan` and becomes a child once the root span
-  exists.
-- Log lines do not carry trace ids yet, and ESM auto-instrumentation needs a loader hook that the
-  server does not start with yet, so incoming `traceparent` is not honoured.
-- `ihub.surface`, `ihub.client.channel` and `ihub.turn.outcome` are introduced by #4008.
+- `ihub.surface`, `ihub.client.channel` and `ihub.turn.outcome` are introduced by #4008 (P2).
+- Log lines carry trace ids only with `autoInstrumentation` (P3 adds them in the logger itself).

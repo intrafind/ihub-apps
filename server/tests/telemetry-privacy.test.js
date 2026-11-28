@@ -26,6 +26,7 @@ import {
   configureIdentity,
   pseudonymise,
   resetIdentityForTests,
+  setPseudonymKeySource,
   userSpanAttributes
 } from '../telemetry/identity.js';
 import {
@@ -66,6 +67,7 @@ beforeEach(() => {
   resetIdentityForTests();
   resetSpansForTests();
   tokenStorageService.encryptionKey = KEY;
+  setPseudonymKeySource(() => tokenStorageService.encryptionKey);
 });
 
 function fakeMeter() {

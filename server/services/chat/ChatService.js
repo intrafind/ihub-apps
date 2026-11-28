@@ -95,6 +95,7 @@ import { appendSchedulingContextNote } from '../scheduler/tasks/schedulingContex
 import * as defaultTelemetry from './chatTelemetry.js';
 import modelDiscoveryService from '../ModelDiscoveryService.js';
 import { recordTextOutput } from '../provenance/turnProvenance.js';
+import { endTurnSpan, startTurnSpan } from '../../telemetry/traces.js';
 
 const COMPONENT = 'ChatService';
 
@@ -503,6 +504,35 @@ class ChatService {
   // ── the turn ───────────────────────────────────────────────────────────
 
   /**
+   * Run one chat turn inside its trace span (`invoke_agent {app.id}`): every
+   * model call, tool call and outbound request of the turn becomes its child.
+   * See {@link ChatService#_runTurnTraced} for the parameters and result.
+   *
+   * @param {Object} params - As for `_runTurnTraced`
+   * @returns {Promise<Object>} The turn result
+   */
+  async runTurn(params) {
+    const span = startTurnSpan({
+      appId: params?.prep?.app?.id,
+      modelId: params?.prep?.model?.id,
+      chatId: params?.chatId,
+      userId: params?.user?.id,
+      trigger: params?.trigger?.type,
+      streaming: params?.streaming !== false
+    });
+    try {
+      const result = await span.run(() => this._runTurnTraced(params));
+      endTurnSpan(span, result);
+      return result;
+    } catch (error) {
+      span.fail(error);
+      throw error;
+    } finally {
+      span.end();
+    }
+  }
+
+  /**
    * Run one chat turn.
    *
    * With `streaming: true` the turn is one run on the chat's SSE v2 stream
@@ -589,7 +619,7 @@ class ChatService {
    * @returns {Promise<Object>} `{ runId, status, content, finishReason, usage, messages, knowledgeSources,
    *   pendingInteraction?, toolName?, error?, errorInfo?, structuredOutput?, refusal? }`
    */
-  async runTurn({
+  async _runTurnTraced({
     prep,
     chatId,
     messageId,
@@ -1925,6 +1955,34 @@ class ChatService {
   // ── headless app invocation (app-as-tool gateway, MCP) ─────────────────
 
   /**
+   * Run an app as a sub-agent inside its trace span (`invoke_agent {app.id}`,
+   * `ihub.turn.kind=subagent`). See {@link ChatService#_invokeAppTraced}.
+   *
+   * @param {Object} opts - As for `_invokeAppTraced`
+   * @returns {Promise<Object>} The invocation result
+   */
+  async invokeAppInternal(opts) {
+    const span = startTurnSpan({
+      appId: opts?.appId,
+      chatId: opts?.chatId,
+      userId: opts?.user?.id,
+      trigger: 'agent',
+      streaming: false,
+      kind: 'subagent'
+    });
+    try {
+      const result = await span.run(() => this._invokeAppTraced(opts));
+      endTurnSpan(span, result);
+      return result;
+    } catch (error) {
+      span.fail(error);
+      throw error;
+    } finally {
+      span.end();
+    }
+  }
+
+  /**
    * Run an app to completion without a client: the app-as-tool gateway and
    * the MCP `tools/call` surface. Tools execute server-side; interactive tools
    * are refused (no user to answer); passthrough output becomes the answer.
@@ -1951,7 +2009,7 @@ class ChatService {
    *   produced (`{ id, name, mimeType, bytes, data }`, `data` base64) and `images` the pictures
    *   (`{ mimeType, data, name? }`)
    */
-  async invokeAppInternal({
+  async _invokeAppTraced({
     appId,
     user,
     messages = [],

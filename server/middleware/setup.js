@@ -391,7 +391,11 @@ export function setupMiddleware(app, platformConfig = {}) {
       'Origin',
       'Cache-Control',
       'X-File-Name',
-      'If-Match'
+      'If-Match',
+      // W3C trace context: a caller (Office add-in, browser extension, API
+      // client) may continue its own trace into the server.
+      'traceparent',
+      'tracestate'
     ];
     const REQUIRED_EXPOSED_HEADERS = ['Content-Disposition', 'ETag', 'Default-Model-Assigned'];
     let allowedHeaders;

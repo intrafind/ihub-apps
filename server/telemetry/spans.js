@@ -31,6 +31,8 @@
 import {
   context as otelContext,
   INVALID_SPAN_CONTEXT,
+  propagation,
+  ROOT_CONTEXT,
   SpanKind,
   SpanStatusCode,
   trace
@@ -291,6 +293,36 @@ export class SpanHandle {
   bind(fn) {
     return otelContext.bind(this.context, fn);
   }
+
+  /**
+   * An async iterable whose every step runs in this span's context. An async
+   * generator body runs in the context of whoever calls `next()` (the SSE
+   * writer, a route), so without this the spans started inside a streamed
+   * turn would attach to the caller instead of this span.
+   *
+   * @template T
+   * @param {AsyncIterable<T>} iterable
+   * @returns {AsyncIterableIterator<T>}
+   */
+  bindIterable(iterable) {
+    const ctx = this.context;
+    const iterator = iterable[Symbol.asyncIterator]();
+    const step = method => arg =>
+      typeof iterator[method] === 'function'
+        ? otelContext.with(ctx, () => iterator[method](arg))
+        : Promise.resolve({ done: true, value: arg });
+    return {
+      next: step('next'),
+      return: step('return'),
+      throw: arg =>
+        typeof iterator.throw === 'function'
+          ? otelContext.with(ctx, () => iterator.throw(arg))
+          : Promise.reject(arg),
+      [Symbol.asyncIterator]() {
+        return this;
+      }
+    };
+  }
 }
 
 /**
@@ -367,6 +399,67 @@ export function activeTraceIds() {
   const spanContext = trace.getSpanContext(otelContext.active());
   if (!spanContext || !trace.isSpanContextValid(spanContext)) return {};
   return { trace_id: spanContext.traceId, span_id: spanContext.spanId };
+}
+
+/**
+ * The active trace context as a plain object (`traceparent`, `tracestate`) to
+ * send along with work handed to a worker thread, another cluster process or a
+ * later run. Empty when there is no active trace.
+ *
+ * @param {import('@opentelemetry/api').Context} [ctx] - Defaults to the active context
+ * @returns {Object<string, string>}
+ */
+export function injectContext(ctx = otelContext.active()) {
+  const carrier = {};
+  try {
+    propagation.inject(ctx, carrier);
+  } catch {
+    /* no propagator: nothing to carry */
+  }
+  return carrier;
+}
+
+/**
+ * The context a carrier from {@link injectContext} stands for, to start the
+ * receiving side's span under (`startSpan(name, { parentContext })`).
+ *
+ * @param {Object<string, string>|undefined|null} carrier
+ * @returns {import('@opentelemetry/api').Context}
+ */
+export function extractContext(carrier) {
+  if (!carrier || typeof carrier !== 'object') return ROOT_CONTEXT;
+  try {
+    return propagation.extract(ROOT_CONTEXT, carrier);
+  } catch {
+    return ROOT_CONTEXT;
+  }
+}
+
+/**
+ * Run `fn` in the context a carrier stands for, so spans it starts continue
+ * the sender's trace. Without a carrier `fn` runs as it is.
+ *
+ * @template T
+ * @param {Object<string, string>|undefined|null} carrier
+ * @param {() => T} fn
+ * @returns {T}
+ */
+export function runInCarrierContext(carrier, fn) {
+  if (!carrier || typeof carrier !== 'object' || !carrier.traceparent) return fn();
+  return otelContext.with(extractContext(carrier), fn);
+}
+
+/**
+ * A span link to the trace a carrier came from. A run that resumes hours later
+ * (a workflow after a human decision) starts a new trace that links to the
+ * old one instead of a parent that ended long ago.
+ *
+ * @param {Object<string, string>|undefined|null} carrier
+ * @returns {Array<import('@opentelemetry/api').Link>} One link, or none
+ */
+export function linksFrom(carrier) {
+  const spanContext = trace.getSpanContext(extractContext(carrier));
+  return spanContext && trace.isSpanContextValid(spanContext) ? [{ context: spanContext }] : [];
 }
 
 /** Reset the module state (tests only). */

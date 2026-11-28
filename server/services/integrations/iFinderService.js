@@ -13,6 +13,7 @@ import authDebugService from '../../utils/authDebugService.js';
 import fs from 'node:fs';
 import path from 'node:path';
 import logger from '../../utils/logger.js';
+import { withRetrievalSpan } from '../../telemetry/traces.js';
 
 /**
  * What a caller that passed something other than a document id needs to hear.
@@ -123,11 +124,26 @@ class IFinderService {
   }
 
   /**
+   * Search iFinder inside a retrieval span (`retrieval ifinder`); the HTTP call
+   * is its child. See {@link IFinderService#_searchTraced}.
+   *
+   * @param {Object} params - Search parameters
+   * @returns {Promise<Object>} Search results
+   */
+  async search(params) {
+    return withRetrievalSpan(
+      'ifinder',
+      () => this._searchTraced(params),
+      result => result?.results?.length
+    );
+  }
+
+  /**
    * Search for documents in iFinder
    * @param {Object} params - Search parameters
    * @returns {Object} Search results
    */
-  async search({
+  async _searchTraced({
     query,
     chatId,
     user,

@@ -80,6 +80,7 @@ import { loadTaskPromptFiles, withTaskFiles } from '../../chatFiles/taskFiles.js
 import { refreshTaskFiles } from '../../chatFiles/fileSources.js';
 import { currentPolicy, deleteRunChat, pruneTaskRuns, toolsOfferedByApp } from './taskService.js';
 import { resolveRunScopes } from './taskScopes.js';
+import { withScheduledTaskSpan } from '../../../telemetry/traces.js';
 
 const COMPONENT = 'ScheduledTaskExecution';
 
@@ -180,6 +181,29 @@ async function authorizeRun(task, user, language) {
   return { app, integrationScopes: scopes.scopes };
 }
 
+/** The closed set of `ihub.trigger.type` values on `scheduled_task.run`. */
+const SCHEDULED_TRIGGERS = new Set(['schedule', 'manual', 'catch_up']);
+
+/** A run's trigger as a span attribute value, `other` outside the closed set. */
+function scheduledTriggerOf(trigger) {
+  return SCHEDULED_TRIGGERS.has(trigger) ? trigger : 'other';
+}
+
+/**
+ * Execute one scheduled task run in its own trace (`scheduled_task.run`); the
+ * turn it runs (`invoke_agent`) and everything below are its children. See
+ * {@link executeTaskRunTraced}.
+ *
+ * @param {{taskId: string, runId: string}} job
+ * @param {Object} [deps]
+ * @returns {Promise<*>}
+ */
+export async function executeTaskRun(job, deps = {}) {
+  return withScheduledTaskSpan({ trigger: 'schedule' }, span =>
+    executeTaskRunTraced(job, deps, span)
+  );
+}
+
 /**
  * Execute one queued run to its end (or to an approval pause).
  *
@@ -192,7 +216,7 @@ async function authorizeRun(task, user, language) {
  * @param {() => number} [deps.now]
  * @returns {Promise<Object|null>} The run as it ended, or null when there was nothing to run.
  */
-export async function executeTaskRun({ taskId, runId }, deps = {}) {
+async function executeTaskRunTraced({ taskId, runId }, deps = {}, span = null) {
   const repository = deps.repository || getScheduledTaskRepository();
   const service = deps.chatService || defaultChatService();
   const now = deps.now || (() => Date.now());
@@ -200,7 +224,10 @@ export async function executeTaskRun({ taskId, runId }, deps = {}) {
   const language = platform.defaultLanguage || 'en';
 
   const task = await repository.getTask(taskId);
+  if (task?.appId) span?.setAttributes({ 'app.id': task.appId });
   let run = await repository.getRun(taskId, runId);
+  // "Run now" and scheduled runs share the span name; the run says which it was.
+  if (run?.trigger) span?.setAttributes({ 'ihub.trigger.type': scheduledTriggerOf(run.trigger) });
   if (!task) {
     if (run && !isFinalRunStatus(run.status)) {
       await repository.mutateRun(taskId, runId, stored => ({

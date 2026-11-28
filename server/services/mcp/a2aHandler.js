@@ -24,6 +24,7 @@ import {
   inboundChatId,
   ingestInboundFiles
 } from './inboundFiles.js';
+import { withA2aTaskSpan } from '../../telemetry/traces.js';
 
 /**
  * Agent-to-Agent (A2A) protocol handler.
@@ -620,10 +621,28 @@ function isAbort(error) {
 }
 
 /**
+ * Run a task inside its span (`a2a.task {kind}`); see {@link runTaskTraced}.
+ *
+ * @param {Object} params - As for `runTaskTraced`
+ * @returns {Promise<*>}
+ */
+function runTask(params) {
+  return withA2aTaskSpan(
+    {
+      skillKind: params?.skill?._kind,
+      skillId: params?.skill?._id,
+      stream: typeof params?.emit === 'function',
+      userId: params?.user?.id
+    },
+    () => runTaskTraced(params)
+  );
+}
+
+/**
  * Run the skill for a task and drive the task through its states, emitting
  * A2A streaming events on the way when `emit` is given.
  */
-async function runTask({
+async function runTaskTraced({
   task,
   skill,
   text,

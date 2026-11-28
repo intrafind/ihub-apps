@@ -176,5 +176,6 @@ VOLUME ["/app/contents/", "/app/logs"]
 # Use tini as PID 1 to handle signals properly
 ENTRYPOINT ["/sbin/tini", "--", "/app/docker-entrypoint.sh"]
 
-# Start the application (we're already in /app and copied dist to ./, so server is at ./server/server.js)
-CMD ["node", "server/server.js"]
+# Start the application (we're already in /app and copied dist to ./, so server is at ./server/server.js).
+# The --import bootstrap starts telemetry before the app loads (see server/instrumentation.mjs).
+CMD ["node", "--import", "./server/instrumentation.mjs", "server/server.js"]

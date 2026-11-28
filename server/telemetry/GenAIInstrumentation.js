@@ -28,7 +28,7 @@ import {
 import { inputMessagesAttributes, outputMessagesAttributes } from './contentCapture.js';
 import { conversationSpanAttributes, userSpanAttributes } from './identity.js';
 import { recordOperationDuration, recordTokenUsage } from './metrics.js';
-import { isAbortError, SpanKind, startSpan } from './spans.js';
+import { errorTypeOf, isAbortError, SpanKind, startSpan } from './spans.js';
 
 /**
  * One LLM call's span and metrics. Every method is safe to call more than
@@ -152,6 +152,42 @@ export class LLMCallTelemetry {
     } finally {
       this.span.end();
     }
+  }
+
+  /**
+   * A transient failure is retried: one event per attempt on the span.
+   *
+   * @param {number} attempt - 1 for the first retry
+   * @param {unknown} err
+   */
+  retried(attempt, err) {
+    if (this.ended) return;
+    this.span.addEvent('ihub.llm.retry', {
+      'ihub.retry.attempt': attempt,
+      'error.type': errorTypeOf(err) ?? 'unknown'
+    });
+  }
+
+  /**
+   * The provider paused the turn (`pause_turn`) and the call continues on a new
+   * request.
+   *
+   * @param {number} continuation - 1 for the first continuation
+   */
+  continued(continuation) {
+    if (this.ended) return;
+    this.span.addEvent('ihub.llm.pause_turn', { 'ihub.continuation': continuation });
+  }
+
+  /**
+   * The stream of this call was dropped without being read to its end (no
+   * consumer, no error): the span ends marked `ihub.stream.abandoned`.
+   */
+  abandon() {
+    if (this.ended) return;
+    this.ended = true;
+    this.span.setAttributes({ 'ihub.stream.abandoned': true });
+    this.span.end();
   }
 
   /** @returns {number} Seconds since the call started. */

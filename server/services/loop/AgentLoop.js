@@ -35,7 +35,7 @@ import { addUsage, normalizeUsage } from './llmUsage.js';
 import { repairToolArguments, applyParameterDefaults, matchTool } from './toolArgs.js';
 import { classifyToolResult } from './toolClassify.js';
 import { isCitationProducing } from '../tools/toolCategory.js';
-import { startedDisplayOf } from '../../utils/toolDisplay.js';
+import { activityOriginOf, startedDisplayOf } from '../../utils/toolDisplay.js';
 import { extractToolOutcome, extractToolSources, finalizeSourceFrame } from '../sources/index.js';
 import { runToolCallScope } from '../sources/toolCallScope.js';
 import {
@@ -101,6 +101,7 @@ import {
 
 import { recordToolCall } from '../../telemetry/metrics.js';
 import { toolCallOutcomeOf } from '../chat/answerOriginMetrics.js';
+import { endToolSpan, startToolSpan } from '../../telemetry/traces.js';
 
 const COMPONENT = 'AgentLoop';
 const PREVIEW_CHARS = 1024;
@@ -1277,11 +1278,34 @@ export class AgentLoop {
   }
 
   /**
+   * Execute one tool call inside its span (`execute_tool {tool}`): what the
+   * tool calls out to (a search, an MCP server, a sub-agent) becomes its child.
+   * See {@link AgentLoop#_executeOneTraced}.
+   */
+  async _executeOne(ctx, item, opts) {
+    const toolId = item?.toolDef?.id || item?.call?.function?.name;
+    const span = startToolSpan({
+      toolDef: item?.toolDef,
+      toolId,
+      callId: item?.call?.id,
+      origin: activityOriginOf(item?.toolDef)
+    });
+    try {
+      return await span.run(() => this._executeOneTraced(ctx, item, opts, span));
+    } catch (error) {
+      span.fail(error);
+      throw error;
+    } finally {
+      span.end();
+    }
+  }
+
+  /**
    * Execute one resolved tool call through the seams.
    * @private
    * @returns {Promise<{position:number, messages:Array, terminate?:Object}>}
    */
-  async _executeOne(ctx, item, { seams, iteration, groupIndex, toolExecution }) {
+  async _executeOneTraced(ctx, item, { seams, iteration, groupIndex, toolExecution }, span) {
     const { call, toolDef, args, argsRepaired, position } = item;
     const toolId = toolDef?.id || call.function.name;
     const name = call.function.name;
@@ -1503,6 +1527,14 @@ export class AgentLoop {
     messages.push(outcome.message);
 
     const verdict = classifyToolResult(outcome.message);
+    endToolSpan(span, {
+      origin: outcome.activityOrigin || display.activityOrigin,
+      outcome: toolCallOutcomeOf(outcome, { failed: callFailed }),
+      count: outcome.resultCount,
+      bytes: bound.bytes,
+      failed: verdict.failed || callFailed,
+      rateLimited: verdict.rateLimited
+    });
     // Where a search or fetch looked, and what it came to: the server's own
     // decision, counted so a call it cannot place shows up.
     if (display.activityKind === 'search' || display.activityKind === 'fetch') {

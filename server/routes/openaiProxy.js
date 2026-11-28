@@ -94,6 +94,7 @@ import { recordTextOutput } from '../services/provenance/turnProvenance.js';
 import { applyProvenanceHeaders, withProvenance } from '../services/provenance/httpProvenance.js';
 import registerConversationsRoutes from './inference/conversations.js';
 import registerFilesRoutes from './inference/files.js';
+import { withInferenceSpan } from '../telemetry/traces.js';
 
 export { inferenceErrorStatus } from '../services/inference/errors.js';
 
@@ -357,10 +358,17 @@ export default function registerOpenAIProxyRoutes(
    */
   app.post(`${base}/v1/chat/completions`, async (req, res) => {
     const modelParam = req.body?.model;
-    if (typeof modelParam === 'string' && modelParam.startsWith(APP_MODEL_PREFIX)) {
-      return handleAppCompletion(req, res);
-    }
-    return handleModelCompletion(req, res);
+    const isApp = typeof modelParam === 'string' && modelParam.startsWith(APP_MODEL_PREFIX);
+    // One span per request; the turn or the model call below are its children.
+    return withInferenceSpan(
+      {
+        api: 'chat_completions',
+        target: isApp ? 'app' : 'model',
+        stream: req.body?.stream === true,
+        userId: req.user?.id
+      },
+      () => (isApp ? handleAppCompletion(req, res) : handleModelCompletion(req, res))
+    );
   });
 
   /** `/chat/completions` on a plain model. */

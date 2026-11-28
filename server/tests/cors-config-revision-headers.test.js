@@ -58,6 +58,11 @@ describe.each([
     expect(allowed(res)).toContain('if-match');
   });
 
+  test('a preflight allows the W3C trace context headers', async () => {
+    const res = await preflight(createTestApp(cors));
+    expect(allowed(res)).toEqual(expect.arrayContaining(['traceparent', 'tracestate']));
+  });
+
   test('a response exposes ETag (and still Content-Disposition)', async () => {
     const res = await request(createTestApp(cors)).get('/api/probe').set('Origin', ORIGIN);
     expect(exposed(res)).toEqual(expect.arrayContaining(['etag', 'content-disposition']));

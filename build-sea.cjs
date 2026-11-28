@@ -331,7 +331,12 @@ async function startServer() {
     // the installation directory, not process.execPath, so a restart after an
     // update runs the updated Node.js.
     const nodeBinary = path.join(binDir, process.platform === 'win32' ? 'node.exe' : 'node');
-    nodeProcess = spawn(fs.existsSync(nodeBinary) ? nodeBinary : process.execPath, [serverPath], {
+    // The telemetry bootstrap runs before the server (see server/instrumentation.mjs).
+    const instrumentationPath = path.join(binDir, 'server', 'instrumentation.mjs');
+    const serverArgs = fs.existsSync(instrumentationPath)
+      ? ['--import', require('url').pathToFileURL(instrumentationPath).href, serverPath]
+      : [serverPath];
+    nodeProcess = spawn(fs.existsSync(nodeBinary) ? nodeBinary : process.execPath, serverArgs, {
       stdio: 'inherit',
       env: process.env,
       detached: false // Ensure the child process is terminated when parent exits

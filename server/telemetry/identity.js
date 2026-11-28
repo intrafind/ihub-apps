@@ -32,7 +32,6 @@
  */
 
 import crypto from 'node:crypto';
-import tokenStorageService from '../services/TokenStorageService.js';
 
 /** The values `telemetry.spans.userIdMode` accepts. */
 export const USER_ID_MODES = Object.freeze(['off', 'pseudonymised', 'clear']);
@@ -49,6 +48,19 @@ const PSEUDONYM_LENGTH = 32;
 let derivedKey = null;
 let derivedFrom = null;
 let currentMode = DEFAULT_USER_ID_MODE;
+/** Returns the installation key (64 hex characters) or null; set by `telemetry.js`. */
+let keySource = () => null;
+
+/**
+ * Where the installation key comes from. `telemetry.js` points it at
+ * `TokenStorageService`; this module does not import that itself, so code that
+ * runs in extraction threads can use the span helpers without loading it.
+ *
+ * @param {() => string|null|undefined} source
+ */
+export function setPseudonymKeySource(source) {
+  keySource = typeof source === 'function' ? source : () => null;
+}
 
 /**
  * The user id mode a telemetry config asks for.
@@ -78,7 +90,7 @@ export function getUserIdMode() {
 
 /** The HMAC key, derived once per installation key; null while none is loaded. */
 function pseudonymKey() {
-  const base = tokenStorageService.encryptionKey;
+  const base = keySource();
   if (!base) return null;
   if (derivedFrom !== base) {
     derivedKey = Buffer.from(
@@ -142,4 +154,5 @@ export function resetIdentityForTests() {
   derivedKey = null;
   derivedFrom = null;
   currentMode = DEFAULT_USER_ID_MODE;
+  keySource = () => null;
 }
