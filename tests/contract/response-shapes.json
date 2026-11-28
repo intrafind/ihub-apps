@@ -1304,7 +1304,8 @@
         "spans": {
           "enabled": "boolean",
           "includeOptInAttributes": "boolean",
-          "sampleRate": "number"
+          "sampleRate": "number",
+          "userIdMode": "string"
         }
       },
       "trustProxy": "number",
@@ -3739,6 +3740,15 @@
         },
         "volumes": ["object"]
       },
+      "telemetry": {
+        "enabled": "boolean",
+        "provider": "null",
+        "signals": {
+          "logs": "object",
+          "metrics": "object",
+          "traces": "object"
+        }
+      },
       "workingSet": {
         "windows": ["object"]
       }
@@ -5657,6 +5667,14 @@
       "storage": {
         "provider": "string",
         "ready": "boolean"
+      },
+      "telemetry": {
+        "enabled": "boolean",
+        "signals": {
+          "logs": "object",
+          "metrics": "object",
+          "traces": "object"
+        }
       },
       "timestamp": "string",
       "version": "string"

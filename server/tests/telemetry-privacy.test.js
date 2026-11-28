@@ -295,7 +295,7 @@ describe('redactContent', () => {
     ['Authorization: Bearer abcdef0123456789', 'Authorization: Bearer [REDACTED:token]'],
     ['key sk-proj-abcdefghijklmnop1234', 'key [REDACTED:key]'],
     ['api_key=supersecretvalue&x=1', 'api_key=[REDACTED:secret]&x=1'],
-    ['AKIAABCDEFGHIJKLMNOP', '[REDACTED:key]'],
+    ['AKIAABCDEFGHIJKLMNOP', '[REDACTED:key]'], // gitleaks:allow (fake key, redaction test)
     ['call 0171 2345678 now', 'call [REDACTED:phone] now'],
     ['on 01.02.2024 at noon', 'on 01.02.2024 at noon'],
     ['version 1.2.3 and 42', 'version 1.2.3 and 42']
