@@ -97,6 +97,28 @@ describe('restoreRedacted', () => {
       providers: [{ id: 'p1', clientSecret: 's1', url: 'https://old/url' }, { id: 'gone' }]
     });
   });
+
+  test('rollback of a header map keeps the current headers the snapshot lacks', () => {
+    const HEADERS = [{ path: 'otlp.headers.*' }];
+    const current = { otlp: { headers: { Authorization: 'Bearer now', 'X-Old': 'rotated' } } };
+    const header = restoreRedacted(
+      { otlp: { headers: { 'X-Old': 'old-leaked', 'X-Gone': 'old' } } },
+      current,
+      HEADERS,
+      { mode: 'rollback' }
+    );
+    expect(header).toEqual({
+      otlp: { headers: { Authorization: 'Bearer now', 'X-Old': 'rotated' } }
+    });
+    const noHeaders = restoreRedacted({ otlp: { endpoint: 'x' } }, current, HEADERS, {
+      mode: 'rollback'
+    });
+    expect(noHeaders.otlp.headers).toEqual(current.otlp.headers);
+    // A save names every header it keeps: one left out is removed.
+    expect(
+      restoreRedacted({ otlp: { headers: { 'X-Old': SECRET_MARKER } } }, current, HEADERS)
+    ).toEqual({ otlp: { headers: { 'X-Old': 'rotated' } } });
+  });
 });
 
 describe('assertNoMarkers', () => {

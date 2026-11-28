@@ -1226,7 +1226,11 @@ export class LLMClient {
             toolCalls
           });
         } else {
-          client._endCallTelemetry(callTelemetry, { model, accumulator });
+          client._endCallTelemetry(callTelemetry, {
+            model,
+            accumulator,
+            aborted: !accumulator.complete && callSignal?.aborted === true
+          });
           // A consumer that stopped reading before the end (a stop button
           // that broke out of the loop) ended the call early.
           recordUsage({
@@ -1800,7 +1804,7 @@ export class LLMClient {
    * End a call's telemetry after it completed.
    * @private
    */
-  _endCallTelemetry(callTelemetry, { model, accumulator }) {
+  _endCallTelemetry(callTelemetry, { model, accumulator, aborted = false }) {
     if (!callTelemetry) return;
     try {
       const usage = accumulator.usage
@@ -1813,6 +1817,9 @@ export class LLMClient {
           }
         : undefined;
       callTelemetry.succeed({
+        // A user stop after the answer started: tokens count, the call is not
+        // an error and its duration says nothing about latency.
+        aborted,
         usage,
         finishReasons: accumulator.finishReason ? [accumulator.finishReason] : undefined,
         responseModel: model.modelId,

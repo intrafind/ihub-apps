@@ -40,6 +40,7 @@ import {
   redactContent
 } from '../telemetry/contentCapture.js';
 import { initializeMetrics } from '../telemetry/metrics.js';
+import { reloadTelemetryConfig } from '../telemetry.js';
 
 const KEY = 'a'.repeat(64);
 const exporter = new InMemorySpanExporter();
@@ -110,6 +111,13 @@ describe('identity on spans', () => {
     expect(JSON.stringify(span.attributes)).not.toContain('jdoe');
   });
 
+  test('a reload replaces the span settings: a deleted userIdMode falls back to the default', () => {
+    reloadTelemetryConfig({ enabled: true, spans: { userIdMode: 'clear' } });
+    expect(userSpanAttributes('jdoe')).toEqual({ 'user.id': 'jdoe' });
+    reloadTelemetryConfig({ enabled: true, spans: {} });
+    expect(userSpanAttributes('jdoe')).toEqual({ 'user.hash': expect.any(String) });
+  });
+
   test('the pseudonym is stable per user and installation key, and differs per domain', () => {
     expect(pseudonymise('jdoe', 'user')).toBe(pseudonymise('jdoe', 'user'));
     expect(pseudonymise('jdoe', 'user')).not.toBe(pseudonymise('jdoe', 'conversation'));
@@ -173,6 +181,17 @@ describe('errors and stops', () => {
     expect(span.attributes['error.type']).toBeUndefined();
     expect(span.status.code).toBe(0);
     expect(histograms['gen_ai.client.operation.duration'].record).not.toHaveBeenCalled();
+  });
+
+  test('a stop after the answer started keeps its tokens, is aborted, records no duration', () => {
+    configureSpans(ON);
+    const histograms = fakeMeter();
+    call(ON).succeed({ aborted: true, usage: { inputTokens: 10, outputTokens: 3 } });
+    const [span] = exporter.getFinishedSpans();
+    expect(span.attributes['ihub.aborted']).toBe(true);
+    expect(span.status.code).toBe(0);
+    expect(histograms['gen_ai.client.operation.duration'].record).not.toHaveBeenCalled();
+    expect(histograms['gen_ai.client.token.usage'].record).toHaveBeenCalled();
   });
 
   test('ending twice ends once', () => {
@@ -287,6 +306,18 @@ describe('content capture', () => {
     expect(parsed).toHaveLength(1);
     expect(parsed[0].parts[0].content.endsWith('newest')).toBe(true);
   });
+
+  test('escaped characters in the cut-off part do not crowd out the newest text', () => {
+    const config = { ...ON, events: { enabled: true, includePrompts: true, maxEventSize: 4096 } };
+    const long = [{ role: 'user', content: `${'\n'.repeat(5000)}newest` }];
+    const { 'gen_ai.input.messages': json } = inputMessagesAttributes(long, config);
+    expect(json.length).toBeLessThanOrEqual(MAX_CONTENT_LENGTH);
+    const content = JSON.parse(json)[0].parts[0].content;
+    expect(content.startsWith('…')).toBe(true);
+    expect(content.endsWith('\nnewest')).toBe(true);
+    // Each newline costs two characters encoded: about 2000 of them fit.
+    expect(content.length).toBeGreaterThan(1900);
+  });
 });
 
 describe('redactContent', () => {
@@ -295,6 +326,8 @@ describe('redactContent', () => {
     ['Authorization: Bearer abcdef0123456789', 'Authorization: Bearer [REDACTED:token]'],
     ['key sk-proj-abcdefghijklmnop1234', 'key [REDACTED:key]'],
     ['api_key=supersecretvalue&x=1', 'api_key=[REDACTED:secret]&x=1'],
+    ['{"password":"hunter2pw","user":"x"}', '{"password":"[REDACTED:secret]","user":"x"}'],
+    ["{'access_token': 'abc123def'}", "{'access_token': '[REDACTED:secret]'}"],
     ['AKIAABCDEFGHIJKLMNOP', '[REDACTED:key]'], // gitleaks:allow (fake key, redaction test)
     ['call 0171 2345678 now', 'call [REDACTED:phone] now'],
     ['on 01.02.2024 at noon', 'on 01.02.2024 at noon'],

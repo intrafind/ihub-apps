@@ -113,7 +113,12 @@ attribute names need updating.
 - In Prometheus mode every series carries a `cluster_worker_id` label, and `service.instance.id`
   is `<host>-w<worker>` instead of a random id per process.
 
-**Before upgrading:** if dashboards or queries filter on `user.id`, `user.groups` or the
-`gen_ai.content.*` events, switch them to `user.hash` and `gen_ai.input.messages` /
-`gen_ai.output.messages`, or set `userIdMode` to `clear` where your works agreement allows it.
-Aggregate Prometheus series across workers with `sum` (or `max` for the active-user gauges).
+**Before upgrading:**
+
+- Queries on `user.id`: switch them to `user.hash`, or set `userIdMode` to `clear` where your
+  works agreement allows it. `clear` brings back `user.id` only.
+- Queries on the `gen_ai.content.*` events: switch them to `gen_ai.input.messages` /
+  `gen_ai.output.messages`, whatever the `userIdMode`.
+- Queries on `user.groups`: there is no replacement on spans; group-level analysis needs the
+  usage reports or the audit log instead.
+- Aggregate Prometheus series across workers with `sum` (or `max` for the active-user gauges).

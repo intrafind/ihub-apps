@@ -105,13 +105,16 @@ export class LLMCallTelemetry {
    * @param {string} [result.responseModel]
    * @param {string} [result.outputText] - Captured only when completion capture is on
    * @param {Array<Object>} [result.toolCalls] - Names captured only when completion capture is on
+   * @param {boolean} [result.aborted] - The user stopped the answer after it started:
+   *   `ihub.aborted` on the span, tokens recorded, no duration
    */
-  succeed({ usage, finishReasons, responseModel, outputText, toolCalls } = {}) {
+  succeed({ usage, finishReasons, responseModel, outputText, toolCalls, aborted = false } = {}) {
     if (this.ended) return;
     this.ended = true;
     try {
       recordTokenUsage(this.metricAttributes, usage);
-      recordOperationDuration(this.durationSeconds(), this.metricAttributes);
+      if (aborted) this.span.abort();
+      else recordOperationDuration(this.durationSeconds(), this.metricAttributes);
       if (this.span.isRecording) {
         this.span.setAttributes({
           ...buildResponseAttributes({ finishReasons, model: responseModel }),
