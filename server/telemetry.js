@@ -35,7 +35,6 @@ import {
   parseOTLPEnvVars
 } from './telemetry/exporters.js';
 import { OtelLogTransport } from './telemetry/logBridge.js';
-import { addLogTransport } from './utils/logger.js';
 import { createInstrumentations } from './telemetry/autoInstrumentation.js';
 import { RedactingSpanProcessor } from './telemetry/spanRedaction.js';
 import { configureSpans } from './telemetry/spans.js';
@@ -488,6 +487,10 @@ export async function initTelemetry(rawConfig = {}, { instrumentations, bootstra
   if (exporters.logs) {
     // Application log lines to the OpenTelemetry logs pipeline, filtered
     // (`telemetry/logBridge.js`); `logs.level` is the lowest level sent.
+    // Imported here, not at the top: many test suites mock the logger module
+    // with its default export only, and a static named import would fail to
+    // link wherever telemetry.js is loaded under such a mock.
+    const { addLogTransport } = await import('./utils/logger.js');
     addLogTransport(new OtelLogTransport({ level: config.logs?.level || 'info' }));
   }
 
