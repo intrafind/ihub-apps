@@ -182,6 +182,30 @@ describe('turn outcome', () => {
   });
 });
 
+describe('sub-agent turns', () => {
+  test('an app called as a tool records no turn; an MCP/A2A call is an api turn', () => {
+    const subagent = startTurnSpan({ appId: 'helper', kind: 'subagent', metrics: false });
+    endTurnSpan(subagent, { status: 'completed', content: 'x' });
+    subagent.end();
+    expect(labelsOf('ihub.turns')).toEqual([]);
+    const mcp = startTurnSpan({
+      appId: 'helper',
+      kind: 'subagent',
+      surface: 'api',
+      channel: 'mcp'
+    });
+    endTurnSpan(mcp, { status: 'aborted' });
+    mcp.end();
+    expect(labelsOf('ihub.turns')).toEqual([
+      expect.objectContaining({
+        'ihub.surface': 'api',
+        'ihub.client.channel': 'mcp',
+        'ihub.turn.outcome': 'aborted'
+      })
+    ]);
+  });
+});
+
 describe('client channel', () => {
   const platform = {
     officeIntegration: { oauthClientId: 'office-client' },
@@ -209,7 +233,8 @@ describe('security events from audit entries', () => {
     [{ action: 'update', resource: 'telemetryContentCapture' }, 'content_capture_change'],
     [{ action: 'update', resource: 'group' }, 'permission_change'],
     [{ action: 'create', resource: 'personalApiKey' }, 'api_key_change'],
-    [{ action: 'create', resource: 'oauthToken' }, 'oauth_grant'],
+    [{ action: 'create', resource: 'oauthConnection' }, 'oauth_grant'],
+    [{ action: 'create', resource: 'oauthToken' }, 'api_key_change'],
     [{ action: 'delete', resource: 'oauthConnection' }, 'oauth_revoke'],
     [{ action: 'export', resource: 'chat' }, 'bulk_export'],
     [{ action: 'create', resource: 'chatShare' }, 'share_created'],
@@ -226,13 +251,17 @@ describe('outbound requests through httpFetch', () => {
   let port;
   beforeAll(async () => {
     server = http.createServer((req, res) => {
+      if (req.url === '/hang') return; // answers never: only a deadline ends the request
       res.statusCode = req.url === '/down' ? 503 : 200;
       res.end('ok');
     });
     await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
     port = server.address().port;
   });
-  afterAll(() => new Promise(resolve => server.close(resolve)));
+  afterAll(() => {
+    server.closeAllConnections();
+    return new Promise(resolve => server.close(resolve));
+  });
 
   test('records duration by dependency kind, with error.type for an error status', async () => {
     await httpFetch(`http://127.0.0.1:${port}/ok?token=secret`, { dependency: 'ifinder' });
@@ -249,6 +278,25 @@ describe('outbound requests through httpFetch', () => {
     await expect(httpFetch('http://127.0.0.1:1/', { dependency: 'idp' })).rejects.toThrow();
     expect(labelsOf('ihub.outbound.request.duration')).toEqual([
       { 'ihub.dependency.kind': 'idp', 'error.type': 'connection_refused' }
+    ]);
+  });
+
+  test('a deadline is a timeout of the dependency; the caller stopping is not recorded', async () => {
+    await expect(
+      httpFetch(`http://127.0.0.1:${port}/hang`, {
+        dependency: 'ifinder',
+        signal: AbortSignal.timeout(50)
+      })
+    ).rejects.toThrow();
+    const stop = new AbortController();
+    const stopped = httpFetch(`http://127.0.0.1:${port}/hang`, {
+      dependency: 'llm',
+      signal: stop.signal
+    });
+    setTimeout(() => stop.abort(), 20);
+    await expect(stopped).rejects.toThrow();
+    expect(labelsOf('ihub.outbound.request.duration')).toEqual([
+      { 'ihub.dependency.kind': 'ifinder', 'error.type': 'timeout' }
     ]);
   });
 

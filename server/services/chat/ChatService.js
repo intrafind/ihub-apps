@@ -1984,6 +1984,10 @@ class ChatService {
    * @returns {Promise<Object>} The invocation result
    */
   async invokeAppInternal(opts) {
+    // MCP and A2A pass `turnSurface: 'api'`: their invocation is the client's
+    // turn. An app called as another app's tool passes none: it is part of the
+    // calling turn and records no turn of its own.
+    const turnSurface = opts?.turnSurface;
     const span = startTurnSpan({
       appId: opts?.appId,
       chatId: opts?.chatId,
@@ -1991,12 +1995,14 @@ class ChatService {
       trigger: 'agent',
       streaming: false,
       kind: 'subagent',
-      surface: 'agent',
-      channel: currentClientChannel({ user: opts?.user, platform: configCache.getPlatform?.() })
+      surface: turnSurface ?? 'agent',
+      channel: currentClientChannel({ user: opts?.user, platform: configCache.getPlatform?.() }),
+      metrics: turnSurface !== undefined
     });
     try {
       const result = await span.run(() => this._invokeAppTraced(opts));
-      endTurnSpan(span, result);
+      // A stopped invocation is returned as an error to its caller; the turn was aborted.
+      endTurnSpan(span, result?.aborted ? { ...result, status: 'aborted' } : result);
       return result;
     } catch (error) {
       span.fail(error);
@@ -2221,6 +2227,7 @@ class ChatService {
         });
         return {
           status: 'error',
+          ...(result.status === 'aborted' ? { aborted: true } : {}),
           runId,
           error: {
             message: result.error?.message || `App invocation ${result.status}`,

@@ -91,8 +91,10 @@ const PASSTHROUGH_FIELDS = [
   'requestMessageId'
 ];
 
-const TIMEOUT_REASON = Symbol('llm-timeout');
-const CONNECT_TIMEOUT_REASON = Symbol('llm-connect-timeout');
+// The deadlines abort with a `TimeoutError`, so httpFetch records a request
+// they cut short as a dependency timeout, not as the caller stopping.
+const TIMEOUT_REASON = new DOMException('LLM whole-call deadline expired', 'TimeoutError');
+const CONNECT_TIMEOUT_REASON = new DOMException('LLM connect deadline expired', 'TimeoutError');
 const STREAM_IDLE_REASON = Symbol('llm-stream-idle');
 
 /**

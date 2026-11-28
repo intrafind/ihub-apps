@@ -56,6 +56,17 @@ export function networkErrorClass(error) {
   return { type: 'unknown', tls: false };
 }
 
+/**
+ * Whether a signal's abort reason is a deadline: `AbortSignal.timeout()` and
+ * the LLM client's own timers abort with a `TimeoutError`.
+ *
+ * @param {unknown} reason - `signal.reason`
+ * @returns {boolean}
+ */
+export function isTimeoutReason(reason) {
+  return !!reason && typeof reason === 'object' && reason.name === 'TimeoutError';
+}
+
 /** Whether an error is a request the caller aborted (not a dependency failure). */
 export function isAbortedRequest(error) {
   return (

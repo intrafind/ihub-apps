@@ -19,7 +19,11 @@ import { guardedLookup } from './dnsGuard.js';
 import tokenStorageService from '../services/TokenStorageService.js';
 import { redactUrlSecrets } from './secretNames.js';
 import { recordOutboundRequest } from '../telemetry/metrics.js';
-import { isAbortedRequest, networkErrorClass } from '../telemetry/networkErrors.js';
+import {
+  isAbortedRequest,
+  isTimeoutReason,
+  networkErrorClass
+} from '../telemetry/networkErrors.js';
 
 /**
  * Workaround for `https-proxy-agent` >=7.0.0 (verified through 9.0.0).
@@ -990,8 +994,13 @@ async function sendHttpFetch(url, options = {}, forceIgnoreSSL = null) {
     });
     return response;
   } catch (error) {
-    if (!isAbortedRequest(error)) {
-      const { type, tls } = networkErrorClass(error);
+    // node-fetch rejects with its own AbortError whatever aborted the signal;
+    // a deadline (`AbortSignal.timeout()`, a caller's timer) leaves a
+    // TimeoutError as the reason. That is the hung dependency this metric is
+    // for, not the caller stopping.
+    const aborted = isAbortedRequest(error);
+    if (!aborted || isTimeoutReason(fetchOptions.signal?.reason)) {
+      const { type, tls } = aborted ? { type: 'timeout', tls: false } : networkErrorClass(error);
       recordOutboundRequest({
         kind: dependency,
         seconds: (performance.now() - startedAt) / 1000,

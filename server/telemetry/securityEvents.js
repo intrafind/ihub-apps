@@ -38,9 +38,11 @@ export function securityEventOfAudit({ action, resource, result } = {}) {
   if (resource === 'platform' && action === 'update') return 'admin_config_change';
   if (PERMISSION_RESOURCES.has(resource)) return 'permission_change';
   if (resource === 'user') return 'user_change';
-  if (resource === 'personalApiKey') return 'api_key_change';
+  // An admin-issued static key for an OAuth client is a key like a personal one.
+  if (resource === 'personalApiKey' || resource === 'oauthToken') return 'api_key_change';
   if (OAUTH_CLIENT_RESOURCES.has(resource)) return 'oauth_client_change';
-  if (resource === 'oauthToken' && action === 'create') return 'oauth_grant';
+  // A user consenting to a client (`/oauth/authorize`) writes the connection.
+  if (resource === 'oauthConnection' && action === 'create') return 'oauth_grant';
   if (resource === 'oauthConnection' && (action === 'delete' || action === 'revoke')) {
     return 'oauth_revoke';
   }

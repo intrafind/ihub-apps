@@ -83,7 +83,8 @@ export function startTurnSpan({
   streaming,
   kind = 'turn',
   surface,
-  channel
+  channel,
+  metrics = true
 }) {
   const span = startSpan(`invoke_agent ${nameSegment(appId, 'chat')}`, {
     kind: SpanKind.INTERNAL,
@@ -101,7 +102,7 @@ export function startTurnSpan({
     }
   });
   // What the turn's metrics need at its end, and what its tool calls report to.
-  span.turn = { appId, surface, channel, startedAt: Date.now(), toolFailures: 0 };
+  span.turn = { appId, surface, channel, metrics, startedAt: Date.now(), toolFailures: 0 };
   span.context = span.context.setValue(TURN_STATE, span.turn);
   return span;
 }
@@ -119,7 +120,8 @@ export function endTurnSpan(span, result) {
   span.setAttributes({ 'ihub.turn.status': status, 'ihub.turn.outcome': outcome });
   if (status === 'aborted') span.abort();
   else if (status === 'error') span.fail({ code: result?.errorInfo?.code || 'TURN_FAILED' });
-  if (span.turn) {
+  // An app run as another app's tool is part of that turn: its span, not a turn of its own.
+  if (span.turn && span.turn.metrics !== false) {
     recordTurn({
       seconds: (Date.now() - span.turn.startedAt) / 1000,
       outcome,
