@@ -68,3 +68,15 @@ open for a moment while iHub replaced it.
   statistics, the results of tool jobs and files a migration moves.
 - When a migration ran but the history file cannot be written, the error now says so, and the
   history no longer lists that migration as failed.
+
+## Usage Statistics No Longer Keep Outdated Numbers After Overlapping Rollups
+
+The usage statistics could show outdated numbers for an older day. This happened when two rollups of
+the usage records ran at the same time, for example the hourly one and one started from
+**Admin → Usage**, and the one that had read the older records finished last.
+
+- Rollups now run one after another. In each server process they run in the order they were
+  started; between the workers and instances of a cluster they wait for each other where the
+  storage provides a lock (the default file storage does, between the workers of one machine).
+- A rollup started while another is running waits for it and then runs itself, so it includes
+  the records that arrived in the meantime.
